@@ -13,6 +13,27 @@ export {
   removeSongCacheEntry
 } from './libraryCacheDb/songCache'
 
+export type {
+  PlaylistViewSnapshotMeta,
+  PlaylistViewSnapshotRecord,
+  PlaylistViewSnapshotWriteInput
+} from './libraryCacheDb/playlistViewSnapshot'
+
+export {
+  normalizeSnapshotListRoot,
+  loadPlaylistViewSnapshot,
+  loadPlaylistViewSnapshotMeta,
+  savePlaylistViewSnapshot,
+  touchPlaylistViewSnapshotVerified,
+  touchPlaylistViewSnapshotIdentity,
+  markPlaylistViewSnapshotContentStale,
+  findPlaylistViewSnapshotUuidsByRoot,
+  listPlaylistViewSnapshotVerificationCandidates,
+  deletePlaylistViewSnapshot,
+  deletePlaylistViewSnapshotsByRoot,
+  prunePlaylistViewSnapshots
+} from './libraryCacheDb/playlistViewSnapshot'
+
 export {
   loadCoverIndexEntry,
   replaceCoverIndexExtByHash,

@@ -13,13 +13,34 @@ let reconciling = false
 let bulkOperationDepth = 0
 let pendingBulkReconcileWindow: BrowserWindow | null = null
 let mutationListener: (() => void) | null = null
+let contentChangeListener: ((changedAbsPaths: string[]) => void) | null = null
+let pendingContentPaths = new Set<string>()
+let contentDebounceTimer: NodeJS.Timeout | null = null
 let pendingCuratedContentChange = false
 let watchWindow: BrowserWindow | null = null
 
 const WATCH_DEBOUNCE_MS = 400
+/** 单次 flush 最多带这么多路径：狂改几千个文件时没必要逐个上报，取样即可定位到歌单。 */
+const MAX_PENDING_CONTENT_PATHS = 400
 
 export function bindLibraryTreeMutationListener(listener: (() => void) | null): void {
   mutationListener = listener
+}
+
+/**
+ * 目录内容变化监听（歌单视图快照用）。
+ *
+ * 与 mutationListener 的区别：那个只在"树结构变了"时响，而拖一首歌进歌单目录
+ * 不改树结构，却让该歌单的视图快照过期。所以这里单独攒一份"改动过的绝对路径"，
+ * 按同一个 400ms 抖动窗口 flush。
+ *
+ * 这里用注册钩子而不是直接 import 服务：mainWindow/index 会 import 本模块，
+ * 而服务要 import mainWindow 推事件，直连就成环了。
+ */
+export function bindLibraryTreeContentChangeListener(
+  listener: ((changedAbsPaths: string[]) => void) | null
+): void {
+  contentChangeListener = listener
 }
 
 const watchPathEquals = (left: string, right: string): boolean =>
@@ -55,6 +76,36 @@ function clearDebounceTimer() {
     clearTimeout(debounceTimer)
     debounceTimer = null
   }
+}
+
+function clearContentDebounceTimer() {
+  if (contentDebounceTimer) {
+    clearTimeout(contentDebounceTimer)
+    contentDebounceTimer = null
+  }
+}
+
+function flushPendingContentPaths() {
+  contentDebounceTimer = null
+  if (pendingContentPaths.size === 0) return
+  const paths = [...pendingContentPaths]
+  pendingContentPaths = new Set<string>()
+  if (!contentChangeListener) return
+  try {
+    contentChangeListener(paths)
+  } catch (error) {
+    log.error('[watcher] content change listener failed', error)
+  }
+}
+
+/** 记下一个改动过的绝对路径，攒够抖动窗口再一次性交给监听者。 */
+function queueContentChangePath(absPath: string) {
+  if (!contentChangeListener || !absPath) return
+  if (pendingContentPaths.size < MAX_PENDING_CONTENT_PATHS) {
+    pendingContentPaths.add(absPath)
+  }
+  clearContentDebounceTimer()
+  contentDebounceTimer = setTimeout(flushPendingContentPaths, WATCH_DEBOUNCE_MS)
 }
 
 /** Drop a scheduled reconcile that has not started yet (debounce window only). */
@@ -141,9 +192,10 @@ export function beginLibraryTreeWatcherBulkOperation(): () => void {
  * 必须立刻通知 mutationListener：delSongs 会包在 bulk 里，结束时 fromBulk
  * 对账不会触发同步，只靠 reconcile 会把这次删除吃掉。
  */
-export function notifyLibraryFsChanged(_absPath?: string): void {
+export function notifyLibraryFsChanged(absPath?: string): void {
   pendingCuratedContentChange = true
   mutationListener?.()
+  if (absPath) queueContentChangePath(path.resolve(String(absPath)))
   scheduleReconcile(watchWindow)
 }
 
@@ -157,6 +209,8 @@ export function startLibraryTreeWatcher(window: BrowserWindow | null): void {
   try {
     watcher = fs.watch(libraryRoot, { recursive: true }, (_event, filename) => {
       if (isCuratedLibraryWatchPath(filename)) pendingCuratedContentChange = true
+      const relative = String(filename || '')
+      if (relative) queueContentChangePath(path.join(libraryRoot, relative))
       scheduleReconcile(window)
     })
     watcher.on('error', (error) => {
@@ -169,6 +223,8 @@ export function startLibraryTreeWatcher(window: BrowserWindow | null): void {
 
 export function stopLibraryTreeWatcher(): void {
   clearDebounceTimer()
+  clearContentDebounceTimer()
+  pendingContentPaths = new Set<string>()
   pendingCuratedContentChange = false
   watchWindow = null
   if (!watcher) return

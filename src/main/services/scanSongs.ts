@@ -33,6 +33,7 @@ import {
   preserveBestAvailableSongStructure
 } from './songStructureCachePolicy'
 import { preserveCachedAddedAtMs } from '../../shared/songAddedAt'
+import { computePlaylistIdentityDigest } from './playlistIdentitySignature'
 
 type ScanSongListOptions = {
   enablePostScanTasks?: boolean
@@ -49,6 +50,8 @@ export type ScanSongListResult = {
     repaired: boolean
   }
   cacheIdentityVerified: boolean
+  /** 本次扫描时磁盘上的文件身份摘要（路径+size+mtime）。快照层用它判断"还要不要重扫"。 */
+  identityDigest: string
   perf: {
     listFilesMs: number
     cacheCheckMs: number
@@ -59,6 +62,12 @@ export type ScanSongListResult = {
     failedCount: number
     cacheHits: number
     parsedCount: number
+    /** 以下为定位慢开销的细分项：读缓存表、stat、跨库补分析各花了多久。 */
+    cacheLoadMs: number
+    cacheRows: number
+    statMs: number
+    refreshMissingMs: number
+    refreshMissingCount: number
   }
 }
 
@@ -305,6 +314,7 @@ export async function scanSongList(
   const cacheRoot = await resolvePlaylistCacheRoot(scanPath)
   let cacheMap = new Map<string, CacheEntry>()
   let cacheFromDb = false
+  const perfCacheLoadStart = Date.now()
   if (cacheRoot) {
     const dbCache = await LibraryCacheDb.loadSongCache(cacheRoot)
     if (dbCache) {
@@ -320,9 +330,12 @@ export async function scanSongList(
       cacheFromDb = true
     }
   }
+  const perfCacheLoadMs = Date.now() - perfCacheLoadStart
 
   const perfCacheCheckStart = Date.now()
   const filesStatList = await statPlaylistAudioFiles(songFileUrls)
+  const perfStatMs = Date.now() - perfCacheCheckStart
+  const identityDigest = computePlaylistIdentityDigest(filesStatList)
   const filesStatByKey = new Map(filesStatList.map((item) => [item.key, item]))
   const waveformAvailability = cacheRoot
     ? LibraryCacheDb.loadWaveformSurfaceAvailabilityByMeta(
@@ -414,6 +427,7 @@ export async function scanSongList(
       songListUUID,
       playlistTrackNumbering,
       cacheIdentityVerified,
+      identityDigest,
       perf: {
         listFilesMs: perfListEnd - perfListStart,
         cacheCheckMs: perfCacheCheckEnd - perfCacheCheckStart,
@@ -423,7 +437,12 @@ export async function scanSongList(
         successCount: scanData.length,
         failedCount,
         cacheHits: cachedInfos.length,
-        parsedCount
+        parsedCount,
+        cacheLoadMs: perfCacheLoadMs,
+        cacheRows: cacheMap.size,
+        statMs: perfStatMs,
+        refreshMissingMs: perfRefreshMissing.ms,
+        refreshMissingCount: perfRefreshMissing.count
       }
     }
   }
@@ -496,8 +515,12 @@ export async function scanSongList(
     return buildScanResult(verifiedSongs, 0, 0, 0, true)
   }
 
+  // 跨库补分析是"每首一次 loadSongCacheEntry"的串行开销，且 loadSongCacheEntry 内部
+  // 还可能做非索引松散比较与写回，因此单独计量，别混进 cacheCheckMs 里看不出来。
+  const perfRefreshMissing = { ms: 0, count: 0 }
   const refreshMissingAnalysisFromOtherRoots = async () => {
     if (!cacheFromDb || !cacheRoot || cacheMap.size === 0 || filesStatList.length === 0) return
+    const startedAt = Date.now()
     for (const st of filesStatList) {
       const entry = cacheMap.get(st.key)
       if (!entry || !entry.info) continue
@@ -506,6 +529,7 @@ export async function scanSongList(
         !hasCompleteGrid(entry.info) ||
         !hasUsableSongEnergyAnalysis(entry.info)
       if (!missingAnalysis) continue
+      perfRefreshMissing.count += 1
       const refreshed = await LibraryCacheDb.loadSongCacheEntry(cacheRoot, st.file)
       if (refreshed?.info) {
         cacheMap.set(st.key, refreshed)
@@ -514,6 +538,7 @@ export async function scanSongList(
         }
       }
     }
+    perfRefreshMissing.ms += Date.now() - startedAt
   }
 
   // 磁盘身份与缓存完全一致：直接用缓存出列表，不再解析、不再全量写回。

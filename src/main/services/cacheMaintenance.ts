@@ -585,7 +585,9 @@ export async function pruneOrphanedSongListCaches(dbRoot?: string): Promise<{
     }
     const pathByUuid = buildNodePathMap(nodes, root)
     const keepRoots = new Set<string>()
+    const keepUuids = new Set<string>()
     for (const row of nodes) {
+      if (row.uuid) keepUuids.add(String(row.uuid))
       if (row.nodeType !== 'songList') continue
       const rel = pathByUuid.get(row.uuid)
       if (!rel) continue
@@ -593,6 +595,9 @@ export async function pruneOrphanedSongListCaches(dbRoot?: string): Promise<{
     }
     keepRoots.add(path.join(rootDir, mapRendererPathToFsPath('library/RecycleBin')))
     keepRoots.add(path.join(rootDir, mapRendererPathToFsPath('library/RecordingLibrary')))
+    // 歌单没了就把视图快照一起清掉，否则 UUID 万一被复用会读到上一张歌单的内容。
+    // 这里保留所有节点类型的 uuid（不只 songList），避免误删别的节点将来用到的行。
+    LibraryCacheDb.prunePlaylistViewSnapshots(keepUuids)
     return await LibraryCacheDb.pruneCachesByRoots(keepRoots)
   } catch {
     return {

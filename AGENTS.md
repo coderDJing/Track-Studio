@@ -49,6 +49,12 @@
 - “拆分”必须为真拆分：禁止把主体逻辑整体挪到一个新文件后，仅在原文件保留单行转发/导入；原文件必须保留清晰且有实际价值的职责边界与实现。
 - 拆分完成后必须执行行数校验并在交付时明确给出每个相关文件的实际行数，确保可核验。
 
+## 歌单打开与后台刷新（红线）
+- 后台核对、重扫、增量补丁绝不能让用户看见列表“退出重进”或不断闪动。刷新必须就地合并：等价的行复用旧对象引用（`src/shared/playlistViewMerge.ts` 的 `planSongListMerge`），禁止用整份新列表覆盖 `originalSongInfoArr` 让 Vue 重建所有行。
+- 后台刷新禁止重跑首次打开的渐进渲染、禁止重置滚动位置 / 选中项 / 当前播放行；内容完全没变化时必须**一个 UI 动作都不做**（连赋值都不做）。连续到达的多个刷新事件必须合并成一次（最新优先 + 单飞）。
+- 行等价判定必须主进程与 renderer 共用 `src/shared/songListItemCompare.ts`；两边各写一套会导致反复推空补丁或漏刷新。
+- 视图快照（`playlist_view_snapshot`）只服务“读 / 展示”。移动、删除、改标签、写分析、导出 rekordbox XML、云同步对账等任何写操作都必须先走精确磁盘核对，禁止读快照。
+
 ## Testing Guidelines
 - Rust module tests live in `rust_package/__test__/` and follow `*.spec.mjs` naming.
 - There is no root JS test runner yet; add new suites near the code they cover and document how to run them.

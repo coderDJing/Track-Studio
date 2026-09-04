@@ -2,6 +2,7 @@ import { app, type BrowserWindow, type ProcessMetric } from 'electron'
 import { log } from '../../log'
 import { getMainProcessStallContext } from '../../services/mainProcessActivityTrace'
 import { getPlaylistScanDiagnosticSnapshot } from '../../services/playlistScanDiagnostics'
+import { getPlaylistOpenPerfSnapshot } from '../../services/playlistOpenPerfTrace'
 
 const MAIN_PROCESS_STALL_THRESHOLD_MS = 3_000
 const MAIN_PROCESS_HEARTBEAT_INTERVAL_MS = 1_000
@@ -77,6 +78,7 @@ const captureSnapshot = (
     visible: browserWindow.isVisible(),
     processMetrics: options?.processMetrics ?? getProcessMetrics(rendererPid),
     playlistScans: getPlaylistScanDiagnosticSnapshot(),
+    playlistOpenPerf: getPlaylistOpenPerfSnapshot(),
     ...getMainProcessStallContext(sinceMs)
   }
 }

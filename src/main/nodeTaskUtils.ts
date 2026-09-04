@@ -8,36 +8,85 @@ import { isENOSPCError } from './nodeErrorUtils'
 // makes the worker load Electron-only dependencies and fail before scanning starts.
 type InterruptedDecision = 'resume' | 'cancel'
 
+/** 子目录并发上限。libuv 线程池默认 4，开太大只会排队，还会抢走 stat 的额度。 */
+const DIRECTORY_SCAN_CONCURRENCY = 8
+
+/**
+ * 递归枚举目录下的指定后缀文件。
+ *
+ * 子目录并发展开（上限 DIRECTORY_SCAN_CONCURRENCY），但拼接时严格按目录项顺序回填，
+ * 因此输出顺序与串行版本逐字一致——歌单序号初始化、封面扫描都依赖这个顺序。
+ */
 export const collectFilesWithExtensions = async (dir: string, extensions: string[] = []) => {
-  let files: string[] = []
+  const allowedExts = new Set(
+    extensions.map((ext) => String(ext || '').toLowerCase()).filter(Boolean)
+  )
+
+  let active = 0
+  const waiters: Array<() => void> = []
+  const acquire = async (): Promise<void> => {
+    if (active < DIRECTORY_SCAN_CONCURRENCY) {
+      active += 1
+      return
+    }
+    await new Promise<void>((resolve) => waiters.push(resolve))
+  }
+  // 有等待者时直接移交许可（不减 active），否则会短暂超发并突破并发上限。
+  const release = (): void => {
+    const next = waiters.shift()
+    if (next) {
+      next()
+      return
+    }
+    active -= 1
+  }
+
+  const walk = async (current: string): Promise<string[]> => {
+    let entries: fs.Dirent[]
+    await acquire()
+    try {
+      entries = await fs.readdir(current, { withFileTypes: true })
+    } catch {
+      return []
+    } finally {
+      release()
+    }
+
+    const subDirFiles = new Map<number, string[]>()
+    const pending: Array<Promise<void>> = []
+    for (const [index, entry] of entries.entries()) {
+      if (!entry.isDirectory()) continue
+      const childPath = path.join(current, entry.name)
+      pending.push(
+        walk(childPath).then((files) => {
+          subDirFiles.set(index, files)
+        })
+      )
+    }
+    if (pending.length > 0) await Promise.all(pending)
+
+    const files: string[] = []
+    for (const [index, entry] of entries.entries()) {
+      if (entry.isDirectory()) {
+        const nested = subDirFiles.get(index)
+        if (nested) {
+          for (const file of nested) files.push(file)
+        }
+        continue
+      }
+      if (!entry.isFile()) continue
+      if (!allowedExts.has(path.extname(entry.name).toLowerCase())) continue
+      files.push(path.join(current, entry.name))
+    }
+    return files
+  }
+
   try {
     const stats = await fs.stat(dir)
-
     if (stats.isFile()) {
-      const ext = path.extname(dir).toLowerCase()
-      if (extensions.includes(ext)) {
-        return [dir]
-      }
-      return []
+      return allowedExts.has(path.extname(dir).toLowerCase()) ? [dir] : []
     }
-
-    const directoryEntries = await fs.readdir(dir, { withFileTypes: true })
-
-    for (const entry of directoryEntries) {
-      const fullPath = path.join(dir, entry.name)
-
-      if (entry.isFile()) {
-        const ext = path.extname(fullPath).toLowerCase()
-        if (extensions.includes(ext)) {
-          files.push(fullPath)
-        }
-      } else if (entry.isDirectory()) {
-        const subFiles = await collectFilesWithExtensions(fullPath, extensions)
-        files = files.concat(subFiles)
-      }
-    }
-
-    return files
+    return await walk(dir)
   } catch {
     return []
   }

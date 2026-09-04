@@ -8,6 +8,7 @@ import { EXTERNAL_PLAYLIST_UUID } from '../../shared/externalPlayback'
 import { scheduleSongListPostScanTasks } from '../services/scanSongs'
 import { scanSongListOffMainThread } from '../services/songListScanWorker'
 import { beginPlaylistScanDiagnostic } from '../services/playlistScanDiagnostics'
+import { recordPlaylistOpenPath } from '../services/playlistOpenPerfTrace'
 import {
   preparePlaylistTimeBasisRepair,
   queuePlaylistTimeBasisRepair
@@ -32,6 +33,11 @@ import {
   previewPlaylistBatchRename
 } from '../services/playlistBatchRename'
 import { markGlobalSongSearchDirty } from '../services/globalSongSearch'
+import {
+  openPlaylistViewFast,
+  savePlaylistViewSnapshotFromScan,
+  verifyPlaylistViewTracks
+} from '../services/playlistViewSnapshotService'
 import { scheduleCuratedLibrarySyncIfUnderCurated } from '../cloudSyncScheduler'
 import {
   compactSongListTrackNumbers,
@@ -132,6 +138,10 @@ export function registerPlaylistHandlers() {
         workerDurationMs
       })
 
+      // 扫完立刻落视图快照：下次打开这张歌单就只剩"一次主键查询 + 一次 JSON.parse"。
+      // 放在这里而不是 renderer，是因为只有主进程知道真实的 list_root。
+      savePlaylistViewSnapshotFromScan(songListUUID, scanPath, result)
+
       stage = 'time-basis-plan'
       const preparedRepair = preparePlaylistTimeBasisRepair(result.scanData)
       activity.update('time-basis-background-queued', {
@@ -169,6 +179,24 @@ export function registerPlaylistHandlers() {
 
       const responseReadyAtMs = Date.now()
       const mainDurationMs = responseReadyAtMs - startedAtMs
+      // 整单重扫是兜底档：只有真的慢（≥ 阈值）才会写一行日志，正常什么都不写。
+      recordPlaylistOpenPath({
+        source: 'full-scan',
+        hit: true,
+        tookMs: mainDurationMs,
+        itemCount: result.scanData.length,
+        reason: source,
+        songListUUID,
+        details: {
+          workerDurationMs,
+          listFilesMs: result.perf?.listFilesMs,
+          cacheLoadMs: result.perf?.cacheLoadMs,
+          statMs: result.perf?.statMs,
+          parseMetadataMs: result.perf?.parseMetadataMs,
+          refreshMissingMs: result.perf?.refreshMissingMs,
+          parsedCount: result.perf?.parsedCount
+        }
+      })
       if (repairJob.completion) {
         activity.update('response-ready-background-repair', {
           trackCount: result.scanData.length,
@@ -216,6 +244,56 @@ export function registerPlaylistHandlers() {
         const scanPaths = songListPath.map((p) => resolveLibraryPath(p).absPath)
         return await runSongListScan(scanPaths, songListUUID, diagnosticContext)
       }
+    }
+  )
+
+  // 前台打开歌单的快路径：只读快照表，绝不碰文件系统。
+  // 没命中就老老实实回 hit=false，让 renderer 走 scanSongList——**只起一个 worker**。
+  ipcMain.handle(
+    'playlist:fast-open',
+    (_e, payload: { songListUUID?: string; songListPath?: string }) => {
+      const songListUUID = String(payload?.songListUUID || '').trim()
+      if (!songListUUID) {
+        return {
+          hit: false,
+          source: 'miss',
+          songListUUID: '',
+          revision: 0,
+          items: [],
+          missingWaveformFilePaths: [],
+          tookMs: 0
+        }
+      }
+      const rawPath = String(payload?.songListPath || '').trim()
+      const songListPath = rawPath ? resolveLibraryPath(rawPath).absPath : ''
+      const result = openPlaylistViewFast({ songListUUID, songListPath })
+      // 只累计命中率与未命中原因（内存计数器）；这条路径正常是个位数毫秒，不会写日志。
+      recordPlaylistOpenPath({
+        source: 'snapshot',
+        hit: result.hit,
+        tookMs: result.tookMs,
+        itemCount: result.items.length,
+        reason: result.hit ? undefined : 'no-snapshot-row',
+        songListUUID
+      })
+      return result
+    }
+  )
+
+  // 分散核对：renderer 滚动到某几行 / 选中 / 播放时报上来，只 stat 这几首。
+  ipcMain.handle(
+    'playlist:verify-tracks',
+    async (_e, payload: { songListUUID?: string; songListPath?: string; filePaths?: unknown }) => {
+      const songListUUID = String(payload?.songListUUID || '').trim()
+      if (!songListUUID) return { scheduled: false }
+      const filePaths = Array.isArray(payload?.filePaths)
+        ? payload.filePaths.map((item) => String(item || '').trim()).filter(Boolean)
+        : []
+      if (filePaths.length === 0) return { scheduled: false }
+      const rawPath = String(payload?.songListPath || '').trim()
+      const songListPath = rawPath ? resolveLibraryPath(rawPath).absPath : ''
+      const scheduled = await verifyPlaylistViewTracks({ songListUUID, songListPath, filePaths })
+      return { scheduled }
     }
   )
 

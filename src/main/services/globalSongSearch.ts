@@ -96,6 +96,9 @@ type PlaylistFastLoadResult = {
   missingWaveformFilePaths: string[]
   tookMs: number
   snapshotAt: number
+  /** 命中时带上扫描根与文件身份摘要，调用方据此把视图快照补上（见 songSearchHandlers）。 */
+  listRoot: string
+  identityDigest: string
 }
 
 export type MarkGlobalSongSearchDirtyOptions = {
@@ -564,7 +567,9 @@ class GlobalSongSearchEngine {
       items: [],
       missingWaveformFilePaths: [],
       tookMs: Date.now() - started,
-      snapshotAt: this.lastBuiltAt
+      snapshotAt: this.lastBuiltAt,
+      listRoot: '',
+      identityDigest: ''
     })
     if (!normalizedUuid) return miss()
 
@@ -592,7 +597,9 @@ class GlobalSongSearchEngine {
           ? verified.missingWaveformFilePaths
           : [],
         tookMs: Date.now() - started,
-        snapshotAt: this.lastBuiltAt
+        snapshotAt: this.lastBuiltAt,
+        listRoot: playlistMeta.absPath,
+        identityDigest: String(verified.identityDigest || '')
       }
     } catch {
       return miss()

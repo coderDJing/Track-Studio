@@ -1,5 +1,7 @@
 import { ipcMain } from 'electron'
 import globalSongSearchEngine, { markGlobalSongSearchDirty } from '../services/globalSongSearch'
+import { savePlaylistViewSnapshot } from '../libraryCacheDb/playlistViewSnapshot'
+import { recordPlaylistOpenPath } from '../services/playlistOpenPerfTrace'
 
 export function registerSongSearchHandlers() {
   ipcMain.handle('song-search:warmup', async (_event, payload?: { force?: boolean }) => {
@@ -21,7 +23,27 @@ export function registerSongSearchHandlers() {
     async (_event, payload?: { songListUUID?: string }) => {
       const songListUUID =
         typeof payload?.songListUUID === 'string' ? payload.songListUUID.trim() : ''
-      return await globalSongSearchEngine.getPlaylistFastLoad(songListUUID)
+      const result = await globalSongSearchEngine.getPlaylistFastLoad(songListUUID)
+      // 这条是快照没建立时的第二档路径。它刚刚对着磁盘核对过缓存身份，
+      // 结果正好可以当权威快照存下来，下一次打开就能走 'playlist:fast-open'（零 fs）。
+      if (result.hit && songListUUID && result.listRoot) {
+        savePlaylistViewSnapshot({
+          songListUUID,
+          listRoot: result.listRoot,
+          identityDigest: result.identityDigest,
+          items: result.items,
+          missingWaveformFilePaths: result.missingWaveformFilePaths
+        })
+      }
+      recordPlaylistOpenPath({
+        source: 'cache-verify',
+        hit: result.hit,
+        tookMs: result.tookMs,
+        itemCount: result.items.length,
+        reason: result.hit ? undefined : 'cache-identity-unverified',
+        songListUUID
+      })
+      return result
     }
   )
 

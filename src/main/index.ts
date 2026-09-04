@@ -58,6 +58,12 @@ import { registerSettingsHandlers } from './ipc/settingsHandlers'
 import { registerCuratedLibrarySyncIpc } from './curatedLibrarySync/ipc'
 import { registerLibraryMaintenanceHandlers } from './ipc/libraryMaintenanceHandlers'
 import { registerPlaylistHandlers } from './ipc/playlistHandlers'
+import { bindLibraryTreeContentChangeListener } from './libraryTreeWatcher'
+import {
+  invalidatePlaylistViewSnapshotsByPaths,
+  startPlaylistViewSnapshotIdleVerification,
+  stopPlaylistViewSnapshotIdleVerification
+} from './services/playlistViewSnapshotService'
 import { registerMediaMetadataHandlers } from './ipc/mediaMetadataHandlers'
 import { registerSongEditHandlers } from './ipc/songEditHandlers'
 import { registerCacheHandlers } from './ipc/cacheHandlers'
@@ -359,12 +365,20 @@ registerHotCueHandlers()
 registerMemoryCueHandlers()
 registerDevSongListTraceHandlers()
 
+// 歌单视图快照的后台核对入口。用注册钩子接 watcher，而不是让 watcher 直接 import 服务：
+// 服务要 import mainWindow 推刷新事件，而 mainWindow/index 又 import 了 watcher，直连会成环。
+bindLibraryTreeContentChangeListener((changedAbsPaths) => {
+  invalidatePlaylistViewSnapshotsByPaths(changedAbsPaths)
+})
+startPlaylistViewSnapshotIdleVerification()
+
 let appRuntimeCleanupDone = false
 const cleanupAppRuntimeResources = () => {
   if (appRuntimeCleanupDone) return
   appRuntimeCleanupDone = true
   stopCloudSyncScheduler()
   stopCuratedLibraryLiveSync()
+  stopPlaylistViewSnapshotIdleVerification()
   void cancelCuratedLibrarySync()
   terminateRegisteredChildProcesses()
   closeLibraryDb()

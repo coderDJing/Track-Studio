@@ -15,6 +15,13 @@ import {
   normalizeRoot,
   stripBeatThisDebugInfo
 } from './pathResolvers'
+// song_cache 一变，对应歌单的视图快照就可能过期：每个写入函数成功后都把快照标成
+// verified_at_ms = 0，后台核对看到哨兵值会重建一次。
+// 顺序说明：worker 扫描先 replaceSongCache（标脏），主进程随后写快照（verified_at_ms = now），
+// 所以正常扫描不会留下假脏。已知窄窗口：分析写入若正好落在"worker 写缓存"与"主进程存快照"
+// 之间，这次标脏会被覆盖，要等下一次写入才重新标脏；renderer 已经通过分析事件拿到实时值，
+// 显示不受影响。
+import { markPlaylistViewSnapshotContentStale } from './playlistViewSnapshot'
 import type { SqliteDatabase } from '../libraryDb'
 
 const migratedSongRoots = new Set<string>()
@@ -828,6 +835,7 @@ export async function replaceSongCache(
       }
     })
     run()
+    markPlaylistViewSnapshotContentStale(listRootKey)
     return true
   } catch (error) {
     log.error('[sqlite] song cache replace failed', error)
@@ -885,6 +893,7 @@ export async function upsertSongCacheEntry(
       insert.run(listRootKey, fileKey, entry.size, entry.mtimeMs, infoJson)
     })
     run()
+    markPlaylistViewSnapshotContentStale(listRootKey)
     return true
   } catch (error) {
     log.error('[sqlite] song cache upsert failed', error)
@@ -935,7 +944,10 @@ export async function updateSongCacheTimeBasisOffset(
         candidate.listRoot,
         candidate.filePath
       )
-      if (Number(result?.changes || 0) > 0) return true
+      if (Number(result?.changes || 0) > 0) {
+        markPlaylistViewSnapshotContentStale(listRootKey)
+        return true
+      }
     }
     return false
   } catch (error) {
@@ -975,6 +987,7 @@ export async function removeSongCacheEntry(listRoot: string, filePath: string): 
         resolvedFile.legacyAbs
       )
     }
+    markPlaylistViewSnapshotContentStale(listRootKey)
     return true
   } catch (error) {
     log.error('[sqlite] song cache delete failed', error)
