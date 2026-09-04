@@ -74,6 +74,13 @@ import {
   prunePendingDeletedCuratedNodes,
   purgePendingDeletedCuratedNodeShells
 } from './pendingDeletedNodes'
+import {
+  asOptionalNumber,
+  asOptionalPositiveInt,
+  localFilePendingSinceLast,
+  localNodePendingSinceLast,
+  sameSortOrder
+} from './pendingLocal'
 
 let running = false
 let cancelRequested = false
@@ -364,27 +371,6 @@ const rememberPushConflicts = (
   if (dropped.length > 0) sessionConflicts = dropped
 }
 
-const asOptionalNumber = (value: unknown): number | null => {
-  if (value === null || value === undefined || value === '') return null
-  const num = typeof value === 'number' ? value : Number(value)
-  return Number.isFinite(num) ? num : null
-}
-
-const sameSortOrder = (left: unknown, right: unknown): boolean => {
-  const a = asOptionalNumber(left)
-  const b = asOptionalNumber(right)
-  if (a === b) return true
-  // 旧服务端曾把 null 写成 0（Number(null) === 0）
-  return (a === null && b === 0) || (a === 0 && b === null)
-}
-
-const asOptionalPositiveInt = (value: unknown): number | null => {
-  const num = asOptionalNumber(value)
-  if (num === null) return null
-  const rounded = Math.floor(num)
-  return rounded > 0 ? rounded : null
-}
-
 const buildPushOps = (
   local: Awaited<ReturnType<typeof scanCuratedLibraryForSync>>,
   snapshot: Awaited<ReturnType<typeof pullCuratedSnapshot>>,
@@ -393,8 +379,17 @@ const buildPushOps = (
   const diff = diffLocalAgainstSnapshot(local, snapshot)
   const ops: CuratedLibrarySyncOp[] = []
   const now = Date.now()
+  // Date.now() 是 Unix 毫秒（UTC），同一 userKey 跨时区可比；设备时钟不准时听服务端 revision。
   const curated = findCuratedLibraryNode()
   const snapshotNodeIds = new Set(snapshot.nodes.map((node) => node.uuid))
+  const lastSnapshot = loadCachedSnapshot()
+  const lastNodeById = new Map((lastSnapshot?.nodes || []).map((node) => [node.uuid, node]))
+  const lastFileById = new Map((lastSnapshot?.files || []).map((file) => [file.fileId, file]))
+  const lastKnownFileIds = new Set<string>([
+    ...lastFileById.keys(),
+    ...(readCuratedLibrarySyncLastCloudIds()?.files || [])
+  ])
+  const lastNodeIds = new Set(lastNodeById.keys())
   const parentChanged = (cloudParent: string, localParent: string): boolean => {
     if (!curated) return cloudParent !== localParent
     return !sameCloudParentUuid(cloudParent, localParent, curated.uuid, snapshotNodeIds)
@@ -402,7 +397,18 @@ const buildPushOps = (
   const pendingDeleted = listPendingDeletedCuratedNodeIds()
   for (const node of local.nodes) {
     if (pendingDeleted.has(node.uuid)) continue
+    // 墓碑赢：扫描会把 updatedAtMs 写成 now，不能靠时间戳判断「本机更新」。
+    if (diff.tombstoneNodes.has(node.uuid) && !diff.cloudNodes.has(node.uuid)) {
+      logCuratedDeleteTrace('skip-upsert-tombstoned-node', { uuid: node.uuid, name: node.name })
+      continue
+    }
     const cloud = diff.cloudNodes.get(node.uuid)
+    const lastNode = lastNodeById.get(node.uuid)
+    const localUnchangedSinceLast =
+      !!lastNode &&
+      localNodePendingSinceLast(node, lastNode, curated?.uuid || null, lastNodeIds) === false
+    // 本机相对上次快照没改，云端却不同：那是对端改的。禁止用 now() 把过期本地写回去。
+    if (cloud && localUnchangedSinceLast) continue
     if (
       !cloud ||
       cloud.name !== node.name ||
@@ -425,7 +431,13 @@ const buildPushOps = (
   }
   for (const file of local.files) {
     if (pendingDeleted.has(file.parentUuid)) continue
+    if (diff.tombstoneFiles.has(file.fileId) && !diff.cloudFiles.has(file.fileId)) continue
     const cloud = diff.cloudFiles.get(file.fileId)
+    const lastFile = lastFileById.get(file.fileId)
+    const localUnchangedSinceLast =
+      !!lastFile &&
+      localFilePendingSinceLast(file, lastFile, curated?.uuid || null, lastNodeIds) === false
+    if (cloud && localUnchangedSinceLast) continue
     if (
       !cloud ||
       parentChanged(cloud.parentUuid, file.parentUuid) ||
@@ -466,6 +478,12 @@ const buildPushOps = (
     if (pendingDeleted.has(file.parentUuid)) continue
     const tombstone = diff.tombstoneFiles.get(file.fileId)
     if (!tombstone) continue
+    if (diff.cloudFiles.has(file.fileId)) continue
+    // 上次同步还在本机/云快照里：这是过期副本，不是回收站恢复。
+    if (lastKnownFileIds.has(file.fileId)) {
+      logCuratedDeleteTrace('skip-undelete-stale-file', { fileId: file.fileId })
+      continue
+    }
     if (file.updatedAtMs <= tombstone.deletedAtMs) continue
     ops.push({
       type: 'undeleteFile',
@@ -651,6 +669,9 @@ const incrementalApplyOptions = (): ApplyRemoteOptions => {
   const knownNodeIds = new Set<string>()
   if (cached) {
     for (const node of cached.nodes) knownNodeIds.add(node.uuid)
+    for (const tombstone of cached.tombstones) {
+      if (tombstone.kind === 'node') knownNodeIds.add(tombstone.id)
+    }
   }
   if (trustMaterialized && lastIds) {
     for (const uuid of lastIds.nodes) knownNodeIds.add(uuid)
@@ -664,7 +685,10 @@ const incrementalApplyOptions = (): ApplyRemoteOptions => {
     // 快照节点 ∪ 上次本机落地节点。只信其中一份时，删歌单容易被当成云端新建。
     knownNodeIds:
       cached || trustMaterialized || pendingDeletedNodeIds.size > 0 ? knownNodeIds : null,
-    pendingDeletedNodeIds
+    pendingDeletedNodeIds,
+    preservePendingLocal: true,
+    lastAppliedNodes: cached ? new Map(cached.nodes.map((node) => [node.uuid, node])) : null,
+    lastAppliedFiles: cached ? new Map(cached.files.map((file) => [file.fileId, file])) : null
   }
 }
 
@@ -674,13 +698,20 @@ const isDeletionOp = (op: CuratedLibrarySyncOp): boolean =>
 const summarizePushOps = (phase: string, ops: CuratedLibrarySyncOp[]): void => {
   const pending = [...listPendingDeletedCuratedNodeIds()]
   const deleteNodes = ops.filter((op) => op.type === 'deleteNode').map((op) => op.uuid)
-  if (pending.length === 0 && deleteNodes.length === 0) return
+  const upsertNodeOps = ops.filter((op) => op.type === 'upsertNode')
+  const upsertNodes = upsertNodeOps.map((op) => op.node.uuid)
+  if (pending.length === 0 && deleteNodes.length === 0 && upsertNodes.length === 0) return
   logCuratedDeleteTrace('push-ops', {
     phase,
     pending,
     deleteNode: deleteNodes,
+    upsertNodeIds: upsertNodes,
+    upsertNodeOrders: upsertNodeOps.map((op) => ({
+      uuid: op.node.uuid,
+      sortOrder: op.node.sortOrder
+    })),
     deleteFile: ops.filter((op) => op.type === 'deleteFile').length,
-    upsertNode: ops.filter((op) => op.type === 'upsertNode').length,
+    upsertNode: upsertNodes.length,
     upsertFile: ops.filter((op) => op.type === 'upsertFile').length
   })
 }
@@ -705,6 +736,18 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
       const pushedDeletes = await pushCuratedOps({
         baseRevision: snapshot.revision,
         ops: deletionOps
+      })
+      logCuratedDeleteTrace('push-deletes-result', {
+        ok: pushedDeletes.ok,
+        baseRevision: snapshot.revision,
+        nextRevision: pushedDeletes.snapshot.revision,
+        stillOnCloud: deletionOps
+          .filter((op) => op.type === 'deleteNode')
+          .map((op) => op.uuid)
+          .filter((uuid) => pushedDeletes.snapshot.nodes.some((node) => node.uuid === uuid)),
+        tombstoneIds: pushedDeletes.snapshot.tombstones
+          .filter((item) => item.kind === 'node')
+          .map((item) => item.id)
       })
       if (pushedDeletes.ok) {
         snapshot = pushedDeletes.snapshot
@@ -735,7 +778,7 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
       const conflictApplied = await applyRemoteSnapshot(
         pushed.snapshot,
         after,
-        applyOptions,
+        { ...applyOptions, preservePendingLocal: false },
         applyCtx()
       )
       writeCuratedLibrarySyncDeferredOps([...remainingDeferred, ...conflictApplied.deferred])

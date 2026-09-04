@@ -11,7 +11,7 @@ import {
   updateLibraryNodeName,
   updateLibraryNodeOrder
 } from '../libraryTreeDb'
-import { writeUuidMarker } from '../libraryTreeDbHelpers'
+import { normalizeOrder, writeUuidMarker } from '../libraryTreeDbHelpers'
 import { protectSetReferencedFilesForDeletion } from '../ipc/setListHandlers'
 import { getRecycleBinRecordByFileId, type RecycleBinRecord } from '../recycleBinDb'
 import { moveFileToRecycleBin, restoreRecycleBinFile } from '../recycleBinService'
@@ -38,9 +38,11 @@ import {
   getCuratedLibraryAbsRoot,
   getLibraryAbsRoot,
   getNodeAbsPath,
+  isPathInside,
   libraryRelativeToAbs,
   resolveCloudParentAbs,
-  resolveCloudParentToLocalUuid
+  resolveCloudParentToLocalUuid,
+  toCloudParentUuid
 } from './paths'
 import {
   listPendingDeletedCuratedNodeIds,
@@ -54,6 +56,11 @@ import type {
   CuratedLibrarySyncSnapshot
 } from '../../shared/curatedLibrarySync'
 import type { CuratedLocalFile, CuratedLocalNode } from './scan'
+import {
+  asOptionalPositiveInt,
+  localFilePendingSinceLast,
+  localNodePendingSinceLast
+} from './pendingLocal'
 
 export type DeferredRemoteOp = {
   type: 'deleteFile' | 'moveFile' | 'deleteNode'
@@ -83,6 +90,10 @@ export type ApplyRemoteOptions = {
   knownFileIds?: Set<string> | null
   knownNodeIds?: Set<string> | null
   pendingDeletedNodeIds?: Set<string> | null
+  /** 增量对账：本机相对上次快照的改动先推云，落地不要用旧快照盖掉。冲突落地必须关掉。 */
+  preservePendingLocal?: boolean
+  lastAppliedNodes?: Map<string, CuratedLibrarySyncCloudNode> | null
+  lastAppliedFiles?: Map<string, CuratedLibrarySyncCloudFile> | null
 }
 
 const isEnospc = (error: unknown): boolean => {
@@ -145,9 +156,34 @@ const adoptNodeUuid = (localUuid: string, cloudUuid: string): void => {
   if (abs) void writeUuidMarker(abs, cloudUuid)
 }
 
+const shouldPreservePendingLocal = (options: ApplyRemoteOptions): boolean =>
+  options.preservePendingLocal === true && options.adoptIds !== true && options.extras === 'keep'
+
+const liveLocalNodeFromRow = (
+  existing: {
+    uuid: string
+    parentUuid: string | null
+    dirName: string
+    nodeType: string
+    order: number | null
+  },
+  curatedUuid: string
+): CuratedLocalNode | null => {
+  if (existing.nodeType !== 'dir' && existing.nodeType !== 'songList') return null
+  return {
+    uuid: existing.uuid,
+    parentUuid: toCloudParentUuid(existing.parentUuid || curatedUuid, curatedUuid),
+    name: existing.dirName,
+    nodeType: existing.nodeType,
+    sortOrder: normalizeOrder(existing.order),
+    updatedAtMs: 0
+  }
+}
+
 const ensureCloudNodeLocal = async (
   node: CuratedLibrarySyncCloudNode,
-  scope: CloudParentScope
+  scope: CloudParentScope,
+  options: ApplyRemoteOptions
 ): Promise<string | null> => {
   if (listPendingDeletedCuratedNodeIds().has(node.uuid)) {
     logCuratedDeleteTrace('ensure-aborted-pending', { uuid: node.uuid, name: node.name })
@@ -159,6 +195,24 @@ const ensureCloudNodeLocal = async (
   if (!parentAbs) return null
   const destAbs = path.join(parentAbs, node.name)
   if (existing) {
+    const lastNode = options.lastAppliedNodes?.get(node.uuid)
+    const live = liveLocalNodeFromRow(existing, scope.curatedUuid)
+    const lastNodeIds = new Set(options.lastAppliedNodes?.keys() || [])
+    if (
+      shouldPreservePendingLocal(options) &&
+      live &&
+      localNodePendingSinceLast(live, lastNode, scope.curatedUuid, lastNodeIds)
+    ) {
+      const currentAbs = getNodeAbsPath(node.uuid)
+      logCuratedDeleteTrace('apply-skip-pending-node-meta', {
+        uuid: node.uuid,
+        name: existing.dirName,
+        localOrder: live.sortOrder,
+        cloudOrder: node.sortOrder
+      })
+      if (currentAbs) await writeUuidMarker(currentAbs, node.uuid)
+      return currentAbs
+    }
     const currentAbs = getNodeAbsPath(node.uuid)
     if (currentAbs && path.normalize(currentAbs) !== path.normalize(destAbs)) {
       await fs.ensureDir(path.dirname(destAbs))
@@ -506,7 +560,8 @@ const applyFileTombstones = async (
   snapshot: CuratedLibrarySyncSnapshot,
   localById: Map<string, CuratedLocalFile>,
   curatedRoot: string,
-  ctx: ApplyRemoteContext
+  ctx: ApplyRemoteContext,
+  options: ApplyRemoteOptions
 ): Promise<DeferredRemoteOp[]> => {
   const deferred: DeferredRemoteOp[] = []
   const cloudFileIds = new Set(snapshot.files.map((file) => file.fileId))
@@ -514,22 +569,48 @@ const applyFileTombstones = async (
     if (tombstone.kind !== 'file' || cloudFileIds.has(tombstone.id)) continue
     assertNotCancelled(ctx.signal)
     const abs = resolveLocalAbsForFileId(tombstone.id, localById)
-    if (!abs || !abs.startsWith(curatedRoot) || !(await fs.pathExists(abs))) continue
-    const identity = getCuratedSyncFileById(tombstone.id)
-    if (
-      identity &&
-      identity.updatedAtMs > tombstone.deletedAtMs &&
-      identity.location === 'curated'
-    ) {
+    if (!abs || !isPathInside(abs, curatedRoot) || !(await fs.pathExists(abs))) continue
+    // 上次本机快照里没有这首：多半是回收站恢复，不要先搬回垃圾桶。
+    // 上次有过：对端删了，本机还留着，必须落地墓碑。禁止用扫描写成 now 的 updatedAtMs 跳过。
+    if (options.knownFileIds && !options.knownFileIds.has(tombstone.id)) {
+      logCuratedDeleteTrace('tombstone-skip-restored-file', { fileId: tombstone.id })
       continue
     }
     if (isBusyPath(abs, ctx)) {
       deferred.push({ type: 'deleteFile', fileId: tombstone.id })
       continue
     }
+    logCuratedDeleteTrace('tombstone-remove-file', { fileId: tombstone.id, abs })
     await deleteLocalFile(abs, ctx)
   }
   return deferred
+}
+
+const audioExtSet = (): Set<string> => {
+  const list = store.settingConfig?.audioExt
+  const result = new Set<string>()
+  if (!Array.isArray(list)) return result
+  for (const raw of list) {
+    const ext = String(raw || '')
+      .trim()
+      .toLowerCase()
+    if (!ext) continue
+    result.add(ext.startsWith('.') ? ext : `.${ext}`)
+  }
+  return result
+}
+
+const dirHasAudioFiles = async (dirPath: string, audioExts: Set<string>): Promise<boolean> => {
+  const items = await fs.readdir(dirPath, { withFileTypes: true }).catch(() => [])
+  for (const item of items) {
+    const full = path.join(dirPath, item.name)
+    if (item.isFile()) {
+      if (audioExts.has(path.extname(item.name).toLowerCase())) return true
+    } else if (item.isDirectory() && (await dirHasAudioFiles(full, audioExts))) {
+      return true
+    }
+  }
+  return false
 }
 
 const applyNodeTombstones = async (
@@ -539,6 +620,7 @@ const applyNodeTombstones = async (
 ): Promise<DeferredRemoteOp[]> => {
   const deferred: DeferredRemoteOp[] = []
   const cloudNodeIds = new Set(snapshot.nodes.map((node) => node.uuid))
+  const audioExts = audioExtSet()
   const tombstoned = snapshot.tombstones
     .filter((item) => item.kind === 'node' && !cloudNodeIds.has(item.id))
     .map((item) => item.id)
@@ -550,17 +632,18 @@ const applyNodeTombstones = async (
     .sort((left, right) => right.depth - left.depth)
   for (const item of withDepth) {
     assertNotCancelled(ctx.signal)
-    if (!item.abs || !item.abs.startsWith(curatedRoot) || !(await fs.pathExists(item.abs))) {
+    if (!item.abs || !isPathInside(item.abs, curatedRoot) || !(await fs.pathExists(item.abs))) {
       const nodes = loadLibraryNodes() || []
       if (nodes.some((node) => node.uuid === item.uuid)) removeLibraryNode(item.uuid)
       continue
     }
-    const leftover = await fs.readdir(item.abs).catch(() => [])
-    const meaningful = leftover.filter((name) => name !== '.frkb.uuid')
-    if (meaningful.length > 0) {
+    // 本机删空歌单只看有没有音频；封面等残留不能挡住墓碑，否则对端会 upsert 把歌单救回云端。
+    if (await dirHasAudioFiles(item.abs, audioExts)) {
+      logCuratedDeleteTrace('tombstone-defer-has-audio', { uuid: item.uuid, abs: item.abs })
       deferred.push({ type: 'deleteNode', nodeUuid: item.uuid })
       continue
     }
+    logCuratedDeleteTrace('tombstone-remove-node', { uuid: item.uuid, abs: item.abs })
     await fs.remove(item.abs)
     removeLibraryNode(item.uuid)
   }
@@ -603,7 +686,7 @@ export const applyRemoteSnapshot = async (
         continue
       }
       const existedInScan = localNodeIds.has(node.uuid)
-      await ensureCloudNodeLocal(node, scope)
+      await ensureCloudNodeLocal(node, scope, options)
       if (!existedInScan) {
         logCuratedDeleteTrace('apply-ensure-missing-node', {
           uuid: node.uuid,
@@ -638,6 +721,18 @@ export const applyRemoteSnapshot = async (
       const destDir = localParentAbsOf(file.parentUuid, scope)
       if (!destDir) continue
       if (matched) {
+        const lastFile = options.lastAppliedFiles?.get(file.fileId)
+        const lastNodeIds = new Set(options.lastAppliedNodes?.keys() || [])
+        if (
+          shouldPreservePendingLocal(options) &&
+          localFilePendingSinceLast(matched, lastFile, scope.curatedUuid, lastNodeIds)
+        ) {
+          logCuratedDeleteTrace('apply-skip-pending-file-meta', {
+            fileId: file.fileId,
+            fileName: matched.fileName
+          })
+          continue
+        }
         const destPath = path.join(destDir, file.fileName)
         if (isBusyPath(matched.absPath, ctx)) {
           deferred.push({
@@ -690,7 +785,7 @@ export const applyRemoteSnapshot = async (
     }
 
     if (options.applyTombstones !== false) {
-      deferred.push(...(await applyFileTombstones(snapshot, localById, curatedRoot, ctx)))
+      deferred.push(...(await applyFileTombstones(snapshot, localById, curatedRoot, ctx, options)))
       deferred.push(...(await applyNodeTombstones(snapshot, curatedRoot, ctx)))
     }
 
@@ -706,20 +801,43 @@ export const applyRemoteSnapshot = async (
       }
       const cloudNodeIds = new Set(snapshot.nodes.map((node) => node.uuid))
       const localNodes = [...local.nodes].reverse()
+      const audioExts = audioExtSet()
       for (const node of localNodes) {
         if (cloudNodeIds.has(node.uuid)) continue
         const abs = getNodeAbsPath(node.uuid)
-        if (!abs || !abs.startsWith(curatedRoot)) continue
-        const leftover = await fs.readdir(abs).catch(() => [])
-        const meaningful = leftover.filter((name) => name !== '.frkb.uuid')
-        if (meaningful.length === 0) {
-          await fs.remove(abs)
-          removeLibraryNode(node.uuid)
-        }
+        if (!abs || !isPathInside(abs, curatedRoot)) continue
+        if (await dirHasAudioFiles(abs, audioExts)) continue
+        await fs.remove(abs)
+        removeLibraryNode(node.uuid)
       }
     }
 
-    await applyTrackNumbers(snapshot.files, scope)
+    const skipTrackParents = new Set<string>()
+    if (shouldPreservePendingLocal(options)) {
+      const lastNodeIds = new Set(options.lastAppliedNodes?.keys() || [])
+      for (const localFile of local.files) {
+        const lastFile = options.lastAppliedFiles?.get(localFile.fileId)
+        if (!lastFile) continue
+        if (
+          asOptionalPositiveInt(lastFile.trackNumber) !==
+            asOptionalPositiveInt(localFile.trackNumber) ||
+          asOptionalPositiveInt(lastFile.addedAtMs) !== asOptionalPositiveInt(localFile.addedAtMs)
+        ) {
+          skipTrackParents.add(localFile.parentUuid)
+          skipTrackParents.add(localParentUuidOf(localFile.parentUuid, scope))
+        }
+      }
+    }
+    await applyTrackNumbers(
+      snapshot.files.filter((file) => {
+        if (skipTrackParents.size === 0) return true
+        return (
+          !skipTrackParents.has(file.parentUuid) &&
+          !skipTrackParents.has(localParentUuidOf(file.parentUuid, scope))
+        )
+      }),
+      scope
+    )
     return { deferred, diskFull: false }
   } catch (error) {
     if (isEnospc(error)) return { deferred, diskFull: true }
