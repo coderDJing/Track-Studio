@@ -436,5 +436,17 @@ export declare function processR3MasterTempoOffline(pcmData: Buffer, sampleRate:
 export declare function probeAudioTimeBasisOffsetMs(filePath: string): Promise<number>
 /** 批量探测时间基偏移，顺序与输入路径一致 */
 export declare function probeAudioTimeBasisOffsetMsBatch(filePaths: Array<string>): Promise<Array<number>>
+export interface NativeAudioFileStat {
+  file: string
+  size: number
+  mtimeMs: number
+}
+export interface NativeAudioFileScanResult {
+  files: Array<NativeAudioFileStat>
+  /** 枚举到了却没能产出完整记录的条目数；> 0 表示这份列表不完整，不可用于身份摘要 */
+  skipped: number
+}
+/** 递归枚举目录下命中后缀的音频文件，同时带回 size / mtimeMs；顺序与 JS 侧 collectFilesWithExtensions 一致 */
+export declare function listAudioFilesWithStat(dir: string, audioExts: Array<string>): Promise<NativeAudioFileScanResult>
 
 export {}

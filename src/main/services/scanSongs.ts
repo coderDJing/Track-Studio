@@ -3,10 +3,9 @@ import { runWithConcurrency } from '../nodeTaskUtils'
 import { ISongInfo } from '../../types/globals'
 import { readWavRiffInfoWindows } from './wavRiffInfo'
 import {
-  listPlaylistAudioFiles,
+  listPlaylistAudioFilesWithStat,
   normalizePlaylistPathKey,
-  resolvePlaylistCacheRoot,
-  statPlaylistAudioFiles
+  resolvePlaylistCacheRoot
 } from './playlistScanPrepare'
 import * as LibraryCacheDb from '../libraryCacheDb'
 import { normalizeSongHotCues } from '../../shared/hotCues'
@@ -66,6 +65,10 @@ export type ScanSongListResult = {
     cacheLoadMs: number
     cacheRows: number
     statMs: number
+    /** 'native' = 枚举与 stat 走原生一遍过；'js' = 原生模块不可用，走两轮 JS 实现。 */
+    listMode: 'native' | 'js'
+    /** 枚举到了却拿不到 size / mtime 的条目数。> 0 说明 identityDigest 不完整。 */
+    skippedCount: number
     refreshMissingMs: number
     refreshMissingCount: number
   }
@@ -295,15 +298,15 @@ export async function scanSongList(
   options: ScanSongListOptions = {}
 ): Promise<ScanSongListResult> {
   const perfAllStart = Date.now()
-  const perfListStart = Date.now()
   let songInfoArr: ISongInfo[] = []
   let playlistTrackNumbering: {
     initialized: boolean
     repaired: boolean
   } | null = null
 
-  const songFileUrls = await listPlaylistAudioFiles(scanPath, audioExt)
-  const perfListEnd = Date.now()
+  // 枚举与 stat 一次做完：原生模块在时是一遍目录遍历，否则退回两轮 JS 实现。
+  const fileScan = await listPlaylistAudioFilesWithStat(scanPath, audioExt)
+  const filesStatList = fileScan.files
   const normalizePathKey = normalizePlaylistPathKey
 
   type CacheEntry = {
@@ -333,8 +336,6 @@ export async function scanSongList(
   const perfCacheLoadMs = Date.now() - perfCacheLoadStart
 
   const perfCacheCheckStart = Date.now()
-  const filesStatList = await statPlaylistAudioFiles(songFileUrls)
-  const perfStatMs = Date.now() - perfCacheCheckStart
   const identityDigest = computePlaylistIdentityDigest(filesStatList)
   const filesStatByKey = new Map(filesStatList.map((item) => [item.key, item]))
   const waveformAvailability = cacheRoot
@@ -429,18 +430,20 @@ export async function scanSongList(
       cacheIdentityVerified,
       identityDigest,
       perf: {
-        listFilesMs: perfListEnd - perfListStart,
+        listFilesMs: fileScan.listMs,
         cacheCheckMs: perfCacheCheckEnd - perfCacheCheckStart,
         parseMetadataMs,
         totalMs: perfAllEnd - perfAllStart,
-        filesCount: songFileUrls.length,
+        filesCount: filesStatList.length,
         successCount: scanData.length,
         failedCount,
         cacheHits: cachedInfos.length,
         parsedCount,
         cacheLoadMs: perfCacheLoadMs,
         cacheRows: cacheMap.size,
-        statMs: perfStatMs,
+        statMs: fileScan.statMs,
+        listMode: fileScan.mode,
+        skippedCount: fileScan.skipped,
         refreshMissingMs: perfRefreshMissing.ms,
         refreshMissingCount: perfRefreshMissing.count
       }

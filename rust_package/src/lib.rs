@@ -55,9 +55,11 @@ mod mixxx_waveform;
 mod pioneer_anlz_raw;
 mod pioneer_cues;
 mod pioneer_export;
+mod playlist_scan;
 mod qm_key;
 
 pub use crate::horizontal_browse_transport::*;
+pub use crate::playlist_scan::*;
 use crate::mixxx_waveform::MixxxWaveformData;
 pub use crate::pioneer_cues::*;
 pub use crate::pioneer_export::*;

@@ -19,11 +19,7 @@ import { normalizePath, resolveCacheListRootAbs } from '../libraryCacheDb/pathRe
 import { createSongListItemComparator } from '../../shared/songListItemCompare'
 import { planSongListMerge } from '../../shared/playlistViewMerge'
 import { computePlaylistIdentityDigest } from './playlistIdentitySignature'
-import {
-  listPlaylistAudioFiles,
-  statPlaylistAudioFiles,
-  PLAYLIST_STAT_CONCURRENCY
-} from './playlistScanPrepare'
+import { listPlaylistAudioFilesWithStat, PLAYLIST_STAT_CONCURRENCY } from './playlistScanPrepare'
 import { scanSongListOffMainThread } from './songListScanWorker'
 import type { scanSongList } from './scanSongs'
 
@@ -306,10 +302,10 @@ async function verifyOnce(request: VerificationRequest): Promise<void> {
 async function computeCurrentIdentityDigest(listRootAbs: string): Promise<string | null> {
   try {
     // 复用扫描用的同一套枚举 + stat，摘要才和 scanSongs 算出来的可比。
-    const files = await listPlaylistAudioFiles(listRootAbs, store.settingConfig.audioExt)
-    const stats = await statPlaylistAudioFiles(files)
-    if (stats.length !== files.length) return null
-    return computePlaylistIdentityDigest(stats)
+    const scan = await listPlaylistAudioFilesWithStat(listRootAbs, store.settingConfig.audioExt)
+    // 有条目枚举到了却拿不到 stat：这份列表不完整，宁可当"核对不了"去重扫，不能拿它下结论。
+    if (scan.skipped > 0) return null
+    return computePlaylistIdentityDigest(scan.files)
   } catch {
     return null
   }
@@ -397,7 +393,9 @@ export async function verifyPlaylistViewTracks(input: {
     if (!cached) return
     try {
       const st = await fs.stat(filePath)
-      if (st.size !== cached.size || st.mtimeMs !== cached.mtimeMs) mismatched = true
+      // 容差和 scanSongs / waveformSurfaceCache 一致（≥1ms 才算变了）：song_cache 里的
+      // mtime 可能是原生 find-data 写的，和这里 fs.stat 拿到的值允许有亚毫秒差。
+      if (st.size !== cached.size || Math.abs(st.mtimeMs - cached.mtimeMs) >= 1) mismatched = true
     } catch {
       mismatched = true
     }
