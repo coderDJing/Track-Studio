@@ -119,6 +119,10 @@ export const LIBRARY_MERGE_TABLE_PARTICIPANTS: readonly LibraryMergeTablePartici
   { table: 'unified_display_waveform_cache', strategy: 'discardable' },
   { table: 'waveform_surface_cache', strategy: 'discardable' },
   { table: 'pioneer_preview_waveform_cache', strategy: 'discardable' },
+  // Playlist view snapshots are per-machine derived rows: list_root and identity_digest describe
+  // this machine's files, and the snapshot only ever serves reads. Importing another library's
+  // snapshots would be meaningless at best, so they are dropped and rebuilt by the next scan.
+  { table: 'playlist_view_snapshot', strategy: 'discardable' },
   { table: 'set_items', strategy: 'row-transform', rowTransform: mergeSetItems },
   { table: 'mixtape_items', strategy: 'row-transform', rowTransform: mergeMixtapeItems },
   { table: 'mixtape_projects', strategy: 'row-transform', rowTransform: mergeMixtapeProjects },

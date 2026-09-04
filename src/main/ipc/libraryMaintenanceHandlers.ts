@@ -63,6 +63,9 @@ const DIRTY_DATA_SQL_TABLES = [
   'unified_display_waveform_cache',
   'waveform_surface_cache',
   'pioneer_preview_waveform_cache',
+  // 歌单视图快照也是纯派生缓存：清脏数据后不一起删，下次打开歌单还会命中旧快照，
+  // 用户点了"清理"却看到和清理前一样的列表。删掉即可，下次扫描会重新落一份。
+  'playlist_view_snapshot',
   'external_analysis_devices',
   'external_analysis_cache',
   'mixtape_items',

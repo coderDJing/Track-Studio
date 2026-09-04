@@ -17,6 +17,10 @@ const temporaryRoots: string[] = []
 const createTemporaryDatabasePath = async (): Promise<string> => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'frkb-library-merge-contract-'))
   temporaryRoots.push(root)
+  // 真实库根一定带 library/ 子目录，initLibraryDb 会先确认它存在才肯打开库（afddeffb
+  // 「防止已删除库被自动重建」）。夹具不建这个目录，下面两个 fail-fast 用例就会在契约
+  // 校验之前拿到 null，永远测不到它们要测的东西。
+  await fs.mkdir(path.join(root, 'library'), { recursive: true })
   return path.join(root, 'FRKB.database.sqlite')
 }
 
