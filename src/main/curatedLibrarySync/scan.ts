@@ -62,7 +62,7 @@ const resolveParentUuid = async (absPath: string, curatedUuid: string): Promise<
   return curatedUuid
 }
 
-const readCacheFields = async (
+export const readCacheFields = async (
   absPath: string
 ): Promise<{ trackNumber: number | null; addedAtMs: number | null }> => {
   try {

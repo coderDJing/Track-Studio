@@ -186,6 +186,7 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
       if (songFileUrls.length === 0) {
         await removeNonAudioEntries(absPath, audioExts)
         await compactTrackNumbersIfSupported()
+        scheduleCuratedLibrarySyncIfUnderCurated([absPath])
         sendProgress({
           id: progressId,
           titleKey: 'library.deleteProgressFinished',
@@ -241,6 +242,7 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
       })
       await removeNonAudioEntries(absPath, audioExts)
       await compactTrackNumbersIfSupported()
+      scheduleCuratedLibrarySyncIfUnderCurated([absPath, ...protectedMovedPaths])
       const totalSuccess = success + protectedMovedPaths.length
       const totalFailed = failed + protectedFailedCount
       const targetWindow = getWindow()

@@ -484,7 +484,6 @@ const buildPushOps = (
       logCuratedDeleteTrace('skip-undelete-stale-file', { fileId: file.fileId })
       continue
     }
-    if (file.updatedAtMs <= tombstone.deletedAtMs) continue
     ops.push({
       type: 'undeleteFile',
       file: {

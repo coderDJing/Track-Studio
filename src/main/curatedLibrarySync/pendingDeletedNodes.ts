@@ -1,4 +1,6 @@
 import fs from 'fs-extra'
+import path from 'node:path'
+import store from '../store'
 import { log } from '../log'
 import { loadLibraryNodes, removeLibraryNode } from '../libraryTreeDb'
 import {
@@ -83,6 +85,33 @@ export const prunePendingDeletedCuratedNodes = (
   writeCuratedLibrarySyncPendingDeletedNodeIds(next)
 }
 
+const audioExtSet = (): Set<string> => {
+  const list = store.settingConfig?.audioExt
+  const result = new Set<string>()
+  if (!Array.isArray(list)) return result
+  for (const raw of list) {
+    const ext = String(raw || '')
+      .trim()
+      .toLowerCase()
+    if (!ext) continue
+    result.add(ext.startsWith('.') ? ext : `.${ext}`)
+  }
+  return result
+}
+
+const dirHasAudioFiles = async (dirPath: string, audioExts: Set<string>): Promise<boolean> => {
+  const items = await fs.readdir(dirPath, { withFileTypes: true }).catch(() => [])
+  for (const item of items) {
+    const full = path.join(dirPath, item.name)
+    if (item.isFile()) {
+      if (audioExts.has(path.extname(item.name).toLowerCase())) return true
+    } else if (item.isDirectory() && (await dirHasAudioFiles(full, audioExts))) {
+      return true
+    }
+  }
+  return false
+}
+
 export const removeLocalPendingCuratedNodeShell = async (
   uuid: string,
   curatedRoot: string
@@ -91,7 +120,10 @@ export const removeLocalPendingCuratedNodeShell = async (
   if (abs && isPathInside(abs, curatedRoot) && (await fs.pathExists(abs))) {
     const leftover = await fs.readdir(abs).catch(() => [])
     const meaningful = leftover.filter((name) => name !== '.frkb.uuid')
-    if (meaningful.length === 0) await fs.remove(abs)
+    // 没有音频就整目录删（封面不能挡住待删空壳，否则 watcher 会按磁盘把歌单建回）。
+    if (meaningful.length === 0 || !(await dirHasAudioFiles(abs, audioExtSet()))) {
+      await fs.remove(abs)
+    }
   }
   removeLibraryNode(uuid)
 }
