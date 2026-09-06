@@ -540,9 +540,9 @@ const loadCachedSnapshot = () => parseCuratedLibrarySnapshot(readCuratedLibraryS
 const pullMergedSnapshot = async (sinceRevision?: number | null) => {
   const cached = loadCachedSnapshot()
   const useDiff = cached != null && Number(sinceRevision) > 0
-  const pulled = await pullCuratedSnapshot(useDiff ? sinceRevision : null)
+  const pulled = await pullCuratedSnapshot(useDiff ? sinceRevision : null, abortController?.signal)
   if (pulled.full === false && !cached) {
-    const full = await pullCuratedSnapshot(null)
+    const full = await pullCuratedSnapshot(null, abortController?.signal)
     return mergeCuratedLibrarySnapshot(null, full)
   }
   return mergeCuratedLibrarySnapshot(cached, pulled)
@@ -555,7 +555,7 @@ const waitForFirstSnapshotUnlock = async (): Promise<
   while (true) {
     throwIfCancelled()
     await waitIfSuspended()
-    const status = await fetchCuratedLibraryStatus()
+    const status = await fetchCuratedLibraryStatus(abortController?.signal)
     if (status.snapshotReady || !status.firstSnapshotLocked) return status
     if (Date.now() >= deadline) {
       throw new Error('CURATED_SYNC_FIRST_SNAPSHOT_WAIT_TIMEOUT')
@@ -586,11 +586,19 @@ const runJoin = async (
   const snapshot = await pullMergedSnapshot(null)
   if (mode === 'local-wins') {
     const failedSha = await uploadMissingBlobs(local.files)
+    const failedIds = new Set(
+      local.files.filter((file) => failedSha.has(file.contentSha256)).map((file) => file.fileId)
+    )
+    const retainedCloudFiles = snapshot.files.filter((file) => failedIds.has(file.fileId))
     const entities = buildCloudEntitiesFromLocal({
       ...local,
       files: local.files.filter((file) => !failedSha.has(file.contentSha256))
     })
-    const next = await replaceCuratedSnapshot(entities)
+    const entityIds = new Set(entities.files.map((file) => file.fileId))
+    for (const file of retainedCloudFiles) {
+      if (!entityIds.has(file.fileId)) entities.files.push(file)
+    }
+    const next = await replaceCuratedSnapshot({ ...entities, signal: abortController?.signal })
     persistAppliedSnapshot(next, {
       files: local.files.filter((file) => !failedSha.has(file.contentSha256)),
       nodes: local.nodes
@@ -632,7 +640,11 @@ const runJoin = async (
       })
       const ops = omitFailedBlobOps(buildPushOps(after, snapshot, retain), failedSha)
       if (ops.length > 0) {
-        const pushed = await pushCuratedOps({ baseRevision: snapshot.revision, ops })
+        const pushed = await pushCuratedOps({
+          baseRevision: snapshot.revision,
+          ops,
+          signal: abortController?.signal
+        })
         if (!pushed.ok) {
           rememberPushConflicts(ops, pushed.snapshot)
           const conflictApplied = await applyRemoteSnapshot(
@@ -740,7 +752,8 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
     if (deletionOps.length > 0) {
       const pushedDeletes = await pushCuratedOps({
         baseRevision: snapshot.revision,
-        ops: deletionOps
+        ops: deletionOps,
+        signal: abortController?.signal
       })
       logCuratedDeleteTrace('push-deletes-result', {
         ok: pushedDeletes.ok,
@@ -777,7 +790,11 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
       writeCuratedLibrarySyncDeferredOps(remainingDeferred)
       return { status: 'success' }
     }
-    const pushed = await pushCuratedOps({ baseRevision: snapshot.revision, ops })
+    const pushed = await pushCuratedOps({
+      baseRevision: snapshot.revision,
+      ops,
+      signal: abortController?.signal
+    })
     if (!pushed.ok) {
       rememberPushConflicts(ops, pushed.snapshot)
       const conflictApplied = await applyRemoteSnapshot(
@@ -811,6 +828,7 @@ const mapCuratedError = (message: string): string => {
     return 'cloudSync.curatedLibrary.errors.quotaExceeded'
   }
   if (upper.includes('HASH')) return 'cloudSync.curatedLibrary.errors.hashMismatch'
+  if (upper.includes('INVALID_NAME')) return 'cloudSync.curatedLibrary.errors.failed'
   if (upper.includes('CANNOTCONNECT') || upper.includes('FETCH')) {
     return 'cloudSync.errors.cannotConnect'
   }
@@ -830,14 +848,15 @@ const runFirstSnapshotUpload = async (): Promise<CuratedLibrarySyncStartResult> 
   sessionCompletedWork = true
   const local = await scanCuratedLibraryForSync()
   const failedSha = await uploadMissingBlobs(local.files)
-  const session = await beginFirstCuratedSnapshot()
+  const session = await beginFirstCuratedSnapshot(abortController?.signal)
   const entities = buildCloudEntitiesFromLocal({
     ...local,
     files: local.files.filter((file) => !failedSha.has(file.contentSha256))
   })
   const committed = await commitFirstCuratedSnapshot({
     sessionId: session.sessionId,
-    ...entities
+    ...entities,
+    signal: abortController?.signal
   })
   persistAppliedSnapshot(committed, {
     files: local.files.filter((file) => !failedSha.has(file.contentSha256)),
@@ -889,7 +908,7 @@ export const runCuratedLibrarySync = async (
   try {
     dismissProgress()
     throwIfCancelled()
-    let status = await fetchCuratedLibraryStatus()
+    let status = await fetchCuratedLibraryStatus(abortController?.signal)
     cacheQuotaFromStatus(status)
     let lastRevision = getCuratedLibrarySyncLastAppliedRevision()
     let rewound = false

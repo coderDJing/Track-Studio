@@ -101,6 +101,19 @@ const isEnospc = (error: unknown): boolean => {
   return code === 'ENOSPC' || /no space/i.test(String((error as Error)?.message || ''))
 }
 
+const isSafeLeafName = (value: string): boolean => {
+  const name = String(value || '').trim()
+  if (!name || name === '.' || name === '..') return false
+  if (/[\\/\u0000-\u001f]/.test(name) || /[<>:"|?*]/.test(name)) return false
+  if (/[ .]$/.test(name)) return false
+  const stem = name.replace(/\..*$/, '').toUpperCase()
+  return !/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/.test(stem)
+}
+
+const assertSafeLeafName = (value: string): void => {
+  if (!isSafeLeafName(value)) throw new Error('CURATED_SYNC_INVALID_NAME')
+}
+
 const assertNotCancelled = (signal: AbortSignal) => {
   if (signal.aborted) {
     const error = new Error('CURATED_SYNC_CANCELLED')
@@ -185,6 +198,7 @@ const ensureCloudNodeLocal = async (
   scope: CloudParentScope,
   options: ApplyRemoteOptions
 ): Promise<string | null> => {
+  assertSafeLeafName(node.name)
   if (listPendingDeletedCuratedNodeIds().has(node.uuid)) {
     logCuratedDeleteTrace('ensure-aborted-pending', { uuid: node.uuid, name: node.name })
     return null
@@ -282,6 +296,7 @@ const importCloudFile = async (
   ctx: ApplyRemoteContext,
   scope: CloudParentScope
 ): Promise<string | null> => {
+  assertSafeLeafName(file.fileName)
   assertNotCancelled(ctx.signal)
   const destDir = localParentAbsOf(file.parentUuid, scope)
   if (!destDir) return null
@@ -750,6 +765,7 @@ export const applyRemoteSnapshot = async (
       list.push(file)
       localByHash.set(file.contentSha256, list)
     }
+    const adoptedLocalIds = new Set<string>()
 
     for (const file of snapshot.files) {
       assertNotCancelled(ctx.signal)
@@ -757,8 +773,12 @@ export const applyRemoteSnapshot = async (
       let matched = localFile
       if (!matched && options.adoptIds) {
         const hashMatches = localByHash.get(file.sha256) || []
-        matched = hashMatches.find((item) => item.fileName === file.fileName) || hashMatches[0]
+        matched =
+          hashMatches.find(
+            (item) => !adoptedLocalIds.has(item.fileId) && item.fileName === file.fileName
+          ) || hashMatches.find((item) => !adoptedLocalIds.has(item.fileId))
         if (matched && matched.fileId !== file.fileId) {
+          adoptedLocalIds.add(matched.fileId)
           replaceCuratedSyncFileId(matched.fileId, file.fileId)
           matched = { ...matched, fileId: file.fileId }
         }

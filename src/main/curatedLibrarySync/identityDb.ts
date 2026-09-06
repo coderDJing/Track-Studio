@@ -194,3 +194,32 @@ export const notifyCuratedFilePathChanged = (fromAbs: string, toAbs: string): vo
   }
   upsertCuratedSyncFile(next)
 }
+
+export const notifyCuratedDirectoryPathChanged = (fromAbs: string, toAbs: string): void => {
+  const db = getLibraryDb()
+  const fromRel = absToCuratedRelative(fromAbs)
+  const toRel = absToCuratedRelative(toAbs)
+  if (!db || !fromRel || !toRel || fromRel === toRel) return
+  try {
+    const rows = db
+      .prepare(
+        `SELECT * FROM ${TABLE} WHERE location = 'curated' AND (relative_path = ? OR relative_path LIKE ?)`
+      )
+      .all(fromRel, `${fromRel}/%`) as Array<Record<string, unknown>>
+    const update = db.prepare(
+      `UPDATE ${TABLE} SET relative_path = ?, location_path = ?, updated_at_ms = ? WHERE file_id = ?`
+    )
+    const tx = db.transaction(() => {
+      for (const raw of rows) {
+        const row = toRow(raw)
+        if (!row) continue
+        const suffix = row.relativePath === fromRel ? '' : row.relativePath.slice(fromRel.length)
+        const nextRel = `${toRel}${suffix}`
+        update.run(nextRel, nextRel, Date.now(), row.fileId)
+      }
+    })
+    tx()
+  } catch (error) {
+    log.error('[curated-sync] directory identity migration failed', error)
+  }
+}
