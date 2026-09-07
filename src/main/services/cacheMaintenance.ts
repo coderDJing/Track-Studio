@@ -19,6 +19,7 @@ import { cancelKeyAnalysisForPaths } from './keyAnalysisQueue'
 import { getCoreFsDirName } from '../coreLibraries'
 import { resolveCanonicalSongBeatGridV2 } from '../../shared/songAnalysisCompleteness'
 import type { TrackReanalysisPlan } from '../../shared/trackReanalysisSelection'
+import { log } from '../log'
 
 const SET_CUSTODY_DIR_NAME = '__set_custody__'
 
@@ -276,9 +277,20 @@ export async function transferTrackCaches(params: {
   }
   if (!fromStat || !toStat) return
 
+  const cacheEntry = await LibraryCacheDb.loadSongCacheEntry(fromRoot, fromPath).catch(() => null)
+  const cacheSize = cacheEntry ? Number(cacheEntry.size) : NaN
+  const cacheMtime = cacheEntry ? Number(cacheEntry.mtimeMs) : NaN
+  const sizeMatches = !!cacheEntry && Number.isFinite(cacheSize) && cacheSize === toStat.size
+  // 移动是同一份文件；mtime 常被 Windows/杀毒改掉。若仍按 mtime 比对，分析结果不会跟到新歌单，
+  // 而且用新 mtime 去读波形缓存还会把源缓存当过期删掉。
+  const reuseCache = removeSource
+    ? sizeMatches
+    : !!(cacheEntry && isCacheStatMatch(cacheEntry, fromStat))
+  const waveformLoadStat =
+    reuseCache && Number.isFinite(cacheMtime) ? { size: cacheSize, mtimeMs: cacheMtime } : fromStat
+
   try {
-    const cacheEntry = await LibraryCacheDb.loadSongCacheEntry(fromRoot, fromPath)
-    if (cacheEntry && toStat && isCacheStatMatch(cacheEntry, fromStat)) {
+    if (cacheEntry && reuseCache) {
       const nextInfo = { ...cacheEntry.info, filePath: toPath }
       const updated = await LibraryCacheDb.upsertSongCacheEntry(toRoot, toPath, {
         size: toStat.size,
@@ -289,13 +301,15 @@ export async function transferTrackCaches(params: {
         await LibraryCacheDb.removeSongCacheEntry(fromRoot, fromPath)
       }
     }
-  } catch {}
+  } catch (error) {
+    log.error('[cache] 移动曲目时分析结果迁移失败', { fromPath, toPath, error })
+  }
 
   try {
     const unified = await LibraryCacheDb.loadUnifiedDisplayWaveformCacheData(
       fromRoot,
       fromPath,
-      fromStat
+      waveformLoadStat
     )
     if (unified) {
       const updated = await LibraryCacheDb.upsertUnifiedDisplayWaveformCacheEntry(
@@ -317,12 +331,12 @@ export async function transferTrackCaches(params: {
     const listPreview = await LibraryCacheDb.loadWaveformListPreviewCacheData(
       fromRoot,
       fromPath,
-      fromStat
+      waveformLoadStat
     )
     const globalOverview = await LibraryCacheDb.loadWaveformGlobalOverviewCacheData(
       fromRoot,
       fromPath,
-      fromStat
+      waveformLoadStat
     )
     if (listPreview && globalOverview) {
       const updated = await LibraryCacheDb.upsertWaveformSurfaceCacheEntry(toRoot, toPath, toStat, {

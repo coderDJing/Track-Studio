@@ -352,31 +352,36 @@ export async function moveOrCopyItemWithCheckIsExist(
   targetPath: string,
   isMove: boolean
 ) {
-  let isExist = await fs.pathExists(targetPath)
-  if (isExist) {
+  const isRetryableLock = (error: unknown): boolean => {
+    const code = String((error as { code?: unknown })?.code || '')
+    return code === 'EBUSY' || code === 'EPERM' || code === 'EACCES' || code === 'EAGAIN'
+  }
+  let dest = targetPath
+  if (await fs.pathExists(targetPath)) {
     let counter = 1
-    let baseName = path.basename(targetPath, path.extname(targetPath))
-    let extension = path.extname(targetPath)
-    let directory = path.dirname(targetPath)
+    const baseName = path.basename(targetPath, path.extname(targetPath))
+    const extension = path.extname(targetPath)
+    const directory = path.dirname(targetPath)
     let newFileName = `${baseName}(${counter})${extension}`
     while (await fs.pathExists(path.join(directory, newFileName))) {
       counter++
       newFileName = `${baseName}(${counter})${extension}`
     }
-    if (isMove) {
-      await fs.move(src, path.join(directory, newFileName))
-    } else {
-      await fs.copy(src, path.join(directory, newFileName))
-    }
-    return path.join(directory, newFileName)
-  } else {
-    if (isMove) {
-      await fs.move(src, targetPath)
-    } else {
-      await fs.copy(src, targetPath)
-    }
-    return targetPath
+    dest = path.join(directory, newFileName)
   }
+  let lastError: unknown
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      if (isMove) await fs.move(src, dest)
+      else await fs.copy(src, dest)
+      return dest
+    } catch (error) {
+      lastError = error
+      if (!isRetryableLock(error) || attempt === 5) throw error
+      await new Promise((resolve) => setTimeout(resolve, 40 * (attempt + 1)))
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError || 'move failed'))
 }
 
 type InterruptedDecision = 'resume' | 'cancel'
