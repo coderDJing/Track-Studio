@@ -51,6 +51,7 @@ export const LIBRARY_METADATA_CONTRACTS: readonly LibraryMetadataContract[] = [
   { kind: 'exact', key: 'curated_library_sync_last_failures_v1', strategy: 'local' },
   { kind: 'exact', key: 'curated_library_sync_last_quota_v1', strategy: 'local' },
   { kind: 'exact', key: 'curated_library_sync_pending_deleted_nodes_v1', strategy: 'local' },
+  { kind: 'exact', key: 'curated_library_sync_pending_join_mode_v1', strategy: 'local' },
   { kind: 'exact', key: 'cache_key_relative_migrated_v1', strategy: 'local' },
   { kind: 'exact', key: 'cache_key_relative_migrated_v2', strategy: 'local' },
   { kind: 'exact', key: 'library_tree_migration_done_v1', strategy: 'local' },
