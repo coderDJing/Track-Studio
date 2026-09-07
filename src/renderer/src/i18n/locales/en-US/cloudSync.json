@@ -70,6 +70,7 @@
         "diskFull": "The disk is full. Sync stopped and local files were left as they are.",
         "quotaExceeded": "The cloud curated-library quota is exceeded. Sync stopped.",
         "hashMismatch": "A downloaded audio file failed checksum verification. Sync stopped.",
+        "uploadIncomplete": "Some audio uploads failed, so the cloud curated library was not replaced. Retry the failed items in Settings.",
         "failed": "Curated library sync failed",
         "cannotChangeUserKey": "userKey cannot be changed while curated library sync is enabled.",
         "protocolUnsupported": "This client protocol version cannot write the cloud curated library.",

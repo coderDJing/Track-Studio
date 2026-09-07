@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import path from 'node:path'
 import { getLibraryDb } from '../libraryDb'
 import { log } from '../log'
 import type { CuratedLibrarySyncLocation } from '../../shared/curatedLibrarySync'
@@ -197,25 +198,52 @@ export const notifyCuratedFilePathChanged = (fromAbs: string, toAbs: string): vo
 
 export const notifyCuratedDirectoryPathChanged = (fromAbs: string, toAbs: string): void => {
   const db = getLibraryDb()
-  const fromRel = absToCuratedRelative(fromAbs)
-  const toRel = absToCuratedRelative(toAbs)
-  if (!db || !fromRel || !toRel || fromRel === toRel) return
+  const fromCuratedRel = absToCuratedRelative(fromAbs)
+  const toCuratedRel = absToCuratedRelative(toAbs)
+  const fromLibraryRel = absToLibraryRelative(fromAbs)
+  const toLibraryRel = absToLibraryRelative(toAbs)
+  if (!db || !fromLibraryRel || !toLibraryRel || fromLibraryRel === toLibraryRel) return
   try {
-    const rows = db
-      .prepare(
-        `SELECT * FROM ${TABLE} WHERE location = 'curated' AND (relative_path = ? OR relative_path LIKE ?)`
-      )
-      .all(fromRel, `${fromRel}/%`) as Array<Record<string, unknown>>
+    const rows = db.prepare(`SELECT * FROM ${TABLE}`).all() as Array<Record<string, unknown>>
     const update = db.prepare(
-      `UPDATE ${TABLE} SET relative_path = ?, location_path = ?, updated_at_ms = ? WHERE file_id = ?`
+      `UPDATE ${TABLE} SET relative_path = ?, location = ?, location_path = ?, updated_at_ms = ? WHERE file_id = ?`
     )
     const tx = db.transaction(() => {
       for (const raw of rows) {
         const row = toRow(raw)
         if (!row) continue
-        const suffix = row.relativePath === fromRel ? '' : row.relativePath.slice(fromRel.length)
-        const nextRel = `${toRel}${suffix}`
-        update.run(nextRel, nextRel, Date.now(), row.fileId)
+        const currentLibraryRel: string | null =
+          row.location === 'curated' && row.relativePath
+            ? fromCuratedRel &&
+              (row.relativePath === fromCuratedRel ||
+                row.relativePath.startsWith(`${fromCuratedRel}/`))
+              ? `${fromLibraryRel}${row.relativePath.slice(fromCuratedRel.length)}`
+              : null
+            : row.locationPath
+        if (
+          !currentLibraryRel ||
+          (currentLibraryRel !== fromLibraryRel &&
+            !currentLibraryRel.startsWith(`${fromLibraryRel}/`))
+        ) {
+          continue
+        }
+        const suffix = currentLibraryRel.slice(fromLibraryRel.length).replace(/^[/\\]+/, '')
+        const nextLibraryRel = suffix
+          ? `${toLibraryRel.replace(/\/$/, '')}/${suffix.replace(/\\/g, '/')}`
+          : toLibraryRel
+        const nextAbs = suffix ? path.join(toAbs, ...suffix.split('/')) : toAbs
+        const detected = detectCuratedFileLocation(nextAbs)
+        const nextCuratedRel =
+          detected.location === 'curated' && toCuratedRel
+            ? `${toCuratedRel}${currentLibraryRel.slice(fromLibraryRel.length)}`
+            : ''
+        update.run(
+          nextCuratedRel,
+          detected.location,
+          detected.locationPath || nextLibraryRel,
+          Date.now(),
+          row.fileId
+        )
       }
     })
     tx()

@@ -20,7 +20,11 @@ export const uploadBlobWithResume = async (params: {
   onSuspendWait?: () => Promise<void>
   throwIfCancelled?: () => void
 }): Promise<void> => {
-  const begin = await beginBlobUpload({ sha256: params.sha256, size: params.size })
+  const begin = await beginBlobUpload({
+    sha256: params.sha256,
+    size: params.size,
+    signal: params.signal
+  })
   if (!begin.needed) return
   const chunkSize = Math.min(
     CURATED_LIBRARY_SYNC_BLOB_CHUNK_SIZE,
@@ -57,11 +61,8 @@ export const uploadBlobWithResume = async (params: {
             break
           }
           if (isAbortError(error)) {
-            await params.onSuspendWait?.()
-            const again = await beginBlobUpload({ sha256: params.sha256, size: params.size })
-            if (!again.needed) return
-            offset = again.uploadedBytes
-            break
+            params.throwIfCancelled?.()
+            throw error
           }
           attempt += 1
           if (attempt >= CHUNK_RETRIES) throw error

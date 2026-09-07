@@ -70,6 +70,7 @@
         "diskFull": "磁盘空间不足，已停止同步。本机保持现状。",
         "quotaExceeded": "云端精选库配额不足，已停止同步。",
         "hashMismatch": "下载的音频校验失败，已停止同步。",
+        "uploadIncomplete": "部分音频上传失败，云端精选库未被覆盖。请在设置中重试失败项。",
         "failed": "精选库同步失败",
         "cannotChangeUserKey": "已开启精选库同步时不能更换 userKey。",
         "protocolUnsupported": "当前客户端协议版本无法写入云端精选库。",

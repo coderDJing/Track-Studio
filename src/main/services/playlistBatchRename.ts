@@ -9,6 +9,7 @@ import { replaceMixtapeFilePath } from '../mixtapeDb'
 import { remapKeyAnalysisTrackedPath } from './keyAnalysisQueue'
 import { readTrackMetadata, readTrackSongInfo } from './metadataEditor'
 import { updateSetItemFilePathReferences } from '../setListDb'
+import { notifyCuratedFilePathChanged } from '../curatedLibrarySync/identityDb'
 import type {
   IBatchRenameExecutionRequestItem,
   IBatchRenameExecutionResult,
@@ -486,6 +487,7 @@ const finalizeUpdatedSong = async (oldFilePath: string, newFilePath: string) => 
   remapKeyAnalysisTrackedPath(oldFilePath, newFilePath)
   replaceMixtapeFilePath(oldFilePath, newFilePath)
   updateSetItemFilePathReferences(oldFilePath, newFilePath)
+  notifyCuratedFilePathChanged(oldFilePath, newFilePath)
   return songInfo
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { mergeCuratedLibrarySnapshot } from './snapshotMerge'
+import { mergeCuratedLibrarySnapshot, parseCuratedLibrarySnapshot } from './snapshotMerge'
+import { CURATED_LIBRARY_SYNC_ROOT_PARENT_UUID } from '../../shared/curatedLibrarySync'
 import type { CuratedLibrarySyncSnapshot } from '../../shared/curatedLibrarySync'
 
 const base = (): CuratedLibrarySyncSnapshot => ({
@@ -102,5 +103,44 @@ describe('mergeCuratedLibrarySnapshot', () => {
     const merged = mergeCuratedLibrarySnapshot(cached, pulled)
     expect(merged.files).toHaveLength(1)
     expect(merged.tombstones).toEqual([])
+  })
+})
+
+describe('parseCuratedLibrarySnapshot', () => {
+  const node = {
+    uuid: '11111111-1111-4111-8111-111111111111',
+    parentUuid: CURATED_LIBRARY_SYNC_ROOT_PARENT_UUID,
+    name: 'List',
+    nodeType: 'songList' as const,
+    sortOrder: null,
+    updatedAtMs: 1
+  }
+
+  it('拒绝畸形响应，不能把它当成空云端精选库', () => {
+    expect(parseCuratedLibrarySnapshot({ protocolVersion: 1, revision: 2 })).toBeNull()
+    expect(
+      parseCuratedLibrarySnapshot({
+        protocolVersion: 1,
+        revision: 2,
+        snapshotReady: true,
+        nodes: [node],
+        files: [{}],
+        tombstones: []
+      })
+    ).toBeNull()
+  })
+
+  it('接受完整协议快照', () => {
+    expect(
+      parseCuratedLibrarySnapshot({
+        protocolVersion: 1,
+        revision: 2,
+        snapshotReady: true,
+        full: true,
+        nodes: [node],
+        files: [],
+        tombstones: []
+      })
+    ).toMatchObject({ protocolVersion: 1, revision: 2, snapshotReady: true, nodes: [node] })
   })
 })

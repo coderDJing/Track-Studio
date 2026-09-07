@@ -94,13 +94,17 @@ export const fetchCuratedLibraryStatus = async (
     })
   }
   const data = json.data
+  const protocolVersion = Number(data.protocolVersion)
+  if (protocolVersion !== CURATED_LIBRARY_SYNC_PROTOCOL_VERSION) {
+    throw new Error('CURATED_SYNC_PROTOCOL_UNSUPPORTED')
+  }
   return {
     revision: Number(data.revision) || 0,
     snapshotReady: data.snapshotReady === true,
     fileCount: Number(data.fileCount) || 0,
     blobBytes: Number(data.blobBytes) || 0,
     quotaBytes: Number(data.quotaBytes) || 0,
-    protocolVersion: Number(data.protocolVersion) || CURATED_LIBRARY_SYNC_PROTOCOL_VERSION,
+    protocolVersion,
     firstSnapshotLocked: data.firstSnapshotLocked === true
   }
 }
@@ -225,12 +229,17 @@ export type CuratedBlobBeginResult = {
 export const beginBlobUpload = async (params: {
   sha256: string
   size: number
+  signal?: AbortSignal
 }): Promise<CuratedBlobBeginResult> => {
-  const json = await postJson('/blob/begin', {
-    userKey: getUserKey(),
-    sha256: params.sha256,
-    size: params.size
-  })
+  const json = await postJson(
+    '/blob/begin',
+    {
+      userKey: getUserKey(),
+      sha256: params.sha256,
+      size: params.size
+    },
+    params.signal
+  )
   if (json.success !== true || !isRecord(json.data)) {
     throw Object.assign(new Error(String(json.error || 'CURATED_SYNC_BLOB_BEGIN_FAILED')), {
       payload: json

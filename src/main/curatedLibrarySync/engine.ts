@@ -46,7 +46,6 @@ import {
 } from '../../shared/curatedLibrarySync'
 import { RECYCLE_BIN_UUID } from '../../shared/recycleBin'
 import {
-  beginBlobUpload,
   beginFirstCuratedSnapshot,
   commitFirstCuratedSnapshot,
   fetchCuratedLibraryStatus,
@@ -305,40 +304,38 @@ const uploadMissingBlobs = async (files: CuratedLocalFile[]): Promise<Set<string
     seen.add(file.contentSha256)
     index += 1
     try {
-      const begin = await beginBlobUpload({ sha256: file.contentSha256, size: file.contentSize })
-      if (!begin.needed) continue
       abortController = new AbortController()
-      try {
-        await runPlaybackAwareBackgroundFileIo(
-          'curated-library-sync:upload-blob',
-          { filePath: file.absPath },
-          () =>
-            uploadBlobWithResume({
-              sha256: file.contentSha256,
-              filePath: file.absPath,
-              size: file.contentSize,
-              signal: abortController?.signal,
-              onSuspendWait: waitIfSuspended,
-              throwIfCancelled
-            })
-        )
-      } catch (error) {
-        if (suspendPaused) {
-          await waitIfSuspended()
-          abortController = new AbortController()
-          await uploadBlobWithResume({
+      await runPlaybackAwareBackgroundFileIo(
+        'curated-library-sync:upload-blob',
+        { filePath: file.absPath },
+        () =>
+          uploadBlobWithResume({
             sha256: file.contentSha256,
             filePath: file.absPath,
             size: file.contentSize,
-            signal: abortController.signal,
+            signal: abortController?.signal,
             onSuspendWait: waitIfSuspended,
             throwIfCancelled
           })
-          continue
-        }
-        throw error
-      }
+      )
     } catch (error) {
+      if (
+        !cancelRequested &&
+        abortController?.signal.aborted === true &&
+        (error as { name?: string })?.name === 'AbortError'
+      ) {
+        await waitIfSuspended()
+        abortController = new AbortController()
+        await uploadBlobWithResume({
+          sha256: file.contentSha256,
+          filePath: file.absPath,
+          size: file.contentSize,
+          signal: abortController.signal,
+          onSuspendWait: waitIfSuspended,
+          throwIfCancelled
+        })
+        continue
+      }
       if (cancelRequested || (error as { name?: string })?.name === 'AbortError') throw error
       failed.add(file.contentSha256)
       recordFailure({
@@ -583,18 +580,13 @@ const runJoin = async (
   const snapshot = await pullMergedSnapshot(null)
   if (mode === 'local-wins') {
     const failedSha = await uploadMissingBlobs(local.files)
-    const failedIds = new Set(
-      local.files.filter((file) => failedSha.has(file.contentSha256)).map((file) => file.fileId)
-    )
-    const retainedCloudFiles = snapshot.files.filter((file) => failedIds.has(file.fileId))
+    if (failedSha.size > 0) {
+      return { status: 'failed', message: 'cloudSync.curatedLibrary.errors.uploadIncomplete' }
+    }
     const entities = buildCloudEntitiesFromLocal({
       ...local,
       files: local.files.filter((file) => !failedSha.has(file.contentSha256))
     })
-    const entityIds = new Set(entities.files.map((file) => file.fileId))
-    for (const file of retainedCloudFiles) {
-      if (!entityIds.has(file.fileId)) entities.files.push(file)
-    }
     const next = await replaceCuratedSnapshot({ ...entities, signal: abortController?.signal })
     persistAppliedSnapshot(next, {
       files: local.files.filter((file) => !failedSha.has(file.contentSha256)),
@@ -845,6 +837,9 @@ const runFirstSnapshotUpload = async (): Promise<CuratedLibrarySyncStartResult> 
   sessionCompletedWork = true
   const local = await scanCuratedLibraryForSync()
   const failedSha = await uploadMissingBlobs(local.files)
+  if (failedSha.size > 0) {
+    return { status: 'failed', message: 'cloudSync.curatedLibrary.errors.uploadIncomplete' }
+  }
   const session = await beginFirstCuratedSnapshot(abortController?.signal)
   const entities = buildCloudEntitiesFromLocal({
     ...local,
@@ -868,6 +863,9 @@ export const isCuratedLibrarySyncRunning = (): boolean => running
 export const cancelCuratedLibrarySync = async (): Promise<{ ok: true }> => {
   cancelRequested = true
   abortController?.abort()
+  const waiters = resumeWaiters
+  resumeWaiters = []
+  for (const waiter of waiters) waiter()
   return { ok: true }
 }
 

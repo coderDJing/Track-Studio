@@ -11,6 +11,7 @@ import { updateSongCacheEntry, purgeCoverCacheForTrack, findSongListRoot } from 
 import * as LibraryCacheDb from '../libraryCacheDb'
 import type { IAudioMetadata, IPicture } from 'music-metadata'
 import { updateSetItemFilePathReferences } from '../setListDb'
+import { notifyCuratedFilePathChanged } from '../curatedLibrarySync/identityDb'
 import { registerChildProcess } from './childProcessRegistry'
 
 async function parseMetadata(filePath: string) {
@@ -509,6 +510,7 @@ export async function updateTrackMetadata(
     await purgeCoverCacheForTrack(filePath, renamedFrom)
     if (renamedFrom) {
       updateSetItemFilePathReferences(renamedFrom, filePath)
+      notifyCuratedFilePathChanged(renamedFrom, filePath)
     }
 
     // Mark track as auto-filled if requested (from MusicBrainz search)
