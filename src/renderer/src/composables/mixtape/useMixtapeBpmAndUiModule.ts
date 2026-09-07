@@ -252,7 +252,6 @@ export const createUseMixtapeBpmAndUiModule = (ctx: UseMixtapeBpmAndUiModuleCont
     resolveMixtapeStemModelByProfile,
     resolveMixtapeOutputProgressState,
     normalizeDownbeatBeatOffset,
-    normalizeFirstBeatMs,
     normalizeBpm,
     MIXTAPE_ENVELOPE_PARAMS_TRADITIONAL,
     MIXTAPE_ENVELOPE_PARAMS_STEM,

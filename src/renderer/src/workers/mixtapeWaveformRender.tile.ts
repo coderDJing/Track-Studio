@@ -7,7 +7,7 @@ import type {
   StemWaveformData,
   WaveformStemId
 } from './mixtapeWaveformRender.types'
-import { GRID_BEAT4_LINE_WIDTH, GRID_BEAT_LINE_WIDTH } from '../composables/mixtape/constants'
+import { GRID_BEAT_LINE_WIDTH } from '../composables/mixtape/constants'
 import { resolveMixtapeTrackLoopTileSections } from '../composables/mixtape/mixtapeTrackLoop'
 import { createTrackTimeMapFromSnapshotPayload } from '../composables/mixtape/trackTimeMapFactory'
 import { resolveRoundedTrackLocalPx } from '../composables/mixtape/timelinePixelMath'

@@ -48,6 +48,10 @@ const scheduleCloudChange = (revision: number, snapshotReady: boolean) => {
     const lastNow = getCuratedLibrarySyncLastAppliedRevision()
     if (lastNow === null) return
     if (!snapshotReady || revision < lastNow) {
+      if (snapshotReady && revision < lastNow) {
+        void enqueueCuratedLibrarySync({ trigger: 'scheduled', joinMode: 'cloud-wins' })
+        return
+      }
       enqueueJoinAlignment()
       return
     }
@@ -73,7 +77,8 @@ const runLoop = async (token: number) => {
           if (event !== 'revision' && event !== 'snapshot') return
           connected = true
           backoffMs = 2000
-          const revision = Number(data.revision) || 0
+          const revision = Number(data.revision)
+          if (!Number.isSafeInteger(revision) || revision < 0) return
           const snapshotReady = data.snapshotReady === true
           scheduleCloudChange(revision, snapshotReady)
         }

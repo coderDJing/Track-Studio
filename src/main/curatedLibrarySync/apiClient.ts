@@ -38,12 +38,24 @@ const getUserKey = (): string =>
 const asSnapshot = (raw: unknown): CuratedLibrarySyncSnapshot | null =>
   parseCuratedLibrarySnapshot(raw)
 
-async function postJson(pathName: string, body: Record<string, unknown>): Promise<RecordLike> {
+const combineSignals = (signal?: AbortSignal): AbortSignal => {
+  const timeout = AbortSignal.timeout(60_000)
+  if (!signal) return timeout
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any([signal, timeout])
+  return signal
+}
+
+async function postJson(
+  pathName: string,
+  body: Record<string, unknown>,
+  signal?: AbortSignal
+): Promise<RecordLike> {
   const baseUrl = await resolveBaseUrl()
   const res = await fetchWithSystemProxy(`${baseUrl}${PREFIX}${pathName}`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: combineSignals(signal)
   })
   const json = await res.json().catch(() => null)
   if (!isRecord(json)) {
@@ -63,8 +75,8 @@ export type CuratedLibrarySyncStatus = {
   firstSnapshotLocked: boolean
 }
 
-export const resetCloudCuratedLibrary = async (): Promise<void> => {
-  const json = await postJson('/reset', { userKey: getUserKey() })
+export const resetCloudCuratedLibrary = async (signal?: AbortSignal): Promise<void> => {
+  const json = await postJson('/reset', { userKey: getUserKey() }, signal)
   if (json.success !== true) {
     throw Object.assign(new Error(String(json.error || 'CURATED_SYNC_RESET_FAILED')), {
       payload: json
@@ -72,27 +84,35 @@ export const resetCloudCuratedLibrary = async (): Promise<void> => {
   }
 }
 
-export const fetchCuratedLibraryStatus = async (): Promise<CuratedLibrarySyncStatus> => {
-  const json = await postJson('/status', { userKey: getUserKey() })
+export const fetchCuratedLibraryStatus = async (
+  signal?: AbortSignal
+): Promise<CuratedLibrarySyncStatus> => {
+  const json = await postJson('/status', { userKey: getUserKey() }, signal)
   if (json.success !== true || !isRecord(json.data)) {
     throw Object.assign(new Error(String(json.error || 'CURATED_SYNC_STATUS_FAILED')), {
       payload: json
     })
   }
   const data = json.data
+  const protocolVersion = Number(data.protocolVersion)
+  if (protocolVersion !== CURATED_LIBRARY_SYNC_PROTOCOL_VERSION) {
+    throw new Error('CURATED_SYNC_PROTOCOL_UNSUPPORTED')
+  }
   return {
     revision: Number(data.revision) || 0,
     snapshotReady: data.snapshotReady === true,
     fileCount: Number(data.fileCount) || 0,
     blobBytes: Number(data.blobBytes) || 0,
     quotaBytes: Number(data.quotaBytes) || 0,
-    protocolVersion: Number(data.protocolVersion) || CURATED_LIBRARY_SYNC_PROTOCOL_VERSION,
+    protocolVersion,
     firstSnapshotLocked: data.firstSnapshotLocked === true
   }
 }
 
-export const beginFirstCuratedSnapshot = async (): Promise<{ sessionId: string }> => {
-  const json = await postJson('/begin-first-snapshot', { userKey: getUserKey() })
+export const beginFirstCuratedSnapshot = async (
+  signal?: AbortSignal
+): Promise<{ sessionId: string }> => {
+  const json = await postJson('/begin-first-snapshot', { userKey: getUserKey() }, signal)
   if (json.success !== true || !isRecord(json.data) || typeof json.data.sessionId !== 'string') {
     throw Object.assign(new Error(String(json.error || 'CURATED_SYNC_BEGIN_FAILED')), {
       payload: json
@@ -105,14 +125,19 @@ export const commitFirstCuratedSnapshot = async (params: {
   sessionId: string
   nodes: CuratedLibrarySyncCloudNode[]
   files: CuratedLibrarySyncCloudFile[]
+  signal?: AbortSignal
 }): Promise<CuratedLibrarySyncSnapshot> => {
-  const json = await postJson('/commit-snapshot', {
-    userKey: getUserKey(),
-    sessionId: params.sessionId,
-    protocolVersion: CURATED_LIBRARY_SYNC_PROTOCOL_VERSION,
-    nodes: params.nodes,
-    files: params.files
-  })
+  const json = await postJson(
+    '/commit-snapshot',
+    {
+      userKey: getUserKey(),
+      sessionId: params.sessionId,
+      protocolVersion: CURATED_LIBRARY_SYNC_PROTOCOL_VERSION,
+      nodes: params.nodes,
+      files: params.files
+    },
+    params.signal
+  )
   const snapshot = asSnapshot(json.data)
   if (json.success !== true || !snapshot) {
     throw Object.assign(new Error(String(json.error || 'CURATED_SYNC_COMMIT_FAILED')), {
@@ -125,14 +150,19 @@ export const commitFirstCuratedSnapshot = async (params: {
 export const replaceCuratedSnapshot = async (params: {
   nodes: CuratedLibrarySyncCloudNode[]
   files: CuratedLibrarySyncCloudFile[]
+  signal?: AbortSignal
 }): Promise<CuratedLibrarySyncSnapshot> => {
-  const json = await postJson('/commit-snapshot', {
-    userKey: getUserKey(),
-    replaceExisting: true,
-    protocolVersion: CURATED_LIBRARY_SYNC_PROTOCOL_VERSION,
-    nodes: params.nodes,
-    files: params.files
-  })
+  const json = await postJson(
+    '/commit-snapshot',
+    {
+      userKey: getUserKey(),
+      replaceExisting: true,
+      protocolVersion: CURATED_LIBRARY_SYNC_PROTOCOL_VERSION,
+      nodes: params.nodes,
+      files: params.files
+    },
+    params.signal
+  )
   const snapshot = asSnapshot(json.data)
   if (json.success !== true || !snapshot) {
     throw Object.assign(new Error(String(json.error || 'CURATED_SYNC_REPLACE_FAILED')), {
@@ -143,13 +173,14 @@ export const replaceCuratedSnapshot = async (params: {
 }
 
 export const pullCuratedSnapshot = async (
-  sinceRevision?: number | null
+  sinceRevision?: number | null,
+  signal?: AbortSignal
 ): Promise<CuratedLibrarySyncSnapshot> => {
   const body: Record<string, unknown> = { userKey: getUserKey() }
   if (Number.isFinite(Number(sinceRevision)) && Number(sinceRevision) > 0) {
     body.sinceRevision = Math.floor(Number(sinceRevision))
   }
-  const json = await postJson('/pull', body)
+  const json = await postJson('/pull', body, signal)
   const snapshot = asSnapshot(json.data)
   if (json.success !== true || !snapshot) {
     throw Object.assign(new Error(String(json.error || 'CURATED_SYNC_PULL_FAILED')), {
@@ -162,16 +193,21 @@ export const pullCuratedSnapshot = async (
 export const pushCuratedOps = async (params: {
   baseRevision: number
   ops: CuratedLibrarySyncOp[]
+  signal?: AbortSignal
 }): Promise<
   | { ok: true; snapshot: CuratedLibrarySyncSnapshot }
   | { ok: false; conflict: true; snapshot: CuratedLibrarySyncSnapshot }
 > => {
-  const json = await postJson('/push', {
-    userKey: getUserKey(),
-    baseRevision: params.baseRevision,
-    protocolVersion: CURATED_LIBRARY_SYNC_PROTOCOL_VERSION,
-    ops: params.ops
-  })
+  const json = await postJson(
+    '/push',
+    {
+      userKey: getUserKey(),
+      baseRevision: params.baseRevision,
+      protocolVersion: CURATED_LIBRARY_SYNC_PROTOCOL_VERSION,
+      ops: params.ops
+    },
+    params.signal
+  )
   const snapshot = asSnapshot(json.data)
   if (Number(json._httpStatus) === 409 && snapshot) {
     return { ok: false, conflict: true, snapshot }
@@ -193,12 +229,17 @@ export type CuratedBlobBeginResult = {
 export const beginBlobUpload = async (params: {
   sha256: string
   size: number
+  signal?: AbortSignal
 }): Promise<CuratedBlobBeginResult> => {
-  const json = await postJson('/blob/begin', {
-    userKey: getUserKey(),
-    sha256: params.sha256,
-    size: params.size
-  })
+  const json = await postJson(
+    '/blob/begin',
+    {
+      userKey: getUserKey(),
+      sha256: params.sha256,
+      size: params.size
+    },
+    params.signal
+  )
   if (json.success !== true || !isRecord(json.data)) {
     throw Object.assign(new Error(String(json.error || 'CURATED_SYNC_BLOB_BEGIN_FAILED')), {
       payload: json

@@ -13,6 +13,7 @@ import {
 } from '../../utils'
 import { transferTrackCaches } from '../../services/cacheMaintenance'
 import { scheduleCuratedLibrarySyncIfUnderCurated } from '../../cloudSyncScheduler'
+import { notifyCuratedDirectoryPathChanged } from '../../curatedLibrarySync/identityDb'
 import { getNodeAbsPath } from '../../curatedLibrarySync/paths'
 import { rememberCuratedLibraryNodeDeletion } from '../../curatedLibrarySync/pendingDeletedNodes'
 import {
@@ -574,6 +575,7 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
               oldFullPath,
               newFullPath
             })
+            notifyCuratedDirectoryPathChanged(oldFullPath, newFullPath)
             operationStatus = 'renamed'
           } else {
             operationStatus = 'rename_failed_source_not_found'
@@ -751,6 +753,7 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
               oldFullPath: srcFullPath,
               newFullPath: destFullPath
             })
+            notifyCuratedDirectoryPathChanged(srcFullPath, destFullPath)
             operationStatus = 'moved'
           } else {
             operationStatus = 'move_failed_source_not_found'

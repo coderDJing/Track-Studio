@@ -70,6 +70,7 @@
         "diskFull": "The disk is full. Sync stopped and local files were left as they are.",
         "quotaExceeded": "The cloud curated-library quota is exceeded. Sync stopped.",
         "hashMismatch": "A downloaded audio file failed checksum verification. Sync stopped.",
+        "uploadIncomplete": "Some audio uploads failed, so the cloud curated library was not replaced. Retry the failed items in Settings.",
         "failed": "Curated library sync failed",
         "cannotChangeUserKey": "userKey cannot be changed while curated library sync is enabled.",
         "protocolUnsupported": "This client protocol version cannot write the cloud curated library.",
@@ -113,11 +114,11 @@
       "reset": {
         "sectionTitle": "Clear cloud curated library",
         "title": "Dangerous: Clear cloud curated library",
-        "description": "This empties the cloud curated library for the current userKey (folders, playlists, and audio) and frees that quota. If curated sync is still enabled on this computer, local curated tracks are moved to the recycle bin to match the empty cloud. Cloud fingerprints and curated artists are not cleared. IRREVERSIBLE. Type DELETE to continue.",
+        "description": "This empties the cloud curated library for the current userKey (folders, playlists, and audio) and frees that quota. Every device with curated sync enabled follows the empty cloud immediately (no first-alignment prompt); local curated tracks go to the recycle bin. Cloud fingerprints and curated artists are not cleared. IRREVERSIBLE. Type DELETE to continue.",
         "short": "Clear cloud curated library",
-        "hint": "The cloud curated library becomes empty. If sync is still on, this computer's curated library is cleared into the recycle bin too. Cloud fingerprints and curated artists are left untouched.",
+        "hint": "The cloud curated library becomes empty. All devices with sync on also clear their curated libraries into the recycle bin, without a first-alignment prompt. Cloud fingerprints and curated artists are left untouched.",
         "needUserKey": "Save a userKey first, then try this action again.",
-        "success": "Cloud curated library cleared. If curated sync is on, local curated tracks were moved to the recycle bin."
+        "success": "Cloud curated library cleared. Devices with sync on will match the empty cloud; curated tracks go to the recycle bin."
       }
     },
     "minimize": "Minimize",

@@ -13,7 +13,6 @@ import {
 import {
   GAIN_ENVELOPE_MAX_POINTS_PER_SEC,
   GAIN_ENVELOPE_MIN_GAP_RATIO,
-  GAIN_ENVELOPE_PERSIST_DEBOUNCE_MS,
   GAIN_ENVELOPE_SAME_SEC_EPSILON,
   MIX_PARAM_UNDO_STACK_LIMIT
 } from '@renderer/composables/mixtape/gainEnvelopeEditorConstants'

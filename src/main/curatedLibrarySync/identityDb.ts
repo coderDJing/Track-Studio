@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import path from 'node:path'
 import { getLibraryDb } from '../libraryDb'
 import { log } from '../log'
 import type { CuratedLibrarySyncLocation } from '../../shared/curatedLibrarySync'
@@ -193,4 +194,60 @@ export const notifyCuratedFilePathChanged = (fromAbs: string, toAbs: string): vo
     next.fileName = toAbs.split(/[/\\]/).pop() || row.fileName
   }
   upsertCuratedSyncFile(next)
+}
+
+export const notifyCuratedDirectoryPathChanged = (fromAbs: string, toAbs: string): void => {
+  const db = getLibraryDb()
+  const fromCuratedRel = absToCuratedRelative(fromAbs)
+  const toCuratedRel = absToCuratedRelative(toAbs)
+  const fromLibraryRel = absToLibraryRelative(fromAbs)
+  const toLibraryRel = absToLibraryRelative(toAbs)
+  if (!db || !fromLibraryRel || !toLibraryRel || fromLibraryRel === toLibraryRel) return
+  try {
+    const rows = db.prepare(`SELECT * FROM ${TABLE}`).all() as Array<Record<string, unknown>>
+    const update = db.prepare(
+      `UPDATE ${TABLE} SET relative_path = ?, location = ?, location_path = ?, updated_at_ms = ? WHERE file_id = ?`
+    )
+    const tx = db.transaction(() => {
+      for (const raw of rows) {
+        const row = toRow(raw)
+        if (!row) continue
+        const currentLibraryRel: string | null =
+          row.location === 'curated' && row.relativePath
+            ? fromCuratedRel &&
+              (row.relativePath === fromCuratedRel ||
+                row.relativePath.startsWith(`${fromCuratedRel}/`))
+              ? `${fromLibraryRel}${row.relativePath.slice(fromCuratedRel.length)}`
+              : null
+            : row.locationPath
+        if (
+          !currentLibraryRel ||
+          (currentLibraryRel !== fromLibraryRel &&
+            !currentLibraryRel.startsWith(`${fromLibraryRel}/`))
+        ) {
+          continue
+        }
+        const suffix = currentLibraryRel.slice(fromLibraryRel.length).replace(/^[/\\]+/, '')
+        const nextLibraryRel = suffix
+          ? `${toLibraryRel.replace(/\/$/, '')}/${suffix.replace(/\\/g, '/')}`
+          : toLibraryRel
+        const nextAbs = suffix ? path.join(toAbs, ...suffix.split('/')) : toAbs
+        const detected = detectCuratedFileLocation(nextAbs)
+        const nextCuratedRel =
+          detected.location === 'curated' && toCuratedRel
+            ? `${toCuratedRel}${currentLibraryRel.slice(fromLibraryRel.length)}`
+            : ''
+        update.run(
+          nextCuratedRel,
+          detected.location,
+          detected.locationPath || nextLibraryRel,
+          Date.now(),
+          row.fileId
+        )
+      }
+    })
+    tx()
+  } catch (error) {
+    log.error('[curated-sync] directory identity migration failed', error)
+  }
 }

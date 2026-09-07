@@ -116,16 +116,6 @@ const ALGORITHMIC_FEATURE_KEYS: Array<keyof AlgorithmicValues> = [
   'recurrenceNovelty'
 ]
 
-const ALGORITHMIC_CORE_FEATURE_KEYS = [
-  'energy',
-  'attack',
-  'low',
-  'high',
-  'bass',
-  'density',
-  'tension'
-] as const
-
 const STANDARD_SEQUENCE: readonly AlgorithmicState[] = [
   { kind: 'intro', minBars: 8, maxBars: 64 },
   { kind: 'build', minBars: 4, maxBars: 24 },
@@ -308,35 +298,6 @@ const buildAlgorithmicBarFeatures = (
   if (features.length > ALGORITHMIC_MAX_BARS) return features
 
   return enrichStructuralFeatures(features)
-}
-
-const createEmptyCoreValues = (): AlgorithmicCoreValues => ({
-  energy: 0,
-  attack: 0,
-  low: 0,
-  high: 0,
-  bass: 0,
-  density: 0,
-  tension: 0
-})
-
-const averageCoreFeatures = (
-  features: readonly AlgorithmicBarFeature[],
-  startIndex: number,
-  endIndex: number
-): AlgorithmicCoreValues => {
-  const values = createEmptyCoreValues()
-  const start = clamp(Math.floor(startIndex), 0, features.length)
-  const end = clamp(Math.ceil(endIndex), start + 1, features.length)
-  const count = Math.max(1, end - start)
-  for (let index = start; index < end; index += 1) {
-    const feature = features[index]
-    if (!feature) continue
-    for (const key of ALGORITHMIC_CORE_FEATURE_KEYS) {
-      values[key] += feature[key] / count
-    }
-  }
-  return values
 }
 
 const resolveFooteCheckerboardScore = (

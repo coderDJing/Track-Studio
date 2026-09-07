@@ -58,7 +58,6 @@ import type {
   RekordboxDesktopCopyTracksToStorageResponse
 } from '../../shared/rekordboxDesktopPlaylist'
 import type { RekordboxDesktopCleanupCopiedTracksRequest } from '../../shared/rekordboxDesktopPlaylist'
-import { assertLibraryMergeMutationAllowed } from '../services/libraryMerge/runtime'
 import type { IPioneerPlaylistTrack } from '../../types/globals'
 
 export function registerRekordboxDesktopLibraryHandlers() {

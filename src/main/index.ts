@@ -317,7 +317,6 @@ if (devInstanceLock) {
   process.on('exit', releaseDevInstanceLock)
 }
 
-const platform = process.platform
 const ffmpegPath = resolveBundledFfmpegPath()
 process.env.FRKB_FFMPEG_PATH = ffmpegPath
 void ensureExecutableOnMac(ffmpegPath)

@@ -93,10 +93,12 @@ export const scanCuratedLibraryForSync = async (): Promise<{
     audioExts.length > 0 ? await collectFilesWithExtensions(curatedRoot, audioExts) : []
   const existingByPath = new Map<string, CuratedSyncFileRow>()
   const existingById = new Map<string, CuratedSyncFileRow>()
+  const pathKey = (value: string): string =>
+    process.platform === 'win32' ? value.toLocaleLowerCase() : value
   for (const row of listCuratedSyncFiles()) {
     existingById.set(row.fileId, row)
     if (row.location === 'curated' && row.relativePath) {
-      existingByPath.set(row.relativePath, row)
+      existingByPath.set(pathKey(row.relativePath), row)
     }
   }
   const usedIds = new Set<string>()
@@ -119,7 +121,7 @@ export const scanCuratedLibraryForSync = async (): Promise<{
       curatedNode.uuid
     )
     const fileName = path.basename(absPath)
-    const previous = existingByPath.get(relativePath)
+    const previous = existingByPath.get(pathKey(relativePath))
     let contentSha256 = previous?.contentSha256 || ''
     if (
       !previous ||
@@ -131,12 +133,30 @@ export const scanCuratedLibraryForSync = async (): Promise<{
     }
     let fileId = previous?.fileId || ''
     if (!fileId) {
-      const orphan = [...existingById.values()].find(
+      let orphan = [...existingById.values()].find(
         (row) =>
           !usedIds.has(row.fileId) &&
           row.contentSha256 === contentSha256 &&
           row.location !== 'curated'
       )
+      // 外部文件管理器改名/移动时 watcher 只能看到新路径；旧身份仍标记为 curated，
+      // 只有在旧路径确实消失后才允许按内容接回，避免同哈希副本互相抢 ID。
+      if (!orphan) {
+        for (const row of existingById.values()) {
+          if (
+            usedIds.has(row.fileId) ||
+            row.contentSha256 !== contentSha256 ||
+            row.location !== 'curated'
+          ) {
+            continue
+          }
+          const oldAbs = row.relativePath ? curatedRelativeToAbs(row.relativePath) : null
+          if (!oldAbs || !(await fs.pathExists(oldAbs))) {
+            orphan = row
+            break
+          }
+        }
+      }
       fileId = orphan?.fileId || createCuratedSyncFileId()
     }
     usedIds.add(fileId)

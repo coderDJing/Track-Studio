@@ -216,7 +216,6 @@ const scoreSegment = (
   const energy = toRank(segment.normalized.energy)
   const low = toRank(segment.normalized.low)
   const mid = toRank(segment.normalized.mid)
-  const high = toRank(segment.normalized.high)
   const attack = toRank(segment.normalized.attackDensity)
   const density = toRank(segment.normalized.density)
   const active = resolveSemanticActivity(segment.normalized)

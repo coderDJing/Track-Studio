@@ -25,7 +25,10 @@ import {
   setCuratedLibrarySyncLastAppliedRevision,
   forgetCuratedLibrarySyncJoinState
 } from '../librarySettingsDb'
-import { getPendingCuratedLibraryJoinPrompt } from './joinPrompt'
+import {
+  clearPendingCuratedLibraryJoinPrompt,
+  getPendingCuratedLibraryJoinPrompt
+} from './joinPrompt'
 import {
   CURATED_LIBRARY_SYNC_PLAYLISTS_CHANGED_CHANNEL,
   CURATED_LIBRARY_SYNC_PROGRESS_ID,
@@ -43,7 +46,6 @@ import {
 } from '../../shared/curatedLibrarySync'
 import { RECYCLE_BIN_UUID } from '../../shared/recycleBin'
 import {
-  beginBlobUpload,
   beginFirstCuratedSnapshot,
   commitFirstCuratedSnapshot,
   fetchCuratedLibraryStatus,
@@ -90,7 +92,6 @@ let resumeWaiters: Array<() => void> = []
 let powerMonitorBound = false
 let sessionFailures: CuratedLibrarySyncFailureItem[] = []
 let sessionConflicts: CuratedLibrarySyncConflictItem[] = []
-let sessionAttemptedTransfers = false
 let sessionCompletedWork = false
 
 const bindPowerMonitor = () => {
@@ -296,7 +297,6 @@ const uploadMissingBlobs = async (files: CuratedLocalFile[]): Promise<Set<string
   const seen = new Set<string>()
   const failed = new Set<string>()
   let index = 0
-  sessionAttemptedTransfers = true
   for (const file of files) {
     throwIfCancelled()
     await waitIfSuspended()
@@ -304,40 +304,38 @@ const uploadMissingBlobs = async (files: CuratedLocalFile[]): Promise<Set<string
     seen.add(file.contentSha256)
     index += 1
     try {
-      const begin = await beginBlobUpload({ sha256: file.contentSha256, size: file.contentSize })
-      if (!begin.needed) continue
       abortController = new AbortController()
-      try {
-        await runPlaybackAwareBackgroundFileIo(
-          'curated-library-sync:upload-blob',
-          { filePath: file.absPath },
-          () =>
-            uploadBlobWithResume({
-              sha256: file.contentSha256,
-              filePath: file.absPath,
-              size: file.contentSize,
-              signal: abortController?.signal,
-              onSuspendWait: waitIfSuspended,
-              throwIfCancelled
-            })
-        )
-      } catch (error) {
-        if (suspendPaused) {
-          await waitIfSuspended()
-          abortController = new AbortController()
-          await uploadBlobWithResume({
+      await runPlaybackAwareBackgroundFileIo(
+        'curated-library-sync:upload-blob',
+        { filePath: file.absPath },
+        () =>
+          uploadBlobWithResume({
             sha256: file.contentSha256,
             filePath: file.absPath,
             size: file.contentSize,
-            signal: abortController.signal,
+            signal: abortController?.signal,
             onSuspendWait: waitIfSuspended,
             throwIfCancelled
           })
-          continue
-        }
-        throw error
-      }
+      )
     } catch (error) {
+      if (
+        !cancelRequested &&
+        abortController?.signal.aborted === true &&
+        (error as { name?: string })?.name === 'AbortError'
+      ) {
+        await waitIfSuspended()
+        abortController = new AbortController()
+        await uploadBlobWithResume({
+          sha256: file.contentSha256,
+          filePath: file.absPath,
+          size: file.contentSize,
+          signal: abortController.signal,
+          onSuspendWait: waitIfSuspended,
+          throwIfCancelled
+        })
+        continue
+      }
       if (cancelRequested || (error as { name?: string })?.name === 'AbortError') throw error
       failed.add(file.contentSha256)
       recordFailure({
@@ -537,9 +535,9 @@ const loadCachedSnapshot = () => parseCuratedLibrarySnapshot(readCuratedLibraryS
 const pullMergedSnapshot = async (sinceRevision?: number | null) => {
   const cached = loadCachedSnapshot()
   const useDiff = cached != null && Number(sinceRevision) > 0
-  const pulled = await pullCuratedSnapshot(useDiff ? sinceRevision : null)
+  const pulled = await pullCuratedSnapshot(useDiff ? sinceRevision : null, abortController?.signal)
   if (pulled.full === false && !cached) {
-    const full = await pullCuratedSnapshot(null)
+    const full = await pullCuratedSnapshot(null, abortController?.signal)
     return mergeCuratedLibrarySnapshot(null, full)
   }
   return mergeCuratedLibrarySnapshot(cached, pulled)
@@ -552,7 +550,7 @@ const waitForFirstSnapshotUnlock = async (): Promise<
   while (true) {
     throwIfCancelled()
     await waitIfSuspended()
-    const status = await fetchCuratedLibraryStatus()
+    const status = await fetchCuratedLibraryStatus(abortController?.signal)
     if (status.snapshotReady || !status.firstSnapshotLocked) return status
     if (Date.now() >= deadline) {
       throw new Error('CURATED_SYNC_FIRST_SNAPSHOT_WAIT_TIMEOUT')
@@ -564,7 +562,6 @@ const waitForFirstSnapshotUnlock = async (): Promise<
 const applyCtx = (): ApplyRemoteContext => ({
   signal: abortController?.signal || new AbortController().signal,
   onTransferFailure: (payload) => {
-    sessionAttemptedTransfers = true
     recordFailure({
       direction: payload.direction,
       name: payload.name,
@@ -583,17 +580,23 @@ const runJoin = async (
   const snapshot = await pullMergedSnapshot(null)
   if (mode === 'local-wins') {
     const failedSha = await uploadMissingBlobs(local.files)
+    if (failedSha.size > 0) {
+      return { status: 'failed', message: 'cloudSync.curatedLibrary.errors.uploadIncomplete' }
+    }
     const entities = buildCloudEntitiesFromLocal({
       ...local,
       files: local.files.filter((file) => !failedSha.has(file.contentSha256))
     })
-    const next = await replaceCuratedSnapshot(entities)
+    const next = await replaceCuratedSnapshot({ ...entities, signal: abortController?.signal })
     persistAppliedSnapshot(next, {
       files: local.files.filter((file) => !failedSha.has(file.contentSha256)),
       nodes: local.nodes
     })
     writeCuratedLibrarySyncDeferredOps([])
     return { status: 'success' }
+  }
+  if (mode === 'cloud-wins') {
+    clearPendingCuratedLibraryJoinPrompt()
   }
   const extras = mode === 'cloud-wins' ? 'delete' : 'keep'
   const release = beginLibraryTreeWatcherBulkOperation()
@@ -626,7 +629,11 @@ const runJoin = async (
       })
       const ops = omitFailedBlobOps(buildPushOps(after, snapshot, retain), failedSha)
       if (ops.length > 0) {
-        const pushed = await pushCuratedOps({ baseRevision: snapshot.revision, ops })
+        const pushed = await pushCuratedOps({
+          baseRevision: snapshot.revision,
+          ops,
+          signal: abortController?.signal
+        })
         if (!pushed.ok) {
           rememberPushConflicts(ops, pushed.snapshot)
           const conflictApplied = await applyRemoteSnapshot(
@@ -719,9 +726,38 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
   sessionCompletedWork = true
   const local = await scanCuratedLibraryForSync()
   let snapshot = await pullMergedSnapshot(getCuratedLibrarySyncLastAppliedRevision())
+  const lastAppliedRevision = getCuratedLibrarySyncLastAppliedRevision()
+  // reset/回滚可能恰好发生在 status 与 pull 之间；不能把本机旧文件再推回刚清空的云端。
+  if (lastAppliedRevision != null && snapshot.revision < lastAppliedRevision) {
+    return await runJoin('cloud-wins')
+  }
   const release = beginLibraryTreeWatcherBulkOperation()
   let latest = local
   try {
+    const applyCloudAuthoritativeSnapshot = async (
+      winning: CuratedLibrarySyncSnapshot,
+      currentLocal: { files: CuratedLocalFile[]; nodes: CuratedLocalNode[] }
+    ): Promise<CuratedLibrarySyncStartResult> => {
+      const applied = await applyRemoteSnapshot(
+        winning,
+        currentLocal,
+        {
+          extras: 'delete',
+          adoptIds: true,
+          applyTombstones: true,
+          knownFileIds: null,
+          knownNodeIds: null,
+          preservePendingLocal: false
+        },
+        applyCtx()
+      )
+      await purgePendingDeletedCuratedNodeShells()
+      latest = await scanCuratedLibraryForSync()
+      if (applied.diskFull) return { status: 'disk_full' }
+      writeCuratedLibrarySyncDeferredOps(applied.deferred)
+      persistAppliedSnapshot(winning, latest)
+      return { status: 'success' }
+    }
     const deferred = toDeferred(readCuratedLibrarySyncDeferredOps())
     const applyOptions = incrementalApplyOptions()
     const remainingDeferred = await retryDeferredRemoteOps(deferred, snapshot, applyCtx())
@@ -734,7 +770,8 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
     if (deletionOps.length > 0) {
       const pushedDeletes = await pushCuratedOps({
         baseRevision: snapshot.revision,
-        ops: deletionOps
+        ops: deletionOps,
+        signal: abortController?.signal
       })
       logCuratedDeleteTrace('push-deletes-result', {
         ok: pushedDeletes.ok,
@@ -751,6 +788,10 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
       if (pushedDeletes.ok) {
         snapshot = pushedDeletes.snapshot
       } else {
+        if (pushedDeletes.snapshot.revision < snapshot.revision) {
+          forgetCuratedLibrarySyncJoinState()
+          return await applyCloudAuthoritativeSnapshot(pushedDeletes.snapshot, local)
+        }
         rememberPushConflicts(deletionOps, pushedDeletes.snapshot)
         snapshot = pushedDeletes.snapshot
       }
@@ -771,8 +812,16 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
       writeCuratedLibrarySyncDeferredOps(remainingDeferred)
       return { status: 'success' }
     }
-    const pushed = await pushCuratedOps({ baseRevision: snapshot.revision, ops })
+    const pushed = await pushCuratedOps({
+      baseRevision: snapshot.revision,
+      ops,
+      signal: abortController?.signal
+    })
     if (!pushed.ok) {
+      if (pushed.snapshot.revision < snapshot.revision) {
+        forgetCuratedLibrarySyncJoinState()
+        return await applyCloudAuthoritativeSnapshot(pushed.snapshot, after)
+      }
       rememberPushConflicts(ops, pushed.snapshot)
       const conflictApplied = await applyRemoteSnapshot(
         pushed.snapshot,
@@ -805,6 +854,7 @@ const mapCuratedError = (message: string): string => {
     return 'cloudSync.curatedLibrary.errors.quotaExceeded'
   }
   if (upper.includes('HASH')) return 'cloudSync.curatedLibrary.errors.hashMismatch'
+  if (upper.includes('INVALID_NAME')) return 'cloudSync.curatedLibrary.errors.failed'
   if (upper.includes('CANNOTCONNECT') || upper.includes('FETCH')) {
     return 'cloudSync.errors.cannotConnect'
   }
@@ -824,14 +874,18 @@ const runFirstSnapshotUpload = async (): Promise<CuratedLibrarySyncStartResult> 
   sessionCompletedWork = true
   const local = await scanCuratedLibraryForSync()
   const failedSha = await uploadMissingBlobs(local.files)
-  const session = await beginFirstCuratedSnapshot()
+  if (failedSha.size > 0) {
+    return { status: 'failed', message: 'cloudSync.curatedLibrary.errors.uploadIncomplete' }
+  }
+  const session = await beginFirstCuratedSnapshot(abortController?.signal)
   const entities = buildCloudEntitiesFromLocal({
     ...local,
     files: local.files.filter((file) => !failedSha.has(file.contentSha256))
   })
   const committed = await commitFirstCuratedSnapshot({
     sessionId: session.sessionId,
-    ...entities
+    ...entities,
+    signal: abortController?.signal
   })
   persistAppliedSnapshot(committed, {
     files: local.files.filter((file) => !failedSha.has(file.contentSha256)),
@@ -846,6 +900,9 @@ export const isCuratedLibrarySyncRunning = (): boolean => running
 export const cancelCuratedLibrarySync = async (): Promise<{ ok: true }> => {
   cancelRequested = true
   abortController?.abort()
+  const waiters = resumeWaiters
+  resumeWaiters = []
+  for (const waiter of waiters) waiter()
   return { ok: true }
 }
 
@@ -878,20 +935,15 @@ export const runCuratedLibrarySync = async (
   abortController = new AbortController()
   sessionFailures = []
   sessionConflicts = []
-  sessionAttemptedTransfers = false
   sessionCompletedWork = false
   try {
     dismissProgress()
     throwIfCancelled()
-    let status = await fetchCuratedLibraryStatus()
+    let status = await fetchCuratedLibraryStatus(abortController?.signal)
     cacheQuotaFromStatus(status)
     let lastRevision = getCuratedLibrarySyncLastAppliedRevision()
     let rewound = false
-    if (
-      lastRevision !== null &&
-      lastRevision > 0 &&
-      (!status.snapshotReady || status.revision < lastRevision)
-    ) {
+    if (lastRevision !== null && (!status.snapshotReady || status.revision < lastRevision)) {
       forgetCuratedLibrarySyncJoinState()
       cacheQuotaFromStatus(status)
       lastRevision = null
@@ -936,8 +988,16 @@ export const runCuratedLibrarySync = async (
         }
       }
     }
+    // 显式 cloud-wins（清空云端 / 对端看到 revision 回绕）必须按空云端删本机。
+    // lastRevision 为 0 时也会落到这里；不能再走增量，否则会把本机库 upsert 回刚清空的云端。
+    if (payload.joinMode === 'cloud-wins') {
+      return await runJoin('cloud-wins')
+    }
     if (lastRevision === null) {
       if (!payload.joinMode) {
+        if (rewound && status.snapshotReady) {
+          return await runJoin('cloud-wins')
+        }
         const local = await scanCuratedLibraryForSync()
         return {
           status: 'needs_join_choice',
