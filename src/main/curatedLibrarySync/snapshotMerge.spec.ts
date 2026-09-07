@@ -128,6 +128,25 @@ describe('parseCuratedLibrarySnapshot', () => {
         tombstones: []
       })
     ).toBeNull()
+    expect(
+      parseCuratedLibrarySnapshot({
+        protocolVersion: 1,
+        revision: 2,
+        snapshotReady: true,
+        nodes: [
+          {
+            uuid: '11111111-1111-4111-8111-111111111111',
+            parentUuid: '22222222-2222-4222-8222-222222222222',
+            name: 'Orphan',
+            nodeType: 'dir',
+            sortOrder: null,
+            updatedAtMs: 1
+          }
+        ],
+        files: [],
+        tombstones: []
+      })
+    ).toBeNull()
   })
 
   it('接受完整协议快照', () => {
@@ -142,5 +161,26 @@ describe('parseCuratedLibrarySnapshot', () => {
         tombstones: []
       })
     ).toMatchObject({ protocolVersion: 1, revision: 2, snapshotReady: true, nodes: [node] })
+  })
+
+  it('接受省略未变更父节点的增量快照', () => {
+    expect(
+      parseCuratedLibrarySnapshot({
+        protocolVersion: 1,
+        revision: 2,
+        snapshotReady: true,
+        full: false,
+        nodes: [
+          {
+            ...node,
+            uuid: '33333333-3333-4333-8333-333333333333',
+            parentUuid: '44444444-4444-4444-8444-444444444444',
+            revision: 2
+          }
+        ],
+        files: [],
+        tombstones: []
+      })
+    ).not.toBeNull()
   })
 })

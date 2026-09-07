@@ -294,7 +294,8 @@ const findCustodyFile = async (file: CuratedLibrarySyncCloudFile): Promise<strin
 const importCloudFile = async (
   file: CuratedLibrarySyncCloudFile,
   ctx: ApplyRemoteContext,
-  scope: CloudParentScope
+  scope: CloudParentScope,
+  overwriteDestination = false
 ): Promise<string | null> => {
   assertSafeLeafName(file.fileName)
   assertNotCancelled(ctx.signal)
@@ -335,7 +336,8 @@ const importCloudFile = async (
   const finalPath = await relocateLibraryAudioFile({
     sourceAbs: tempPath,
     destAbs: destPath,
-    mode: 'move'
+    mode: 'move',
+    overwrite: overwriteDestination
   })
   await stampPlaylistSongsAddedAt({
     listRoot: destDir,
@@ -349,10 +351,11 @@ const importCloudFile = async (
 const tryImportCloudFile = async (
   file: CuratedLibrarySyncCloudFile,
   ctx: ApplyRemoteContext,
-  scope: CloudParentScope
+  scope: CloudParentScope,
+  overwriteDestination = false
 ): Promise<string | null> => {
   try {
-    return await importCloudFile(file, ctx, scope)
+    return await importCloudFile(file, ctx, scope, overwriteDestination)
   } catch (error) {
     if (isEnospc(error)) throw error
     if ((error as { name?: string })?.name === 'AbortError') throw error
@@ -453,6 +456,17 @@ const deleteLocalFile = async (absPath: string, ctx: ApplyRemoteContext): Promis
   }
   const result = await moveFileToRecycleBin(absPath)
   return result.status === 'moved' || result.status === 'skipped'
+}
+
+const ensureRemoteDestinationAvailable = async (
+  destPath: string,
+  currentPath: string | null,
+  ctx: ApplyRemoteContext
+): Promise<boolean> => {
+  if (currentPath && path.normalize(currentPath) === path.normalize(destPath)) return true
+  if (!(await fs.pathExists(destPath))) return true
+  if (isBusyPath(destPath, ctx)) return false
+  return deleteLocalFile(destPath, ctx)
 }
 
 const resolveLocalAbsForFileId = (
@@ -810,10 +824,27 @@ export const applyRemoteSnapshot = async (
           })
           continue
         }
+        if (!(await ensureRemoteDestinationAvailable(destPath, matched.absPath, ctx))) {
+          deferred.push({
+            type: 'moveFile',
+            fileId: file.fileId,
+            parentUuid: file.parentUuid,
+            fileName: file.fileName,
+            sha256: file.sha256
+          })
+          continue
+        }
         if (matched.contentSha256 !== file.sha256) {
-          const imported = await tryImportCloudFile(file, ctx, scope)
+          const imported = await tryImportCloudFile(
+            file,
+            ctx,
+            scope,
+            path.normalize(matched.absPath) === path.normalize(destPath)
+          )
           if (imported) {
-            await moveFileToRecycleBin(matched.absPath)
+            if (path.normalize(matched.absPath) !== path.normalize(destPath)) {
+              await moveFileToRecycleBin(matched.absPath)
+            }
             persistImportedIdentity(
               file,
               imported,
@@ -846,6 +877,17 @@ export const applyRemoteSnapshot = async (
         continue
       }
       if (shouldSkipRestoringCloudFile(file, options)) continue
+      const destPath = path.join(destDir, file.fileName)
+      if (!(await ensureRemoteDestinationAvailable(destPath, null, ctx))) {
+        deferred.push({
+          type: 'moveFile',
+          fileId: file.fileId,
+          parentUuid: file.parentUuid,
+          fileName: file.fileName,
+          sha256: file.sha256
+        })
+        continue
+      }
       const imported = await tryImportCloudFile(file, ctx, scope)
       if (imported) persistImportedIdentity(file, imported, absToRel(curatedRoot, imported), scope)
     }

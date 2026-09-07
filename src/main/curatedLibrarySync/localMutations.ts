@@ -39,12 +39,22 @@ export const relocateLibraryAudioFile = async (params: {
   sourceAbs: string
   destAbs: string
   mode: 'move' | 'copy'
+  overwrite?: boolean
 }): Promise<string> => {
-  const movedPath = await moveOrCopyItemWithCheckIsExist(
-    params.sourceAbs,
-    params.destAbs,
-    params.mode === 'move'
-  )
+  let movedPath = params.destAbs
+  if (params.overwrite) {
+    if (params.mode === 'move') {
+      await fs.move(params.sourceAbs, params.destAbs, { overwrite: true })
+    } else {
+      await fs.copy(params.sourceAbs, params.destAbs, { overwrite: true })
+    }
+  } else {
+    movedPath = await moveOrCopyItemWithCheckIsExist(
+      params.sourceAbs,
+      params.destAbs,
+      params.mode === 'move'
+    )
+  }
   if (params.mode === 'move') {
     remapMovedAudioFile(params.sourceAbs, movedPath)
   }

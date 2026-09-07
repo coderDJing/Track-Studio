@@ -84,6 +84,16 @@ const validateSnapshotEntities = (
   }
   const nodeIds = new Set(nodes.map((node) => node.uuid.toLowerCase()))
   const fileIds = new Set(files.map((file) => file.fileId.toLowerCase()))
+  if (full) {
+    for (const item of [...nodes, ...files]) {
+      if (
+        item.parentUuid.toLowerCase() !== ROOT_PARENT_UUID &&
+        !nodeIds.has(item.parentUuid.toLowerCase())
+      ) {
+        return false
+      }
+    }
+  }
   for (const tombstone of tombstones) {
     if (
       (tombstone.kind === 'node' && nodeIds.has(tombstone.id.toLowerCase())) ||

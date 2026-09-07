@@ -726,9 +726,42 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
   sessionCompletedWork = true
   const local = await scanCuratedLibraryForSync()
   let snapshot = await pullMergedSnapshot(getCuratedLibrarySyncLastAppliedRevision())
+  const lastAppliedRevision = getCuratedLibrarySyncLastAppliedRevision()
+  // reset/回滚可能恰好发生在 status 与 pull 之间；不能把本机旧文件再推回刚清空的云端。
+  if (
+    lastAppliedRevision != null &&
+    lastAppliedRevision > 0 &&
+    snapshot.revision < lastAppliedRevision
+  ) {
+    return await runJoin('cloud-wins')
+  }
   const release = beginLibraryTreeWatcherBulkOperation()
   let latest = local
   try {
+    const applyCloudAuthoritativeSnapshot = async (
+      winning: CuratedLibrarySyncSnapshot,
+      currentLocal: { files: CuratedLocalFile[]; nodes: CuratedLocalNode[] }
+    ): Promise<CuratedLibrarySyncStartResult> => {
+      const applied = await applyRemoteSnapshot(
+        winning,
+        currentLocal,
+        {
+          extras: 'delete',
+          adoptIds: true,
+          applyTombstones: true,
+          knownFileIds: null,
+          knownNodeIds: null,
+          preservePendingLocal: false
+        },
+        applyCtx()
+      )
+      await purgePendingDeletedCuratedNodeShells()
+      latest = await scanCuratedLibraryForSync()
+      if (applied.diskFull) return { status: 'disk_full' }
+      writeCuratedLibrarySyncDeferredOps(applied.deferred)
+      persistAppliedSnapshot(winning, latest)
+      return { status: 'success' }
+    }
     const deferred = toDeferred(readCuratedLibrarySyncDeferredOps())
     const applyOptions = incrementalApplyOptions()
     const remainingDeferred = await retryDeferredRemoteOps(deferred, snapshot, applyCtx())
@@ -759,6 +792,10 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
       if (pushedDeletes.ok) {
         snapshot = pushedDeletes.snapshot
       } else {
+        if (pushedDeletes.snapshot.revision < snapshot.revision) {
+          forgetCuratedLibrarySyncJoinState()
+          return await applyCloudAuthoritativeSnapshot(pushedDeletes.snapshot, local)
+        }
         rememberPushConflicts(deletionOps, pushedDeletes.snapshot)
         snapshot = pushedDeletes.snapshot
       }
@@ -785,6 +822,10 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
       signal: abortController?.signal
     })
     if (!pushed.ok) {
+      if (pushed.snapshot.revision < snapshot.revision) {
+        forgetCuratedLibrarySyncJoinState()
+        return await applyCloudAuthoritativeSnapshot(pushed.snapshot, after)
+      }
       rememberPushConflicts(ops, pushed.snapshot)
       const conflictApplied = await applyRemoteSnapshot(
         pushed.snapshot,
