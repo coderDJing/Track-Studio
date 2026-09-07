@@ -339,19 +339,39 @@ const toDeferred = (value: unknown): DeferredRemoteOp[] => {
   })
 }
 
-const uploadMissingBlobs = async (files: CuratedLocalFile[]): Promise<Set<string>> => {
-  const seen = new Set<string>()
-  const failed = new Set<string>()
-  const uniqueTotal = new Set(files.map((file) => file.contentSha256)).size
-  let index = 0
-  if (uniqueTotal > 0) {
-    setActivity('uploading', 0, uniqueTotal)
+const normalizeBlobSha = (value: string | undefined): string =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+
+const cloudBlobShaSet = (snapshot: { files: Array<{ sha256: string }> }): Set<string> => {
+  const shas = new Set<string>()
+  for (const file of snapshot.files) {
+    const sha = normalizeBlobSha(file.sha256)
+    if (sha) shas.add(sha)
   }
+  return shas
+}
+
+const uploadMissingBlobs = async (
+  files: CuratedLocalFile[],
+  alreadyOnCloud?: Set<string>
+): Promise<Set<string>> => {
+  const pendingBySha = new Map<string, CuratedLocalFile>()
   for (const file of files) {
+    const sha = normalizeBlobSha(file.contentSha256)
+    if (!sha || alreadyOnCloud?.has(sha) || pendingBySha.has(sha)) continue
+    pendingBySha.set(sha, file)
+  }
+  const pending = [...pendingBySha.values()]
+  const failed = new Set<string>()
+  const uniqueTotal = pending.length
+  if (uniqueTotal === 0) return failed
+  setActivity('uploading', 0, uniqueTotal)
+  let index = 0
+  for (const file of pending) {
     throwIfCancelled()
     await waitIfSuspended()
-    if (seen.has(file.contentSha256)) continue
-    seen.add(file.contentSha256)
     index += 1
     setActivity('uploading', index, uniqueTotal)
     try {
@@ -630,7 +650,7 @@ const runJoin = async (
   setActivity('applying')
   const snapshot = await pullMergedSnapshot(null)
   if (mode === 'local-wins') {
-    const failedSha = await uploadMissingBlobs(local.files)
+    const failedSha = await uploadMissingBlobs(local.files, cloudBlobShaSet(snapshot))
     if (failedSha.size > 0) {
       return { status: 'failed', message: 'cloudSync.curatedLibrary.errors.uploadIncomplete' }
     }
@@ -670,7 +690,7 @@ const runJoin = async (
     writeCuratedLibrarySyncDeferredOps(applied.deferred)
     const after = latest
     if (mode === 'merge') {
-      const failedSha = await uploadMissingBlobs(after.files)
+      const failedSha = await uploadMissingBlobs(after.files, cloudBlobShaSet(snapshot))
       const retain = collectUnappliedCloudIds(snapshot, after, {
         extras: 'keep',
         adoptIds: true,
@@ -821,7 +841,7 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
     remainingDeferred.push(...applied.deferred)
     writeCuratedLibrarySyncDeferredOps(remainingDeferred)
     const after = latest
-    const failedSha = await uploadMissingBlobs(after.files)
+    const failedSha = await uploadMissingBlobs(after.files, cloudBlobShaSet(snapshot))
     const retain = collectUnappliedCloudIds(snapshot, after, applyOptions)
     const ops = omitFailedBlobOps(buildPushOps(after, snapshot, retain), failedSha)
     if (ops.length === 0) {
