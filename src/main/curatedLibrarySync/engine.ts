@@ -30,6 +30,7 @@ import {
   getPendingCuratedLibraryJoinPrompt
 } from './joinPrompt'
 import {
+  CURATED_LIBRARY_SYNC_CANCEL_CHANNEL,
   CURATED_LIBRARY_SYNC_PLAYLISTS_CHANGED_CHANNEL,
   CURATED_LIBRARY_SYNC_PROGRESS_ID,
   CURATED_LIBRARY_SYNC_ROOT_PARENT_UUID,
@@ -67,7 +68,12 @@ import {
   type ApplyRemoteOptions,
   type DeferredRemoteOp
 } from './applyRemote'
-import { scanCuratedLibraryForSync, type CuratedLocalFile, type CuratedLocalNode } from './scan'
+import {
+  countCuratedLibraryAudioFiles,
+  scanCuratedLibraryForSync,
+  type CuratedLocalFile,
+  type CuratedLocalNode
+} from './scan'
 import { findCuratedLibraryNode, sameCloudParentUuid } from './paths'
 import { markGlobalSongSearchDirty } from '../services/globalSongSearch'
 import {
@@ -166,6 +172,41 @@ const dismissProgress = () => {
     dismiss: true
   })
 }
+
+const reportProgress = (
+  titleKey: string,
+  now: number,
+  total: number,
+  extra?: { noProgress?: boolean }
+): void => {
+  const win = mainWindow.instance
+  if (!win || win.isDestroyed()) return
+  win.webContents.send('progressSet', {
+    id: CURATED_LIBRARY_SYNC_PROGRESS_ID,
+    titleKey,
+    now,
+    total,
+    noProgress: extra?.noProgress === true,
+    cancelable: true,
+    cancelChannel: CURATED_LIBRARY_SYNC_CANCEL_CHANNEL
+  })
+}
+
+const scanLocalForSync = () =>
+  scanCuratedLibraryForSync({
+    onFileProgress: (done, total) =>
+      reportProgress('cloudSync.curatedLibrary.progressScanning', done, total)
+  })
+
+const buildJoinChoice = async (status: {
+  fileCount: number
+  revision: number
+}): Promise<CuratedLibrarySyncStartResult> => ({
+  status: 'needs_join_choice',
+  localFileCount: await countCuratedLibraryAudioFiles(),
+  cloudFileCount: status.fileCount,
+  cloudRevision: status.revision
+})
 
 const notifyTree = async () => {
   const win = mainWindow.instance
@@ -295,13 +336,18 @@ const toDeferred = (value: unknown): DeferredRemoteOp[] => {
 const uploadMissingBlobs = async (files: CuratedLocalFile[]): Promise<Set<string>> => {
   const seen = new Set<string>()
   const failed = new Set<string>()
+  const uniqueTotal = new Set(files.map((file) => file.contentSha256)).size
   let index = 0
+  if (uniqueTotal > 0) {
+    reportProgress('cloudSync.curatedLibrary.progressUploading', 0, uniqueTotal)
+  }
   for (const file of files) {
     throwIfCancelled()
     await waitIfSuspended()
     if (seen.has(file.contentSha256)) continue
     seen.add(file.contentSha256)
     index += 1
+    reportProgress('cloudSync.curatedLibrary.progressUploading', index, uniqueTotal)
     try {
       abortController = new AbortController()
       await runPlaybackAwareBackgroundFileIo(
@@ -549,6 +595,9 @@ const waitForFirstSnapshotUnlock = async (): Promise<
     await waitIfSuspended()
     const status = await fetchCuratedLibraryStatus(abortController?.signal)
     if (status.snapshotReady || !status.firstSnapshotLocked) return status
+    reportProgress('cloudSync.curatedLibrary.progressWaitingFirstSnapshot', 0, 0, {
+      noProgress: true
+    })
     if (Date.now() >= deadline) {
       throw new Error('CURATED_SYNC_FIRST_SNAPSHOT_WAIT_TIMEOUT')
     }
@@ -573,7 +622,7 @@ const runJoin = async (
   mode: CuratedLibrarySyncJoinMode
 ): Promise<CuratedLibrarySyncStartResult> => {
   sessionCompletedWork = true
-  const local = await scanCuratedLibraryForSync()
+  const local = await scanLocalForSync()
   const snapshot = await pullMergedSnapshot(null)
   if (mode === 'local-wins') {
     const failedSha = await uploadMissingBlobs(local.files)
@@ -611,7 +660,7 @@ const runJoin = async (
       },
       applyCtx()
     )
-    latest = await scanCuratedLibraryForSync()
+    latest = await scanLocalForSync()
     if (applied.diskFull) return { status: 'disk_full' }
     writeCuratedLibrarySyncDeferredOps(applied.deferred)
     const after = latest
@@ -646,7 +695,7 @@ const runJoin = async (
             applyCtx()
           )
           writeCuratedLibrarySyncDeferredOps([...applied.deferred, ...conflictApplied.deferred])
-          latest = await scanCuratedLibraryForSync()
+          latest = await scanLocalForSync()
           persistAppliedSnapshot(pushed.snapshot, latest)
         } else {
           persistAppliedSnapshot(pushed.snapshot, after)
@@ -700,7 +749,7 @@ const isDeletionOp = (op: CuratedLibrarySyncOp): boolean =>
 
 const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
   sessionCompletedWork = true
-  const local = await scanCuratedLibraryForSync()
+  const local = await scanLocalForSync()
   let snapshot = await pullMergedSnapshot(getCuratedLibrarySyncLastAppliedRevision())
   const lastAppliedRevision = getCuratedLibrarySyncLastAppliedRevision()
   // reset/回滚可能恰好发生在 status 与 pull 之间；不能把本机旧文件再推回刚清空的云端。
@@ -728,7 +777,7 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
         applyCtx()
       )
       await purgePendingDeletedCuratedNodeShells()
-      latest = await scanCuratedLibraryForSync()
+      latest = await scanLocalForSync()
       if (applied.diskFull) return { status: 'disk_full' }
       writeCuratedLibrarySyncDeferredOps(applied.deferred)
       persistAppliedSnapshot(winning, latest)
@@ -761,7 +810,7 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
     }
     const applied = await applyRemoteSnapshot(snapshot, local, applyOptions, applyCtx())
     await purgePendingDeletedCuratedNodeShells()
-    latest = await scanCuratedLibraryForSync()
+    latest = await scanLocalForSync()
     if (applied.diskFull) return { status: 'disk_full' }
     remainingDeferred.push(...applied.deferred)
     writeCuratedLibrarySyncDeferredOps(remainingDeferred)
@@ -793,7 +842,7 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
       )
       writeCuratedLibrarySyncDeferredOps([...remainingDeferred, ...conflictApplied.deferred])
       await purgePendingDeletedCuratedNodeShells()
-      latest = await scanCuratedLibraryForSync()
+      latest = await scanLocalForSync()
       persistAppliedSnapshot(pushed.snapshot, latest)
       return { status: 'success' }
     }
@@ -834,7 +883,7 @@ const isFirstSnapshotRace = (error: unknown): boolean => {
 
 const runFirstSnapshotUpload = async (): Promise<CuratedLibrarySyncStartResult> => {
   sessionCompletedWork = true
-  const local = await scanCuratedLibraryForSync()
+  const local = await scanLocalForSync()
   const failedSha = await uploadMissingBlobs(local.files)
   if (failedSha.size > 0) {
     return { status: 'failed', message: 'cloudSync.curatedLibrary.errors.uploadIncomplete' }
@@ -915,32 +964,22 @@ export const runCuratedLibrarySync = async (
       if (!status.snapshotReady || lastRevision === null) return { status: 'success' }
       return await runIncremental()
     }
-    if (!status.snapshotReady && status.firstSnapshotLocked) {
-      status = await waitForFirstSnapshotUnlock()
-    }
     if (!status.snapshotReady) {
+      // 空云端也要先弹第一次对齐；不能先哈希/上传，否则用户只看到「同步进行中」。
+      if (!payload.joinMode) {
+        if (lastRevision !== null) return { status: 'success' }
+        return await buildJoinChoice(status)
+      }
       if (payload.joinMode === 'cloud-wins') {
         return await runJoin('cloud-wins')
       }
-      if (rewound && !payload.joinMode) {
-        const local = await scanCuratedLibraryForSync()
-        return {
-          status: 'needs_join_choice',
-          localFileCount: local.files.length,
-          cloudFileCount: status.fileCount,
-          cloudRevision: status.revision
-        }
-      }
-      if (
-        (rewound || lastRevision !== null) &&
-        (payload.joinMode === 'local-wins' || payload.joinMode === 'merge')
-      ) {
-        return await runFirstSnapshotUpload()
-      }
-      if (lastRevision !== null) {
-        return { status: 'success' }
-      }
       try {
+        if (status.firstSnapshotLocked) {
+          status = await waitForFirstSnapshotUnlock()
+          if (status.snapshotReady) {
+            return await runJoin(payload.joinMode)
+          }
+        }
         return await runFirstSnapshotUpload()
       } catch (error) {
         if (!isFirstSnapshotRace(error)) throw error
@@ -948,6 +987,7 @@ export const runCuratedLibrarySync = async (
         if (!status.snapshotReady) {
           return await runFirstSnapshotUpload()
         }
+        return await runJoin(payload.joinMode)
       }
     }
     // 显式 cloud-wins（清空云端 / 对端看到 revision 回绕）必须按空云端删本机。
@@ -960,16 +1000,10 @@ export const runCuratedLibrarySync = async (
         if (rewound && status.snapshotReady) {
           return await runJoin('cloud-wins')
         }
-        const local = await scanCuratedLibraryForSync()
-        return {
-          status: 'needs_join_choice',
-          localFileCount: local.files.length,
-          cloudFileCount: status.fileCount,
-          cloudRevision: status.revision
-        }
+        return await buildJoinChoice(status)
       }
       if (payload.joinMode === 'local-wins' && !payload.confirmOverwriteCloud) {
-        const localCount = (await scanCuratedLibraryForSync()).files.length
+        const localCount = await countCuratedLibraryAudioFiles()
         if (status.fileCount > 0 && (localCount === 0 || localCount * 2 < status.fileCount)) {
           return {
             status: 'needs_overwrite_cloud_confirm',

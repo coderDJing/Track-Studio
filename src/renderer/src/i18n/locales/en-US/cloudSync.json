@@ -76,6 +76,9 @@
         "protocolUnsupported": "This client protocol version cannot write the cloud curated library.",
         "firstSnapshotWait": "Timed out waiting for another device to finish the first snapshot. Try again later."
       },
+      "progressScanning": "Checking curated library audio",
+      "progressUploading": "Uploading curated library audio",
+      "progressWaitingFirstSnapshot": "Waiting for another device to finish the first snapshot",
       "quota": "Cloud usage",
       "quotaValue": "{used} / {limit} · {count} tracks",
       "quotaUnknown": "{used} used; quota not available yet",

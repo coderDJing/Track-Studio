@@ -78,7 +78,20 @@ export const readCacheFields = async (
   }
 }
 
-export const scanCuratedLibraryForSync = async (): Promise<{
+/** 只数精选库音频文件，不哈希。第一次对齐弹窗只需要数量。 */
+export const countCuratedLibraryAudioFiles = async (): Promise<number> => {
+  const curatedRoot = getCuratedLibraryAbsRoot()
+  const curatedNode = findCuratedLibraryNode()
+  if (!curatedRoot || !curatedNode) return 0
+  const audioExts = getAudioExts()
+  if (audioExts.length === 0) return 0
+  const absFiles = await collectFilesWithExtensions(curatedRoot, audioExts)
+  return absFiles.length
+}
+
+export const scanCuratedLibraryForSync = async (options?: {
+  onFileProgress?: (done: number, total: number) => void
+}): Promise<{
   files: CuratedLocalFile[]
   nodes: CuratedLocalNode[]
 }> => {
@@ -104,6 +117,8 @@ export const scanCuratedLibraryForSync = async (): Promise<{
   const usedIds = new Set<string>()
   const files: CuratedLocalFile[] = []
   const now = Date.now()
+  const total = absFiles.length
+  options?.onFileProgress?.(0, total)
 
   for (const absPath of absFiles) {
     const relativePath = absToCuratedRelative(absPath)
@@ -185,6 +200,7 @@ export const scanCuratedLibraryForSync = async (): Promise<{
     }
     upsertCuratedSyncFile(row)
     files.push({ ...row, absPath })
+    options?.onFileProgress?.(files.length, total)
   }
 
   for (const row of existingById.values()) {
