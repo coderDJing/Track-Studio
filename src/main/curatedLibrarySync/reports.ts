@@ -80,3 +80,18 @@ export const mapTransferErrorKey = (error: unknown): string => {
   }
   return 'cloudSync.curatedLibrary.errors.failed'
 }
+
+export const mapCuratedSyncError = (message: string): string => {
+  const upper = message.toUpperCase()
+  if (upper.includes('INVALID_NAME')) return 'cloudSync.curatedLibrary.errors.failed'
+  if (upper.includes('PROTOCOL')) return 'cloudSync.curatedLibrary.errors.protocolUnsupported'
+  if (upper.includes('FIRST_SNAPSHOT_WAIT')) {
+    return 'cloudSync.curatedLibrary.errors.firstSnapshotWait'
+  }
+  return mapTransferErrorKey(message)
+}
+
+export const isFirstSnapshotRace = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error || '')
+  return message.includes('FIRST_SNAPSHOT_LOCKED') || message.includes('FIRST_SNAPSHOT_EXISTS')
+}

@@ -39,7 +39,8 @@ export const LIBRARY_SETTING_META_KEYS = {
   lastConflicts: 'curated_library_sync_last_conflicts_v1',
   lastFailures: 'curated_library_sync_last_failures_v1',
   lastQuota: 'curated_library_sync_last_quota_v1',
-  pendingDeletedNodes: 'curated_library_sync_pending_deleted_nodes_v1'
+  pendingDeletedNodes: 'curated_library_sync_pending_deleted_nodes_v1',
+  pendingJoinMode: 'curated_library_sync_pending_join_mode_v1'
 } as const
 
 function parseStoredValue(raw: string): unknown {
@@ -370,6 +371,26 @@ export function writeCuratedLibrarySyncPendingDeletedNodeIds(ids: string[]): voi
   writeJsonMeta(LIBRARY_SETTING_META_KEYS.pendingDeletedNodes, unique)
 }
 
+export function readCuratedLibrarySyncPendingJoinMode():
+  | 'merge'
+  | 'cloud-wins'
+  | 'local-wins'
+  | null {
+  const raw = readJsonMeta(LIBRARY_SETTING_META_KEYS.pendingJoinMode)
+  if (raw === 'merge' || raw === 'cloud-wins' || raw === 'local-wins') return raw
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const mode = String((raw as { mode?: unknown }).mode || '')
+    if (mode === 'merge' || mode === 'cloud-wins' || mode === 'local-wins') return mode
+  }
+  return null
+}
+
+export function writeCuratedLibrarySyncPendingJoinMode(
+  mode: 'merge' | 'cloud-wins' | 'local-wins' | null
+): void {
+  writeJsonMeta(LIBRARY_SETTING_META_KEYS.pendingJoinMode, mode)
+}
+
 /** 忘掉本机已接上云精选库的锚点，下次同步会重新走首次对齐。 */
 export function forgetCuratedLibrarySyncJoinState(): void {
   setCuratedLibrarySyncLastAppliedRevision(null)
@@ -386,6 +407,7 @@ export function forgetCuratedLibrarySyncJoinState(): void {
     snapshotReady: false
   })
   writeCuratedLibrarySyncPendingDeletedNodeIds([])
+  writeCuratedLibrarySyncPendingJoinMode(null)
 }
 
 export async function syncLibrarySettingsFromDb(dirPath?: string): Promise<void> {

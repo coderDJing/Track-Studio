@@ -77,6 +77,15 @@ export type ApplyRemoteContext = {
     fileId: string
     error: unknown
   }) => void
+  onFileProgress?: (done: number, total: number) => void
+  onNodesReady?: () => void | Promise<void>
+  onImported?: (payload: {
+    parentUuid: string
+    absPath: string
+    fileName: string
+    trackNumber: number | null
+    addedAtMs: number | null
+  }) => void
 }
 
 export type ApplyRemoteOptions = {
@@ -357,6 +366,20 @@ const tryImportCloudFile = async (
     })
     return null
   }
+}
+
+const emitImported = (
+  ctx: ApplyRemoteContext,
+  file: CuratedLibrarySyncCloudFile,
+  absPath: string
+): void => {
+  ctx.onImported?.({
+    parentUuid: file.parentUuid,
+    absPath,
+    fileName: file.fileName,
+    trackNumber: asOptionalPositiveInt(file.trackNumber),
+    addedAtMs: asOptionalPositiveInt(file.addedAtMs)
+  })
 }
 
 const persistImportedIdentity = (
@@ -711,6 +734,7 @@ export const applyRemoteSnapshot = async (
       await ensureCloudNodeLocal(node, scope, options)
     }
     await purgePendingDeletedCuratedNodeShells()
+    await ctx.onNodesReady?.()
 
     const cloudFileIds = new Set(snapshot.files.map((file) => file.fileId))
     const localById = new Map(local.files.map((file) => [file.fileId, file]))
@@ -721,8 +745,13 @@ export const applyRemoteSnapshot = async (
       localByHash.set(file.contentSha256, list)
     }
     const adoptedLocalIds = new Set<string>()
+    const fileTotal = snapshot.files.length
+    let fileDone = 0
+    ctx.onFileProgress?.(0, fileTotal)
 
     for (const file of snapshot.files) {
+      fileDone += 1
+      ctx.onFileProgress?.(fileDone, fileTotal)
       assertNotCancelled(ctx.signal)
       const localFile = localById.get(file.fileId)
       let matched = localFile
@@ -797,6 +826,7 @@ export const applyRemoteSnapshot = async (
               ),
               scope
             )
+            emitImported(ctx, file, imported)
           }
           continue
         }
@@ -832,7 +862,10 @@ export const applyRemoteSnapshot = async (
         continue
       }
       const imported = await tryImportCloudFile(file, ctx, scope)
-      if (imported) persistImportedIdentity(file, imported, absToRel(curatedRoot, imported), scope)
+      if (imported) {
+        persistImportedIdentity(file, imported, absToRel(curatedRoot, imported), scope)
+        emitImported(ctx, file, imported)
+      }
     }
 
     if (options.applyTombstones !== false) {

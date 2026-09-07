@@ -97,6 +97,9 @@ const activityText = computed(() => {
   if (phase === 'scanning') {
     return t('cloudSync.curatedLibrary.activityScanning', { now, total })
   }
+  if (phase === 'downloading') {
+    return t('cloudSync.curatedLibrary.activityDownloading', { now, total })
+  }
   if (phase === 'uploading') {
     return t('cloudSync.curatedLibrary.activityUploading', { now, total })
   }

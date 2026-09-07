@@ -109,6 +109,7 @@ export type CuratedLibrarySyncFailureItem = {
 export type CuratedLibrarySyncActivityPhase =
   | 'idle'
   | 'scanning'
+  | 'downloading'
   | 'uploading'
   | 'waiting-first-snapshot'
   | 'applying'

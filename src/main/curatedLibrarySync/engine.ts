@@ -1,4 +1,3 @@
-import path from 'node:path'
 import { powerMonitor } from 'electron'
 import store from '../store'
 import { log } from '../log'
@@ -6,7 +5,6 @@ import mainWindow from '../window/mainWindow'
 import { isLibraryMergeActive } from '../services/libraryMerge'
 import { isLibraryRelocateActive, hasLibraryRelocateJournalSync } from '../services/libraryRelocate'
 import { beginLibraryTreeWatcherBulkOperation } from '../libraryTreeWatcher'
-import { getLibrary } from '../utils'
 import { runPlaybackAwareBackgroundFileIo } from '../services/playbackForegroundActivity'
 import { is } from '@electron-toolkit/utils'
 import { resolveDevCloudSyncUserKey } from '../../shared/cloudSyncDevUserKey'
@@ -23,30 +21,27 @@ import {
   writeCuratedLibrarySyncFailures,
   writeCuratedLibrarySyncQuotaCache,
   setCuratedLibrarySyncLastAppliedRevision,
-  forgetCuratedLibrarySyncJoinState
+  forgetCuratedLibrarySyncJoinState,
+  readCuratedLibrarySyncPendingJoinMode,
+  writeCuratedLibrarySyncPendingJoinMode
 } from '../librarySettingsDb'
 import {
   clearPendingCuratedLibraryJoinPrompt,
   getPendingCuratedLibraryJoinPrompt
 } from './joinPrompt'
 import {
-  CURATED_LIBRARY_SYNC_PLAYLISTS_CHANGED_CHANNEL,
   CURATED_LIBRARY_SYNC_PROGRESS_ID,
-  CURATED_LIBRARY_SYNC_ROOT_PARENT_UUID,
   type CuratedLibrarySyncActivity,
   type CuratedLibrarySyncActivityPhase,
   type CuratedLibrarySyncConflictItem,
   type CuratedLibrarySyncFailureItem,
   type CuratedLibrarySyncJoinMode,
-  type CuratedLibrarySyncListFileChange,
   type CuratedLibrarySyncOp,
-  type CuratedLibrarySyncPlaylistsChangedPayload,
   type CuratedLibrarySyncSnapshot,
   type CuratedLibrarySyncStartPayload,
   type CuratedLibrarySyncStartResult,
   type CuratedLibrarySyncTrigger
 } from '../../shared/curatedLibrarySync'
-import { RECYCLE_BIN_UUID } from '../../shared/recycleBin'
 import {
   beginFirstCuratedSnapshot,
   commitFirstCuratedSnapshot,
@@ -57,7 +52,7 @@ import {
 } from './apiClient'
 import { uploadBlobWithResume } from './blobTransfer'
 import { collectDroppedOps } from './conflictDiff'
-import { mapTransferErrorKey } from './reports'
+import { isFirstSnapshotRace, mapCuratedSyncError, mapTransferErrorKey } from './reports'
 import { parseCuratedLibrarySnapshot, mergeCuratedLibrarySnapshot } from './snapshotMerge'
 import {
   applyRemoteSnapshot,
@@ -69,6 +64,7 @@ import {
   type ApplyRemoteOptions,
   type DeferredRemoteOp
 } from './applyRemote'
+import { finishApplyUi, notifyTree, queueImportedApplyUi, resetApplyUiFlush } from './applyUiNotify'
 import {
   countCuratedLibraryAudioFiles,
   scanCuratedLibraryForSync,
@@ -76,7 +72,6 @@ import {
   type CuratedLocalNode
 } from './scan'
 import { findCuratedLibraryNode, sameCloudParentUuid } from './paths'
-import { markGlobalSongSearchDirty } from '../services/globalSongSearch'
 import {
   listPendingDeletedCuratedNodeIds,
   prunePendingDeletedCuratedNodes,
@@ -213,114 +208,6 @@ const buildJoinChoice = async (status: {
   cloudFileCount: status.fileCount,
   cloudRevision: status.revision
 })
-
-const notifyTree = async () => {
-  const win = mainWindow.instance
-  if (!win || win.isDestroyed()) return
-  try {
-    const tree = await getLibrary({ skipSync: true })
-    win.webContents.send('library-tree-updated', tree)
-  } catch {}
-}
-
-const toLocalPlaylistUuid = (cloudParent: string): string => {
-  const curated = findCuratedLibraryNode()
-  const parent = String(cloudParent || '').trim()
-  if (!parent || parent === CURATED_LIBRARY_SYNC_ROOT_PARENT_UUID) {
-    return curated?.uuid || ''
-  }
-  return parent
-}
-
-const toLibraryPath = (absPath: string): string => {
-  const dbRoot = String(store.databaseDir || '').trim()
-  if (!dbRoot || !absPath) return ''
-  const rel = path.relative(dbRoot, absPath).replace(/\\/g, '/')
-  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return ''
-  return rel
-}
-
-const toListFileChange = (file: CuratedLocalFile): CuratedLibrarySyncListFileChange | null => {
-  const listUUID = toLocalPlaylistUuid(file.parentUuid)
-  const libraryPath = toLibraryPath(file.absPath)
-  if (!listUUID || !file.absPath || !libraryPath) return null
-  return {
-    listUUID,
-    absPath: file.absPath,
-    libraryPath,
-    trackNumber: file.trackNumber,
-    addedAtMs: file.addedAtMs
-  }
-}
-
-const collectPlaylistFileChanges = (
-  before: { files: CuratedLocalFile[]; nodes: CuratedLocalNode[] },
-  after: { files: CuratedLocalFile[]; nodes: CuratedLocalNode[] }
-): CuratedLibrarySyncPlaylistsChangedPayload => {
-  const uuids = new Set<string>()
-  const removed: CuratedLibrarySyncListFileChange[] = []
-  const added: CuratedLibrarySyncListFileChange[] = []
-  const updated: CuratedLibrarySyncListFileChange[] = []
-  const pushChange = (target: CuratedLibrarySyncListFileChange[], file: CuratedLocalFile) => {
-    const change = toListFileChange(file)
-    if (!change) return
-    target.push(change)
-    uuids.add(change.listUUID)
-  }
-  const beforeFiles = new Map(before.files.map((file) => [file.fileId, file]))
-  const afterFiles = new Map(after.files.map((file) => [file.fileId, file]))
-  let recycled = false
-  for (const [fileId, file] of beforeFiles) {
-    const next = afterFiles.get(fileId)
-    if (!next) {
-      pushChange(removed, file)
-      recycled = true
-      continue
-    }
-    if (next.parentUuid !== file.parentUuid || next.fileName !== file.fileName) {
-      pushChange(removed, file)
-      pushChange(added, next)
-      continue
-    }
-    if (next.trackNumber !== file.trackNumber || next.addedAtMs !== file.addedAtMs) {
-      pushChange(updated, next)
-    }
-  }
-  for (const [fileId, file] of afterFiles) {
-    if (!beforeFiles.has(fileId)) pushChange(added, file)
-  }
-  const afterNodeIds = new Set(after.nodes.map((node) => node.uuid))
-  for (const node of before.nodes) {
-    if (afterNodeIds.has(node.uuid)) continue
-    uuids.add(node.uuid)
-    const parent = toLocalPlaylistUuid(node.parentUuid)
-    if (parent) uuids.add(parent)
-  }
-  const beforeNodeIds = new Set(before.nodes.map((node) => node.uuid))
-  for (const node of after.nodes) {
-    if (beforeNodeIds.has(node.uuid)) continue
-    uuids.add(node.uuid)
-    const parent = toLocalPlaylistUuid(node.parentUuid)
-    if (parent) uuids.add(parent)
-  }
-  if (recycled) uuids.add(RECYCLE_BIN_UUID)
-  return { uuids: [...uuids], removed, added, updated }
-}
-
-const notifyPlaylistsChanged = (payload: CuratedLibrarySyncPlaylistsChangedPayload) => {
-  if (
-    payload.uuids.length === 0 &&
-    payload.removed.length === 0 &&
-    payload.added.length === 0 &&
-    payload.updated.length === 0
-  ) {
-    return
-  }
-  markGlobalSongSearchDirty('curated-library-sync', { songListUUIDs: payload.uuids })
-  const win = mainWindow.instance
-  if (!win || win.isDestroyed()) return
-  win.webContents.send(CURATED_LIBRARY_SYNC_PLAYLISTS_CHANGED_CHANNEL, payload)
-}
 
 const throwIfCancelled = () => {
   if (cancelRequested) {
@@ -597,6 +484,7 @@ const persistAppliedSnapshot = (
     new Set(snapshot.nodes.map((node) => node.uuid)),
     new Set(rawLocalNodeIds)
   )
+  writeCuratedLibrarySyncPendingJoinMode(null)
 }
 
 const loadCachedSnapshot = () => parseCuratedLibrarySnapshot(readCuratedLibrarySyncLastSnapshot())
@@ -639,21 +527,27 @@ const applyCtx = (): ApplyRemoteContext => ({
       fileId: payload.fileId,
       errorKey: mapTransferErrorKey(payload.error)
     })
-  }
+  },
+  onFileProgress: (now, total) => {
+    if (total > 0) setActivity('downloading', now, total)
+  },
+  onNodesReady: () => notifyTree(),
+  onImported: queueImportedApplyUi
 })
 
 const runJoin = async (
   mode: CuratedLibrarySyncJoinMode
 ): Promise<CuratedLibrarySyncStartResult> => {
+  writeCuratedLibrarySyncPendingJoinMode(mode)
   sessionCompletedWork = true
   const local = await scanLocalForSync()
-  setActivity('applying')
   const snapshot = await pullMergedSnapshot(null)
   if (mode === 'local-wins') {
     const failedSha = await uploadMissingBlobs(local.files, cloudBlobShaSet(snapshot))
     if (failedSha.size > 0) {
       return { status: 'failed', message: 'cloudSync.curatedLibrary.errors.uploadIncomplete' }
     }
+    setActivity('applying')
     const entities = buildCloudEntitiesFromLocal({
       ...local,
       files: local.files.filter((file) => !failedSha.has(file.contentSha256))
@@ -700,6 +594,7 @@ const runJoin = async (
       })
       const ops = omitFailedBlobOps(buildPushOps(after, snapshot, retain), failedSha)
       if (ops.length > 0) {
+        setActivity('applying')
         const pushed = await pushCuratedOps({
           baseRevision: snapshot.revision,
           ops,
@@ -733,8 +628,7 @@ const runJoin = async (
     }
   } finally {
     release()
-    await notifyTree()
-    notifyPlaylistsChanged(collectPlaylistFileChanges(local, latest))
+    await finishApplyUi(local, latest)
   }
   return { status: 'success' }
 }
@@ -775,7 +669,6 @@ const isDeletionOp = (op: CuratedLibrarySyncOp): boolean =>
 const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
   sessionCompletedWork = true
   const local = await scanLocalForSync()
-  setActivity('applying')
   let snapshot = await pullMergedSnapshot(getCuratedLibrarySyncLastAppliedRevision())
   const lastAppliedRevision = getCuratedLibrarySyncLastAppliedRevision()
   // reset/回滚可能恰好发生在 status 与 pull 之间；不能把本机旧文件再推回刚清空的云端。
@@ -849,6 +742,7 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
       writeCuratedLibrarySyncDeferredOps(remainingDeferred)
       return { status: 'success' }
     }
+    setActivity('applying')
     const pushed = await pushCuratedOps({
       baseRevision: snapshot.revision,
       ops,
@@ -877,34 +771,8 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
     return { status: 'success' }
   } finally {
     release()
-    await notifyTree()
-    notifyPlaylistsChanged(collectPlaylistFileChanges(local, latest))
+    await finishApplyUi(local, latest)
   }
-}
-
-const mapCuratedError = (message: string): string => {
-  const upper = message.toUpperCase()
-  if (upper.includes('DISK_FULL') || upper.includes('ENOSPC')) {
-    return 'cloudSync.curatedLibrary.errors.diskFull'
-  }
-  if (upper.includes('QUOTA') || upper.includes('LIMIT')) {
-    return 'cloudSync.curatedLibrary.errors.quotaExceeded'
-  }
-  if (upper.includes('HASH')) return 'cloudSync.curatedLibrary.errors.hashMismatch'
-  if (upper.includes('INVALID_NAME')) return 'cloudSync.curatedLibrary.errors.failed'
-  if (upper.includes('CANNOTCONNECT') || upper.includes('FETCH')) {
-    return 'cloudSync.errors.cannotConnect'
-  }
-  if (upper.includes('PROTOCOL')) return 'cloudSync.curatedLibrary.errors.protocolUnsupported'
-  if (upper.includes('FIRST_SNAPSHOT_WAIT')) {
-    return 'cloudSync.curatedLibrary.errors.firstSnapshotWait'
-  }
-  return 'cloudSync.curatedLibrary.errors.failed'
-}
-
-const isFirstSnapshotRace = (error: unknown): boolean => {
-  const message = error instanceof Error ? error.message : String(error || '')
-  return message.includes('FIRST_SNAPSHOT_LOCKED') || message.includes('FIRST_SNAPSHOT_EXISTS')
 }
 
 const runFirstSnapshotUpload = async (): Promise<CuratedLibrarySyncStartResult> => {
@@ -974,6 +842,7 @@ export const runCuratedLibrarySync = async (
   sessionFailures = []
   sessionConflicts = []
   sessionCompletedWork = false
+  resetApplyUiFlush()
   try {
     dismissProgress()
     throwIfCancelled()
@@ -1035,6 +904,10 @@ export const runCuratedLibrarySync = async (
         if (rewound && status.snapshotReady) {
           return await runJoin('cloud-wins')
         }
+        const pendingJoinMode = readCuratedLibrarySyncPendingJoinMode()
+        if (pendingJoinMode) {
+          return await runJoin(pendingJoinMode)
+        }
         return await buildJoinChoice(status)
       }
       if (payload.joinMode === 'local-wins' && !payload.confirmOverwriteCloud) {
@@ -1067,7 +940,7 @@ export const runCuratedLibrarySync = async (
       return { status: 'paused_offline' }
     }
     log.error('[curated-library-sync] failed', error)
-    return { status: 'failed', message: mapCuratedError(message) }
+    return { status: 'failed', message: mapCuratedSyncError(message) }
   } finally {
     const cancelled = cancelRequested
     running = false

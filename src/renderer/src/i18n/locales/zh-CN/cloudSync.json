@@ -78,6 +78,7 @@
       },
       "activityTitle": "当前同步",
       "activityScanning": "正在核对本机精选库 {now}/{total}",
+      "activityDownloading": "正在下载精选库音频 {now}/{total}",
       "activityUploading": "正在上传精选库音频 {now}/{total}",
       "activityWaitingFirstSnapshot": "正在等待另一台设备完成首次快照",
       "activityApplying": "正在提交精选库快照",

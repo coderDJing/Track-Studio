@@ -78,6 +78,7 @@
       },
       "activityTitle": "Current sync",
       "activityScanning": "Checking local curated library {now}/{total}",
+      "activityDownloading": "Downloading curated library audio {now}/{total}",
       "activityUploading": "Uploading curated library audio {now}/{total}",
       "activityWaitingFirstSnapshot": "Waiting for another device to finish the first snapshot",
       "activityApplying": "Committing the curated library snapshot",
