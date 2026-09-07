@@ -728,11 +728,7 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
   let snapshot = await pullMergedSnapshot(getCuratedLibrarySyncLastAppliedRevision())
   const lastAppliedRevision = getCuratedLibrarySyncLastAppliedRevision()
   // reset/回滚可能恰好发生在 status 与 pull 之间；不能把本机旧文件再推回刚清空的云端。
-  if (
-    lastAppliedRevision != null &&
-    lastAppliedRevision > 0 &&
-    snapshot.revision < lastAppliedRevision
-  ) {
+  if (lastAppliedRevision != null && snapshot.revision < lastAppliedRevision) {
     return await runJoin('cloud-wins')
   }
   const release = beginLibraryTreeWatcherBulkOperation()
@@ -947,11 +943,7 @@ export const runCuratedLibrarySync = async (
     cacheQuotaFromStatus(status)
     let lastRevision = getCuratedLibrarySyncLastAppliedRevision()
     let rewound = false
-    if (
-      lastRevision !== null &&
-      lastRevision > 0 &&
-      (!status.snapshotReady || status.revision < lastRevision)
-    ) {
+    if (lastRevision !== null && (!status.snapshotReady || status.revision < lastRevision)) {
       forgetCuratedLibrarySyncJoinState()
       cacheQuotaFromStatus(status)
       lastRevision = null
@@ -995,6 +987,11 @@ export const runCuratedLibrarySync = async (
           return await runFirstSnapshotUpload()
         }
       }
+    }
+    // 显式 cloud-wins（清空云端 / 对端看到 revision 回绕）必须按空云端删本机。
+    // lastRevision 为 0 时也会落到这里；不能再走增量，否则会把本机库 upsert 回刚清空的云端。
+    if (payload.joinMode === 'cloud-wins') {
+      return await runJoin('cloud-wins')
     }
     if (lastRevision === null) {
       if (!payload.joinMode) {

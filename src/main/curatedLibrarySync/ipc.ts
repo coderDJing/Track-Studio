@@ -142,6 +142,10 @@ export const registerCuratedLibrarySyncIpc = (): void => {
       return { success: false, message: 'cloudSync.notConfigured' }
     }
     await cancelCuratedLibrarySync()
+    const waitUntil = Date.now() + 15000
+    while (isCuratedLibrarySyncRunning() && Date.now() < waitUntil) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
     return enqueueCloudWork(async () => {
       try {
         await resetCloudCuratedLibrary()
@@ -149,7 +153,7 @@ export const registerCuratedLibrarySyncIpc = (): void => {
         syncCuratedLibraryLiveSync()
         if (isCuratedLibrarySyncEnabled()) {
           const aligned = await runCuratedLibrarySync({ trigger: 'manual', joinMode: 'cloud-wins' })
-          if (aligned.status !== 'success' && aligned.status !== 'already_running') {
+          if (aligned.status !== 'success') {
             return {
               success: false,
               message:

@@ -223,7 +223,11 @@ export function getCuratedLibrarySyncLastAppliedRevision(): number | null {
   if (!db) return null
   const raw = getMetaValue(db, LIBRARY_SETTING_META_KEYS.lastAppliedRevision)
   if (raw === null || raw === '') return null
-  const parsed = Number(parseStoredValue(raw))
+  const value = parseStoredValue(raw)
+  // JSON null 必须当「未对齐」；Number(null)===0，会和「已落地空云端 revision 0」撞车，
+  // 清空云端后误走增量，把本机精选库整库推回去。
+  if (value === null || value === undefined || value === '') return null
+  const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed < 0) return null
   return Math.floor(parsed)
 }
