@@ -56,11 +56,8 @@ import type {
   CuratedLibrarySyncSnapshot
 } from '../../shared/curatedLibrarySync'
 import { readCacheFields, type CuratedLocalFile, type CuratedLocalNode } from './scan'
-import {
-  asOptionalPositiveInt,
-  localFilePendingSinceLast,
-  localNodePendingSinceLast
-} from './pendingLocal'
+import { asOptionalPositiveInt, localNodePendingSinceLast } from './pendingLocal'
+import { adoptAliveHashMatch, liveMatchedFileApplyState } from './applyRemotePendingFile'
 
 export type DeferredRemoteOp = {
   type: 'deleteFile' | 'moveFile' | 'deleteNode'
@@ -417,37 +414,6 @@ const persistMatchedCloudFile = async (
   })
 }
 
-/** 扫描开跑后文件被改名/挪走/改内容/改曲序：不要按云端旧快照搬回去。 */
-const liveMatchedFileApplyState = async (
-  matched: CuratedLocalFile,
-  lastFile: CuratedLibrarySyncCloudFile | undefined,
-  scope: CloudParentScope,
-  lastNodeIds: Set<string>
-): Promise<'missing' | 'pending' | 'stable'> => {
-  if (!(await fs.pathExists(matched.absPath))) return 'missing'
-  try {
-    const stat = await fs.stat(matched.absPath)
-    if (
-      stat.size !== matched.contentSize ||
-      (matched.mtimeMs != null && Number(matched.mtimeMs) !== Number(stat.mtimeMs))
-    ) {
-      return 'pending'
-    }
-  } catch {
-    return 'missing'
-  }
-  const liveCache = await readCacheFields(matched.absPath)
-  const live = {
-    parentUuid: matched.parentUuid,
-    fileName: path.basename(matched.absPath),
-    contentSha256: matched.contentSha256,
-    trackNumber: liveCache.trackNumber ?? matched.trackNumber,
-    addedAtMs: liveCache.addedAtMs ?? matched.addedAtMs
-  }
-  if (localFilePendingSinceLast(live, lastFile, scope.curatedUuid, lastNodeIds)) return 'pending'
-  return 'stable'
-}
-
 const deleteLocalFile = async (absPath: string, ctx: ApplyRemoteContext): Promise<boolean> => {
   if (isBusyPath(absPath, ctx)) return false
   const setProtection = await protectSetReferencedFilesForDeletion([absPath])
@@ -800,21 +766,28 @@ export const applyRemoteSnapshot = async (
       const destDir = localParentAbsOf(file.parentUuid, scope)
       if (!destDir) continue
       if (matched) {
+        let current = matched
         const lastFile = options.lastAppliedFiles?.get(file.fileId)
         const lastNodeIds = new Set(options.lastAppliedNodes?.keys() || [])
         if (shouldPreservePendingLocal(options)) {
-          const liveState = await liveMatchedFileApplyState(matched, lastFile, scope, lastNodeIds)
+          current = await adoptAliveHashMatch(current, file.fileId, file.sha256, localByHash)
+          const liveState = await liveMatchedFileApplyState(
+            current,
+            lastFile,
+            scope.curatedUuid,
+            lastNodeIds
+          )
           if (liveState !== 'stable') {
             logCuratedDeleteTrace('apply-skip-pending-file-meta', {
               fileId: file.fileId,
-              fileName: matched.fileName,
+              fileName: current.fileName,
               liveState
             })
             continue
           }
         }
         const destPath = path.join(destDir, file.fileName)
-        if (isBusyPath(matched.absPath, ctx)) {
+        if (isBusyPath(current.absPath, ctx)) {
           deferred.push({
             type: 'moveFile',
             fileId: file.fileId,
@@ -824,7 +797,7 @@ export const applyRemoteSnapshot = async (
           })
           continue
         }
-        if (!(await ensureRemoteDestinationAvailable(destPath, matched.absPath, ctx))) {
+        if (!(await ensureRemoteDestinationAvailable(destPath, current.absPath, ctx))) {
           deferred.push({
             type: 'moveFile',
             fileId: file.fileId,
@@ -834,16 +807,16 @@ export const applyRemoteSnapshot = async (
           })
           continue
         }
-        if (matched.contentSha256 !== file.sha256) {
+        if (current.contentSha256 !== file.sha256) {
           const imported = await tryImportCloudFile(
             file,
             ctx,
             scope,
-            path.normalize(matched.absPath) === path.normalize(destPath)
+            path.normalize(current.absPath) === path.normalize(destPath)
           )
           if (imported) {
-            if (path.normalize(matched.absPath) !== path.normalize(destPath)) {
-              await moveFileToRecycleBin(matched.absPath)
+            if (path.normalize(current.absPath) !== path.normalize(destPath)) {
+              await moveFileToRecycleBin(current.absPath)
             }
             persistImportedIdentity(
               file,
@@ -857,21 +830,21 @@ export const applyRemoteSnapshot = async (
           }
           continue
         }
-        if (path.normalize(matched.absPath) !== path.normalize(destPath)) {
+        if (path.normalize(current.absPath) !== path.normalize(destPath)) {
           const moved = await relocateLibraryAudioFile({
-            sourceAbs: matched.absPath,
+            sourceAbs: current.absPath,
             destAbs: destPath,
             mode: 'move'
           })
-          await persistMatchedCloudFile(file, moved, destDir, curatedRoot, scope, matched.addedAtMs)
+          await persistMatchedCloudFile(file, moved, destDir, curatedRoot, scope, current.addedAtMs)
         } else {
           await persistMatchedCloudFile(
             file,
-            matched.absPath,
+            current.absPath,
             destDir,
             curatedRoot,
             scope,
-            matched.addedAtMs
+            current.addedAtMs
           )
         }
         continue

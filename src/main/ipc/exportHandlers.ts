@@ -422,9 +422,13 @@ export function registerExportHandlers() {
         tasks.push(async () => {
           const movedPath = await moveOrCopyItemWithCheckIsExist(src, targetPath, isMove)
           if (isMove) {
-            remapKeyAnalysisTrackedPath(src, movedPath)
-            replaceMixtapeFilePath(src, movedPath)
-            updateSetItemFilePathReferences(src, movedPath)
+            try {
+              remapKeyAnalysisTrackedPath(src, movedPath)
+              replaceMixtapeFilePath(src, movedPath)
+              updateSetItemFilePathReferences(src, movedPath)
+            } catch (error) {
+              log.error('[moveSongsToDir] 移动后引用重映射失败', { src, movedPath, error })
+            }
           }
           try {
             const fromRoot = await findSongListRoot(path.dirname(src))
@@ -436,7 +440,9 @@ export function registerExportHandlers() {
               toPath: movedPath,
               mode: isMove ? 'move' : 'copy'
             })
-          } catch {}
+          } catch (error) {
+            log.error('[moveSongsToDir] 分析结果迁移失败', { src, movedPath, error })
+          }
           if (isMove) {
             if (isInRecycleBinAbsPath(src)) {
               const rel = toLibraryRelativePath(src)
@@ -478,6 +484,11 @@ export function registerExportHandlers() {
           payload
         )
     })
+    for (const item of results) {
+      if (item instanceof Error) {
+        log.error(isMove ? '[moveSongsToDir] 任务失败' : '[copySongsToDir] 任务失败', item)
+      }
+    }
     if (hasENOSPC && mainWindow.instance) {
       mainWindow.instance.webContents.send('file-batch-summary', {
         context: isMove ? 'moveSongs' : 'copySongs',
