@@ -72,7 +72,6 @@ import { findCuratedLibraryNode, sameCloudParentUuid } from './paths'
 import { markGlobalSongSearchDirty } from '../services/globalSongSearch'
 import {
   listPendingDeletedCuratedNodeIds,
-  logCuratedDeleteTrace,
   prunePendingDeletedCuratedNodes,
   purgePendingDeletedCuratedNodeShells
 } from './pendingDeletedNodes'
@@ -397,7 +396,6 @@ const buildPushOps = (
     if (pendingDeleted.has(node.uuid)) continue
     // 墓碑赢：扫描会把 updatedAtMs 写成 now，不能靠时间戳判断「本机更新」。
     if (diff.tombstoneNodes.has(node.uuid) && !diff.cloudNodes.has(node.uuid)) {
-      logCuratedDeleteTrace('skip-upsert-tombstoned-node', { uuid: node.uuid, name: node.name })
       continue
     }
     const cloud = diff.cloudNodes.get(node.uuid)
@@ -479,7 +477,6 @@ const buildPushOps = (
     if (diff.cloudFiles.has(file.fileId)) continue
     // 上次同步还在本机/云快照里：这是过期副本，不是回收站恢复。
     if (lastKnownFileIds.has(file.fileId)) {
-      logCuratedDeleteTrace('skip-undelete-stale-file', { fileId: file.fileId })
       continue
     }
     ops.push({
@@ -701,27 +698,6 @@ const incrementalApplyOptions = (): ApplyRemoteOptions => {
 const isDeletionOp = (op: CuratedLibrarySyncOp): boolean =>
   op.type === 'deleteNode' || op.type === 'deleteFile'
 
-const summarizePushOps = (phase: string, ops: CuratedLibrarySyncOp[]): void => {
-  const pending = [...listPendingDeletedCuratedNodeIds()]
-  const deleteNodes = ops.filter((op) => op.type === 'deleteNode').map((op) => op.uuid)
-  const upsertNodeOps = ops.filter((op) => op.type === 'upsertNode')
-  const upsertNodes = upsertNodeOps.map((op) => op.node.uuid)
-  if (pending.length === 0 && deleteNodes.length === 0 && upsertNodes.length === 0) return
-  logCuratedDeleteTrace('push-ops', {
-    phase,
-    pending,
-    deleteNode: deleteNodes,
-    upsertNodeIds: upsertNodes,
-    upsertNodeOrders: upsertNodeOps.map((op) => ({
-      uuid: op.node.uuid,
-      sortOrder: op.node.sortOrder
-    })),
-    deleteFile: ops.filter((op) => op.type === 'deleteFile').length,
-    upsertNode: upsertNodes.length,
-    upsertFile: ops.filter((op) => op.type === 'upsertFile').length
-  })
-}
-
 const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
   sessionCompletedWork = true
   const local = await scanCuratedLibraryForSync()
@@ -766,24 +742,11 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
       buildPushOps(local, snapshot, retainBefore),
       new Set()
     ).filter(isDeletionOp)
-    summarizePushOps('incremental-deletes', deletionOps)
     if (deletionOps.length > 0) {
       const pushedDeletes = await pushCuratedOps({
         baseRevision: snapshot.revision,
         ops: deletionOps,
         signal: abortController?.signal
-      })
-      logCuratedDeleteTrace('push-deletes-result', {
-        ok: pushedDeletes.ok,
-        baseRevision: snapshot.revision,
-        nextRevision: pushedDeletes.snapshot.revision,
-        stillOnCloud: deletionOps
-          .filter((op) => op.type === 'deleteNode')
-          .map((op) => op.uuid)
-          .filter((uuid) => pushedDeletes.snapshot.nodes.some((node) => node.uuid === uuid)),
-        tombstoneIds: pushedDeletes.snapshot.tombstones
-          .filter((item) => item.kind === 'node')
-          .map((item) => item.id)
       })
       if (pushedDeletes.ok) {
         snapshot = pushedDeletes.snapshot
@@ -806,7 +769,6 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
     const failedSha = await uploadMissingBlobs(after.files)
     const retain = collectUnappliedCloudIds(snapshot, after, applyOptions)
     const ops = omitFailedBlobOps(buildPushOps(after, snapshot, retain), failedSha)
-    summarizePushOps('incremental-remaining', ops)
     if (ops.length === 0) {
       persistAppliedSnapshot(snapshot, after)
       writeCuratedLibrarySyncDeferredOps(remainingDeferred)

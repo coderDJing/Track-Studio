@@ -46,7 +46,6 @@ import {
 } from './paths'
 import {
   listPendingDeletedCuratedNodeIds,
-  logCuratedDeleteTrace,
   purgePendingDeletedCuratedNodeShells,
   removeLocalPendingCuratedNodeShell
 } from './pendingDeletedNodes'
@@ -197,7 +196,6 @@ const ensureCloudNodeLocal = async (
 ): Promise<string | null> => {
   assertSafeLeafName(node.name)
   if (listPendingDeletedCuratedNodeIds().has(node.uuid)) {
-    logCuratedDeleteTrace('ensure-aborted-pending', { uuid: node.uuid, name: node.name })
     return null
   }
   const existing = (loadLibraryNodes() || []).find((item) => item.uuid === node.uuid)
@@ -215,12 +213,6 @@ const ensureCloudNodeLocal = async (
       localNodePendingSinceLast(live, lastNode, scope.curatedUuid, lastNodeIds)
     ) {
       const currentAbs = getNodeAbsPath(node.uuid)
-      logCuratedDeleteTrace('apply-skip-pending-node-meta', {
-        uuid: node.uuid,
-        name: existing.dirName,
-        localOrder: live.sortOrder,
-        cloudOrder: node.sortOrder
-      })
       if (currentAbs) await writeUuidMarker(currentAbs, node.uuid)
       return currentAbs
     }
@@ -599,14 +591,12 @@ const applyFileTombstones = async (
     // 上次本机快照里没有这首：多半是回收站恢复，不要先搬回垃圾桶。
     // 上次有过：对端删了，本机还留着，必须落地墓碑。禁止用扫描写成 now 的 updatedAtMs 跳过。
     if (options.knownFileIds && !options.knownFileIds.has(tombstone.id)) {
-      logCuratedDeleteTrace('tombstone-skip-restored-file', { fileId: tombstone.id })
       continue
     }
     if (isBusyPath(abs, ctx)) {
       deferred.push({ type: 'deleteFile', fileId: tombstone.id })
       continue
     }
-    logCuratedDeleteTrace('tombstone-remove-file', { fileId: tombstone.id, abs })
     await deleteLocalFile(abs, ctx)
   }
   return deferred
@@ -679,11 +669,9 @@ const applyNodeTombstones = async (
     }
     // 本机删空歌单只看有没有音频；封面等残留不能挡住墓碑，否则对端会 upsert 把歌单救回云端。
     if (await dirHasAudioFiles(item.abs, audioExts)) {
-      logCuratedDeleteTrace('tombstone-defer-has-audio', { uuid: item.uuid, abs: item.abs })
       deferred.push({ type: 'deleteNode', nodeUuid: item.uuid })
       continue
     }
-    logCuratedDeleteTrace('tombstone-remove-node', { uuid: item.uuid, abs: item.abs })
     await fs.remove(item.abs)
     removeLibraryNode(item.uuid)
   }
@@ -716,24 +704,11 @@ export const applyRemoteSnapshot = async (
       const pendingDeleted = livePendingDeletedNodeIds(options)
       if (shouldSkipRecreatingLocallyMissingCloudNode(node.uuid, localNodeIds, options)) {
         if (pendingDeleted.has(node.uuid)) {
-          logCuratedDeleteTrace('apply-skip-pending-node', {
-            uuid: node.uuid,
-            name: node.name,
-            staleLocalScanStillHadIt: localNodeIds.has(node.uuid)
-          })
           await removeLocalPendingCuratedNodeShell(node.uuid, curatedRoot)
         }
         continue
       }
-      const existedInScan = localNodeIds.has(node.uuid)
       await ensureCloudNodeLocal(node, scope, options)
-      if (!existedInScan) {
-        logCuratedDeleteTrace('apply-ensure-missing-node', {
-          uuid: node.uuid,
-          name: node.name,
-          pending: pendingDeleted.has(node.uuid)
-        })
-      }
     }
     await purgePendingDeletedCuratedNodeShells()
 
@@ -778,11 +753,6 @@ export const applyRemoteSnapshot = async (
             lastNodeIds
           )
           if (liveState !== 'stable') {
-            logCuratedDeleteTrace('apply-skip-pending-file-meta', {
-              fileId: file.fileId,
-              fileName: current.fileName,
-              liveState
-            })
             continue
           }
         }

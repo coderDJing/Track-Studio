@@ -340,7 +340,7 @@ export const registerSongEditHandlers = () => {
             orderedFilePaths
           })
         } catch (error) {
-          log.warn('song-edit:commit track number update failed', error)
+          log.error('song-edit:commit track number update failed', error)
         }
       }
 

@@ -491,10 +491,6 @@ export async function moveFileToRecycleBin(
     } catch {}
     if (fromCurated) {
       try {
-        log.info('[curated-sync] 精选库曲目已移入回收站，排队同步', {
-          fileId: identity?.fileId || options.fileId || null,
-          destRelativePath: rel
-        })
         notifyLibraryFsChanged(destPath)
       } catch {}
     }
