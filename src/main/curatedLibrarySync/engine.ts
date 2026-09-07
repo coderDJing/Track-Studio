@@ -93,7 +93,6 @@ let resumeWaiters: Array<() => void> = []
 let powerMonitorBound = false
 let sessionFailures: CuratedLibrarySyncFailureItem[] = []
 let sessionConflicts: CuratedLibrarySyncConflictItem[] = []
-let sessionAttemptedTransfers = false
 let sessionCompletedWork = false
 
 const bindPowerMonitor = () => {
@@ -299,7 +298,6 @@ const uploadMissingBlobs = async (files: CuratedLocalFile[]): Promise<Set<string
   const seen = new Set<string>()
   const failed = new Set<string>()
   let index = 0
-  sessionAttemptedTransfers = true
   for (const file of files) {
     throwIfCancelled()
     await waitIfSuspended()
@@ -567,7 +565,6 @@ const waitForFirstSnapshotUnlock = async (): Promise<
 const applyCtx = (): ApplyRemoteContext => ({
   signal: abortController?.signal || new AbortController().signal,
   onTransferFailure: (payload) => {
-    sessionAttemptedTransfers = true
     recordFailure({
       direction: payload.direction,
       name: payload.name,
@@ -903,7 +900,6 @@ export const runCuratedLibrarySync = async (
   abortController = new AbortController()
   sessionFailures = []
   sessionConflicts = []
-  sessionAttemptedTransfers = false
   sessionCompletedWork = false
   try {
     dismissProgress()

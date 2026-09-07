@@ -42,8 +42,7 @@ import { prepareExternalPlaybackPlaylistAnalysis } from '../services/pioneerDevi
 import type {
   IBatchRenameExecutionRequestItem,
   IBatchRenameTemplateSegment,
-  IBatchRenameTrackInput,
-  ISongInfo
+  IBatchRenameTrackInput
 } from '../../types/globals'
 import { assertLibraryMergeMutationAllowed } from '../services/libraryMerge/runtime'
 

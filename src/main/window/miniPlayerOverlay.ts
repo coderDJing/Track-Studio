@@ -49,7 +49,6 @@ let latestTooltip: {
   source: BrowserWindow
 } | null = null
 let tooltipMeasuredSize: { width: number; height: number } | null = null
-let closingMenuFromBlur = false
 let ignoreMenuBlurUntil = 0
 
 const isUsableWindow = (target: BrowserWindow | null): target is BrowserWindow =>
@@ -347,11 +346,7 @@ const ensureOverlayWindow = () => {
   overlayWindow.on('blur', () => {
     if (!latestOverlay || latestOverlay.state.kind !== 'menu') return
     if (Date.now() < ignoreMenuBlurUntil) return
-    closingMenuFromBlur = true
     finishOverlay({ type: 'dismiss' })
-    setTimeout(() => {
-      closingMenuFromBlur = false
-    }, 280)
   })
   overlayWindow.once('ready-to-show', () => {
     if (!latestOverlay || !isUsableWindow(overlayWindow)) return

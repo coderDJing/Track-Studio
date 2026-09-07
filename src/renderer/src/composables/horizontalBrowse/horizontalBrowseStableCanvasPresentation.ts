@@ -399,16 +399,6 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
       playbackClock = null
       return
     }
-    // Revision handoff keeps the old rendered frame moving with its own viewport math
-    // until the replacement frame is ready. Applying the new viewport to the old frame
-    // can exceed overscan for one tick and stop the playback RAF.
-    const handoffFrame =
-      canUseRevisionHandoffFrame(currentFrame) && currentFrame ? currentFrame : null
-    // Revision handoff keeps the old frame's geometry, but its playback position must still
-    // follow the current presentation clock. The handoff frame can carry a stale playbackRate
-    // while live tempo preview is reanchoring the clock on every input frame; advancing from
-    // that stale frame rate makes the stable canvas drift away from render-sync currentSeconds,
-    // then snap back when the replacement frame is promoted.
     const estimatedSeconds = estimatePlaybackSeconds()
     const result = apply(estimatedSeconds, {
       allowReanchor: true,

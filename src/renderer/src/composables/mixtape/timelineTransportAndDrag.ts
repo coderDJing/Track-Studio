@@ -29,11 +29,7 @@ import {
   type TransportEntry,
   type TransportStemId
 } from '@renderer/composables/mixtape/timelineTransportAudioData'
-import {
-  hasInternalPlaybackSequence,
-  mapPlaybackSequencePlanToLocalSec,
-  mapPlaybackSequenceLocalToPlanSec
-} from '@renderer/composables/mixtape/timelineTransportPlaybackSequence'
+import { hasInternalPlaybackSequence } from '@renderer/composables/mixtape/timelineTransportPlaybackSequence'
 import {
   resolveEntryPlaybackOffsetSourceSec,
   resolveEntryPlaybackOffsetPlanSec,

@@ -181,17 +181,6 @@ export const useHorizontalBrowseDynamicBeatGridEdit = (
     }
   }
 
-  const selectClipByIndex = (map: SongBeatGridMapV2, index: number, manual: boolean) => {
-    const normalizedIndex = Math.max(0, Math.floor(Number(index) || 0))
-    if (!map.clips[normalizedIndex]) return false
-    selectedTarget.value = {
-      type: 'clip',
-      index: normalizedIndex,
-      manual
-    }
-    return true
-  }
-
   const syncPreviewFromSelectedTarget = () => {
     const map = resolveDynamicMap()
     const selectedIndex = resolveActiveClipIndex()

@@ -1,5 +1,5 @@
 import mainWindow from './window/mainWindow'
-import { beginLibrarySetup, getLibrarySetupState, sendLibrarySetupState } from './librarySetupState'
+import { beginLibrarySetup, sendLibrarySetupState } from './librarySetupState'
 import type { LibrarySetupErrorHint, LibrarySetupMode } from '../shared/librarySetup'
 
 export const openLibrarySetupWindow = (options?: {

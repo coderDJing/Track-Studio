@@ -5,7 +5,6 @@ import {
   buildUnifiedDisplayWaveformDetailFromMixxx,
   UNIFIED_DISPLAY_WAVEFORM_CACHE_VERSION,
   UNIFIED_DISPLAY_WAVEFORM_DETAIL_RATE,
-  UNIFIED_DISPLAY_WAVEFORM_PARAMETER_VERSION,
   type UnifiedDisplayWaveformDetailData
 } from '../../shared/unifiedDisplayWaveform'
 import {

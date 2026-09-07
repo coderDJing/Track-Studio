@@ -20,8 +20,7 @@ import { emitSongGridUpdated } from '../songGridEvents'
 import {
   createSongBeatGridMapV2FromFixedGrid,
   normalizeSongBeatGridDownbeatBeatOffset,
-  normalizeSongBeatGridMapV2,
-  projectSongBeatGridMapV2ToFixedGrid
+  normalizeSongBeatGridMapV2
 } from '../../../shared/songBeatGridMapV2'
 import { getBeatThisRuntimeAvailabilitySnapshot } from '../../workers/beatThisRuntime'
 import {
@@ -42,10 +41,8 @@ import {
   normalizeKeyAnalysisAlgorithmVersion
 } from '../keyAnalysisAlgorithmVersion'
 import {
-  isValidBpm,
   isValidFirstBeatMs,
   normalizePath,
-  type BpmAnalysisResult,
   type DoneEntry,
   type KeyAnalysisJob,
   type KeyAnalysisResult

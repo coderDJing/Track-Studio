@@ -609,7 +609,6 @@ export const useHorizontalBrowseRawWaveformCanvas = (
     const renderRekordboxGridEntries = cloneRekordboxBeatGridEntriesForHorizontalBrowseWorker(
       options.rekordboxGridEntries?.() ?? options.song()?.rekordboxGridEntries
     )
-    const renderBeatGridMapSignature = renderBeatGridMap?.signature ?? ''
     const renderBeatGridEditMode = options.beatGridEditMode?.() === true
     const rawBeatGridVisibleFromSec = Number(options.beatGridVisibleFromSec?.())
     const renderBeatGridVisibleFromSec =

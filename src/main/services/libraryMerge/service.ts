@@ -22,7 +22,6 @@ import {
   LibraryMergeError,
   type LibraryMergeOptions,
   type LibraryMergePhase,
-  type LibraryMergeProgress,
   type LibraryMergeResult,
   type LibraryMergeScope
 } from './types'

@@ -15,19 +15,6 @@ export type MainPlayerPlayingAnalysisPayload = {
   onlyIfQueued: boolean
 }
 
-const normalizeSongListUUID = (value: unknown) => String(value || '').trim()
-
-const isPlaylistAnalysisPromptDismissed = (
-  runtime: PlaylistAnalysisGateRuntime,
-  songListUUID?: string | null
-) => {
-  const uuid = normalizeSongListUUID(songListUUID)
-  if (!uuid) return false
-  return Array.isArray(runtime.playlistAnalysisPromptDismissedSongListUUIDs)
-    ? runtime.playlistAnalysisPromptDismissedSongListUUIDs.includes(uuid)
-    : false
-}
-
 export const resolveBrowserMainPlayerAnalysisIntent = (
   runtime: PlaylistAnalysisGateRuntime
 ): BrowserMainPlayerAnalysisIntent => {
