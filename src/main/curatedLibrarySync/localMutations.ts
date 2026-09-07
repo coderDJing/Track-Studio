@@ -8,6 +8,7 @@ import { updateSetItemFilePathReferences } from '../setListDb'
 import { remapKeyAnalysisTrackedPath } from '../services/keyAnalysisQueue'
 import { markGlobalSongSearchDirty } from '../services/globalSongSearch'
 import { rememberCuratedArtistsForAddedTracks } from '../curatedArtistLibrary'
+import { deletePlaylistViewSnapshotsUnderRoot } from '../libraryCacheDb'
 import { notifyCuratedFilePathChanged } from './identityDb'
 
 const remapMovedAudioFile = (fromAbs: string, toAbs: string) => {
@@ -64,10 +65,13 @@ export const relocateLibraryDirectoryFiles = async (
   sourceAbs: string,
   destAbs: string
 ): Promise<void> => {
+  // 整目录搬家后快照里的 list_root / filePath 都是旧绝对路径，改不回来，只能丢掉。
+  // 源目录即使已经不在了也要按旧路径清：云端对账可能磁盘先动、树后动。
+  deletePlaylistViewSnapshotsUnderRoot(sourceAbs)
+  if (!(await fs.pathExists(sourceAbs))) return
   const audioExts = store.settingConfig?.audioExt || []
   const oldFiles =
     audioExts.length > 0 ? await collectFilesWithExtensions(sourceAbs, audioExts) : []
-  if (!(await fs.pathExists(sourceAbs))) return
   await fs.move(sourceAbs, destAbs, { overwrite: false })
   for (const oldFile of oldFiles) {
     const rel = path.relative(sourceAbs, oldFile)

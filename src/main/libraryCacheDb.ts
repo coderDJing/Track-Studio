@@ -31,6 +31,7 @@ export {
   listPlaylistViewSnapshotVerificationCandidates,
   deletePlaylistViewSnapshot,
   deletePlaylistViewSnapshotsByRoot,
+  deletePlaylistViewSnapshotsUnderRoot,
   prunePlaylistViewSnapshots
 } from './libraryCacheDb/playlistViewSnapshot'
 

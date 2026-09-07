@@ -6,7 +6,9 @@ export type SongListLoadTicket = Readonly<{
 export const isSongListViewPending = (songListUUID: string, appliedSongListUUID: string) =>
   songListUUID !== '' && appliedSongListUUID !== songListUUID
 
-// 回切到已落地歌单时，如果可见列表已被切走时清空，仍应保持载入态，避免先画出空表头。
+// 转圈只看延迟后的 loadingShow。切歌单时 UUID 还没落地不能立刻改 viewState，
+// 否则外层 out-in 会把整页卸掉再装上，快照命中也会闪一下。
+// 回切到已落地歌单且可见列表已被清空时，仍立刻保持载入态，避免先画出空表头。
 export const shouldHoldSongListLoading = (params: {
   songListUUID: string
   appliedSongListUUID: string
@@ -15,7 +17,6 @@ export const shouldHoldSongListLoading = (params: {
   loadingShow?: boolean
 }) => {
   if (params.loadingShow) return true
-  if (isSongListViewPending(params.songListUUID, params.appliedSongListUUID)) return true
   return (
     params.isRequesting &&
     params.visibleCount === 0 &&

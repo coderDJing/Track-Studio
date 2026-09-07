@@ -1,3 +1,4 @@
+import path = require('path')
 import { getLibraryDb } from '../libraryDb'
 import { log } from '../log'
 import type { ISongInfo } from '../../types/globals'
@@ -59,7 +60,7 @@ type SnapshotStatements = {
   markStaleByRoot: ReturnType<SqliteDatabase['prepare']>
   deleteByUuid: ReturnType<SqliteDatabase['prepare']>
   deleteByRoot: ReturnType<SqliteDatabase['prepare']>
-  listUuids: ReturnType<SqliteDatabase['prepare']>
+  listRootRows: ReturnType<SqliteDatabase['prepare']>
 }
 
 // 打开歌单是热路径：statement 只在同一个连接上准备一次，换库自动失效。
@@ -114,7 +115,7 @@ function getStatements(db: SqliteDatabase): SnapshotStatements {
     ),
     deleteByUuid: db.prepare(`DELETE FROM playlist_view_snapshot WHERE song_list_uuid = ?`),
     deleteByRoot: db.prepare(`DELETE FROM playlist_view_snapshot WHERE list_root = ?`),
-    listUuids: db.prepare(`SELECT song_list_uuid FROM playlist_view_snapshot`)
+    listRootRows: db.prepare(`SELECT song_list_uuid, list_root FROM playlist_view_snapshot`)
   }
   statementCache.set(db, statements)
   return statements
@@ -325,8 +326,82 @@ export function deletePlaylistViewSnapshotsByRoot(listRoot: string): void {
   }
 }
 
-/** 树对账后清掉已经不存在的歌单快照，避免 UUID 复用时读到旧内容。 */
-export function prunePlaylistViewSnapshots(knownSongListUUIDs: Iterable<string>): number {
+const removeSnapshotsByUuids = (
+  db: SqliteDatabase,
+  statements: SnapshotStatements,
+  uuids: readonly string[]
+): number => {
+  if (uuids.length === 0) return 0
+  const removeAll = db.transaction((list: readonly string[]) => {
+    for (const uuid of list) statements.deleteByUuid.run(uuid)
+  })
+  removeAll(uuids)
+  return uuids.length
+}
+
+/**
+ * 删掉某个目录**及其子目录**下的所有快照，返回删掉的行数。
+ *
+ * 目录改名 / 移动后必须调它：快照的 list_root 和 items_json 里的每一条 filePath 都还是
+ * 旧路径，光改 list_root 救不回 items，重写 items 又等于重扫。删掉最诚实——下次打开
+ * 走一次完整扫描重建即可。留着的话有两种可见故障：
+ *  1. 打开歌单命中旧快照，用户点播放拿到已不存在的路径；
+ *  2. watcher 拿旧路径去核对，会把"目录已经不在了"读成"这张歌单空了"，落一份空快照。
+ *
+ * 行数等于歌单数（几百量级），所以直接取回全表在 JS 里比前缀：既避开 LIKE 通配符撞上
+ * 歌单名里的 `_` / `%`，也避开 SQLite substr 按字符计数与 JS UTF-16 长度不一致的坑。
+ */
+export function deletePlaylistViewSnapshotsUnderRoot(listRoot: string): number {
+  const normalized = normalizeSnapshotListRoot(listRoot)
+  if (!normalized) return 0
+  const db = getLibraryDb()
+  if (!db) return 0
+  try {
+    const statements = getStatements(db)
+    const rows = statements.listRootRows.all() as SnapshotRow[]
+    const prefix = normalized + path.sep
+    const stale = rows
+      .filter((row) => {
+        const root = normalizeSnapshotListRoot(String(row.list_root || ''))
+        return Boolean(root) && (root === normalized || root.startsWith(prefix))
+      })
+      .map((row) => String(row.song_list_uuid || ''))
+      .filter(Boolean)
+    return removeSnapshotsByUuids(db, statements, stale)
+  } catch (error) {
+    log.error('[playlist-snapshot] delete under root failed', error)
+    return 0
+  }
+}
+
+const buildExpectedListRootKeys = (
+  currentListRootsByUuid?: ReadonlyMap<string, string>
+): Map<string, string> => {
+  const expectedKeyByUuid = new Map<string, string>()
+  if (!currentListRootsByUuid) return expectedKeyByUuid
+  for (const [uuid, listRoot] of currentListRootsByUuid) {
+    const id = normalizeUuid(uuid)
+    const key = normalizeSnapshotListRoot(listRoot)
+    if (id && key) expectedKeyByUuid.set(id, key)
+  }
+  return expectedKeyByUuid
+}
+
+/**
+ * 树对账后清掉不可再用的歌单快照。
+ *
+ * 两种行都要删：
+ *  1. UUID 已经不在树上（避免复用时读到上一张歌单）；
+ *  2. UUID 还在，但当前路径和快照 list_root 对不上——磁盘改名、云同步搬家都是
+ *     这条：items_json 里仍是旧绝对路径，留着就会秒开到死路径。
+ *
+ * currentListRootsByUuid 只需要填还能定位到路径的 songList。其它节点类型故意
+ * 不进这张表，避免把「将来可能用到的 uuid 行」误判成路径漂移。
+ */
+export function prunePlaylistViewSnapshots(
+  knownSongListUUIDs: Iterable<string>,
+  currentListRootsByUuid?: ReadonlyMap<string, string>
+): number {
   const db = getLibraryDb()
   if (!db) return 0
   const known = new Set<string>()
@@ -334,18 +409,22 @@ export function prunePlaylistViewSnapshots(knownSongListUUIDs: Iterable<string>)
     const normalized = normalizeUuid(uuid)
     if (normalized) known.add(normalized)
   }
+  const expectedKeyByUuid = buildExpectedListRootKeys(currentListRootsByUuid)
   try {
     const statements = getStatements(db)
-    const rows = statements.listUuids.all() as SnapshotRow[]
+    const rows = statements.listRootRows.all() as SnapshotRow[]
     const stale = rows
-      .map((row) => String(row.song_list_uuid || ''))
-      .filter((uuid) => uuid && !known.has(uuid))
-    if (stale.length === 0) return 0
-    const removeAll = db.transaction((uuids: string[]) => {
-      for (const uuid of uuids) statements.deleteByUuid.run(uuid)
-    })
-    removeAll(stale)
-    return stale.length
+      .map((row) => {
+        const uuid = String(row.song_list_uuid || '')
+        if (!uuid) return ''
+        if (!known.has(uuid)) return uuid
+        const expectedKey = expectedKeyByUuid.get(uuid)
+        if (!expectedKey) return ''
+        const actualKey = normalizeSnapshotListRoot(String(row.list_root || ''))
+        return actualKey === expectedKey ? '' : uuid
+      })
+      .filter(Boolean)
+    return removeSnapshotsByUuids(db, statements, stale)
   } catch (error) {
     log.error('[playlist-snapshot] prune failed', error)
     return 0

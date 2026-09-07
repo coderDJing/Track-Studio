@@ -575,29 +575,39 @@ export async function pruneOrphanedSongListCaches(dbRoot?: string): Promise<{
         mixtapeStemWaveformCacheRemoved: 0
       }
     }
+    const pruneAllLibraryCaches = async () => {
+      // 已确认库树为空时，所有现存歌单快照都无法证明仍对应当前树，必须一并清掉。
+      LibraryCacheDb.prunePlaylistViewSnapshots(new Set())
+      return await LibraryCacheDb.pruneCachesByRoots(new Set())
+    }
     const nodes = loadLibraryNodes(rootDir) || []
     if (nodes.length === 0) {
-      return await LibraryCacheDb.pruneCachesByRoots(new Set())
+      return await pruneAllLibraryCaches()
     }
     const root = nodes.find((row) => row.parentUuid === null && row.nodeType === 'root')
     if (!root) {
-      return await LibraryCacheDb.pruneCachesByRoots(new Set())
+      return await pruneAllLibraryCaches()
     }
     const pathByUuid = buildNodePathMap(nodes, root)
     const keepRoots = new Set<string>()
     const keepUuids = new Set<string>()
+    const currentListRootsByUuid = new Map<string, string>()
     for (const row of nodes) {
       if (row.uuid) keepUuids.add(String(row.uuid))
       if (row.nodeType !== 'songList') continue
       const rel = pathByUuid.get(row.uuid)
       if (!rel) continue
-      keepRoots.add(path.join(rootDir, rel))
+      const abs = path.join(rootDir, rel)
+      keepRoots.add(abs)
+      currentListRootsByUuid.set(String(row.uuid), abs)
     }
     keepRoots.add(path.join(rootDir, mapRendererPathToFsPath('library/RecycleBin')))
     keepRoots.add(path.join(rootDir, mapRendererPathToFsPath('library/RecordingLibrary')))
     // 歌单没了就把视图快照一起清掉，否则 UUID 万一被复用会读到上一张歌单的内容。
     // 这里保留所有节点类型的 uuid（不只 songList），避免误删别的节点将来用到的行。
-    LibraryCacheDb.prunePlaylistViewSnapshots(keepUuids)
+    // 歌单还在但路径已经变了（磁盘改名、云同步搬家）时，list_root / items_json
+    // 都是旧绝对路径，必须按当前树路径丢掉，不能只看 uuid 还在就留下。
+    LibraryCacheDb.prunePlaylistViewSnapshots(keepUuids, currentListRootsByUuid)
     return await LibraryCacheDb.pruneCachesByRoots(keepRoots)
   } catch {
     return {

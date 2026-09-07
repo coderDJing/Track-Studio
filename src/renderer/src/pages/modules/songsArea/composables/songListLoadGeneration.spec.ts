@@ -55,13 +55,36 @@ describe('song list view pending', () => {
 })
 
 describe('should hold song list loading', () => {
-  it('keeps loading while switching to a playlist whose data is not applied yet', () => {
+  it('does not flash loading while the new playlist is still pending', () => {
     expect(
       shouldHoldSongListLoading({
         songListUUID: 'playlist-b',
         appliedSongListUUID: 'playlist-a',
         visibleCount: 12,
         isRequesting: true
+      })
+    ).toBe(false)
+  })
+
+  it('does not flash loading on first open before the delayed flag', () => {
+    expect(
+      shouldHoldSongListLoading({
+        songListUUID: 'playlist-a',
+        appliedSongListUUID: '',
+        visibleCount: 0,
+        isRequesting: true
+      })
+    ).toBe(false)
+  })
+
+  it('shows loading after the delayed flag is set', () => {
+    expect(
+      shouldHoldSongListLoading({
+        songListUUID: 'playlist-b',
+        appliedSongListUUID: 'playlist-a',
+        visibleCount: 12,
+        isRequesting: true,
+        loadingShow: true
       })
     ).toBe(true)
   })

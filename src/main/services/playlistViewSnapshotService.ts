@@ -10,6 +10,7 @@ import {
   listPlaylistViewSnapshotVerificationCandidates,
   loadPlaylistViewSnapshot,
   loadPlaylistViewSnapshotMeta,
+  normalizeSnapshotListRoot,
   savePlaylistViewSnapshot,
   touchPlaylistViewSnapshotIdentity,
   touchPlaylistViewSnapshotVerified
@@ -125,6 +126,21 @@ export function openPlaylistViewFast(input: {
   // itemCount 与 items 长度不一致说明这行写坏了，宁可当没命中重扫一次。
   if (snapshot.itemCount !== snapshot.items.length) return miss()
 
+  // renderer 传入的是当前库树解析出的真实路径。UUID 可能在云同步/异常恢复中被
+  // 复用，路径不一致时旧 items 里的 filePath 已不可用，不能先把它展示出来。
+  const requestedPath = String(input?.songListPath || '').trim()
+  if (requestedPath) {
+    const requestedRoot = path.isAbsolute(requestedPath)
+      ? requestedPath
+      : path.join(store.databaseDir || '', requestedPath)
+    if (
+      !requestedRoot ||
+      normalizeSnapshotListRoot(requestedRoot) !== normalizeSnapshotListRoot(snapshot.listRoot)
+    ) {
+      return miss()
+    }
+  }
+
   const listRootAbs = resolveVerificationRoot(uuid, input?.songListPath, snapshot.listRoot)
   if (listRootAbs) {
     schedulePlaylistViewVerification({
@@ -176,8 +192,11 @@ export function savePlaylistViewSnapshotFromScan(
   const uuid = normalizeUuid(songListUUID)
   if (!uuid || typeof scanPath !== 'string' || !scanPath) return
   if (!result || !Array.isArray(result.scanData)) return
-  // 缓存身份没核对过（verify 模式失败）时别存，否则会把半份列表当成权威快照。
-  if (result.cacheIdentityVerified === false) return
+  // 完整扫描即使解析了新文件，cacheIdentityVerified 也会是 false；能否落快照要看
+  // 本次扫描是否完整，而不是是否纯缓存命中。枚举/stat 跳过或任务失败时拒绝落盘，
+  // 防止把半份列表当成权威快照。
+  if (result.perf.skippedCount > 0 || result.perf.failedCount > 0) return
+  if (!result.identityDigest) return
   savePlaylistViewSnapshot({
     songListUUID: uuid,
     listRoot: scanPath,
@@ -248,6 +267,12 @@ async function verifyOnce(request: VerificationRequest): Promise<void> {
   const meta = loadPlaylistViewSnapshotMeta(songListUUID)
   if (!meta) return
 
+  // 目录不在了（外部删除、网络盘掉线、云同步搬家的中间态）就直接放手：空目录的扫描
+  // 结果和"这张歌单被清空了"长得一模一样，照着落一份空快照 + 推 view-refreshed，
+  // 用户正开着的列表会当场被清空，盘回来后还得等下一轮核对才恢复。
+  // 目录真的永久没了由树对账（prunePlaylistViewSnapshots）删这行，不是核对的职责。
+  if (!(await directoryStillExists(listRootAbs))) return
+
   // verified_at_ms > 0：只做便宜的身份核对。对得上就纯粹更新时间戳，UI 一无所知。
   if (meta.verifiedAtMs > 0 && meta.identityDigest) {
     const digest = await computeCurrentIdentityDigest(listRootAbs)
@@ -297,6 +322,15 @@ async function verifyOnce(request: VerificationRequest): Promise<void> {
     missingWaveformFilePaths: nextMissing,
     reason: request.reason
   })
+}
+
+async function directoryStillExists(listRootAbs: string): Promise<boolean> {
+  try {
+    const stats = await fs.stat(listRootAbs)
+    return stats.isDirectory()
+  } catch {
+    return false
+  }
 }
 
 async function computeCurrentIdentityDigest(listRootAbs: string): Promise<string | null> {

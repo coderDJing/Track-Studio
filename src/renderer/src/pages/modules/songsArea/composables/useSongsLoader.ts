@@ -142,6 +142,21 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
     }
   }
 
+  // 超过这个时间还没落地才亮转圈。快照命中通常远小于它，避免外层 out-in 整页闪一下。
+  const SONG_LIST_LOADING_DELAY_MS = 200
+  const beginDelayedLoadingShow = (ticket: SongListLoadTicket) => {
+    loadingShow.value = false
+    const timer = window.setTimeout(() => {
+      if (loadGenerationGuard.isCurrent(ticket)) loadingShow.value = true
+    }, SONG_LIST_LOADING_DELAY_MS)
+    // 返回的函数必须连已亮起的转圈一起收掉：只 clearTimeout 的话，定时器刚好在首屏
+    // 渲染前一帧触发时，转圈会一直亮到请求收尾，把已经画好的列表又盖回去。
+    return () => {
+      window.clearTimeout(timer)
+      if (loadGenerationGuard.isCurrent(ticket)) loadingShow.value = false
+    }
+  }
+
   // 渐进式渲染（当前行数）
   const renderCount = ref(0)
 
@@ -701,8 +716,9 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
     const openStartedAtMs = Date.now()
     isRequesting.value = true
     loadingShow.value = false
-    // 切到另一张歌单时不要丢掉已落地的列表。pending/loading 会挡住旧内容；
-    // 载入中途切回来时才能立刻还原，而不是先画出空表再等完整扫描。
+    // 切到另一张歌单时不要丢掉已落地的列表。pending 期间由 leaveData 顶着旧内容。
+    // loading 必须等超过延迟才亮：快照命中只需几十毫秒，立刻切到 loading
+    // 会走外层 out-in 动画，整页闪一下。
 
     if (requestUUID === EXTERNAL_PLAYLIST_UUID) {
       const songs = runtime.externalPlaylist.songs || []
@@ -715,13 +731,20 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
       settleSongListRequest(ticket)
       return
     }
-    if (requestUUID === RECYCLE_BIN_UUID) {
-      songsAreaState.missingWaveformFilePaths = []
-      loadingShow.value = false
-      const loadingSetTimeout = setTimeout(() => {
-        if (loadGenerationGuard.isCurrent(ticket)) loadingShow.value = true
-      }, 100)
-      try {
+
+    const cancelDelayedLoadingShow = beginDelayedLoadingShow(ticket)
+    const maybeLoadFreshAnalysis = async (songListPath: string) => {
+      if (options.waitForFreshAnalysisFields !== true || wasAlreadyApplied) return
+      // 快照已先落地，结束“打开请求”本身，再做一次用户明确要求的新鲜分析字段核对。
+      // 这样这次较慢的核对不会重新亮 loading，也不会阻塞首屏快照。
+      settleSongListRequest(ticket)
+      await loadSongListFromDisk(songListPath, ticket, {
+        diagnosticSource: 'fresh-analysis'
+      })
+    }
+    try {
+      if (requestUUID === RECYCLE_BIN_UUID) {
+        songsAreaState.missingWaveformFilePaths = []
         const { scanData, songListUUID } =
           await window.electron.ipcRenderer.invoke('recycleBin:list')
         if (!loadGenerationGuard.isCurrent(ticket) || songListUUID !== requestUUID) return
@@ -730,19 +753,10 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
         syncSelectedKeysAfterReload(scanData, songListUUID)
         syncPlayingStateAfterReload(scanData, songListUUID)
         markSongListApplied(songListUUID)
-      } finally {
-        clearTimeout(loadingSetTimeout)
-        settleSongListRequest(ticket)
+        return
       }
-      return
-    }
-    if (requestUUID === RECORDING_LIBRARY_UUID) {
-      songsAreaState.missingWaveformFilePaths = []
-      loadingShow.value = false
-      const loadingSetTimeout = setTimeout(() => {
-        if (loadGenerationGuard.isCurrent(ticket)) loadingShow.value = true
-      }, 100)
-      try {
+      if (requestUUID === RECORDING_LIBRARY_UUID) {
+        songsAreaState.missingWaveformFilePaths = []
         const { scanData, songListUUID } =
           await window.electron.ipcRenderer.invoke('recordingLibrary:list')
         if (!loadGenerationGuard.isCurrent(ticket) || songListUUID !== requestUUID) return
@@ -751,20 +765,11 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
         syncSelectedKeysAfterReload(scanData, songListUUID)
         syncPlayingStateAfterReload(scanData, songListUUID)
         markSongListApplied(songListUUID)
-      } finally {
-        clearTimeout(loadingSetTimeout)
-        settleSongListRequest(ticket)
+        return
       }
-      return
-    }
 
-    if (isMixtapeListUUID(requestUUID)) {
-      songsAreaState.missingWaveformFilePaths = []
-      loadingShow.value = false
-      const loadingSetTimeout = setTimeout(() => {
-        if (loadGenerationGuard.isCurrent(ticket)) loadingShow.value = true
-      }, 100)
-      try {
+      if (isMixtapeListUUID(requestUUID)) {
+        songsAreaState.missingWaveformFilePaths = []
         const result = await window.electron.ipcRenderer.invoke('mixtape:list', {
           playlistId: requestUUID
         })
@@ -783,20 +788,14 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
         syncPlayingStateAfterReload(songs, requestUUID)
         markSongListApplied(requestUUID)
         await hydrateRenderCount(ticket)
-      } finally {
-        clearTimeout(loadingSetTimeout)
-        settleSongListRequest(ticket)
+        // 首屏已经画出来了，立刻把待亮的转圈收掉，别等 finally：慢一步就会出现
+        // "列表 → 转圈 → 列表" 两次整页切换。
+        cancelDelayedLoadingShow()
+        return
       }
-      return
-    }
 
-    if (isSetListUUID(requestUUID)) {
-      songsAreaState.missingWaveformFilePaths = []
-      loadingShow.value = false
-      const loadingSetTimeout = setTimeout(() => {
-        if (loadGenerationGuard.isCurrent(ticket)) loadingShow.value = true
-      }, 100)
-      try {
+      if (isSetListUUID(requestUUID)) {
+        songsAreaState.missingWaveformFilePaths = []
         const { scanData, songListUUID } = await window.electron.ipcRenderer.invoke(
           'setList:load-items',
           requestUUID
@@ -809,93 +808,76 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
         syncPlayingStateAfterReload(songs, songListUUID)
         markSongListApplied(songListUUID)
         await hydrateRenderCount(ticket)
-      } finally {
-        clearTimeout(loadingSetTimeout)
-        settleSongListRequest(ticket)
-      }
-      return
-    }
-
-    const songListPath = libraryUtils.findDirPathByUuid(requestUUID)
-
-    // 第一优先：视图快照。主进程只查一行 + JSON.parse，零文件系统访问。
-    // 正确性由它自己排的后台核对补：对得上就什么都不做，真变了才推 view-refreshed。
-    try {
-      const snapshotPayload = (await window.electron.ipcRenderer.invoke('playlist:fast-open', {
-        songListUUID: requestUUID,
-        songListPath
-      })) as PlaylistFastOpenPayload | null
-      if (!loadGenerationGuard.isCurrent(ticket)) return
-      if (snapshotPayload?.hit) {
-        const snapshotItems = Array.isArray(snapshotPayload.items)
-          ? (snapshotPayload.items as ISongInfo[])
-          : []
-        songsAreaState.missingWaveformFilePaths = normalizeMissingWaveformFilePaths(
-          snapshotPayload.missingWaveformFilePaths
-        )
-        resetDistributedVerifyCursor(requestUUID)
-        rememberAppliedViewRevision(requestUUID, snapshotPayload.revision)
-        if (!(await applySongListData(snapshotItems, ticket))) return
-        settleSongListRequest(ticket)
-        writeSongListOpenPerf({
-          source: 'snapshot',
-          tookMs: Date.now() - openStartedAtMs,
-          itemCount: snapshotItems.length,
-          songListUUID: requestUUID
-        })
-        if (options.waitForFreshAnalysisFields === true && !wasAlreadyApplied) {
-          await loadSongListFromDisk(songListPath, ticket, {
-            diagnosticSource: 'fresh-analysis'
-          })
-        }
+        cancelDelayedLoadingShow()
         return
       }
-    } catch {}
 
-    // 快照还没建立（首次打开 / 刚清过缓存）：退回原来的"核对缓存身份"快路径，
-    // 它命中后会顺手把快照落下来，下次打开就走上面那条。
-    try {
-      const fastPayload = await window.electron.ipcRenderer.invoke(
-        'song-search:playlist-fast-load',
-        {
-          songListUUID: requestUUID
-        }
-      )
-      if (!loadGenerationGuard.isCurrent(ticket)) return
-      const hit = Boolean(fastPayload?.hit)
-      if (hit) {
-        const fastItems = Array.isArray(fastPayload?.items) ? fastPayload.items : []
-        songsAreaState.missingWaveformFilePaths = normalizeMissingWaveformFilePaths(
-          fastPayload?.missingWaveformFilePaths
-        )
-        resetDistributedVerifyCursor(requestUUID)
-        // 这条路不知道快照 revision（handler 落快照时才生成），只能记成"未知"。
-        // 记 0 是必须的：如果缓存被清过、revision 从 1 重新计数，留着旧的大号会把
-        // 后台第一次真刷新当成过期事件丢掉。
-        rememberAppliedViewRevision(requestUUID, 0)
-        if (!(await applySongListData(fastItems, ticket))) return
-        settleSongListRequest(ticket)
-        writeSongListOpenPerf({
-          source: 'cache-verify',
-          tookMs: Date.now() - openStartedAtMs,
-          itemCount: fastItems.length,
-          songListUUID: requestUUID
-        })
-        if (options.waitForFreshAnalysisFields === true && !wasAlreadyApplied) {
-          await loadSongListFromDisk(songListPath, ticket, {
-            diagnosticSource: 'fresh-analysis'
+      const songListPath = libraryUtils.findDirPathByUuid(requestUUID)
+
+      // 第一优先：视图快照。主进程只查一行 + JSON.parse，零文件系统访问。
+      // 正确性由它自己排的后台核对补：对得上就什么都不做，真变了才推 view-refreshed。
+      try {
+        const snapshotPayload = (await window.electron.ipcRenderer.invoke('playlist:fast-open', {
+          songListUUID: requestUUID,
+          songListPath
+        })) as PlaylistFastOpenPayload | null
+        if (!loadGenerationGuard.isCurrent(ticket)) return
+        if (snapshotPayload?.hit) {
+          const snapshotItems = Array.isArray(snapshotPayload.items)
+            ? (snapshotPayload.items as ISongInfo[])
+            : []
+          songsAreaState.missingWaveformFilePaths = normalizeMissingWaveformFilePaths(
+            snapshotPayload.missingWaveformFilePaths
+          )
+          resetDistributedVerifyCursor(requestUUID)
+          rememberAppliedViewRevision(requestUUID, snapshotPayload.revision)
+          if (!(await applySongListData(snapshotItems, ticket))) return
+          cancelDelayedLoadingShow()
+          writeSongListOpenPerf({
+            source: 'snapshot',
+            tookMs: Date.now() - openStartedAtMs,
+            itemCount: snapshotItems.length,
+            songListUUID: requestUUID
           })
+          await maybeLoadFreshAnalysis(songListPath)
+          return
         }
-        return
-      }
-    } catch {}
+      } catch {}
 
-    loadingShow.value = false
-    const loadingSetTimeout = setTimeout(() => {
-      if (loadGenerationGuard.isCurrent(ticket)) loadingShow.value = true
-    }, 100)
+      // 快照还没建立（首次打开 / 刚清过缓存）：退回原来的"核对缓存身份"快路径，
+      // 它命中后会顺手把快照落下来，下次打开就走上面那条。
+      try {
+        const fastPayload = await window.electron.ipcRenderer.invoke(
+          'song-search:playlist-fast-load',
+          {
+            songListUUID: requestUUID
+          }
+        )
+        if (!loadGenerationGuard.isCurrent(ticket)) return
+        const hit = Boolean(fastPayload?.hit)
+        if (hit) {
+          const fastItems = Array.isArray(fastPayload?.items) ? fastPayload.items : []
+          songsAreaState.missingWaveformFilePaths = normalizeMissingWaveformFilePaths(
+            fastPayload?.missingWaveformFilePaths
+          )
+          resetDistributedVerifyCursor(requestUUID)
+          // 这条路不知道快照 revision（handler 落快照时才生成），只能记成"未知"。
+          // 记 0 是必须的：如果缓存被清过、revision 从 1 重新计数，留着旧的大号会把
+          // 后台第一次真刷新当成过期事件丢掉。
+          rememberAppliedViewRevision(requestUUID, 0)
+          if (!(await applySongListData(fastItems, ticket))) return
+          cancelDelayedLoadingShow()
+          writeSongListOpenPerf({
+            source: 'cache-verify',
+            tookMs: Date.now() - openStartedAtMs,
+            itemCount: fastItems.length,
+            songListUUID: requestUUID
+          })
+          await maybeLoadFreshAnalysis(songListPath)
+          return
+        }
+      } catch {}
 
-    try {
       await loadSongListFromDisk(songListPath, ticket, {
         forceNotifySongSearchDirty: true,
         diagnosticSource: 'foreground-open'
@@ -909,7 +891,7 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
         songListUUID: requestUUID
       })
     } finally {
-      clearTimeout(loadingSetTimeout)
+      cancelDelayedLoadingShow()
       settleSongListRequest(ticket)
     }
   }

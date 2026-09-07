@@ -19,7 +19,7 @@ import {
   cleanupMixtapeWaveformCache,
   cleanupOrphanedMixtapeVaultFiles
 } from '../../services/mixtapeWaveformMaintenance'
-import { renameCacheRoot } from '../../libraryCacheDb'
+import { deletePlaylistViewSnapshotsUnderRoot, renameCacheRoot } from '../../libraryCacheDb'
 import type { FileSystemOperation } from '@shared/fileSystemOperation'
 import {
   findLibraryNodeByPath,
@@ -846,6 +846,11 @@ async function transferCachesAfterDirChange(params: {
   const { nodeType, oldFullPath, newFullPath } = params
   if (!oldFullPath || !newFullPath) return
   if (normalizePath(oldFullPath) === normalizePath(newFullPath)) return
+
+  // 下面的缓存搬运是按"文件 key"逐条改的，歌单视图快照却是整目录一行、items_json 里
+  // 存的全是旧绝对路径，搬不动，只能整棵子树一起丢掉，由下次打开时的完整扫描重建。
+  // 两种节点都要做：歌单自己改名，和它的某一层父目录改名，对快照的效果是一样的。
+  deletePlaylistViewSnapshotsUnderRoot(oldFullPath)
 
   if (nodeType === 'songList') {
     try {

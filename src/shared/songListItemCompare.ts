@@ -39,6 +39,18 @@ export const normalizeComparableText = (value: unknown): string => String(value 
 const normalizeComparableNumber = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null
 
+const normalizeComparableBoolean = (value: unknown): boolean | null =>
+  typeof value === 'boolean' ? value : null
+
+const normalizeComparableJson = (value: unknown): string => {
+  if (value === undefined || value === null) return ''
+  try {
+    return JSON.stringify(value) || ''
+  } catch {
+    return ''
+  }
+}
+
 const normalizeComparableSongStructure = (value: unknown): string => {
   const structure = normalizeSongStructureAnalysis(value)
   return structure ? JSON.stringify(structure) : ''
@@ -88,9 +100,20 @@ export function createSongListItemComparator(
     normalizeComparableText(left.container).toUpperCase() ===
       normalizeComparableText(right.container).toUpperCase() &&
     normalizeComparableText(left.key) === normalizeComparableText(right.key) &&
+    normalizeComparableNumber(left.keyAnalysisAlgorithmVersion) ===
+      normalizeComparableNumber(right.keyAnalysisAlgorithmVersion) &&
     normalizeComparableNumber(left.bpm) === normalizeComparableNumber(right.bpm) &&
+    normalizeComparableNumber(left.firstBeatMs) === normalizeComparableNumber(right.firstBeatMs) &&
+    normalizeComparableNumber(left.downbeatBeatOffset) ===
+      normalizeComparableNumber(right.downbeatBeatOffset) &&
+    normalizeComparableText(left.beatGridSource) ===
+      normalizeComparableText(right.beatGridSource) &&
     normalizeComparableBeatGridMap(left.beatGridMap) ===
       normalizeComparableBeatGridMap(right.beatGridMap) &&
+    normalizeComparableJson(left.rekordboxGridEntries) ===
+      normalizeComparableJson(right.rekordboxGridEntries) &&
+    normalizeComparableNumber(left.beatGridAlgorithmVersion) ===
+      normalizeComparableNumber(right.beatGridAlgorithmVersion) &&
     normalizeComparableText(left.beatGridStatus) ===
       normalizeComparableText(right.beatGridStatus) &&
     normalizeComparableNumber(left.energyScore) === normalizeComparableNumber(right.energyScore) &&
@@ -98,11 +121,34 @@ export function createSongListItemComparator(
       normalizeComparableNumber(right.energyAlgorithmVersion) &&
     normalizeComparableSongStructure(left.songStructure) ===
       normalizeComparableSongStructure(right.songStructure) &&
+    normalizeComparableNumber(left.timeBasisOffsetMs) ===
+      normalizeComparableNumber(right.timeBasisOffsetMs) &&
+    normalizeComparableNumber(left.timeBasisOffsetAlgorithmVersion) ===
+      normalizeComparableNumber(right.timeBasisOffsetAlgorithmVersion) &&
     areSongHotCuesEqual(left.hotCues, right.hotCues) &&
     areSongMemoryCuesEqual(left.memoryCues, right.memoryCues) &&
     normalizeComparableNumber(left.mixOrder) === normalizeComparableNumber(right.mixOrder) &&
     normalizeComparableText(left.mixtapeItemId) === normalizeComparableText(right.mixtapeItemId) &&
     normalizeComparableText(left.setItemId) === normalizeComparableText(right.setItemId) &&
+    normalizeComparableBoolean(left.analysisOnly) ===
+      normalizeComparableBoolean(right.analysisOnly) &&
+    normalizeComparableBoolean(left.autoFilled) === normalizeComparableBoolean(right.autoFilled) &&
+    normalizeComparableBoolean(left.fileMissing) ===
+      normalizeComparableBoolean(right.fileMissing) &&
+    normalizeComparableText(left.externalAnalyzePath) ===
+      normalizeComparableText(right.externalAnalyzePath) &&
+    normalizeComparableText(left.externalWaveformRootPath) ===
+      normalizeComparableText(right.externalWaveformRootPath) &&
+    normalizeComparableText(left.waveformPreviewListRoot) ===
+      normalizeComparableText(right.waveformPreviewListRoot) &&
+    normalizeComparableText(left.externalSourceKind) ===
+      normalizeComparableText(right.externalSourceKind) &&
+    normalizeComparableText(left.pioneerCoverPath) ===
+      normalizeComparableText(right.pioneerCoverPath) &&
+    normalizeComparableText(left.pioneerAnalyzePath) ===
+      normalizeComparableText(right.pioneerAnalyzePath) &&
+    normalizeComparableText(left.pioneerDeviceRootPath) ===
+      normalizeComparableText(right.pioneerDeviceRootPath) &&
     normalizeComparableNumber(left.deletedAtMs) === normalizeComparableNumber(right.deletedAtMs) &&
     normalizeComparableText(left.originalPlaylistPath) ===
       normalizeComparableText(right.originalPlaylistPath) &&
@@ -152,13 +198,24 @@ export function createSongListItemComparator(
     pushIfNumberDiff('bitrate')
     pushIfUpperTextDiff('container')
     pushIfTextDiff('key')
+    pushIfNumberDiff('keyAnalysisAlgorithmVersion')
     pushIfNumberDiff('bpm')
+    pushIfNumberDiff('firstBeatMs')
+    pushIfNumberDiff('downbeatBeatOffset')
+    pushIfTextDiff('beatGridSource')
     if (
       normalizeComparableBeatGridMap(left.beatGridMap) !==
       normalizeComparableBeatGridMap(right.beatGridMap)
     ) {
       fields.push('beatGridMap')
     }
+    if (
+      normalizeComparableJson(left.rekordboxGridEntries) !==
+      normalizeComparableJson(right.rekordboxGridEntries)
+    ) {
+      fields.push('rekordboxGridEntries')
+    }
+    pushIfNumberDiff('beatGridAlgorithmVersion')
     pushIfTextDiff('beatGridStatus')
     pushIfNumberDiff('energyScore')
     pushIfNumberDiff('energyAlgorithmVersion')
@@ -168,11 +225,36 @@ export function createSongListItemComparator(
     ) {
       fields.push('songStructure')
     }
+    pushIfNumberDiff('timeBasisOffsetMs')
+    pushIfNumberDiff('timeBasisOffsetAlgorithmVersion')
     if (!areSongHotCuesEqual(left.hotCues, right.hotCues)) fields.push('hotCues')
     if (!areSongMemoryCuesEqual(left.memoryCues, right.memoryCues)) fields.push('memoryCues')
     pushIfNumberDiff('mixOrder')
     pushIfTextDiff('mixtapeItemId')
     pushIfTextDiff('setItemId')
+    if (
+      normalizeComparableBoolean(left.analysisOnly) !==
+      normalizeComparableBoolean(right.analysisOnly)
+    ) {
+      fields.push('analysisOnly')
+    }
+    if (
+      normalizeComparableBoolean(left.autoFilled) !== normalizeComparableBoolean(right.autoFilled)
+    ) {
+      fields.push('autoFilled')
+    }
+    if (
+      normalizeComparableBoolean(left.fileMissing) !== normalizeComparableBoolean(right.fileMissing)
+    ) {
+      fields.push('fileMissing')
+    }
+    pushIfTextDiff('externalAnalyzePath')
+    pushIfTextDiff('externalWaveformRootPath')
+    pushIfTextDiff('waveformPreviewListRoot')
+    pushIfTextDiff('externalSourceKind')
+    pushIfTextDiff('pioneerCoverPath')
+    pushIfTextDiff('pioneerAnalyzePath')
+    pushIfTextDiff('pioneerDeviceRootPath')
     pushIfNumberDiff('deletedAtMs')
     pushIfTextDiff('originalPlaylistPath')
     pushIfTextDiff('recycleBinSourceType')
