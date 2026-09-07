@@ -30,10 +30,11 @@ import {
   getPendingCuratedLibraryJoinPrompt
 } from './joinPrompt'
 import {
-  CURATED_LIBRARY_SYNC_CANCEL_CHANNEL,
   CURATED_LIBRARY_SYNC_PLAYLISTS_CHANGED_CHANNEL,
   CURATED_LIBRARY_SYNC_PROGRESS_ID,
   CURATED_LIBRARY_SYNC_ROOT_PARENT_UUID,
+  type CuratedLibrarySyncActivity,
+  type CuratedLibrarySyncActivityPhase,
   type CuratedLibrarySyncConflictItem,
   type CuratedLibrarySyncFailureItem,
   type CuratedLibrarySyncJoinMode,
@@ -98,6 +99,13 @@ let powerMonitorBound = false
 let sessionFailures: CuratedLibrarySyncFailureItem[] = []
 let sessionConflicts: CuratedLibrarySyncConflictItem[] = []
 let sessionCompletedWork = false
+const idleActivity = (): CuratedLibrarySyncActivity => ({
+  running: false,
+  phase: 'idle',
+  now: 0,
+  total: 0
+})
+let sessionActivity: CuratedLibrarySyncActivity = idleActivity()
 
 const bindPowerMonitor = () => {
   if (powerMonitorBound) return
@@ -173,29 +181,27 @@ const dismissProgress = () => {
   })
 }
 
-const reportProgress = (
-  titleKey: string,
-  now: number,
-  total: number,
-  extra?: { noProgress?: boolean }
-): void => {
-  const win = mainWindow.instance
-  if (!win || win.isDestroyed()) return
-  win.webContents.send('progressSet', {
-    id: CURATED_LIBRARY_SYNC_PROGRESS_ID,
-    titleKey,
+const setActivity = (phase: CuratedLibrarySyncActivityPhase, now = 0, total = 0): void => {
+  sessionActivity = {
+    running: phase !== 'idle',
+    phase,
     now,
-    total,
-    noProgress: extra?.noProgress === true,
-    cancelable: true,
-    cancelChannel: CURATED_LIBRARY_SYNC_CANCEL_CHANNEL
-  })
+    total
+  }
 }
+
+const clearActivity = (): void => {
+  sessionActivity = idleActivity()
+}
+
+export const getCuratedLibrarySyncActivity = (): CuratedLibrarySyncActivity => ({
+  ...sessionActivity,
+  running: running || sessionActivity.running
+})
 
 const scanLocalForSync = () =>
   scanCuratedLibraryForSync({
-    onFileProgress: (done, total) =>
-      reportProgress('cloudSync.curatedLibrary.progressScanning', done, total)
+    onFileProgress: (done, total) => setActivity('scanning', done, total)
   })
 
 const buildJoinChoice = async (status: {
@@ -339,7 +345,7 @@ const uploadMissingBlobs = async (files: CuratedLocalFile[]): Promise<Set<string
   const uniqueTotal = new Set(files.map((file) => file.contentSha256)).size
   let index = 0
   if (uniqueTotal > 0) {
-    reportProgress('cloudSync.curatedLibrary.progressUploading', 0, uniqueTotal)
+    setActivity('uploading', 0, uniqueTotal)
   }
   for (const file of files) {
     throwIfCancelled()
@@ -347,7 +353,7 @@ const uploadMissingBlobs = async (files: CuratedLocalFile[]): Promise<Set<string
     if (seen.has(file.contentSha256)) continue
     seen.add(file.contentSha256)
     index += 1
-    reportProgress('cloudSync.curatedLibrary.progressUploading', index, uniqueTotal)
+    setActivity('uploading', index, uniqueTotal)
     try {
       abortController = new AbortController()
       await runPlaybackAwareBackgroundFileIo(
@@ -595,9 +601,7 @@ const waitForFirstSnapshotUnlock = async (): Promise<
     await waitIfSuspended()
     const status = await fetchCuratedLibraryStatus(abortController?.signal)
     if (status.snapshotReady || !status.firstSnapshotLocked) return status
-    reportProgress('cloudSync.curatedLibrary.progressWaitingFirstSnapshot', 0, 0, {
-      noProgress: true
-    })
+    setActivity('waiting-first-snapshot')
     if (Date.now() >= deadline) {
       throw new Error('CURATED_SYNC_FIRST_SNAPSHOT_WAIT_TIMEOUT')
     }
@@ -623,6 +627,7 @@ const runJoin = async (
 ): Promise<CuratedLibrarySyncStartResult> => {
   sessionCompletedWork = true
   const local = await scanLocalForSync()
+  setActivity('applying')
   const snapshot = await pullMergedSnapshot(null)
   if (mode === 'local-wins') {
     const failedSha = await uploadMissingBlobs(local.files)
@@ -750,6 +755,7 @@ const isDeletionOp = (op: CuratedLibrarySyncOp): boolean =>
 const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
   sessionCompletedWork = true
   const local = await scanLocalForSync()
+  setActivity('applying')
   let snapshot = await pullMergedSnapshot(getCuratedLibrarySyncLastAppliedRevision())
   const lastAppliedRevision = getCuratedLibrarySyncLastAppliedRevision()
   // reset/回滚可能恰好发生在 status 与 pull 之间；不能把本机旧文件再推回刚清空的云端。
@@ -888,6 +894,7 @@ const runFirstSnapshotUpload = async (): Promise<CuratedLibrarySyncStartResult> 
   if (failedSha.size > 0) {
     return { status: 'failed', message: 'cloudSync.curatedLibrary.errors.uploadIncomplete' }
   }
+  setActivity('applying')
   const session = await beginFirstCuratedSnapshot(abortController?.signal)
   const entities = buildCloudEntitiesFromLocal({
     ...local,
@@ -965,19 +972,27 @@ export const runCuratedLibrarySync = async (
       return await runIncremental()
     }
     if (!status.snapshotReady) {
-      // 空云端也要先弹第一次对齐；不能先哈希/上传，否则用户只看到「同步进行中」。
-      if (!payload.joinMode) {
-        if (lastRevision !== null) return { status: 'success' }
-        return await buildJoinChoice(status)
-      }
       if (payload.joinMode === 'cloud-wins') {
         return await runJoin('cloud-wins')
       }
+      if (rewound && !payload.joinMode) {
+        return await buildJoinChoice(status)
+      }
+      if (
+        (rewound || lastRevision !== null) &&
+        (payload.joinMode === 'local-wins' || payload.joinMode === 'merge')
+      ) {
+        return await runFirstSnapshotUpload()
+      }
+      if (lastRevision !== null) {
+        return { status: 'success' }
+      }
+      // 空云端第一次：静默上传本机精选库，不弹对齐。
       try {
         if (status.firstSnapshotLocked) {
           status = await waitForFirstSnapshotUnlock()
           if (status.snapshotReady) {
-            return await runJoin(payload.joinMode)
+            return await buildJoinChoice(status)
           }
         }
         return await runFirstSnapshotUpload()
@@ -987,7 +1002,7 @@ export const runCuratedLibrarySync = async (
         if (!status.snapshotReady) {
           return await runFirstSnapshotUpload()
         }
-        return await runJoin(payload.joinMode)
+        return await buildJoinChoice(status)
       }
     }
     // 显式 cloud-wins（清空云端 / 对端看到 revision 回绕）必须按空云端删本机。
@@ -1037,6 +1052,7 @@ export const runCuratedLibrarySync = async (
     const cancelled = cancelRequested
     running = false
     abortController = null
+    clearActivity()
     dismissProgress()
     if (!cancelled) {
       persistSessionReports(!sessionCompletedWork)

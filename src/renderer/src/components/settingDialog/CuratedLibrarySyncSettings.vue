@@ -8,6 +8,7 @@ import { formatAnalysisRuntimeBytes } from '@renderer/utils/analysisRuntimeDownl
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { runCuratedLibrarySyncUi } from '@renderer/composables/runCuratedLibrarySyncUi'
 import type {
+  CuratedLibrarySyncActivity,
   CuratedLibrarySyncConflictItem,
   CuratedLibrarySyncConflictKind,
   CuratedLibrarySyncFailureItem,
@@ -34,6 +35,13 @@ const CONFLICT_KIND_KEYS: Record<CuratedLibrarySyncConflictKind, string> = {
   'node-delete-lost': 'cloudSync.curatedLibrary.conflictKinds.nodeDeleteLost'
 }
 
+const emptyActivity = (): CuratedLibrarySyncActivity => ({
+  running: false,
+  phase: 'idle',
+  now: 0,
+  total: 0
+})
+
 const emptyOverview = (): CuratedLibrarySyncOverview => ({
   liveConnected: false,
   snapshotReady: false,
@@ -42,7 +50,8 @@ const emptyOverview = (): CuratedLibrarySyncOverview => ({
   quotaUsedBytes: 0,
   quotaBytes: 0,
   conflicts: [],
-  failures: []
+  failures: [],
+  activity: emptyActivity()
 })
 
 const overview = ref<CuratedLibrarySyncOverview>(emptyOverview())
@@ -71,12 +80,48 @@ const extraFailureCount = computed(() =>
   Math.max(0, overview.value.failures.length - visibleFailures.value.length)
 )
 
+const activity = computed(() => overview.value.activity || emptyActivity())
+
+const activityVisible = computed(
+  () => activity.value.running === true && activity.value.phase !== 'idle'
+)
+
+const activityPercent = computed(() => {
+  const total = activity.value.total
+  if (total <= 0) return 0
+  return Math.max(0, Math.min(100, Math.round((activity.value.now / total) * 100)))
+})
+
+const activityText = computed(() => {
+  const { phase, now, total } = activity.value
+  if (phase === 'scanning') {
+    return t('cloudSync.curatedLibrary.activityScanning', { now, total })
+  }
+  if (phase === 'uploading') {
+    return t('cloudSync.curatedLibrary.activityUploading', { now, total })
+  }
+  if (phase === 'waiting-first-snapshot') {
+    return t('cloudSync.curatedLibrary.activityWaitingFirstSnapshot')
+  }
+  if (phase === 'applying') {
+    return t('cloudSync.curatedLibrary.activityApplying')
+  }
+  return ''
+})
+
+const showFirstSnapshotHint = computed(
+  () => activityVisible.value && overview.value.snapshotReady !== true
+)
+
 const refreshOverview = async () => {
   try {
     const next = (await window.electron.ipcRenderer.invoke(
       'curatedLibrarySync/getOverview'
     )) as CuratedLibrarySyncOverview
-    overview.value = next
+    overview.value = {
+      ...next,
+      activity: next.activity || emptyActivity()
+    }
   } catch {
     overview.value = {
       ...emptyOverview(),
@@ -157,24 +202,12 @@ const handleNotice = () => {
   void refreshOverview()
 }
 
-const refreshLiveConnected = async () => {
-  try {
-    const live = await window.electron.ipcRenderer.invoke('curatedLibrarySync/isLiveConnected')
-    overview.value = {
-      ...overview.value,
-      liveConnected: live === true
-    }
-  } catch {
-    overview.value = { ...overview.value, liveConnected: false }
-  }
-}
-
 onMounted(() => {
   window.electron.ipcRenderer.on('curatedLibrarySync/notice', handleNotice)
   void refreshOverview()
   liveTimer = setInterval(() => {
-    void refreshLiveConnected()
-  }, 2000)
+    void refreshOverview()
+  }, 1000)
 })
 
 onBeforeUnmount(() => {
@@ -212,6 +245,19 @@ onBeforeUnmount(() => {
       </div>
       <div class="setting-hint">{{ t('cloudSync.curatedLibrary.liveHint') }}</div>
     </div>
+
+    <template v-if="activityVisible">
+      <div class="setting-block">{{ t('cloudSync.curatedLibrary.activityTitle') }}</div>
+      <div class="setting-control">
+        <div class="status-value on">{{ activityText }}</div>
+        <div v-if="activity.total > 0" class="quota-bar">
+          <div class="quota-bar-fill" :style="{ width: `${activityPercent}%` }" />
+        </div>
+        <div v-if="showFirstSnapshotHint" class="setting-hint">
+          {{ t('cloudSync.curatedLibrary.activityFirstSnapshotHint') }}
+        </div>
+      </div>
+    </template>
 
     <div class="setting-block">{{ t('cloudSync.curatedLibrary.quota') }}</div>
     <div class="setting-control">

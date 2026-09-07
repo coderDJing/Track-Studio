@@ -106,6 +106,20 @@ export type CuratedLibrarySyncFailureItem = {
   fileId?: string
 }
 
+export type CuratedLibrarySyncActivityPhase =
+  | 'idle'
+  | 'scanning'
+  | 'uploading'
+  | 'waiting-first-snapshot'
+  | 'applying'
+
+export type CuratedLibrarySyncActivity = {
+  running: boolean
+  phase: CuratedLibrarySyncActivityPhase
+  now: number
+  total: number
+}
+
 export type CuratedLibrarySyncOverview = {
   liveConnected: boolean
   snapshotReady: boolean
@@ -115,6 +129,7 @@ export type CuratedLibrarySyncOverview = {
   quotaBytes: number
   conflicts: CuratedLibrarySyncConflictItem[]
   failures: CuratedLibrarySyncFailureItem[]
+  activity: CuratedLibrarySyncActivity
 }
 
 export type CuratedLibrarySyncNotice = {

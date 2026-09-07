@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import store from '../store'
 import {
   cancelCuratedLibrarySync,
+  getCuratedLibrarySyncActivity,
   isCuratedLibrarySyncRunning,
   runCuratedLibrarySync
 } from './engine'
@@ -33,6 +34,13 @@ import type {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value)
 
+const withActivity = (
+  overview: Omit<CuratedLibrarySyncOverview, 'activity'>
+): CuratedLibrarySyncOverview => ({
+  ...overview,
+  activity: getCuratedLibrarySyncActivity()
+})
+
 const readQuotaCache = () => {
   const raw = readCuratedLibrarySyncQuotaCache()
   if (!isRecord(raw)) {
@@ -57,21 +65,29 @@ const buildOverview = async (): Promise<CuratedLibrarySyncOverview> => {
   const cached = readQuotaCache()
   const conflicts = parseConflictItems(readCuratedLibrarySyncConflicts())
   const failures = parseFailureItems(readCuratedLibrarySyncFailures())
+  const cachedOverview = {
+    liveConnected: isCuratedLibraryLiveConnected(),
+    snapshotReady: cached.snapshotReady,
+    revision: cached.revision,
+    fileCount: cached.fileCount,
+    quotaUsedBytes: cached.quotaUsedBytes,
+    quotaBytes: cached.quotaBytes,
+    conflicts,
+    failures
+  }
   const userKey = resolveDevCloudSyncUserKey(
     String(store.settingConfig?.cloudSyncUserKey || '').trim(),
     is.dev
   )
   if (!userKey) {
-    return {
-      liveConnected: false,
-      snapshotReady: cached.snapshotReady,
-      revision: cached.revision,
-      fileCount: cached.fileCount,
-      quotaUsedBytes: cached.quotaUsedBytes,
-      quotaBytes: cached.quotaBytes,
-      conflicts,
-      failures
-    }
+    return withActivity({
+      ...cachedOverview,
+      liveConnected: false
+    })
+  }
+  // 首次静默上传时云端快照还是 0 首；不要每次刷新都打 status，以免把设置页卡住。
+  if (isCuratedLibrarySyncRunning()) {
+    return withActivity(cachedOverview)
   }
   try {
     const status = await fetchCuratedLibraryStatus()
@@ -82,7 +98,7 @@ const buildOverview = async (): Promise<CuratedLibrarySyncOverview> => {
       revision: status.revision,
       snapshotReady: status.snapshotReady
     })
-    return {
+    return withActivity({
       liveConnected: isCuratedLibraryLiveConnected(),
       snapshotReady: status.snapshotReady,
       revision: status.revision,
@@ -91,18 +107,9 @@ const buildOverview = async (): Promise<CuratedLibrarySyncOverview> => {
       quotaBytes: status.quotaBytes,
       conflicts,
       failures
-    }
+    })
   } catch {
-    return {
-      liveConnected: isCuratedLibraryLiveConnected(),
-      snapshotReady: cached.snapshotReady,
-      revision: cached.revision,
-      fileCount: cached.fileCount,
-      quotaUsedBytes: cached.quotaUsedBytes,
-      quotaBytes: cached.quotaBytes,
-      conflicts,
-      failures
-    }
+    return withActivity(cachedOverview)
   }
 }
 
