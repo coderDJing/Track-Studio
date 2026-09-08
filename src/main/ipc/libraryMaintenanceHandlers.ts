@@ -14,6 +14,7 @@ import {
   moveFileToRecycleBin,
   normalizeRendererPlaylistPath,
   permanentlyDeleteFile,
+  resolveRecycleBinRecordAbsPath,
   restoreRecycleBinFile,
   toLibraryRelativePath,
   type RecycleBinMoveResult
@@ -77,8 +78,8 @@ const DIRTY_DATA_SQL_TABLES = [
   'mixtape_stem_waveform_cache'
 ] as const
 
-const DELETE_SONGS_BATCH_CONCURRENCY = 16
-const DELETE_SONGS_BATCH_YIELD_EVERY = 0
+const DELETE_SONGS_BATCH_CONCURRENCY = 4
+const DELETE_SONGS_BATCH_YIELD_EVERY = 1
 
 type DirtyDataSqlSummary = {
   removedRows: number
@@ -498,14 +499,11 @@ export function registerLibraryMaintenanceHandlers() {
         recordMap.set(rel, newRecord)
       }
     }
-    const libraryRoot = path.join(rootDir, 'library')
     const existing: Array<{ record: RecycleBinRecord; absPath: string }> = []
     const missingRecords: string[] = []
     for (const record of records) {
-      const absPath = path.isAbsolute(record.filePath)
-        ? record.filePath
-        : path.join(libraryRoot, record.filePath)
-      if (!(await fs.pathExists(absPath))) {
+      const absPath = resolveRecycleBinRecordAbsPath(record.filePath)
+      if (!absPath || !(await fs.pathExists(absPath))) {
         missingRecords.push(record.filePath)
       } else {
         existing.push({ record, absPath })

@@ -4,6 +4,13 @@ import { collectMissingAnalysisFilesFromSongs } from '@renderer/utils/manualKeyA
 import { mapMixtapeSnapshotToSongInfo } from '@renderer/composables/mixtape/mixtapeSnapshotSongMapper'
 import type { MixtapeAppendSourceEntry } from '@renderer/utils/mixtapePlaylistAppend'
 import type { IBatchRenameTrackInput, IDir, IMenu, ISongInfo } from 'src/types/globals'
+import {
+  isCurrentRendererWindowsPathPlatform,
+  normalizeFilePathForComparison
+} from '@shared/filePathComparison'
+
+const normalizePathKey = (value: string) =>
+  normalizeFilePathForComparison(value, isCurrentRendererWindowsPathPlatform())
 
 type ScanSongListResult = {
   scanData?: ISongInfo[]
@@ -219,7 +226,7 @@ export const scanSongListsForSongs = async (uuids: string[]): Promise<ISongInfo[
     if (!Array.isArray(scan?.scanData)) continue
     for (const song of scan.scanData) {
       if (song?.fileMissing || !song?.filePath) continue
-      const key = String(song.filePath).replace(/\//g, '\\').toLowerCase()
+      const key = normalizePathKey(String(song.filePath))
       if (seen.has(key)) continue
       seen.add(key)
       songs.push(song)
@@ -313,7 +320,7 @@ export const uniqueFilePaths = (files: string[]) => {
   const byKey = new Map<string, string>()
   for (const filePath of files) {
     const value = String(filePath || '').trim()
-    const key = value.replace(/\//g, '\\').toLowerCase()
+    const key = normalizePathKey(value)
     if (!value || byKey.has(key)) continue
     byKey.set(key, value)
   }
@@ -418,13 +425,11 @@ export const collectSongsForSimilarBatch = async (operateUuids: string[]): Promi
       : Promise.resolve([] as ISongInfo[][])
   ])
   const merged: ISongInfo[] = [...songListSongs]
-  const seen = new Set(
-    songListSongs.map((s) => String(s.filePath).replace(/\//g, '\\').toLowerCase())
-  )
+  const seen = new Set(songListSongs.map((s) => normalizePathKey(String(s.filePath))))
   for (const arr of [...setSongsArrays, ...mixtapeSongsArrays]) {
     for (const song of arr) {
       if (song?.fileMissing || !song?.filePath) continue
-      const key = String(song.filePath).replace(/\//g, '\\').toLowerCase()
+      const key = normalizePathKey(String(song.filePath))
       if (seen.has(key)) continue
       seen.add(key)
       merged.push(song)

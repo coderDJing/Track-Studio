@@ -54,7 +54,6 @@ function resolveFilePathWhereClause(): string {
 function buildFilePathLookupCandidates(filePath: string): string[] {
   const normalizedPath = typeof filePath === 'string' ? filePath.trim() : ''
   if (!normalizedPath) return []
-  if (process.platform !== 'win32') return [normalizedPath]
 
   const candidates = [
     normalizedPath,
@@ -64,7 +63,7 @@ function buildFilePathLookupCandidates(filePath: string): string[] {
   ]
   const seen = new Set<string>()
   return candidates.filter((candidate) => {
-    const key = candidate.toLowerCase()
+    const key = process.platform === 'win32' ? candidate.toLowerCase() : candidate
     if (!candidate || seen.has(key)) return false
     seen.add(key)
     return true
@@ -329,6 +328,54 @@ export function findSetItemsByFilePath(filePath: string): SetItemRecord[] {
     return result
   } catch (error) {
     log.error('[sqlite] set find items by file path failed', error)
+    return []
+  }
+}
+
+export function findSetItemsByFilePaths(filePaths: string[]): SetItemRecord[] {
+  const lookupCandidates = Array.from(
+    new Set(
+      (Array.isArray(filePaths) ? filePaths : [])
+        .flatMap((filePath) => buildFilePathLookupCandidates(filePath))
+        .map((candidate) => (process.platform === 'win32' ? candidate.toLowerCase() : candidate))
+    )
+  )
+  if (lookupCandidates.length === 0) return []
+  const db = getLibraryDb()
+  if (!db) return []
+  try {
+    const rows: unknown[] = []
+    const chunkSize = 250
+    for (let offset = 0; offset < lookupCandidates.length; offset += chunkSize) {
+      const chunk = lookupCandidates.slice(offset, offset + chunkSize)
+      const placeholders = chunk.map(() => '?').join(', ')
+      const filePathExpression = process.platform === 'win32' ? 'LOWER(file_path)' : 'file_path'
+      rows.push(
+        ...db
+          .prepare(
+            `SELECT id, playlist_uuid, file_path, sort_order, origin_playlist_uuid, origin_path_snapshot, analysis_json, created_at_ms
+             FROM ${TABLE}
+             WHERE ${filePathExpression} IN (${placeholders})`
+          )
+          .all(...chunk)
+      )
+    }
+    const seen = new Set<string>()
+    return rows
+      .map(toRecord)
+      .filter((record): record is SetItemRecord => {
+        if (!record || seen.has(record.id)) return false
+        seen.add(record.id)
+        return true
+      })
+      .sort(
+        (left, right) =>
+          left.sortOrder - right.sortOrder ||
+          left.createdAtMs - right.createdAtMs ||
+          left.id.localeCompare(right.id)
+      )
+  } catch (error) {
+    log.error('[sqlite] set find items by file paths failed', error)
     return []
   }
 }

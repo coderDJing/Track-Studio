@@ -10,8 +10,13 @@ import {
   type TrackReanalysisUserSelection
 } from '@shared/trackReanalysisSelection'
 import { normalizeAnalysisBpmRangeId } from '@shared/analysisBpmRange'
+import {
+  isCurrentRendererWindowsPathPlatform,
+  normalizeFilePathForComparison
+} from '@shared/filePathComparison'
 
-const normalizeFilePathKey = (filePath: string) => filePath.replace(/\//g, '\\').toLowerCase()
+const normalizeFilePathKey = (filePath: string) =>
+  normalizeFilePathForComparison(filePath, isCurrentRendererWindowsPathPlatform())
 
 const persistTrackAnalysisDialogSettings = async (
   purpose: TrackAnalysisDialogPurpose,

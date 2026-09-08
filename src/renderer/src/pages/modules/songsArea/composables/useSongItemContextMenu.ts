@@ -40,6 +40,7 @@ import {
 } from './songItemContextMenuMenus'
 import { detectSongsAreaScrollCarrier } from './scrollCarrier'
 import type { LibraryTransferActionMode } from '@renderer/utils/libraryTransfer'
+import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 
 // Type for the return value when a dialog needs to be opened by the parent
 interface OpenDialogAction {
@@ -92,7 +93,10 @@ export function useSongItemContextMenu(
     error instanceof Error ? error.message : String(error || t('common.unknownError'))
   const runtime = useRuntimeStore() // Use the store directly
   const normalizePath = (p: string | undefined | null) =>
-    (p || '').replace(/\//g, '\\').toLowerCase()
+    normalizeFilePathForComparison(
+      p,
+      isWindowsPathPlatform(runtime.setting.platform || runtime.platform)
+    )
   const isMixtapeView = () =>
     libraryUtils.getLibraryTreeByUUID(songsAreaState.songListUUID)?.type === 'mixtapeList'
   const isSetView = () =>

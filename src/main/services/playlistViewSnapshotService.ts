@@ -81,7 +81,8 @@ type VerificationRequest = {
 }
 
 const comparator = createSongListItemComparator({
-  caseInsensitiveFileName: process.platform === 'win32'
+  caseInsensitiveFileName: process.platform === 'win32',
+  caseInsensitiveFilePath: process.platform === 'win32'
 })
 
 const pendingTimers = new Map<string, NodeJS.Timeout>()

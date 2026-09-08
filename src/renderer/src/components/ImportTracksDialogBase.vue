@@ -162,7 +162,7 @@ const flashBorder = (flashAreaName: string) => {
 }
 
 const songListSelectedDisplay = computed(() => {
-  let arr = songListSelected.value.split('\\')
+  let arr = songListSelected.value.split(/[/\\]/)
   if (arr[0]) arr[0] = toLibraryDisplayName(arr[0])
   return arr.join('\\')
 })

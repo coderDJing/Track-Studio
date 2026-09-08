@@ -8,6 +8,7 @@ import emitter from '@renderer/utils/mitt'
 import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { resolvePlaybackDeleteAllAboveTarget } from '@shared/playbackDeleteAllAbove'
+import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 import { showDeleteSummaryIfNeeded } from '@renderer/pages/modules/songsArea/composables/songItemContextMenuSummaries'
 
 type DeleteSummary = {
@@ -26,11 +27,6 @@ export type DelAllAboveOptions = {
   confirmed?: boolean
 }
 
-const normalizePath = (filePath: string | undefined | null) =>
-  String(filePath || '')
-    .replace(/\//g, '\\')
-    .toLowerCase()
-
 const toDeleteSummary = (summary: unknown): DeleteSummary => {
   const payload = summary && typeof summary === 'object' ? (summary as DeleteSummary) : {}
   return {
@@ -47,6 +43,11 @@ export const createDelAllAbove = (params: {
   isReadOnlyPlaybackSource: () => boolean
 }) => {
   const { runtime, isFileOperationInProgress, isReadOnlyPlaybackSource } = params
+  const caseInsensitiveFilePath = isWindowsPathPlatform(
+    runtime.setting.platform || runtime.platform
+  )
+  const normalizePath = (filePath: string | undefined | null) =>
+    normalizeFilePathForComparison(filePath, caseInsensitiveFilePath)
 
   const buildSongsAreaOptimisticRestoreItems = (
     listUUID: string,
@@ -77,7 +78,8 @@ export const createDelAllAbove = (params: {
       listUuid: currentSongListUUID,
       listData: runtime.playingData.playingSongListData,
       playingSong: runtime.playingData.playingSong,
-      libraryType: libraryUtils.getLibraryTreeByUUID(currentSongListUUID)?.type
+      libraryType: libraryUtils.getLibraryTreeByUUID(currentSongListUUID)?.type,
+      caseInsensitiveFilePath
     })
     if (!target) return
 

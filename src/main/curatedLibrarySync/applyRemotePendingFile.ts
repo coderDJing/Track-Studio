@@ -4,6 +4,7 @@ import type { CuratedLibrarySyncCloudFile } from '../../shared/curatedLibrarySyn
 import { readCacheFields, type CuratedLocalFile } from './scan'
 import { localFilePendingSinceLast } from './pendingLocal'
 import { notifyCuratedFilePathChanged, replaceCuratedSyncFileId } from './identityDb'
+import { sameAbsPath } from './paths'
 
 /** 扫描开跑后本机已把文件挪到别处：按内容接回，避免按云端旧路径再下一份。 */
 export const adoptAliveHashMatch = async (
@@ -15,7 +16,7 @@ export const adoptAliveHashMatch = async (
   if (await fs.pathExists(matched.absPath)) return matched
   const missingAbs = matched.absPath
   const alive = (localByHash.get(sha256) || []).find(
-    (item) => path.normalize(item.absPath) !== path.normalize(missingAbs)
+    (item) => !sameAbsPath(item.absPath, missingAbs)
   )
   if (!alive || !(await fs.pathExists(alive.absPath))) return matched
   if (alive.fileId !== cloudFileId) replaceCuratedSyncFileId(alive.fileId, cloudFileId)

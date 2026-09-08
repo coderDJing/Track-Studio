@@ -10,6 +10,7 @@ import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { RECORDING_LIBRARY_UUID } from '@shared/recordingLibrary'
 import { t } from '@renderer/utils/translate'
 import { createSongListItemComparator } from '@shared/songListItemCompare'
+import { isWindowsPathPlatform } from '@shared/filePathComparison'
 import { planSongListMerge } from '@shared/playlistViewMerge'
 import {
   createSongListLoadGenerationGuard,
@@ -166,8 +167,12 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
     libraryUtils.getLibraryTreeByUUID(songListUUID)?.type === 'setList'
   // 行等价判定必须和主进程用同一套规则（@shared/songListItemCompare），
   // 否则后台核对认为"变了"、renderer 认为"没变"，就会出现反复推空补丁或漏刷新。
+  const caseInsensitiveFilePath = isWindowsPathPlatform(
+    runtime.setting.platform || runtime.platform
+  )
   const comparator = createSongListItemComparator({
-    caseInsensitiveFileName: (runtime.setting.platform || runtime.platform) === 'win32'
+    caseInsensitiveFileName: caseInsensitiveFilePath,
+    caseInsensitiveFilePath
   })
   const {
     getSongIdentityKey,

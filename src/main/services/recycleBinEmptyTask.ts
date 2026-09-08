@@ -4,7 +4,11 @@ import store from '../store'
 import { log } from '../log'
 import { getCoreFsDirName } from '../utils'
 import { findLibraryNodeByPath, removeLibraryNodesByParentUuid } from '../libraryTreeDb'
-import { getRecycleBinRootAbs, permanentlyDeleteFile } from '../recycleBinService'
+import {
+  getRecycleBinRootAbs,
+  permanentlyDeleteFile,
+  resolveRecycleBinRecordAbsPath
+} from '../recycleBinService'
 import {
   deleteRecycleBinRecords,
   listRecycleBinRecords,
@@ -106,17 +110,17 @@ const runRecycleBinEmptyJob = async (
       })
     }
 
-    const libraryRoot = path.join(store.databaseDir, 'library')
     const records = listRecycleBinRecords()
     const recordByAbsPath = new Map<string, PreparedRecord>()
     const referenceCandidates = [...filePaths]
     for (const record of records) {
-      const absPath = path.isAbsolute(record.filePath)
-        ? record.filePath
-        : path.join(libraryRoot, record.filePath)
+      const absPath = resolveRecycleBinRecordAbsPath(record.filePath)
+      if (!absPath) continue
       const legacyPath =
         record.originalPlaylistPath && record.originalFileName
-          ? path.join(libraryRoot, record.originalPlaylistPath, record.originalFileName)
+          ? resolveRecycleBinRecordAbsPath(
+              `${record.originalPlaylistPath}/${record.originalFileName}`
+            )
           : null
       recordByAbsPath.set(normalizePathKey(absPath), {
         record,
@@ -214,10 +218,8 @@ const runRecycleBinEmptyJob = async (
     const remainingPathKeys = new Set(remainingScan.filePaths.map(normalizePathKey))
     const missingRecords = records
       .filter((record) => {
-        const absPath = path.isAbsolute(record.filePath)
-          ? record.filePath
-          : path.join(libraryRoot, record.filePath)
-        return !remainingPathKeys.has(normalizePathKey(absPath))
+        const absPath = resolveRecycleBinRecordAbsPath(record.filePath)
+        return !absPath || !remainingPathKeys.has(normalizePathKey(absPath))
       })
       .map((record) => record.filePath)
     if (missingRecords.length > 0) deleteRecycleBinRecords(missingRecords)

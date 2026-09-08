@@ -52,7 +52,7 @@ const clickChooseDir = async () => {
 
 const folderPathDisplay = computed(() => {
   let newPaths = folderPathVal.value.map((path) => {
-    let parts = path.split('\\')
+    let parts = path.split(/[/\\]/)
     return parts[parts.length - 1] ? parts[parts.length - 1] : parts[parts.length - 2]
   })
   let str = []

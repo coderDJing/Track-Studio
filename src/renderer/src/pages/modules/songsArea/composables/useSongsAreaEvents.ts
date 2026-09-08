@@ -13,8 +13,7 @@ import { normalizeSongBeatGridMapV2 } from '@shared/songBeatGridMapV2'
 import libraryUtils from '@renderer/utils/libraryUtils'
 import { markGlobalSongSearchDirty } from '@renderer/utils/globalSongSearchEvents'
 import type { OpenSongListOptions } from './useSongsLoader'
-
-const normalizePath = (p: string | undefined | null) => (p || '').replace(/\//g, '\\').toLowerCase()
+import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 
 type UserOpenedSongListOptions = {
   forceAnalysisPrompt?: boolean
@@ -52,6 +51,11 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
     activeWaveformPreviewFilePath,
     onUserOpenedSongList
   } = params
+  const normalizePath = (value: string | undefined | null) =>
+    normalizeFilePathForComparison(
+      value,
+      isWindowsPathPlatform(runtime.setting.platform || runtime.platform)
+    )
 
   const isSupportedPlaylistTrackNumberList = () => {
     const currentListUUID = songsAreaState.songListUUID

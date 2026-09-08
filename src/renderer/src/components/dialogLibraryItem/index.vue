@@ -411,12 +411,12 @@ const renameInputBlurHandle = async () => {
   // If renaming the currently viewed songlist in songsArea (less likely in dialog, but for consistency)
   if (dirData.uuid === runtime.songsArea.songListUUID) {
     for (let item of runtime.songsArea.songInfoArr) {
-      let arr = item.filePath.split('\\')
+      let arr = item.filePath.split(/[/\\]/)
       arr[arr.length - 2] = renameDivValue.value
       item.filePath = arr.join('\\')
     }
     for (let index in runtime.songsArea.selectedSongFilePath) {
-      let arr = runtime.songsArea.selectedSongFilePath[index].split('\\')
+      let arr = runtime.songsArea.selectedSongFilePath[index].split(/[/\\]/)
       arr[arr.length - 2] = renameDivValue.value
       runtime.songsArea.selectedSongFilePath[index] = arr.join('\\')
     }
@@ -426,11 +426,11 @@ const renameInputBlurHandle = async () => {
     dirData.uuid === runtime.playingData.playingSongListUUID &&
     runtime.playingData.playingSong !== null
   ) {
-    let arr = runtime.playingData.playingSong.filePath.split('\\')
+    let arr = runtime.playingData.playingSong.filePath.split(/[/\\]/)
     arr[arr.length - 2] = renameDivValue.value
     runtime.playingData.playingSong.filePath = arr.join('\\')
     for (let item of runtime.playingData.playingSongListData) {
-      let arr = item.filePath.split('\\')
+      let arr = item.filePath.split(/[/\\]/)
       arr[arr.length - 2] = renameDivValue.value
       item.filePath = arr.join('\\')
     }

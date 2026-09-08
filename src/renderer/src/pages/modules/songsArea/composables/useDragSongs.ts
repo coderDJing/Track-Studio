@@ -7,6 +7,7 @@ import { copySongCueDefinitionsToTargets } from '@renderer/utils/songCueTransfer
 import { buildMixtapeDragSessionItem } from '@renderer/utils/mixtapeDragSession'
 import { t } from '@renderer/utils/translate'
 import { type MoveSongsToDirSummary, useSongMoveTransaction } from './useSongMoveTransaction'
+import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 
 interface DragSongData {
   songFilePaths: string[]
@@ -88,7 +89,10 @@ export function useDragSongs(params: UseDragSongsParams = {}) {
     } catch {}
   }
   const normalizePath = (p: string | undefined | null) =>
-    (p || '').replace(/\//g, '\\').toLowerCase()
+    normalizeFilePathForComparison(
+      p,
+      isWindowsPathPlatform(runtime.setting.platform || runtime.platform)
+    )
   const buildSongAnalysisSnapshot = (song?: ISongInfo | null) => ({
     key: song?.key,
     keyAnalysisAlgorithmVersion: song?.keyAnalysisAlgorithmVersion,

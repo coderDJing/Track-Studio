@@ -43,6 +43,7 @@ let foregroundGraceUntilMs = 0
 let ipcRegistered = false
 let backgroundFileIoInFlight = 0
 let backgroundFileIoSequence = 0
+let backgroundFileIoHandoffScheduled = false
 const backgroundFileIoWaiters: FileIoWaiter[] = []
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
@@ -104,15 +105,22 @@ const acquireBackgroundFileIoSlot = async (priority: FileIoPriority): Promise<()
 }
 
 const releaseBackgroundFileIoSlot = () => {
-  backgroundFileIoWaiters.sort(
-    (left, right) => left.priority - right.priority || left.sequence - right.sequence
-  )
-  const next = backgroundFileIoWaiters.shift()
-  if (next) {
-    next.resolve()
-    return
-  }
-  backgroundFileIoInFlight = Math.max(0, backgroundFileIoInFlight - 1)
+  if (backgroundFileIoHandoffScheduled) return
+  backgroundFileIoHandoffScheduled = true
+  // Give timers and incoming higher-priority work a chance to run between queued disk tasks.
+  // Resolving the next waiter inline can keep a large deletion batch inside one microtask chain.
+  setImmediate(() => {
+    backgroundFileIoHandoffScheduled = false
+    backgroundFileIoWaiters.sort(
+      (left, right) => left.priority - right.priority || left.sequence - right.sequence
+    )
+    const next = backgroundFileIoWaiters.shift()
+    if (next) {
+      next.resolve()
+      return
+    }
+    backgroundFileIoInFlight = Math.max(0, backgroundFileIoInFlight - 1)
+  })
 }
 
 function markPlaybackForegroundActivity(payload: PlaybackForegroundPayload) {

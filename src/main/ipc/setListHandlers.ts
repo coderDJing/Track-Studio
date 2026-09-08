@@ -27,6 +27,7 @@ import {
 } from '../../shared/songStructure'
 import type { ISongInfo } from '../../types/globals'
 import { normalizeAddedAtMs } from '../../shared/songAddedAt'
+import { normalizeFilePathForComparison } from '../../shared/filePathComparison'
 import { buildSetAnalysisSnapshot } from '../services/setAnalysisSnapshot'
 import {
   listSetItemsByPlaylist,
@@ -38,6 +39,7 @@ import {
   countSetItemsByPlaylist,
   countSetItemsByPlaylists,
   findSetItemsByFilePath,
+  findSetItemsByFilePaths,
   updateSetItemFilePath,
   updateSetItemAnalysisSnapshot,
   normalizeSetItemOrder,
@@ -53,8 +55,7 @@ type SetMappingWithPlaylistName = SetItemRecord & {
 export function normalizeSetFilePathKey(filePath: string): string {
   const trimmed = typeof filePath === 'string' ? filePath.trim() : ''
   if (!trimmed) return ''
-  const normalized = path.normalize(trimmed)
-  return process.platform === 'win32' ? normalized.replace(/\//g, '\\').toLowerCase() : normalized
+  return normalizeFilePathForComparison(path.normalize(trimmed), process.platform === 'win32')
 }
 
 function normalizeRequestedFilePaths(filePaths: string[]): string[] {
@@ -465,16 +466,14 @@ export function findSetReferencesForFiles(filePaths: string[]): SetMappingWithPl
   const nameMap = buildPlaylistUuidToNameMap()
   const results: SetMappingWithPlaylistName[] = []
   const seen = new Set<string>()
-  for (const filePath of normalizeRequestedFilePaths(filePaths)) {
-    const items = findSetItemsByFilePath(filePath)
-    for (const item of items) {
-      if (seen.has(item.id)) continue
-      seen.add(item.id)
-      results.push({
-        ...item,
-        playlistName: nameMap.get(item.playlistUuid) || item.playlistUuid
-      })
-    }
+  const items = findSetItemsByFilePaths(normalizeRequestedFilePaths(filePaths))
+  for (const item of items) {
+    if (seen.has(item.id)) continue
+    seen.add(item.id)
+    results.push({
+      ...item,
+      playlistName: nameMap.get(item.playlistUuid) || item.playlistUuid
+    })
   }
   return results
 }
@@ -675,7 +674,7 @@ export function registerSetListHandlers() {
 
       const scanByPath = new Map<string, ISongInfo>()
       for (const song of scanned) {
-        const normalized = song.filePath.replace(/\//g, '\\').toLowerCase()
+        const normalized = normalizeSetFilePathKey(song.filePath)
         scanByPath.set(normalized, song)
       }
 
@@ -690,7 +689,7 @@ export function registerSetListHandlers() {
         const absPath = path.isAbsolute(item.filePath)
           ? item.filePath
           : path.join(store.databaseDir || '', 'library', item.filePath)
-        const normalized = absPath.replace(/\//g, '\\').toLowerCase()
+        const normalized = normalizeSetFilePathKey(absPath)
         const scannedSong = scanByPath.get(normalized)
         if (!scannedSong) {
           ordered.push(createMissingSetSong(item))

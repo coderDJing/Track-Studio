@@ -3,6 +3,7 @@ import { areSongHotCuesEqual } from './hotCues'
 import { areSongMemoryCuesEqual } from './memoryCues'
 import { normalizeSongBeatGridMapV2 } from './songBeatGridMapV2'
 import { normalizeSongStructureAnalysis } from './songStructure'
+import { normalizeFilePathForComparison } from './filePathComparison'
 
 /**
  * 歌单行的等价判定。主进程（构建后台刷新计划）与 renderer（磁盘重载对比）必须用
@@ -15,6 +16,8 @@ import { normalizeSongStructureAnalysis } from './songStructure'
 export type SongListItemComparatorOptions = {
   /** win32 语义：fileName 比较时忽略大小写。 */
   caseInsensitiveFileName: boolean
+  /** win32 语义：filePath 比较时忽略大小写。 */
+  caseInsensitiveFilePath: boolean
 }
 
 /** 只影响分析结果、不影响"这是哪一首/文件本身变了"的字段。 */
@@ -28,11 +31,11 @@ export const IGNORED_SONG_LIST_REFRESH_DIFF_FIELDS: ReadonlySet<string> = new Se
   'songStructure'
 ])
 
-/** 路径 key：统一分隔符 + 小写。跨平台一致，磁盘缓存与快照都用它。 */
-export const normalizeSongPath = (value: string | undefined | null): string =>
-  String(value || '')
-    .replace(/\//g, '\\')
-    .toLowerCase()
+/** 路径 key：统一分隔符；只有 win32 忽略大小写。 */
+export const normalizeSongPath = (
+  value: string | undefined | null,
+  caseInsensitive = false
+): string => normalizeFilePathForComparison(value, caseInsensitive)
 
 export const normalizeComparableText = (value: unknown): string => String(value || '').trim()
 
@@ -62,10 +65,10 @@ const normalizeComparableBeatGridMap = (value: unknown): string => {
 }
 
 /** 行身份：mixtape / set 条目用各自的条目 id，普通歌单用文件路径。 */
-export const getSongIdentityKey = (song: ISongInfo): string =>
+export const getSongIdentityKey = (song: ISongInfo, caseInsensitiveFilePath = false): string =>
   normalizeComparableText(song.mixtapeItemId) ||
   normalizeComparableText(song.setItemId) ||
-  normalizeSongPath(song.filePath)
+  normalizeSongPath(song.filePath, caseInsensitiveFilePath)
 
 export type SongListItemComparator = {
   getSongIdentityKey: (song: ISongInfo) => string
@@ -79,14 +82,18 @@ export type SongListItemComparator = {
 export function createSongListItemComparator(
   options: SongListItemComparatorOptions
 ): SongListItemComparator {
+  const normalizeComparatorSongPath = (value: string | undefined | null) =>
+    normalizeSongPath(value, options.caseInsensitiveFilePath)
+  const getComparatorSongIdentityKey = (song: ISongInfo) =>
+    getSongIdentityKey(song, options.caseInsensitiveFilePath)
   const normalizeComparableFileName = (value: unknown): string => {
     const normalized = normalizeComparableText(value)
     return options.caseInsensitiveFileName ? normalized.toLowerCase() : normalized
   }
 
   const isEquivalentSongInfo = (left: ISongInfo, right: ISongInfo): boolean =>
-    getSongIdentityKey(left) === getSongIdentityKey(right) &&
-    normalizeSongPath(left.filePath) === normalizeSongPath(right.filePath) &&
+    getComparatorSongIdentityKey(left) === getComparatorSongIdentityKey(right) &&
+    normalizeComparatorSongPath(left.filePath) === normalizeComparatorSongPath(right.filePath) &&
     normalizeComparableFileName(left.fileName) === normalizeComparableFileName(right.fileName) &&
     normalizeComparableText(left.fileFormat).toUpperCase() ===
       normalizeComparableText(right.fileFormat).toUpperCase() &&
@@ -179,8 +186,12 @@ export function createSongListItemComparator(
       }
     }
 
-    if (getSongIdentityKey(left) !== getSongIdentityKey(right)) fields.push('__identity__')
-    if (normalizeSongPath(left.filePath) !== normalizeSongPath(right.filePath)) {
+    if (getComparatorSongIdentityKey(left) !== getComparatorSongIdentityKey(right)) {
+      fields.push('__identity__')
+    }
+    if (
+      normalizeComparatorSongPath(left.filePath) !== normalizeComparatorSongPath(right.filePath)
+    ) {
       fields.push('filePath')
     }
     if (
@@ -267,8 +278,8 @@ export function createSongListItemComparator(
     fields.some((field) => !IGNORED_SONG_LIST_REFRESH_DIFF_FIELDS.has(field))
 
   return {
-    getSongIdentityKey,
-    normalizeSongPath,
+    getSongIdentityKey: getComparatorSongIdentityKey,
+    normalizeSongPath: normalizeComparatorSongPath,
     normalizeComparableText,
     isEquivalentSongInfo,
     getSongInfoDiffFields,

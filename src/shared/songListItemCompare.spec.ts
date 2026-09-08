@@ -27,7 +27,10 @@ const createSong = (): ISongInfo => ({
   fileMissing: false
 })
 
-const comparator = createSongListItemComparator({ caseInsensitiveFileName: true })
+const comparator = createSongListItemComparator({
+  caseInsensitiveFileName: true,
+  caseInsensitiveFilePath: true
+})
 
 describe('song list item comparator', () => {
   it('detects analysis and playback fields that change row behavior', () => {
@@ -64,5 +67,24 @@ describe('song list item comparator', () => {
     expect(result.changed).toBe(true)
     expect(result.updatedCount).toBe(1)
     expect(result.items[0]).toBe(next)
+  })
+
+  it('uses platform case rules while treating slash styles as equivalent', () => {
+    const windowsComparator = createSongListItemComparator({
+      caseInsensitiveFileName: true,
+      caseInsensitiveFilePath: true
+    })
+    const macComparator = createSongListItemComparator({
+      caseInsensitiveFileName: false,
+      caseInsensitiveFilePath: false
+    })
+    const upper = createSong()
+    const slashVariant = { ...upper, filePath: 'C:\\Music\\song.mp3' }
+    const caseVariant = { ...upper, filePath: 'C:/Music/Song.mp3', fileName: 'Song.mp3' }
+
+    expect(windowsComparator.isEquivalentSongInfo(upper, slashVariant)).toBe(true)
+    expect(windowsComparator.isEquivalentSongInfo(upper, caseVariant)).toBe(true)
+    expect(macComparator.isEquivalentSongInfo(upper, slashVariant)).toBe(true)
+    expect(macComparator.isEquivalentSongInfo(upper, caseVariant)).toBe(false)
   })
 })

@@ -18,6 +18,7 @@ import {
   type LibraryTransferTarget
 } from '@renderer/utils/libraryTransfer'
 import { createDelAllAbove } from './usePlayerDeleteAllAbove'
+import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 
 type DeleteSummary = {
   total?: number
@@ -74,7 +75,10 @@ export function usePlayerControlsLogic({
     actionMode: LibraryTransferActionMode
   } | null>(null)
   const normalizePath = (p: string | undefined | null) =>
-    (p || '').replace(/\//g, '\\').toLowerCase()
+    normalizeFilePathForComparison(
+      p,
+      isWindowsPathPlatform(runtime.setting.platform || runtime.platform)
+    )
   const isReadOnlyPlaybackSource = () =>
     isRekordboxExternalPlaybackSource(
       runtime.playingData.playingSongListUUID,
@@ -848,8 +852,6 @@ export function usePlayerControlsLogic({
 
       // 广播删除（从源列表移除当前播放歌曲），确保 songsArea 能同步剔除并重建
       try {
-        const normalizePath = (p: string | undefined | null) =>
-          (p || '').replace(/\//g, '\\').toLowerCase()
         const normalizedPath = normalizePath(filePathToMove)
         emitter.emit('songsRemoved', {
           listUUID: sourceListUuid,

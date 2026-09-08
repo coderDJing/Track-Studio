@@ -28,6 +28,11 @@ import {
 import { emitSongHotCuesUpdated } from '../services/songHotCueEvents'
 import { emitSongMemoryCuesUpdated } from '../services/songMemoryCueEvents'
 import { scheduleCuratedLibrarySyncIfUnderCurated } from '../cloudSyncScheduler'
+import { normalizeFilePathForComparison } from '../../shared/filePathComparison'
+
+const sameFilePath = (left: string, right: string): boolean =>
+  normalizeFilePathForComparison(path.resolve(left), process.platform === 'win32') ===
+  normalizeFilePathForComparison(path.resolve(right), process.platform === 'win32')
 
 const isPathInside = (rootDir: string, targetPath: string) => {
   const relative = path.relative(rootDir, targetPath)
@@ -120,7 +125,7 @@ const releaseSongEditSourceSnapshot = async (sessionId: string) => {
 const ensureSongEditSourceSnapshot = async (sessionId: string, sourceFilePath: string) => {
   const existing = songEditSourceSnapshots.get(sessionId)
   if (existing) {
-    if (path.resolve(existing.sourceFilePath) !== path.resolve(sourceFilePath)) {
+    if (!sameFilePath(existing.sourceFilePath, sourceFilePath)) {
       throw new Error('编辑会话源文件不匹配')
     }
     return existing.snapshotPath
@@ -194,7 +199,7 @@ export const registerSongEditHandlers = () => {
       const canOverwrite = payload?.target === 'overwrite' && nextExt === originalExt
       const sourceDir = path.dirname(sourceFilePath)
       const snapshot = sessionId ? songEditSourceSnapshots.get(sessionId) : null
-      if (snapshot && path.resolve(snapshot.sourceFilePath) !== sourceFilePath) {
+      if (snapshot && !sameFilePath(snapshot.sourceFilePath, sourceFilePath)) {
         throw new Error('编辑会话源文件不匹配')
       }
       const renderSourceFilePath =
@@ -241,10 +246,7 @@ export const registerSongEditHandlers = () => {
       let destPath = canOverwrite ? sourceFilePath : path.join(sourceDir, destFileName)
       if (!canOverwrite) {
         assertWritableSongEditFile(destPath)
-        if (
-          path.resolve(path.dirname(destPath)).toLowerCase() !==
-          path.resolve(sourceDir).toLowerCase()
-        ) {
+        if (!sameFilePath(path.dirname(destPath), sourceDir)) {
           throw new Error('保存路径不合法')
         }
         if (await fs.pathExists(destPath)) {
@@ -326,11 +328,9 @@ export const registerSongEditHandlers = () => {
         const orderedFilePaths = Array.isArray(payload?.orderedFilePaths)
           ? payload.orderedFilePaths.map((item) => String(item || '').trim()).filter(Boolean)
           : []
-        if (!orderedFilePaths.includes(destPath)) {
-          const insertAfter = String(payload?.insertAfterFilePath || sourceFilePath).toLowerCase()
-          const insertIndex = orderedFilePaths.findIndex(
-            (item) => item.toLowerCase() === insertAfter
-          )
+        if (!orderedFilePaths.some((item) => sameFilePath(item, destPath))) {
+          const insertAfter = String(payload?.insertAfterFilePath || sourceFilePath)
+          const insertIndex = orderedFilePaths.findIndex((item) => sameFilePath(item, insertAfter))
           if (insertIndex >= 0) orderedFilePaths.splice(insertIndex + 1, 0, destPath)
           else orderedFilePaths.push(destPath)
         }

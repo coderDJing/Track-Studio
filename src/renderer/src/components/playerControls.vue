@@ -30,6 +30,7 @@ import { promptAndStartTrackReanalysis } from '@renderer/utils/trackReanalysis'
 import libraryUtils from '@renderer/utils/libraryUtils'
 import emitter from '@renderer/utils/mitt'
 import { resolvePlaybackDeleteAllAboveTarget } from '@shared/playbackDeleteAllAbove'
+import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 import {
   type ISongInfo,
   type IMetadataAutoFillSummary,
@@ -208,9 +209,10 @@ const delAllAbove = () => {
 }
 
 const normalizeFilePathForCompare = (filePath?: string | null) =>
-  String(filePath || '')
-    .replace(/\//g, '\\')
-    .toLowerCase()
+  normalizeFilePathForComparison(
+    filePath,
+    isWindowsPathPlatform(runtime.setting.platform || runtime.platform)
+  )
 
 const resolvePlaybackSourceSongListPath = (listUuid = runtime.playingData.playingSongListUUID) => {
   return listUuid ? String(libraryUtils.findDirPathByUuid(listUuid) || '') : ''
@@ -601,7 +603,8 @@ const canDeleteAllAbove = computed(() => {
     listUuid,
     listData: runtime.playingData.playingSongListData,
     playingSong: runtime.playingData.playingSong,
-    libraryType: libraryUtils.getLibraryTreeByUUID(listUuid)?.type
+    libraryType: libraryUtils.getLibraryTreeByUUID(listUuid)?.type,
+    caseInsensitiveFilePath: isWindowsPathPlatform(runtime.setting.platform || runtime.platform)
   })
 })
 

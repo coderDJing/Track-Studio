@@ -9,6 +9,10 @@ import { useDemucsUltraModel, type StemProfile } from '@renderer/composables/use
 import StemWaveformPreview from '@renderer/components/StemWaveformPreview.vue'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 import confirm from '@renderer/components/confirmDialog'
+import {
+  isCurrentRendererWindowsPathPlatform,
+  normalizeFilePathForComparison
+} from '@shared/filePathComparison'
 
 type StemId = 'vocal' | 'inst' | 'bass' | 'drums'
 type StemStatus = 'idle' | 'pending' | 'running' | 'ready' | 'failed'
@@ -146,7 +150,8 @@ const parseSnapshot = (value: unknown): LibraryStemStatusSnapshot | null => {
   }
 }
 
-const normalizePathKey = (value: string) => value.replace(/\//g, '\\').toLowerCase()
+const normalizePathKey = (value: string) =>
+  normalizeFilePathForComparison(value, isCurrentRendererWindowsPathPlatform())
 const isCurrentSong = (value: string) =>
   normalizePathKey(value) === normalizePathKey(props.filePath)
 

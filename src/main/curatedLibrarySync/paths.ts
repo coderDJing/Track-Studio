@@ -18,6 +18,9 @@ const normalizeCompare = (value: string): string => {
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved
 }
 
+export const sameAbsPath = (left: string, right: string): boolean =>
+  normalizeCompare(left) === normalizeCompare(right)
+
 export const toPosixRelative = (value: string): string =>
   String(value || '')
     .replace(/\\/g, '/')

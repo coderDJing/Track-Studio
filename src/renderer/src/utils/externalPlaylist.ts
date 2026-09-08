@@ -2,11 +2,15 @@ import { useRuntimeStore } from '@renderer/stores/runtime'
 import type { ISongInfo } from 'src/types/globals'
 import emitter from '@renderer/utils/mitt'
 import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
+import {
+  isCurrentRendererWindowsPathPlatform,
+  normalizeFilePathForComparison
+} from '@shared/filePathComparison'
 
 type ExternalPlaylistMode = 'replace' | 'append'
 
 const normalizePath = (path: string | null | undefined): string =>
-  (path || '').replace(/\\/g, '/').toLowerCase()
+  normalizeFilePathForComparison(path, isCurrentRendererWindowsPathPlatform())
 
 const dedupeSongs = (songs: ISongInfo[]): ISongInfo[] => {
   const map = new Map<string, ISongInfo>()

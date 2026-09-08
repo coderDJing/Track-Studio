@@ -30,6 +30,7 @@ import { notifyCuratedFilePathChanged } from '../curatedLibrarySync/identityDb'
 import { markGlobalSongSearchDirty } from '../services/globalSongSearch'
 import { remapKeyAnalysisTrackedPath } from '../services/keyAnalysisQueue'
 import { protectSetReferencedFilesForDeletion } from './setListHandlers'
+import { normalizeFilePathForComparison } from '../../shared/filePathComparison'
 import {
   appendSongListTrackNumbers,
   compactSongListTrackNumbers,
@@ -308,7 +309,10 @@ export function registerExportHandlers() {
         const sourcePath = normalizeNonEmptyString(item?.filePath)
         const fileName = path.basename(sourcePath)
         if (!fileName) continue
-        const key = path.resolve(sourcePath).toLowerCase()
+        const key = normalizeFilePathForComparison(
+          path.resolve(sourcePath),
+          process.platform === 'win32'
+        )
         const group = groups.get(key) || {
           sourcePath,
           targetPaths: [],
@@ -539,7 +543,12 @@ export function registerExportHandlers() {
       for (const src of srcs) {
         const sourceRoot = await findSongListRoot(path.dirname(String(src || '').trim()))
         if (!sourceRoot || !isSupportedPlaylistTrackNumberListRoot(sourceRoot)) continue
-        if (path.resolve(sourceRoot) === path.resolve(targetListRoot)) continue
+        if (
+          normalizeFilePathForComparison(path.resolve(sourceRoot), process.platform === 'win32') ===
+          normalizeFilePathForComparison(path.resolve(targetListRoot), process.platform === 'win32')
+        ) {
+          continue
+        }
         sourceRoots.add(sourceRoot)
       }
       for (const sourceRoot of sourceRoots) {

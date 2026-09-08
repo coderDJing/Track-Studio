@@ -21,6 +21,7 @@ import {
   resolvePlaybackRangeHandleVisual
 } from '@shared/playbackRange'
 import { resolvePlaybackDeleteAllAboveTarget } from '@shared/playbackDeleteAllAbove'
+import { isWindowsPathPlatform } from '@shared/filePathComparison'
 import libraryUtils from '@renderer/utils/libraryUtils'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
 
@@ -75,7 +76,10 @@ export function useMiniPlayerHost(params: {
       listUuid,
       listData: params.runtime.playingData.playingSongListData,
       playingSong,
-      libraryType: libraryUtils.getLibraryTreeByUUID(listUuid)?.type
+      libraryType: libraryUtils.getLibraryTreeByUUID(listUuid)?.type,
+      caseInsensitiveFilePath: isWindowsPathPlatform(
+        params.runtime.setting.platform || params.runtime.platform
+      )
     })
     if (!target) return { canDeleteAllAbove: false, deleteAllAboveCount: 0 }
     return { canDeleteAllAbove: true, deleteAllAboveCount: target.songs.length }

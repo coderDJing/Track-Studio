@@ -6,6 +6,7 @@ import type {
   useRuntimeStore
 } from '@renderer/stores/runtime'
 import type { ISongInfo, ISongsAreaColumn } from '../../../../../../types/globals'
+import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 
 type FocusSongPayload = {
   pane?: SongsAreaPaneKey | 'pioneer'
@@ -33,13 +34,9 @@ const FOCUS_RETRY_INTERVAL_MS = 120
 const FOCUS_RETRY_TIMEOUT_MS = 12000
 const FOCUS_STABILIZE_MS = 1500
 
-const normalizeSongPath = (value: string | undefined | null) =>
-  String(value || '')
-    .replace(/\//g, '\\')
-    .toLowerCase()
-
 export function useGlobalSearchFocus(params: UseGlobalSearchFocusParams) {
   const {
+    runtime,
     pane,
     songsAreaState,
     originalSongInfoArr,
@@ -50,6 +47,11 @@ export function useGlobalSearchFocus(params: UseGlobalSearchFocusParams) {
     songDblClick,
     onFocusHit
   } = params
+  const normalizeSongPath = (value: string | undefined | null) =>
+    normalizeFilePathForComparison(
+      value,
+      isWindowsPathPlatform(runtime.setting.platform || runtime.platform)
+    )
 
   const pendingFocusPayload = ref<FocusSongPayload | null>(null)
   let focusRetryTimer: ReturnType<typeof setInterval> | null = null

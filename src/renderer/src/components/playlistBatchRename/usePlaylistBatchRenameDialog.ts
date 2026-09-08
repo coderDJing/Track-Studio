@@ -23,6 +23,7 @@ import type {
   IBatchRenameTemplateToken,
   IBatchRenameTrackInput
 } from 'src/types/globals'
+import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 
 export function usePlaylistBatchRenameDialog(props: {
   songLists: BatchRenameSongListTarget[]
@@ -157,7 +158,11 @@ export function usePlaylistBatchRenameDialog(props: {
       bpm: typeof track.bpm === 'number' ? track.bpm : undefined
     }))
 
-  const normalizeTrackKey = (filePath: string) => filePath.replace(/\//g, '\\').toLowerCase()
+  const normalizeTrackKey = (filePath: string) =>
+    normalizeFilePathForComparison(
+      filePath,
+      isWindowsPathPlatform(runtime.setting.platform || runtime.platform)
+    )
 
   const pushTrackInput = (
     tracks: IBatchRenameTrackInput[],

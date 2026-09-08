@@ -5,6 +5,10 @@ import {
   resolveCanonicalSongBeatGridV2
 } from '../../../shared/songAnalysisCompleteness'
 import type { TrackReanalysisUserSelection } from '../../../shared/trackReanalysisSelection'
+import {
+  isCurrentRendererWindowsPathPlatform,
+  normalizeFilePathForComparison
+} from '../../../shared/filePathComparison'
 
 export type AnalysisCandidate = {
   filePath?: unknown
@@ -27,7 +31,8 @@ export type MissingAnalysisOptions = {
   missingWaveformFilePathKeys?: ReadonlySet<string>
 }
 
-const normalizeFilePathKey = (filePath: string) => filePath.replace(/\//g, '\\').toLowerCase()
+const normalizeFilePathKey = (filePath: string) =>
+  normalizeFilePathForComparison(filePath, isCurrentRendererWindowsPathPlatform())
 
 const resolveMissingWaveformFilePathKeys = (options: MissingAnalysisOptions) => {
   if (options.missingWaveformFilePathKeys) return options.missingWaveformFilePathKeys

@@ -7,6 +7,10 @@ import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { RECORDING_LIBRARY_UUID } from '@shared/recordingLibrary'
 import type { ISongInfo } from '../../../../../../types/globals'
+import {
+  isCurrentRendererWindowsPathPlatform,
+  normalizeFilePathForComparison
+} from '@shared/filePathComparison'
 
 type PlaylistAnalysisRuntime = {
   libraryAreaSelected: string
@@ -46,7 +50,8 @@ type OpenSongListAnalysisPromptOptions = {
   source?: string
 }
 
-const normalizeFilePathKey = (filePath: string) => filePath.replace(/\//g, '\\').toLowerCase()
+const normalizeFilePathKey = (filePath: string) =>
+  normalizeFilePathForComparison(filePath, isCurrentRendererWindowsPathPlatform())
 
 export function usePlaylistAnalysisPrompt({
   runtime,

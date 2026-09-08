@@ -43,6 +43,7 @@ import {
 } from './libraryContextMenuHelpers'
 import { handleRekordboxXmlPlaylistExport } from './handleRekordboxXmlPlaylistExport'
 import type { IDir, IMenu, IMetadataAutoFillSummary } from '../../../../types/globals'
+import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 
 type ExportSongsToDirSummary = {
   removedPaths?: string[]
@@ -870,7 +871,10 @@ export function useLibraryContextMenu({
         if (!operateUuids.length) break
         runtime.isProgressing = true
         const normalizePath = (p: string | undefined | null) =>
-          (p || '').replace(/\//g, '\\').toLowerCase()
+          normalizeFilePathForComparison(
+            p,
+            isWindowsPathPlatform(runtime.setting.platform || runtime.platform)
+          )
         try {
           let totalRemoved = 0
           let totalScanned = 0

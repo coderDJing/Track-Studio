@@ -1,5 +1,9 @@
 import { normalizeSongBeatGridMapV2 } from '@shared/songBeatGridMapV2'
 import type { MixtapeRawItem, MixtapeTrack } from '@renderer/composables/mixtape/types'
+import {
+  isCurrentRendererWindowsPathPlatform,
+  normalizeFilePathForComparison
+} from '@shared/filePathComparison'
 
 type ValueRef<T> = {
   value: T
@@ -24,7 +28,11 @@ type SongMetadataSyncContext = {
 const normalizeMixtapeComparePath = (
   ctx: Pick<SongMetadataSyncContext, 'normalizeMixtapeFilePath'>,
   value: string | undefined | null
-) => ctx.normalizeMixtapeFilePath(value).replace(/\//g, '\\').toLowerCase()
+) =>
+  normalizeFilePathForComparison(
+    ctx.normalizeMixtapeFilePath(value),
+    isCurrentRendererWindowsPathPlatform()
+  )
 
 const parseMixtapeRawItemInfoJson = (item: MixtapeRawItem): Record<string, unknown> => {
   if (!item?.infoJson) return {}

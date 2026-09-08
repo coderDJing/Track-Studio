@@ -3,6 +3,10 @@ import {
   toPreviewUrl,
   type AudioElementWithExtensions
 } from './webAudioPlayer.shared'
+import {
+  isCurrentRendererWindowsPathPlatform,
+  normalizeFilePathForComparison
+} from '@shared/filePathComparison'
 
 type MetadataPreloadEntry = {
   filePath: string
@@ -29,7 +33,8 @@ type PendingMetadataPreload = {
 const MAX_METADATA_PRELOADS = 2
 const MAX_ACTIVE_METADATA_PRELOADS = 1
 
-const normalizePathKey = (value: string) => value.trim().replace(/\//g, '\\').toLowerCase()
+const normalizePathKey = (value: string) =>
+  normalizeFilePathForComparison(value, isCurrentRendererWindowsPathPlatform())
 
 const createHiddenAudio = (): AudioElementWithExtensions => {
   const audio = document.createElement('audio') as AudioElementWithExtensions

@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import type { ISongsAreaPaneRuntimeState } from '@renderer/stores/runtime'
+import { type ISongsAreaPaneRuntimeState, useRuntimeStore } from '@renderer/stores/runtime'
 import libraryUtils from '@renderer/utils/libraryUtils'
 import emitter from '@renderer/utils/mitt'
 import { t } from '@renderer/utils/translate'
@@ -10,6 +10,7 @@ import {
   resolveLibraryTransferActionModeForSongList,
   type LibraryTransferActionMode
 } from '@renderer/utils/libraryTransfer'
+import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 
 export type MoveSongsLibraryName =
   | 'CuratedLibrary'
@@ -33,6 +34,12 @@ type MixtapeAppendResult = {
 
 export function useSelectAndMoveSongs(params: UseSelectAndMoveSongsParams) {
   const { songsAreaState } = params
+  const runtime = useRuntimeStore()
+  const normalizePath = (value: string) =>
+    normalizeFilePathForComparison(
+      value,
+      isWindowsPathPlatform(runtime.setting.platform || runtime.platform)
+    )
   const { prepareSongMove } = useSongMoveTransaction()
   const normalizeUniqueStrings = (values: unknown[]): string[] =>
     Array.from(
@@ -370,10 +377,10 @@ export function useSelectAndMoveSongs(params: UseSelectAndMoveSongsParams) {
       throw error
     }
     const movedSourcePathSet = new Set(
-      moveSummary.movedEntries.map((item) => item.sourcePath.replace(/\//g, '\\').toLowerCase())
+      moveSummary.movedEntries.map((item) => normalizePath(item.sourcePath))
     )
     const failedSourcePaths = selectedPaths.filter(
-      (filePath) => !movedSourcePathSet.has(filePath.replace(/\//g, '\\').toLowerCase())
+      (filePath) => !movedSourcePathSet.has(normalizePath(filePath))
     )
     if (failedSourcePaths.length > 0) {
       moveTransaction.restoreSourceList(failedSourcePaths)

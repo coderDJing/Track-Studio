@@ -20,6 +20,14 @@ type DeleteEntry = {
   originalListRoot?: string | null
 }
 
+const samePath = (left: string, right: string): boolean => {
+  const leftResolved = path.resolve(left)
+  const rightResolved = path.resolve(right)
+  return process.platform === 'win32'
+    ? leftResolved.toLowerCase() === rightResolved.toLowerCase()
+    : leftResolved === rightResolved
+}
+
 type WorkerRequest =
   | { id: number; type: 'scan'; rootPath: string }
   | { id: number; type: 'delete'; databaseDir: string; entries: DeleteEntry[] }
@@ -62,7 +70,7 @@ const deleteEntries = async (databaseDir: string, entries: DeleteEntry[]) => {
       if (
         entry.originalPath &&
         entry.originalListRoot &&
-        path.resolve(entry.originalPath) !== path.resolve(entry.filePath)
+        !samePath(entry.originalPath, entry.filePath)
       ) {
         await purgeCoverCache(entry.originalListRoot, entry.originalPath).catch(() => {})
       }

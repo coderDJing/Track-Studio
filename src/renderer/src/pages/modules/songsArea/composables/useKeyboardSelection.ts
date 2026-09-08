@@ -9,6 +9,7 @@ import libraryUtils from '@renderer/utils/libraryUtils'
 import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { createRepeatSingleClickDeselect } from './repeatSingleClickDeselect'
+import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 
 type ClipboardOperation = 'copy' | 'cut'
 
@@ -52,7 +53,10 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
   let pendingCutPaths = new Set<string>()
   let pendingCutListUUID = ''
   const normalizePath = (p: string | undefined | null) =>
-    (p || '').replace(/\//g, '\\').toLowerCase()
+    normalizeFilePathForComparison(
+      p,
+      isWindowsPathPlatform(runtime.setting.platform || runtime.platform)
+    )
 
   const isMixtapeViewForState = (state: ISongsAreaPaneRuntimeState) =>
     libraryUtils.getLibraryTreeByUUID(state.songListUUID)?.type === 'mixtapeList'

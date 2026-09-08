@@ -42,6 +42,7 @@ import {
   libraryRelativeToAbs,
   resolveCloudParentAbs,
   resolveCloudParentToLocalUuid,
+  sameAbsPath,
   toCloudParentUuid
 } from './paths'
 import {
@@ -227,7 +228,7 @@ const ensureCloudNodeLocal = async (
       return currentAbs
     }
     const currentAbs = getNodeAbsPath(node.uuid)
-    if (currentAbs && path.normalize(currentAbs) !== path.normalize(destAbs)) {
+    if (currentAbs && !sameAbsPath(currentAbs, destAbs)) {
       await fs.ensureDir(path.dirname(destAbs))
       if (await fs.pathExists(currentAbs)) {
         await relocateLibraryDirectoryFiles(currentAbs, destAbs)
@@ -445,7 +446,7 @@ const ensureRemoteDestinationAvailable = async (
   currentPath: string | null,
   ctx: ApplyRemoteContext
 ): Promise<boolean> => {
-  if (currentPath && path.normalize(currentPath) === path.normalize(destPath)) return true
+  if (currentPath && sameAbsPath(currentPath, destPath)) return true
   if (!(await fs.pathExists(destPath))) return true
   if (isBusyPath(destPath, ctx)) return false
   return deleteLocalFile(destPath, ctx)
@@ -822,10 +823,10 @@ export const applyRemoteSnapshot = async (
             file,
             ctx,
             scope,
-            path.normalize(current.absPath) === path.normalize(destPath)
+            sameAbsPath(current.absPath, destPath)
           )
           if (imported) {
-            if (path.normalize(current.absPath) !== path.normalize(destPath)) {
+            if (!sameAbsPath(current.absPath, destPath)) {
               await moveFileToRecycleBin(current.absPath)
             }
             persistImportedIdentity(
@@ -841,7 +842,7 @@ export const applyRemoteSnapshot = async (
           }
           continue
         }
-        if (path.normalize(current.absPath) !== path.normalize(destPath)) {
+        if (!sameAbsPath(current.absPath, destPath)) {
           const moved = await relocateLibraryAudioFile({
             sourceAbs: current.absPath,
             destAbs: destPath,

@@ -14,7 +14,7 @@ import {
 import FingerprintStore from './fingerprintStore'
 import { syncLibrarySettingsFromDb } from './librarySettingsDb'
 import { log } from './log'
-import { moveFileToRecycleBin } from './recycleBinService'
+import { moveFileToRecycleBin, resolvePortableLibraryPath } from './recycleBinService'
 import {
   listRecycleBinRecords,
   upsertRecycleBinRecord,
@@ -210,10 +210,8 @@ async function migrateLegacyRecycleBin(dbRoot: string, db: SqliteDatabase): Prom
   const missingRecords: string[] = []
   const existingRecords = listRecycleBinRecords()
   for (const record of existingRecords) {
-    const absPath = path.isAbsolute(record.filePath)
-      ? record.filePath
-      : path.join(libraryRoot, record.filePath)
-    if (!(await fs.pathExists(absPath))) {
+    const absPath = resolvePortableLibraryPath(libraryRoot, record.filePath)
+    if (!absPath || !(await fs.pathExists(absPath))) {
       missingRecords.push(record.filePath)
     }
   }

@@ -4,6 +4,7 @@ import confirm from '@renderer/components/confirmDialog'
 import emitter from '@renderer/utils/mitt'
 import { t } from '@renderer/utils/translate'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
+import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 
 export type DeleteSummary = {
   total?: number
@@ -22,7 +23,14 @@ type EmptyRecycleBinJobCompletion = {
   summary?: unknown
 }
 
-const normalizePath = (p: string | undefined | null) => (p || '').replace(/\//g, '\\').toLowerCase()
+const normalizePath = (
+  runtime: ReturnType<typeof useRuntimeStore>,
+  value: string | undefined | null
+) =>
+  normalizeFilePathForComparison(
+    value,
+    isWindowsPathPlatform(runtime.setting.platform || runtime.platform)
+  )
 
 export const normalizeDeleteSummary = (summary: unknown): DeleteSummary => {
   const payload = summary && typeof summary === 'object' ? (summary as DeleteSummary) : {}
@@ -195,10 +203,10 @@ export async function emptyRecycleBinWithOptimisticUpdate(
 
     if (Number(deleteSummary.failed || 0) > 0) {
       const removedNormalizedSet = new Set(
-        (deleteSummary.removedPaths || []).map((item) => normalizePath(item))
+        (deleteSummary.removedPaths || []).map((item) => normalizePath(runtime, item))
       )
       const restoredFailed = optimisticPaths.some(
-        (item) => !removedNormalizedSet.has(normalizePath(item))
+        (item) => !removedNormalizedSet.has(normalizePath(runtime, item))
       )
       await showDeleteSummaryIfNeeded(deleteSummary, { restoredFailed })
     }

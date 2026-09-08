@@ -22,7 +22,13 @@ import {
   findCuratedSyncFileByAbsPath,
   notifyCuratedFilePathChanged
 } from './curatedLibrarySync/identityDb'
-import { getCuratedLibraryAbsRoot, isPathInside } from './curatedLibrarySync/paths'
+import {
+  absToLibraryRelative,
+  getCuratedLibraryAbsRoot,
+  isPathInside,
+  sameAbsPath,
+  toPosixRelative
+} from './curatedLibrarySync/paths'
 import { notifyLibraryFsChanged } from './libraryTreeWatcher'
 import { invalidateKeyAnalysisCache } from './services/keyAnalysisQueue'
 import { listMixtapeItemsByFilePath, replaceMixtapeFilePath } from './mixtapeDb'
@@ -106,22 +112,34 @@ function normalizeRelativePathForCompare(value: string): string {
 }
 
 function normalizeNameForCompare(value: string): string {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
+  const normalized = String(value || '').trim()
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
-function getRecordAbsPath(record: RecycleBinRecord, libraryRoot: string): string {
+export function resolvePortableLibraryPath(libraryRoot: string, recordPath: string): string | null {
+  const normalized = String(recordPath || '').trim()
+  if (!libraryRoot || !normalized) return null
+  if (path.isAbsolute(normalized)) return normalized
+  if (path.win32.isAbsolute(normalized) || path.posix.isAbsolute(normalized)) return null
+  const posix = toPosixRelative(normalized)
+  if (!posix) return null
+  const absPath = path.resolve(libraryRoot, ...posix.split('/'))
+  return isPathInside(absPath, libraryRoot) ? absPath : null
+}
+
+export function resolveRecycleBinRecordAbsPath(recordPath: string): string | null {
+  const libraryRoot = getLibraryRootAbs()
+  if (!libraryRoot) return null
+  return resolvePortableLibraryPath(libraryRoot, recordPath)
+}
+
+function getRecordAbsPath(record: RecycleBinRecord): string | null {
   if (path.isAbsolute(record.filePath)) return record.filePath
-  return path.join(libraryRoot, record.filePath)
+  return resolveRecycleBinRecordAbsPath(record.filePath)
 }
 
 export function toLibraryRelativePath(absPath: string): string | null {
-  const libraryRoot = getLibraryRootAbs()
-  if (!libraryRoot || !absPath) return null
-  const rel = path.relative(libraryRoot, absPath)
-  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null
-  return rel
+  return absToLibraryRelative(absPath)
 }
 
 export function normalizeRendererPlaylistPath(rendererPath: string): string | null {
@@ -135,9 +153,7 @@ export function normalizeRendererPlaylistPath(rendererPath: string): string | nu
   } catch {
     return null
   }
-  const rel = path.relative(libraryRoot, absPath)
-  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null
-  return rel
+  return absToLibraryRelative(absPath)
 }
 
 async function resolveOriginalPlaylistPathForFile(filePath: string): Promise<string | null> {
@@ -147,20 +163,18 @@ async function resolveOriginalPlaylistPathForFile(filePath: string): Promise<str
     const listRoot = await findSongListRootByPath(path.dirname(filePath))
     if (listRoot) {
       const rel = path.relative(libraryRoot, listRoot)
-      if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) return rel
+      if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) return toPosixRelative(rel)
     }
   } catch {}
   const fallback = path.relative(libraryRoot, path.dirname(filePath))
   if (!fallback || fallback.startsWith('..') || path.isAbsolute(fallback)) return null
-  return fallback
+  return toPosixRelative(fallback)
 }
 
 export function isInRecycleBinAbsPath(absPath: string): boolean {
   const recycleRoot = getRecycleBinRootAbs()
   if (!recycleRoot || !absPath) return false
-  const normalized = path.resolve(absPath)
-  const normalizedRoot = path.resolve(recycleRoot)
-  return normalized === normalizedRoot || normalized.startsWith(normalizedRoot + path.sep)
+  return isPathInside(absPath, recycleRoot)
 }
 
 function parseRenameSeed(baseName: string): { stem: string; index: number | null } {
@@ -291,7 +305,8 @@ async function resolveMissingFromRecycleBin(missingPath: string): Promise<string
   for (const record of records) {
     const recordPath = typeof record.filePath === 'string' ? record.filePath.trim() : ''
     if (!recordPath) continue
-    const absPath = getRecordAbsPath(record, libraryRoot)
+    const absPath = getRecordAbsPath(record)
+    if (!absPath) continue
     if (!(await fs.pathExists(absPath))) continue
 
     let score = 0
@@ -518,7 +533,10 @@ export async function restoreRecycleBinFile(filePath: string): Promise<RecycleBi
   }
   const { record, recordKey } = resolveRecordByPath(filePath)
   if (!record) return { status: 'missing_record', srcPath: filePath }
-  const srcPath = path.isAbsolute(filePath) ? filePath : path.join(libraryRoot, record.filePath)
+  const srcPath = path.isAbsolute(filePath)
+    ? filePath
+    : resolveRecycleBinRecordAbsPath(record.filePath)
+  if (!srcPath) return { status: 'missing_file', srcPath: filePath }
   try {
     if (!(await fs.pathExists(srcPath))) {
       if (recordKey) deleteRecycleBinRecord(recordKey)
@@ -528,7 +546,10 @@ export async function restoreRecycleBinFile(filePath: string): Promise<RecycleBi
     if (!playlistRel) {
       return { status: 'missing_playlist', srcPath, playlistPath: null }
     }
-    const destDir = path.join(libraryRoot, playlistRel)
+    const destDir = resolveRecycleBinRecordAbsPath(playlistRel)
+    if (!destDir) {
+      return { status: 'missing_playlist', srcPath, playlistPath: playlistRel }
+    }
     const destDirStat = await fs.stat(destDir).catch(() => null)
     if (!destDirStat || !destDirStat.isDirectory()) {
       return { status: 'missing_playlist', srcPath, playlistPath: playlistRel }
@@ -577,9 +598,7 @@ export async function permanentlyDeleteFile(
   const libraryRoot = getLibraryRootAbs()
   const srcPath = path.isAbsolute(filePath)
     ? filePath
-    : libraryRoot
-      ? path.join(libraryRoot, record?.filePath || filePath)
-      : filePath
+    : resolveRecycleBinRecordAbsPath(record?.filePath || filePath) || filePath
   let referencedMixtapePath = options.referencedMixtapePath
   if (referencedMixtapePath === undefined) {
     const mixtapeRefs = listMixtapeItemsByFilePath(srcPath)
@@ -590,12 +609,10 @@ export async function permanentlyDeleteFile(
       record?.originalFileName &&
       libraryRoot
     ) {
-      const originalPath = path.join(
-        libraryRoot,
-        record.originalPlaylistPath,
-        record.originalFileName
+      const originalPath = resolveRecycleBinRecordAbsPath(
+        `${toPosixRelative(record.originalPlaylistPath)}/${record.originalFileName}`
       )
-      if (listMixtapeItemsByFilePath(originalPath).length > 0) {
+      if (originalPath && listMixtapeItemsByFilePath(originalPath).length > 0) {
         referencedMixtapePath = originalPath
       }
     }
@@ -639,12 +656,10 @@ export async function permanentlyDeleteFile(
     await clearTrackCache(srcPath)
   } catch {}
   if (record?.originalPlaylistPath && record?.originalFileName && libraryRoot) {
-    const originalPath = path.join(
-      libraryRoot,
-      record.originalPlaylistPath,
-      record.originalFileName
+    const originalPath = resolveRecycleBinRecordAbsPath(
+      `${toPosixRelative(record.originalPlaylistPath)}/${record.originalFileName}`
     )
-    if (path.resolve(originalPath) !== path.resolve(srcPath)) {
+    if (originalPath && !sameAbsPath(originalPath, srcPath)) {
       try {
         await purgeCoverCacheForTrack(originalPath)
       } catch {}
