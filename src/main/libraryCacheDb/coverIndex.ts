@@ -10,10 +10,22 @@ import {
   resolveAbsoluteFilePath
 } from './pathResolvers'
 import type { SqliteDatabase } from '../libraryDb'
+import { runTracedSync } from '../services/mainProcessActivityTraceState'
 
 const migratedCoverRoots = new Set<string>()
 const coverIndexMigrationTasks = new Map<string, Promise<void>>()
 let coverIndexDbQueue: Promise<void> = Promise.resolve()
+let coverIndexDbTaskSequence = 0
+
+type CoverIndexDbTask = {
+  id: number
+  name: string
+  state: 'queued' | 'running'
+  queuedAtMs: number
+  startedAtMs?: number
+}
+
+const coverIndexDbTasks = new Map<number, CoverIndexDbTask>()
 
 type CoverIndexMigrationJson = {
   fileToHash?: Record<string, string>
@@ -27,19 +39,43 @@ type CoverIndexRow = {
   ext?: string
 }
 
-const enqueueCoverIndexDbTask = async <T>(task: () => Promise<T> | T): Promise<T> => {
+const enqueueCoverIndexDbTask = async <T>(name: string, task: () => Promise<T> | T): Promise<T> => {
+  const diagnosticTask: CoverIndexDbTask = {
+    id: ++coverIndexDbTaskSequence,
+    name,
+    state: 'queued',
+    queuedAtMs: Date.now()
+  }
+  coverIndexDbTasks.set(diagnosticTask.id, diagnosticTask)
   const waitForPrevious = coverIndexDbQueue
   let releaseCurrent!: () => void
   coverIndexDbQueue = new Promise<void>((resolve) => {
     releaseCurrent = resolve
   })
   await waitForPrevious
+  diagnosticTask.state = 'running'
+  diagnosticTask.startedAtMs = Date.now()
   try {
     return await task()
   } finally {
+    coverIndexDbTasks.delete(diagnosticTask.id)
     releaseCurrent()
   }
 }
+
+export const getCoverIndexDbDiagnosticSnapshot = (nowMs = Date.now()) => ({
+  queued: [...coverIndexDbTasks.values()].filter((task) => task.state === 'queued').length,
+  running: [...coverIndexDbTasks.values()].filter((task) => task.state === 'running').length,
+  tasks: [...coverIndexDbTasks.values()]
+    .map((task) => ({
+      name: task.name,
+      state: task.state,
+      waitingMs: Math.max(0, (task.startedAtMs ?? nowMs) - task.queuedAtMs),
+      runningMs: task.startedAtMs === undefined ? 0 : Math.max(0, nowMs - task.startedAtMs)
+    }))
+    .sort((left, right) => right.runningMs - left.runningMs || right.waitingMs - left.waitingMs)
+    .slice(0, 12)
+})
 
 export function migrateCoverIndexRows(
   db: SqliteDatabase,
@@ -69,7 +105,7 @@ export function migrateCoverIndexRows(
         moved += result?.changes ? Number(result.changes) : 0
       }
     })
-    run()
+    runTracedSync('sqlite:cover-index-remap', run)
     return moved
   } catch {
     return 0
@@ -127,7 +163,7 @@ async function ensureCoverIndexMigratedInternal(
           insert.run(listRootKey, row.filePath, row.hash, row.ext)
         }
       })
-      run(rows)
+      runTracedSync('sqlite:cover-index-json-migration', () => run(rows))
     } catch (error) {
       shouldMarkMigrated = false
       log.error('[sqlite] cover index migrate failed', error)
@@ -149,7 +185,9 @@ export async function ensureCoverIndexMigrated(
   db: SqliteDatabase,
   listRoot: string
 ): Promise<void> {
-  await enqueueCoverIndexDbTask(() => ensureCoverIndexMigratedInternal(db, listRoot))
+  await enqueueCoverIndexDbTask('ensure-migrated', () =>
+    ensureCoverIndexMigratedInternal(db, listRoot)
+  )
 }
 
 export async function loadCoverIndexEntry(
@@ -172,7 +210,7 @@ export async function loadCoverIndexEntry(
       : undefined
   const legacyFilePath = resolvedFile.legacyAbs
   try {
-    return await enqueueCoverIndexDbTask(async () => {
+    return await enqueueCoverIndexDbTask('load-entry', async () => {
       await ensureCoverIndexMigratedInternal(db, listRoot)
       let row = db
         .prepare('SELECT hash, ext FROM cover_index WHERE list_root = ? AND file_path = ?')
@@ -238,7 +276,7 @@ export async function upsertCoverIndexEntry(
       ? resolvedRoot.legacyAbs
       : undefined
   try {
-    return await enqueueCoverIndexDbTask(async () => {
+    return await enqueueCoverIndexDbTask('upsert-entry', async () => {
       await ensureCoverIndexMigratedInternal(db, listRoot)
       db.prepare(
         'INSERT INTO cover_index (list_root, file_path, hash, ext) VALUES (?, ?, ?, ?) ON CONFLICT(list_root, file_path) DO UPDATE SET hash = excluded.hash, ext = excluded.ext'
@@ -279,7 +317,7 @@ export async function replaceCoverIndexExtByHash(
       ? resolvedRoot.legacyAbs
       : undefined
   try {
-    return await enqueueCoverIndexDbTask(async () => {
+    return await enqueueCoverIndexDbTask('replace-ext-by-hash', async () => {
       await ensureCoverIndexMigratedInternal(db, listRoot)
       const update = db.prepare(
         'UPDATE cover_index SET ext = ? WHERE list_root = ? AND hash = ? AND ext = ?'
@@ -316,7 +354,7 @@ export async function removeCoverIndexEntry(
       ? resolvedRoot.legacyAbs
       : undefined
   try {
-    return await enqueueCoverIndexDbTask(async () => {
+    return await enqueueCoverIndexDbTask('remove-entry', async () => {
       await ensureCoverIndexMigratedInternal(db, listRoot)
       let row = db
         .prepare('SELECT hash, ext FROM cover_index WHERE list_root = ? AND file_path = ?')
@@ -367,7 +405,7 @@ export async function loadCoverIndexEntries(listRoot: string): Promise<CoverInde
       ? resolvedRoot.legacyAbs
       : undefined
   try {
-    return await enqueueCoverIndexDbTask(async () => {
+    return await enqueueCoverIndexDbTask('load-entries', async () => {
       await ensureCoverIndexMigratedInternal(db, listRoot)
       const rows = db
         .prepare<CoverIndexRow>('SELECT file_path, hash, ext FROM cover_index WHERE list_root = ?')
@@ -430,7 +468,7 @@ export async function removeCoverIndexEntries(
       : undefined
   if (!Array.isArray(filePaths) || filePaths.length === 0) return true
   try {
-    return await enqueueCoverIndexDbTask(async () => {
+    return await enqueueCoverIndexDbTask('remove-entries', async () => {
       await ensureCoverIndexMigratedInternal(db, listRoot)
       const del = db.prepare('DELETE FROM cover_index WHERE list_root = ? AND file_path = ?')
       const run = db.transaction((items: string[]) => {
@@ -446,7 +484,7 @@ export async function removeCoverIndexEntries(
           }
         }
       })
-      run(filePaths)
+      runTracedSync('sqlite:cover-index-bulk-delete', () => run(filePaths))
       return true
     })
   } catch (error) {
@@ -469,7 +507,7 @@ export async function countCoverIndexByHash(
       ? resolvedRoot.legacyAbs
       : undefined
   try {
-    return await enqueueCoverIndexDbTask(async () => {
+    return await enqueueCoverIndexDbTask('count-by-hash', async () => {
       const row = db
         .prepare('SELECT COUNT(1) as count FROM cover_index WHERE list_root = ? AND hash = ?')
         .get(listRootKey, hash)

@@ -32,11 +32,26 @@ let flushRequested = false
 let executionPaused = false
 let runningCompletion: Promise<void> | null = null
 
-export const getBackgroundTaskExecutionStatus = () => ({
-  pending: pendingRequestMap.size,
-  running: runningState !== null,
-  paused: executionPaused
-})
+export const getBackgroundTaskExecutionStatus = () => {
+  const now = Date.now()
+  return {
+    pending: pendingRequestMap.size,
+    pendingTasks: [...pendingRequestMap.values()].map((request) => ({
+      category: request.category,
+      trigger: request.trigger,
+      waitingMs: Math.max(0, now - request.requestedAt)
+    })),
+    running: runningState !== null,
+    runningTask: runningState
+      ? {
+          category: runningState.category,
+          trigger: runningState.trigger,
+          durationMs: Math.max(0, now - runningState.startedAt)
+        }
+      : null,
+    paused: executionPaused
+  }
+}
 
 const pauseBackgroundTaskExecution = (): (() => void) => {
   executionPaused = true

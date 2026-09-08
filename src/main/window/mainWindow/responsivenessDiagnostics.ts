@@ -1,8 +1,10 @@
 import { app, type BrowserWindow, type ProcessMetric } from 'electron'
+import { performance, type EventLoopUtilization } from 'node:perf_hooks'
 import { log } from '../../log'
 import { getMainProcessStallContext } from '../../services/mainProcessActivityTrace'
 import { getPlaylistScanDiagnosticSnapshot } from '../../services/playlistScanDiagnostics'
 import { getPlaylistOpenPerfSnapshot } from '../../services/playlistOpenPerfTrace'
+import { isPackagedRcBuild } from '../../services/rcDiagnostics'
 
 const MAIN_PROCESS_STALL_THRESHOLD_MS = 3_000
 const MAIN_PROCESS_HEARTBEAT_INTERVAL_MS = 1_000
@@ -58,6 +60,18 @@ const getProcessMetrics = (rendererPid: number | null): SlimProcessMetric[] => {
   }
 }
 
+const summarizeActiveResources = (): Record<string, number> => {
+  try {
+    const counts: Record<string, number> = {}
+    for (const resource of process.getActiveResourcesInfo()) {
+      counts[resource] = (counts[resource] || 0) + 1
+    }
+    return counts
+  } catch {
+    return {}
+  }
+}
+
 const captureSnapshot = (
   browserWindow: BrowserWindow,
   options?: { sinceMs?: number; processMetrics?: SlimProcessMetric[] }
@@ -91,8 +105,11 @@ const captureSnapshot = (
  * - 每次心跳都采样进程 CPU，卡住时才能看到卡顿窗口内的占用，而不是恢复后的 0。
  */
 export const attachMainWindowResponsivenessDiagnostics = (browserWindow: BrowserWindow) => {
+  const rcDiagnosticsEnabled = isPackagedRcBuild()
   let rendererUnresponsiveAt: number | null = null
   let lastHeartbeatAt = Date.now()
+  let lastCpuUsage = process.cpuUsage()
+  let lastEventLoopUtilization = performance.eventLoopUtilization()
   let stallIncident: {
     startedAtMs: number
     lastStallAtMs: number
@@ -115,51 +132,68 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
     stallIncident = null
   }
 
-  const heartbeat = setInterval(() => {
-    const previousHeartbeatAt = lastHeartbeatAt
-    const now = Date.now()
-    const stallDurationMs = now - previousHeartbeatAt - MAIN_PROCESS_HEARTBEAT_INTERVAL_MS
-    lastHeartbeatAt = now
-    // 必须每拍都采样，Electron 的 percentCPUUsage 是相对上次调用的增量。
-    const processMetrics = browserWindow.isDestroyed()
-      ? []
-      : getProcessMetrics(getRendererPid(browserWindow))
-    if (browserWindow.isDestroyed()) {
-      return
-    }
-    if (stallDurationMs < MAIN_PROCESS_STALL_THRESHOLD_MS) {
-      if (
-        stallIncident &&
-        now - stallIncident.lastStallAtMs >= MAIN_PROCESS_STALL_INCIDENT_GRACE_MS
-      ) {
-        finishStallIncident()
-      }
-      return
-    }
-    if (stallIncident) {
-      stallIncident.lastStallAtMs = now
-      stallIncident.count += 1
-      stallIncident.totalDurationMs += stallDurationMs
-      stallIncident.maxDurationMs = Math.max(stallIncident.maxDurationMs, stallDurationMs)
-      return
-    }
-    stallIncident = {
-      startedAtMs: now,
-      lastStallAtMs: now,
-      count: 1,
-      totalDurationMs: stallDurationMs,
-      maxDurationMs: stallDurationMs
-    }
-    log.error('[main-window] main-process event loop stalled', {
-      stallDurationMs,
-      snapshot: captureSnapshot(browserWindow, {
-        sinceMs: previousHeartbeatAt,
-        processMetrics
-      })
-    })
-  }, MAIN_PROCESS_HEARTBEAT_INTERVAL_MS)
+  const heartbeat = rcDiagnosticsEnabled
+    ? setInterval(() => {
+        const previousHeartbeatAt = lastHeartbeatAt
+        const now = Date.now()
+        const stallDurationMs = now - previousHeartbeatAt - MAIN_PROCESS_HEARTBEAT_INTERVAL_MS
+        lastHeartbeatAt = now
+        const cpuUsage = process.cpuUsage(lastCpuUsage)
+        lastCpuUsage = process.cpuUsage()
+        const eventLoopUtilization: EventLoopUtilization =
+          performance.eventLoopUtilization(lastEventLoopUtilization)
+        lastEventLoopUtilization = performance.eventLoopUtilization()
+        // 必须每拍都采样，Electron 的 percentCPUUsage 是相对上次调用的增量。
+        const processMetrics = browserWindow.isDestroyed()
+          ? []
+          : getProcessMetrics(getRendererPid(browserWindow))
+        if (browserWindow.isDestroyed()) {
+          return
+        }
+        if (stallDurationMs < MAIN_PROCESS_STALL_THRESHOLD_MS) {
+          if (
+            stallIncident &&
+            now - stallIncident.lastStallAtMs >= MAIN_PROCESS_STALL_INCIDENT_GRACE_MS
+          ) {
+            finishStallIncident()
+          }
+          return
+        }
+        if (stallIncident) {
+          stallIncident.lastStallAtMs = now
+          stallIncident.count += 1
+          stallIncident.totalDurationMs += stallDurationMs
+          stallIncident.maxDurationMs = Math.max(stallIncident.maxDurationMs, stallDurationMs)
+          return
+        }
+        stallIncident = {
+          startedAtMs: now,
+          lastStallAtMs: now,
+          count: 1,
+          totalDurationMs: stallDurationMs,
+          maxDurationMs: stallDurationMs
+        }
+        log.error('[main-window] main-process event loop stalled', {
+          stallDurationMs,
+          snapshot: captureSnapshot(browserWindow, {
+            sinceMs: previousHeartbeatAt,
+            processMetrics
+          }),
+          mainProcessInterval: {
+            elapsedMs: Math.max(0, now - previousHeartbeatAt),
+            cpuUserMs: Math.round(cpuUsage.user / 1000),
+            cpuSystemMs: Math.round(cpuUsage.system / 1000),
+            eventLoopActiveMs: Math.round(eventLoopUtilization.active),
+            eventLoopIdleMs: Math.round(eventLoopUtilization.idle),
+            eventLoopUtilization: Math.round(eventLoopUtilization.utilization * 1000) / 1000,
+            activeResources: summarizeActiveResources()
+          }
+        })
+      }, MAIN_PROCESS_HEARTBEAT_INTERVAL_MS)
+    : null
 
   browserWindow.webContents.on('unresponsive', () => {
+    if (!rcDiagnosticsEnabled) return
     if (rendererUnresponsiveAt !== null) {
       return
     }
@@ -170,6 +204,7 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
   })
 
   browserWindow.webContents.on('responsive', () => {
+    if (!rcDiagnosticsEnabled) return
     if (rendererUnresponsiveAt === null) {
       return
     }
@@ -196,7 +231,7 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
 
   const dispose = () => {
     finishStallIncident()
-    clearInterval(heartbeat)
+    if (heartbeat) clearInterval(heartbeat)
   }
   browserWindow.once('closed', dispose)
   return dispose

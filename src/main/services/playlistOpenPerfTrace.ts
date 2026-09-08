@@ -1,4 +1,5 @@
 import { log } from '../log'
+import { isPackagedRcBuild } from './rcDiagnostics'
 
 /**
  * 打开歌单的耗时观测。
@@ -8,8 +9,8 @@ import { log } from '../log'
  *
  *  1. **内存计数器**：各档命中/未命中次数、最慢一次耗时、未命中原因分布。
  *     不落盘，只在"响应性诊断"快照（主进程卡顿时才会打印）里顺带带出。
- *  2. **阈值日志**：单次打开链路耗时 ≥ SLOW_PLAYLIST_OPEN_LOG_THRESHOLD_MS 才写一行 warn。
- *     正常情况（快照命中，个位数毫秒）一行都不写。
+ *  2. **阈值日志**：仅打包后的 RC 在单次打开链路耗时达到阈值时写一行 warn。
+ *     正常情况（快照命中，个位数毫秒）、开发环境和正式版一行都不写。
  *
  * 字段含义：
  *  - `source`：谁服务了这次打开。`snapshot` = 视图快照（零 fs）；
@@ -74,6 +75,7 @@ export function recordPlaylistOpenPath(record: PlaylistOpenPathRecord): void {
   if (!record.hit) rememberMissReason(record.reason || 'unknown')
   if (tookMs < SLOW_PLAYLIST_OPEN_LOG_THRESHOLD_MS) return
   counter.slow += 1
+  if (!isPackagedRcBuild()) return
   log.warn('[playlist-open-perf] slow open', {
     source: record.source,
     hit: record.hit,

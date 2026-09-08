@@ -125,6 +125,7 @@ import { terminateRegisteredChildProcesses } from './services/childProcessRegist
 import { closeLibraryDb } from './libraryDb'
 import { isLibrarySetupActive } from './librarySetupState'
 import { openSafeExternalUrl } from './window/externalNavigation'
+import { isPackagedRcBuild } from './services/rcDiagnostics'
 
 const devRuntime = configureDevRuntime(is.dev, log)
 configureLogTransports()
@@ -766,7 +767,17 @@ app.on('window-all-closed', async () => {
   app.quit()
 })
 
+const RC_DIAGNOSTIC_OUTPUT_LOG_SCOPES = new Set(['playlist-open-perf', 'delete-all-above-perf'])
+
 ipcMain.on('outputLog', (_event, logMsg) => {
+  if (
+    logMsg &&
+    typeof logMsg === 'object' &&
+    RC_DIAGNOSTIC_OUTPUT_LOG_SCOPES.has(String((logMsg as Record<string, unknown>).scope || '')) &&
+    !isPackagedRcBuild()
+  ) {
+    return
+  }
   const normalizeLevelFromText = (text: string): LogLevel => {
     const normalized = String(text || '').toLowerCase()
     if (normalized.includes('[console.debug]') || normalized.includes('[debug]')) return 'debug'

@@ -17,6 +17,7 @@ import {
 import mainWindow from '../window/mainWindow'
 import { createRecordingOutputPath } from '../recordingLibraryService'
 import { log } from '../log'
+import { isPackagedRcBuild } from '../services/rcDiagnostics'
 import { markGlobalSongSearchDirty } from '../services/globalSongSearch'
 import { notifyPlaybackStateChange, notifyTransportActivity } from '../services/keyAnalysisQueue'
 import { assertLibraryMergeMutationAllowed } from '../services/libraryMerge/runtime'
@@ -88,7 +89,7 @@ const logSlowTransportOperation = (
   elapsedMs: number,
   payload: Record<string, unknown>
 ) => {
-  if (elapsedMs < SLOW_TRANSPORT_OPERATION_LOG_THRESHOLD_MS) return
+  if (elapsedMs < SLOW_TRANSPORT_OPERATION_LOG_THRESHOLD_MS || !isPackagedRcBuild()) return
   log.warn(
     `[HB-TRANSPORT-SLOW] ${operation} ${JSON.stringify({
       operation,
@@ -101,6 +102,7 @@ const logSlowTransportOperation = (
 
 const flushTransportDecodeDiagnostics = () => {
   const diagnostics = horizontalBrowseTransportBridge.drainDecodeDiagnostics()
+  if (!isPackagedRcBuild()) return
   for (const diagnostic of diagnostics) {
     const message = `[HB-TRANSPORT-DECODE-SLOW] ${diagnostic.operation} ${JSON.stringify(diagnostic)}`
     log.warn(message)
@@ -113,7 +115,7 @@ const logSlowPreparePlayhead = (
   beforeSnapshot: HorizontalBrowseTransportSnapshot,
   afterSnapshot: HorizontalBrowseTransportSnapshot
 ) => {
-  if (elapsedMs < SLOW_TRANSPORT_OPERATION_LOG_THRESHOLD_MS) return
+  if (elapsedMs < SLOW_TRANSPORT_OPERATION_LOG_THRESHOLD_MS || !isPackagedRcBuild()) return
   log.warn(
     `[HB-TRANSPORT-DECODE] prepare-playhead-slow ${JSON.stringify({
       deck,

@@ -45,6 +45,8 @@ export {
   countCoverIndexByHash
 } from './libraryCacheDb/coverIndex'
 
+export { getCoverIndexDbDiagnosticSnapshot } from './libraryCacheDb/coverIndex'
+
 export { updateWaveformCacheStat, removeWaveformCacheEntry } from './libraryCacheDb/waveformCache'
 
 export { removeCompactVisualWaveformCacheEntry } from './libraryCacheDb/compactVisualWaveformCache'

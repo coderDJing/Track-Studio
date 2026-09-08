@@ -13,8 +13,28 @@ let coverThumbTaskSequence = 0
 const pendingCoverThumbTasks: Array<{
   priority: number
   sequence: number
+  queuedAtMs: number
   resolve: () => void
 }> = []
+
+export const getCoverTaskDiagnosticSnapshot = (nowMs = Date.now()) => {
+  const visibleQueued = pendingCoverThumbTasks.filter((task) => task.priority === 0)
+  const prefetchQueued = pendingCoverThumbTasks.filter((task) => task.priority !== 0)
+  const oldestQueuedAtMs = pendingCoverThumbTasks.reduce<number | null>(
+    (oldest, task) => (oldest === null ? task.queuedAtMs : Math.min(oldest, task.queuedAtMs)),
+    null
+  )
+  return {
+    concurrencyLimit: COVER_THUMB_MAX_CONCURRENCY,
+    active: activeCoverThumbTasks,
+    queued: pendingCoverThumbTasks.length,
+    queuedByPriority: {
+      visible: visibleQueued.length,
+      prefetch: prefetchQueued.length
+    },
+    oldestQueueWaitMs: oldestQueuedAtMs === null ? 0 : Math.max(0, nowMs - oldestQueuedAtMs)
+  }
+}
 
 export type CoverThumbRequestContext = {
   shouldAbort?: () => boolean
@@ -106,6 +126,7 @@ const acquireCoverThumbSlot = async (
       pendingCoverThumbTasks.push({
         priority: context?.priority === 'prefetch' ? 1 : 0,
         sequence: coverThumbTaskSequence++,
+        queuedAtMs: Date.now(),
         resolve
       })
     )

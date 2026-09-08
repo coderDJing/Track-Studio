@@ -1,5 +1,9 @@
 import { app, ipcMain, powerMonitor, type IpcMainInvokeEvent } from 'electron'
 import { getBackgroundTaskExecutionStatus } from './backgroundOrchestrator'
+import { getCoverTaskDiagnosticSnapshot } from './covers'
+import { getBackgroundFileIoDiagnosticSnapshot } from './playbackForegroundActivity'
+import { isPackagedRcBuild } from './rcDiagnostics'
+import { getCoverIndexDbDiagnosticSnapshot } from '../libraryCacheDb/coverIndex'
 import {
   beginMainThreadActivity,
   endMainThreadActivity,
@@ -176,6 +180,9 @@ export const getMainProcessStallContext = (sinceMs: number) => {
     memory: getMemorySnapshot(),
     power: getPowerSnapshot(now),
     backgroundTasks: getBackgroundTaskExecutionStatus(),
+    backgroundFileIo: getBackgroundFileIoDiagnosticSnapshot(now),
+    coverTasks: getCoverTaskDiagnosticSnapshot(now),
+    coverIndexDb: getCoverIndexDbDiagnosticSnapshot(now),
     activity: getMainThreadActivitySnapshot(sinceMs)
   }
 }
@@ -241,4 +248,6 @@ export const installMainProcessActivityTrace = (): void => {
   }
 }
 
-installMainProcessActivityTrace()
+if (isPackagedRcBuild()) {
+  installMainProcessActivityTrace()
+}

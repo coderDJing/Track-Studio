@@ -23,6 +23,44 @@ type OptimisticRestoreItem = {
   index: number
 }
 
+type DeleteAllAbovePerf = {
+  itemCount: number
+  optimisticSetupMs: number
+  optimisticApplyMs: number
+  ipcMs: number
+  reconcileMs: number
+  totalMs: number
+  success: number
+  failed: number
+}
+
+const DELETE_ALL_ABOVE_IPC_LOG_THRESHOLD_MS = 1_000
+const DELETE_ALL_ABOVE_MAIN_THREAD_LOG_THRESHOLD_MS = 100
+const roundMs = (value: number) => Math.max(0, Math.round(value * 10) / 10)
+
+const writeDeleteAllAbovePerf = (perf: DeleteAllAbovePerf) => {
+  const mainThreadMs = perf.optimisticSetupMs + perf.optimisticApplyMs + perf.reconcileMs
+  if (
+    perf.ipcMs < DELETE_ALL_ABOVE_IPC_LOG_THRESHOLD_MS &&
+    mainThreadMs < DELETE_ALL_ABOVE_MAIN_THREAD_LOG_THRESHOLD_MS
+  ) {
+    return
+  }
+  try {
+    window.electron.ipcRenderer.send('outputLog', {
+      level: 'warn',
+      source: 'renderer',
+      scope: 'delete-all-above-perf',
+      message: `slow operation ${JSON.stringify({
+        ...perf,
+        mainThreadMs: roundMs(mainThreadMs),
+        ipcThresholdMs: DELETE_ALL_ABOVE_IPC_LOG_THRESHOLD_MS,
+        mainThreadThresholdMs: DELETE_ALL_ABOVE_MAIN_THREAD_LOG_THRESHOLD_MS
+      })}`
+    })
+  } catch {}
+}
+
 export type DelAllAboveOptions = {
   confirmed?: boolean
 }
@@ -102,40 +140,56 @@ export const createDelAllAbove = (params: {
     }
 
     isFileOperationInProgress.value = true
+    const operationStartedAt = performance.now()
+    const setupStartedAt = performance.now()
     const currentPlayingListSnapshot = [...runtime.playingData.playingSongListData]
     const remainingList = currentPlayingListSnapshot.slice(target.playingIndex)
     const optimisticRestoreItems = buildSongsAreaOptimisticRestoreItems(
       currentSongListUUID,
       delPaths
     )
+    const optimisticSetupMs = performance.now() - setupStartedAt
+    let optimisticApplyMs = 0
+    let ipcMs = 0
+    let reconcileMs = 0
+    let finalSummary: DeleteSummary = {}
     let shouldRestorePlaybackList = true
 
     try {
+      const optimisticApplyStartedAt = performance.now()
       runtime.playingData.playingSongListData = remainingList
       emitter.emit('songsArea/optimistic-remove', {
         listUUID: currentSongListUUID,
         paths: delPaths
       })
       emitter.emit('songsArea/scrollToTop', { listUUID: currentSongListUUID })
+      optimisticApplyMs = performance.now() - optimisticApplyStartedAt
 
       let deleteSummary: DeleteSummary
-      if (isInRecycleBin) {
-        const summary = await window.electron.ipcRenderer.invoke('permanentlyDelSongs', [
-          ...delPaths
-        ])
-        deleteSummary = toDeleteSummary(summary)
-      } else {
-        const songListPath = libraryUtils.findDirPathByUuid(currentSongListUUID)
-        const payload =
-          currentSongListUUID === EXTERNAL_PLAYLIST_UUID
-            ? { filePaths: [...delPaths], sourceType: 'external' }
-            : songListPath
-              ? { filePaths: [...delPaths], songListPath }
-              : [...delPaths]
-        const summary = await window.electron.ipcRenderer.invoke('delSongsAwaitable', payload)
-        deleteSummary = toDeleteSummary(summary)
+      const ipcStartedAt = performance.now()
+      try {
+        if (isInRecycleBin) {
+          const summary = await window.electron.ipcRenderer.invoke('permanentlyDelSongs', [
+            ...delPaths
+          ])
+          deleteSummary = toDeleteSummary(summary)
+        } else {
+          const songListPath = libraryUtils.findDirPathByUuid(currentSongListUUID)
+          const payload =
+            currentSongListUUID === EXTERNAL_PLAYLIST_UUID
+              ? { filePaths: [...delPaths], sourceType: 'external' }
+              : songListPath
+                ? { filePaths: [...delPaths], songListPath }
+                : [...delPaths]
+          const summary = await window.electron.ipcRenderer.invoke('delSongsAwaitable', payload)
+          deleteSummary = toDeleteSummary(summary)
+        }
+      } finally {
+        ipcMs = performance.now() - ipcStartedAt
       }
+      finalSummary = deleteSummary
 
+      const reconcileStartedAt = performance.now()
       const removedPathsForEvent = deleteSummary.removedPaths || []
       const removedNormalizedSet = new Set(removedPathsForEvent.map((item) => normalizePath(item)))
       const failedRestoreItems =
@@ -147,6 +201,7 @@ export const createDelAllAbove = (params: {
       runtime.playingData.playingSongListData = currentPlayingListSnapshot.filter(
         (item) => !removedNormalizedSet.has(normalizePath(item.filePath))
       )
+      reconcileMs = performance.now() - reconcileStartedAt
       if (failedRestoreItems.length > 0) {
         emitter.emit('songsArea/optimistic-restore', {
           listUUID: currentSongListUUID,
@@ -198,6 +253,16 @@ export const createDelAllAbove = (params: {
         runtime.playingData.playingSongListData = currentPlayingListSnapshot
       }
       isFileOperationInProgress.value = false
+      writeDeleteAllAbovePerf({
+        itemCount: delPaths.length,
+        optimisticSetupMs: roundMs(optimisticSetupMs),
+        optimisticApplyMs: roundMs(optimisticApplyMs),
+        ipcMs: roundMs(ipcMs),
+        reconcileMs: roundMs(reconcileMs),
+        totalMs: roundMs(performance.now() - operationStartedAt),
+        success: Number(finalSummary.success || 0),
+        failed: Number(finalSummary.failed || 0)
+      })
     }
   }
 

@@ -30,6 +30,20 @@ type FileIoWaiter = {
   resolve: () => void
 }
 
+type BackgroundFileIoState =
+  | 'waiting-for-playback-before-slot'
+  | 'waiting-for-slot'
+  | 'waiting-for-playback-after-slot'
+  | 'running'
+
+type BackgroundFileIoOperation = {
+  id: number
+  context: string
+  priority: FileIoPriority
+  state: BackgroundFileIoState
+  startedAtMs: number
+}
+
 const FILE_IO_PRIORITY: Record<FileIoPriority, number> = {
   visible: 0,
   foreground: 1,
@@ -43,8 +57,10 @@ let foregroundGraceUntilMs = 0
 let ipcRegistered = false
 let backgroundFileIoInFlight = 0
 let backgroundFileIoSequence = 0
+let backgroundFileIoOperationSequence = 0
 let backgroundFileIoHandoffScheduled = false
 const backgroundFileIoWaiters: FileIoWaiter[] = []
+const backgroundFileIoOperations = new Map<number, BackgroundFileIoOperation>()
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
@@ -71,6 +87,32 @@ const isPlaybackForegroundBusy = (nowMs = Date.now()): boolean => {
 }
 
 export { isPlaybackForegroundBusy }
+
+export const getBackgroundFileIoDiagnosticSnapshot = (nowMs = Date.now()) => {
+  pruneExpiredEntries(nowMs)
+  const queuedByPriority: Partial<Record<FileIoPriority, number>> = {}
+  for (const operation of backgroundFileIoOperations.values()) {
+    if (operation.state !== 'waiting-for-slot') continue
+    queuedByPriority[operation.priority] = (queuedByPriority[operation.priority] || 0) + 1
+  }
+  return {
+    concurrencyLimit: BACKGROUND_FILE_IO_MAX_CONCURRENCY,
+    inFlight: backgroundFileIoInFlight,
+    handoffScheduled: backgroundFileIoHandoffScheduled,
+    foregroundActivityCount: foregroundEntries.size,
+    foregroundGraceRemainingMs: Math.max(0, foregroundGraceUntilMs - nowMs),
+    queuedByPriority,
+    operations: [...backgroundFileIoOperations.values()]
+      .map((operation) => ({
+        context: operation.context,
+        priority: operation.priority,
+        state: operation.state,
+        durationMs: Math.max(0, nowMs - operation.startedAtMs)
+      }))
+      .sort((left, right) => right.durationMs - left.durationMs)
+      .slice(0, 12)
+  }
+}
 
 export const isAbsPathInPlaybackForeground = (absPath: string): boolean => {
   pruneExpiredEntries()
@@ -171,12 +213,25 @@ export async function runPlaybackAwareBackgroundFileIo<T>(
   options: { priority?: FileIoPriority } = {}
 ): Promise<T> {
   const priority = options.priority || 'background'
-  await waitForPlaybackForegroundIdle(`${context}:before-slot`, payload)
-  const releaseSlot = await acquireBackgroundFileIoSlot(priority)
+  const operation: BackgroundFileIoOperation = {
+    id: ++backgroundFileIoOperationSequence,
+    context,
+    priority,
+    state: 'waiting-for-playback-before-slot',
+    startedAtMs: Date.now()
+  }
+  backgroundFileIoOperations.set(operation.id, operation)
+  let releaseSlot: (() => void) | null = null
   try {
+    await waitForPlaybackForegroundIdle(`${context}:before-slot`, payload)
+    operation.state = 'waiting-for-slot'
+    releaseSlot = await acquireBackgroundFileIoSlot(priority)
+    operation.state = 'waiting-for-playback-after-slot'
     await waitForPlaybackForegroundIdle(`${context}:after-slot`, payload)
+    operation.state = 'running'
     return await task()
   } finally {
-    releaseSlot()
+    backgroundFileIoOperations.delete(operation.id)
+    releaseSlot?.()
   }
 }
