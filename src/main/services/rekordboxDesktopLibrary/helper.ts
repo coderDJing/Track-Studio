@@ -51,6 +51,7 @@ type RekordboxDesktopHelperProgressEvent = {
 
 type RunRekordboxDesktopHelperOptions = {
   onProgress?: (payload: RekordboxDesktopHelperProgressPayload) => void
+  timeoutMs?: number
 }
 
 type ResolvedPythonCommand = {
@@ -241,6 +242,20 @@ const createHelperError = (
 }
 
 const HELPER_IDLE_TIMEOUT_MS = 60_000
+const HELPER_PROBE_TIMEOUT_MS = 15_000
+const HELPER_COMMAND_TIMEOUT_MS = 120_000
+
+const resolveHelperCommandTimeout = (
+  command: RekordboxDesktopHelperCommand,
+  configuredTimeoutMs?: number
+) => {
+  if (Number.isFinite(configuredTimeoutMs) && Number(configuredTimeoutMs) > 0) {
+    return Math.max(1_000, Math.round(Number(configuredTimeoutMs)))
+  }
+  return command === 'probe' || command === 'probe-write'
+    ? HELPER_PROBE_TIMEOUT_MS
+    : HELPER_COMMAND_TIMEOUT_MS
+}
 
 type HelperWaiter<TResult> = {
   command: RekordboxDesktopHelperCommand
@@ -453,16 +468,37 @@ class RekordboxDesktopHelperSession {
     this.stderr = ''
     const request: RekordboxDesktopHelperRequest<TPayload> = { command, payload }
     return new Promise<TResult>((resolve, reject) => {
+      const timeoutMs = resolveHelperCommandTimeout(command, options?.timeoutMs)
+      const timeout = setTimeout(() => {
+        if (!this.waiter || this.waiter.command !== command) return
+        this.waiter = null
+        reject(
+          createHelperError(
+            `Rekordbox Desktop helper 执行超时（command=${command}, timeoutMs=${timeoutMs}）。`,
+            'HELPER_RUNTIME_ERROR'
+          )
+        )
+        this.destroyChild()
+      }, timeoutMs)
+      timeout.unref?.()
+      const clearCommandTimeout = () => clearTimeout(timeout)
       this.waiter = {
         command,
         onProgress: options?.onProgress,
-        resolve: resolve as (value: unknown) => void,
-        reject
+        resolve: ((value: unknown) => {
+          clearCommandTimeout()
+          resolve(value as TResult)
+        }) as (value: unknown) => void,
+        reject: (error) => {
+          clearCommandTimeout()
+          reject(error)
+        }
       }
       try {
         child.stdin.write(`${JSON.stringify(request)}\n`)
       } catch (error) {
         this.waiter = null
+        clearCommandTimeout()
         reject(
           createHelperError(
             `写入 Rekordbox Desktop helper 失败: ${error instanceof Error ? error.message : String(error || '')}`,

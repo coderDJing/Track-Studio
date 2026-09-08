@@ -579,7 +579,9 @@ export async function scanSongList(
       } as ISongInfo
     }
     try {
-      const metadata = await mm.parseFile(url)
+      // 列表封面由独立的缩略图链路按可见范围加载；冷扫描不读取嵌入图片，
+      // 避免为整份歌单搬运大块图片数据。
+      const metadata = await mm.parseFile(url, { skipCovers: true })
       const meta = computeFileMeta(url, metadata.format?.container)
       let title =
         metadata.common?.title && metadata.common.title.trim() !== ''

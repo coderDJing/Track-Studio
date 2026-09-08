@@ -61,6 +61,12 @@ type RecycleBinRestoreResult = {
 type RecordLookup = { record: RecycleBinRecord | null; recordKey: string | null }
 type ErrorLike = { code?: unknown; message?: unknown }
 
+type PermanentDeleteFileOptions = {
+  recordLookup?: RecordLookup
+  referencedMixtapePath?: string | null
+  deferRecordDelete?: boolean
+}
+
 const MIXTAPE_VAULT_DIR_NAME = '.mixtape_vault'
 const UNIQUE_MOVE_MAX_ATTEMPTS = 64
 
@@ -560,35 +566,39 @@ export async function restoreRecycleBinFile(filePath: string): Promise<RecycleBi
   }
 }
 
-export async function permanentlyDeleteFile(filePath: string): Promise<boolean> {
+export async function permanentlyDeleteFile(
+  filePath: string,
+  options: PermanentDeleteFileOptions = {}
+): Promise<boolean> {
   if (!filePath) return false
-  const { record, recordKey } = resolveRecordByPath(filePath)
+  const { record, recordKey } = options.recordLookup ?? resolveRecordByPath(filePath)
   const libraryRoot = getLibraryRootAbs()
   const srcPath = path.isAbsolute(filePath)
     ? filePath
     : libraryRoot
       ? path.join(libraryRoot, record?.filePath || filePath)
       : filePath
-  let mixtapeRefs = listMixtapeItemsByFilePath(srcPath)
-  let legacyRefPath = ''
-  if (
-    mixtapeRefs.length === 0 &&
-    record?.originalPlaylistPath &&
-    record?.originalFileName &&
-    libraryRoot
-  ) {
-    const originalPath = path.join(
-      libraryRoot,
-      record.originalPlaylistPath,
-      record.originalFileName
-    )
-    const legacyRefs = listMixtapeItemsByFilePath(originalPath)
-    if (legacyRefs.length > 0) {
-      mixtapeRefs = legacyRefs
-      legacyRefPath = originalPath
+  let referencedMixtapePath = options.referencedMixtapePath
+  if (referencedMixtapePath === undefined) {
+    const mixtapeRefs = listMixtapeItemsByFilePath(srcPath)
+    referencedMixtapePath = mixtapeRefs.length > 0 ? srcPath : null
+    if (
+      !referencedMixtapePath &&
+      record?.originalPlaylistPath &&
+      record?.originalFileName &&
+      libraryRoot
+    ) {
+      const originalPath = path.join(
+        libraryRoot,
+        record.originalPlaylistPath,
+        record.originalFileName
+      )
+      if (listMixtapeItemsByFilePath(originalPath).length > 0) {
+        referencedMixtapePath = originalPath
+      }
     }
   }
-  if (mixtapeRefs.length > 0) {
+  if (referencedMixtapePath) {
     try {
       const moveResult = await moveReferencedMixtapeFileToVault(
         srcPath,
@@ -596,7 +606,7 @@ export async function permanentlyDeleteFile(filePath: string): Promise<boolean> 
       )
       if (!moveResult.moved) {
         if (moveResult.error === 'source file missing') {
-          if (recordKey) {
+          if (recordKey && !options.deferRecordDelete) {
             deleteRecycleBinRecord(recordKey)
           }
           return true
@@ -607,11 +617,11 @@ export async function permanentlyDeleteFile(filePath: string): Promise<boolean> 
         })
         return false
       }
-      if (legacyRefPath && moveResult.destPath) {
-        syncMixtapeFilePathReference(legacyRefPath, moveResult.destPath)
-        syncSetFilePathReference(legacyRefPath, moveResult.destPath)
+      if (referencedMixtapePath !== srcPath && moveResult.destPath) {
+        syncMixtapeFilePathReference(referencedMixtapePath, moveResult.destPath)
+        syncSetFilePathReference(referencedMixtapePath, moveResult.destPath)
       }
-      if (recordKey) {
+      if (recordKey && !options.deferRecordDelete) {
         deleteRecycleBinRecord(recordKey)
       }
       return true
@@ -646,7 +656,7 @@ export async function permanentlyDeleteFile(filePath: string): Promise<boolean> 
     log.error('[recycleBin] delete file failed', { filePath: srcPath, error })
     return false
   }
-  if (recordKey) {
+  if (recordKey && !options.deferRecordDelete) {
     deleteRecycleBinRecord(recordKey)
   }
   return true

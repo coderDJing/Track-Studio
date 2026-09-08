@@ -500,9 +500,14 @@ export function listMixtapeFilePathsInUse(filePaths: string[]): string[] {
       const chunk = normalizedPaths.slice(offset, offset + IN_CLAUSE_CHUNK_SIZE)
       if (chunk.length === 0) continue
       const placeholders = chunk.map(() => '?').join(',')
+      const caseInsensitive = process.platform === 'win32'
+      const filePathExpression = caseInsensitive ? 'LOWER(file_path)' : 'file_path'
+      const queryPaths = caseInsensitive ? chunk.map((filePath) => filePath.toLowerCase()) : chunk
       const rows = db
-        .prepare(`SELECT DISTINCT file_path FROM ${TABLE} WHERE file_path IN (${placeholders})`)
-        .all(...chunk)
+        .prepare(
+          `SELECT DISTINCT file_path FROM ${TABLE} WHERE ${filePathExpression} IN (${placeholders})`
+        )
+        .all(...queryPaths)
       results.push(...rows.map((row: { file_path: string }) => row.file_path))
     }
     return normalizeUniqueStrings(results)

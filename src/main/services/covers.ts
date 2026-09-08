@@ -4,7 +4,10 @@ import { operateHiddenFile, resolveLibraryPath } from '../utils'
 import * as LibraryCacheDb from '../libraryCacheDb'
 
 const DISPLAY_CACHE_MARKER = '.display-v1'
+const COVER_THUMB_MAX_CONCURRENCY = 3
 let pendingPostScanSweepTimer: NodeJS.Timeout | null = null
+let activeCoverThumbTasks = 0
+const pendingCoverThumbTasks: Array<() => void> = []
 
 export type CoverThumbRequestContext = {
   shouldAbort?: () => boolean
@@ -97,7 +100,30 @@ const writeDisplayCacheFile = async (targetPath: string, data: Buffer) => {
   }
 }
 
-export async function getSongCoverThumb(
+const acquireCoverThumbSlot = async (
+  context?: CoverThumbRequestContext
+): Promise<(() => void) | null> => {
+  if (context?.shouldAbort?.()) return null
+  if (activeCoverThumbTasks >= COVER_THUMB_MAX_CONCURRENCY) {
+    await new Promise<void>((resolve) => pendingCoverThumbTasks.push(resolve))
+  }
+  if (context?.shouldAbort?.()) {
+    const next = pendingCoverThumbTasks.shift()
+    next?.()
+    return null
+  }
+  activeCoverThumbTasks += 1
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    activeCoverThumbTasks = Math.max(0, activeCoverThumbTasks - 1)
+    const next = pendingCoverThumbTasks.shift()
+    next?.()
+  }
+}
+
+async function loadSongCoverThumb(
   filePath: string,
   _size: number = 48,
   listRootDir?: string | null,
@@ -208,6 +234,21 @@ export async function getSongCoverThumb(
     }
   } catch {
     return null
+  }
+}
+
+export async function getSongCoverThumb(
+  filePath: string,
+  size: number = 48,
+  listRootDir?: string | null,
+  context?: CoverThumbRequestContext
+): Promise<CoverThumbResult | null> {
+  const release = await acquireCoverThumbSlot(context)
+  if (!release) return null
+  try {
+    return await loadSongCoverThumb(filePath, size, listRootDir, context)
+  } finally {
+    release()
   }
 }
 

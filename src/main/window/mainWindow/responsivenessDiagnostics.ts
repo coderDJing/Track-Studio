@@ -6,6 +6,7 @@ import { getPlaylistOpenPerfSnapshot } from '../../services/playlistOpenPerfTrac
 
 const MAIN_PROCESS_STALL_THRESHOLD_MS = 3_000
 const MAIN_PROCESS_HEARTBEAT_INTERVAL_MS = 1_000
+const MAIN_PROCESS_STALL_INCIDENT_GRACE_MS = 30_000
 
 type SlimProcessMetric = {
   pid: number
@@ -92,6 +93,27 @@ const captureSnapshot = (
 export const attachMainWindowResponsivenessDiagnostics = (browserWindow: BrowserWindow) => {
   let rendererUnresponsiveAt: number | null = null
   let lastHeartbeatAt = Date.now()
+  let stallIncident: {
+    startedAtMs: number
+    lastStallAtMs: number
+    count: number
+    totalDurationMs: number
+    maxDurationMs: number
+  } | null = null
+
+  const finishStallIncident = () => {
+    if (!stallIncident) return
+    if (stallIncident.count > 1) {
+      log.error('[main-window] main-process stall incident summary', {
+        startedAtMs: stallIncident.startedAtMs,
+        endedAtMs: stallIncident.lastStallAtMs,
+        stallCount: stallIncident.count,
+        totalStallDurationMs: stallIncident.totalDurationMs,
+        maxStallDurationMs: stallIncident.maxDurationMs
+      })
+    }
+    stallIncident = null
+  }
 
   const heartbeat = setInterval(() => {
     const previousHeartbeatAt = lastHeartbeatAt
@@ -102,8 +124,31 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
     const processMetrics = browserWindow.isDestroyed()
       ? []
       : getProcessMetrics(getRendererPid(browserWindow))
-    if (stallDurationMs < MAIN_PROCESS_STALL_THRESHOLD_MS || browserWindow.isDestroyed()) {
+    if (browserWindow.isDestroyed()) {
       return
+    }
+    if (stallDurationMs < MAIN_PROCESS_STALL_THRESHOLD_MS) {
+      if (
+        stallIncident &&
+        now - stallIncident.lastStallAtMs >= MAIN_PROCESS_STALL_INCIDENT_GRACE_MS
+      ) {
+        finishStallIncident()
+      }
+      return
+    }
+    if (stallIncident) {
+      stallIncident.lastStallAtMs = now
+      stallIncident.count += 1
+      stallIncident.totalDurationMs += stallDurationMs
+      stallIncident.maxDurationMs = Math.max(stallIncident.maxDurationMs, stallDurationMs)
+      return
+    }
+    stallIncident = {
+      startedAtMs: now,
+      lastStallAtMs: now,
+      count: 1,
+      totalDurationMs: stallDurationMs,
+      maxDurationMs: stallDurationMs
     }
     log.error('[main-window] main-process event loop stalled', {
       stallDurationMs,
@@ -149,7 +194,10 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
     })
   })
 
-  const dispose = () => clearInterval(heartbeat)
+  const dispose = () => {
+    finishStallIncident()
+    clearInterval(heartbeat)
+  }
   browserWindow.once('closed', dispose)
   return dispose
 }

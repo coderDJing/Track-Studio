@@ -15,6 +15,7 @@ let probeCache: {
   value: RekordboxDesktopLibraryProbe
   expiresAt: number
 } | null = null
+let probeInflight: Promise<RekordboxDesktopLibraryProbe> | null = null
 
 const toTrimmedString = (value: unknown) => String(value || '').trim()
 
@@ -134,24 +135,33 @@ export async function probeRekordboxDesktopLibrary(
   if (!forceRefresh && probeCache && probeCache.expiresAt > Date.now()) {
     return probeCache.value
   }
+  if (probeInflight) return await probeInflight
 
-  let probe: RekordboxDesktopLibraryProbe
-  try {
-    probe = normalizeProbe(
-      await runRekordboxDesktopHelper<RekordboxDesktopHelperProbePayload, Record<string, never>>(
-        'probe',
-        {}
+  const request = (async () => {
+    let probe: RekordboxDesktopLibraryProbe
+    try {
+      probe = normalizeProbe(
+        await runRekordboxDesktopHelper<RekordboxDesktopHelperProbePayload, Record<string, never>>(
+          'probe',
+          {}
+        )
       )
-    )
-  } catch (error) {
-    probe = normalizeProbeError(error)
-  }
+    } catch (error) {
+      probe = normalizeProbeError(error)
+    }
 
-  probeCache = {
-    value: probe,
-    expiresAt: Date.now() + PROBE_CACHE_TTL_MS
+    probeCache = {
+      value: probe,
+      expiresAt: Date.now() + PROBE_CACHE_TTL_MS
+    }
+    return probe
+  })()
+  probeInflight = request
+  try {
+    return await request
+  } finally {
+    if (probeInflight === request) probeInflight = null
   }
-  return probe
 }
 
 export async function requireRekordboxDesktopLibraryProbe() {

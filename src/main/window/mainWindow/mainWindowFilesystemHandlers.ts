@@ -41,9 +41,14 @@ import {
   permanentlyDeleteFile,
   type RecycleBinMoveResult
 } from '../../recycleBinService'
-import { listRecycleBinRecords, deleteRecycleBinRecords } from '../../recycleBinDb'
+import {
+  listRecycleBinRecords,
+  deleteRecycleBinRecords,
+  type RecycleBinRecord
+} from '../../recycleBinDb'
 import {
   listMixtapeFilePathsByPlaylist,
+  listMixtapeFilePathsInUse,
   removeMixtapeItemsByPlaylist,
   replaceMixtapeFilePath
 } from '../../mixtapeDb'
@@ -66,6 +71,7 @@ import { assertLibraryMergeMutationAllowed } from '../../services/libraryMerge/r
 const MIXTAPE_WINDOW_OPEN_ERROR_CODE = 'MIXTAPE_WINDOW_OPEN'
 const FILE_BATCH_CONCURRENCY = 8
 const FILE_BATCH_YIELD_EVERY = 8
+const RECYCLE_BIN_DELETE_CONCURRENCY = 2
 
 const normalizeLibraryNodeType = (value: unknown): LibraryNodeType => {
   switch (value) {
@@ -292,7 +298,7 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
       return { total: 0, success: 0, failed: 0, removedPaths: [] }
     }
     const progressId = createProgressId('recycle_bin_empty')
-    const deleteTasks: Array<() => Promise<string>> = []
+    const filePaths: string[] = []
     const emptyDirCandidates: string[] = []
     let success = 0
     let failed = 0
@@ -324,17 +330,63 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
             continue
           }
           if (entry.isFile()) {
-            deleteTasks.push(async () => {
-              const deleted = await permanentlyDeleteFile(entryPath)
-              if (!deleted) {
-                throw new Error(`permanently delete failed: ${entryPath}`)
-              }
-              return entryPath
-            })
+            filePaths.push(entryPath)
           }
         }
       }
       await walkAndCollectFiles(recycleBinPath)
+      const libraryRoot = path.join(store.databaseDir, 'library')
+      const records = listRecycleBinRecords()
+      const normalizePathKey = (value: string) => {
+        const resolved = path.resolve(value)
+        return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+      }
+      const recordByAbsPath = new Map<
+        string,
+        { record: RecycleBinRecord; recordKey: string; legacyPath: string | null }
+      >()
+      const referenceCandidates = [...filePaths]
+      for (const record of records) {
+        const absPath = path.isAbsolute(record.filePath)
+          ? record.filePath
+          : path.join(libraryRoot, record.filePath)
+        const legacyPath =
+          record.originalPlaylistPath && record.originalFileName
+            ? path.join(libraryRoot, record.originalPlaylistPath, record.originalFileName)
+            : null
+        recordByAbsPath.set(normalizePathKey(absPath), {
+          record,
+          recordKey: record.filePath,
+          legacyPath
+        })
+        if (legacyPath) referenceCandidates.push(legacyPath)
+      }
+      const referencedPathKeys = new Set(
+        listMixtapeFilePathsInUse(referenceCandidates).map(normalizePathKey)
+      )
+      const recordKeyByFilePath = new Map<string, string>()
+      const deleteTasks: Array<() => Promise<string>> = filePaths.map((entryPath) => async () => {
+        const entryPathKey = normalizePathKey(entryPath)
+        const prepared = recordByAbsPath.get(entryPathKey)
+        if (prepared) recordKeyByFilePath.set(entryPathKey, prepared.recordKey)
+        const referencedMixtapePath = referencedPathKeys.has(entryPathKey)
+          ? entryPath
+          : prepared?.legacyPath && referencedPathKeys.has(normalizePathKey(prepared.legacyPath))
+            ? prepared.legacyPath
+            : null
+        const options = {
+          recordLookup: prepared
+            ? { record: prepared.record, recordKey: prepared.recordKey }
+            : { record: null, recordKey: null },
+          referencedMixtapePath,
+          deferRecordDelete: true
+        }
+        const deleted = await permanentlyDeleteFile(entryPath, options)
+        if (!deleted) {
+          throw new Error(`permanently delete failed: ${entryPath}`)
+        }
+        return entryPath
+      })
       if (deleteTasks.length > 0) {
         sendProgress({
           id: progressId,
@@ -352,9 +404,9 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
         skipped
       } = deleteTasks.length > 0
         ? await runWithConcurrency(deleteTasks, {
-            concurrency: FILE_BATCH_CONCURRENCY,
+            concurrency: RECYCLE_BIN_DELETE_CONCURRENCY,
             stopOnENOSPC: false,
-            yieldEvery: FILE_BATCH_YIELD_EVERY,
+            yieldEvery: 1,
             onProgress: (done: number, total: number) => {
               sendProgress({
                 id: progressId,
@@ -368,15 +420,25 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
         : { results: emptyResults, success: 0, failed: 0, skipped: 0 }
       success = runSuccess
       failed = runFailed
+      removedPaths = results.filter((item): item is string => typeof item === 'string')
+      const removedRecordKeys = removedPaths
+        .map((filePath) => recordKeyByFilePath.get(normalizePathKey(filePath)))
+        .filter((recordKey): recordKey is string => typeof recordKey === 'string')
+      const removedRecordKeySet = new Set<string>()
+      if (removedRecordKeys.length > 0) {
+        const deletedRecordCount = deleteRecycleBinRecords(removedRecordKeys)
+        if (deletedRecordCount === removedRecordKeys.length) {
+          for (const recordKey of removedRecordKeys) removedRecordKeySet.add(recordKey)
+        }
+      }
       for (const dirPath of emptyDirCandidates.sort((left, right) => right.length - left.length)) {
         try {
           await fs.remove(dirPath)
         } catch {}
       }
-      const libraryRoot = path.join(store.databaseDir, 'library')
-      const records = listRecycleBinRecords()
       const missingRecords: string[] = []
       for (const record of records) {
+        if (removedRecordKeySet.has(record.filePath)) continue
         const absPath = path.isAbsolute(record.filePath)
           ? record.filePath
           : path.join(libraryRoot, record.filePath)
@@ -387,7 +449,6 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
       if (missingRecords.length > 0) {
         deleteRecycleBinRecords(missingRecords)
       }
-      removedPaths = results.filter((item): item is string => typeof item === 'string')
       const recycleBinEmpty = await isDirectoryEffectivelyEmpty(
         recycleBinPath,
         store.settingConfig.audioExt
@@ -410,7 +471,7 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
         total: 1
       })
       return {
-        total: deleteTasks.length,
+        total: filePaths.length,
         success,
         failed,
         removedPaths
@@ -424,9 +485,9 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
       })
       log.error('清空回收站失败:', error)
       return {
-        total: deleteTasks.length,
+        total: filePaths.length,
         success,
-        failed: failed || Math.max(0, deleteTasks.length - success),
+        failed: failed || Math.max(0, filePaths.length - success),
         removedPaths
       }
     }

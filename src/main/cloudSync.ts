@@ -35,6 +35,16 @@ type ErrorLike = {
   code?: unknown
   cause?: unknown
 }
+type ValidateUserKeyResponse = {
+  success?: boolean
+  data?: {
+    isActive?: boolean
+    userKey?: string
+  }
+  error?: unknown
+  limit?: unknown
+  status?: number
+}
 
 const isRecord = (value: unknown): value is RecordLike =>
   !!value && typeof value === 'object' && !Array.isArray(value)
@@ -137,7 +147,10 @@ function mapBackendErrorToI18nKey(payload: unknown): string {
   return 'cloudSync.errors.validationFailed'
 }
 
-async function validateUserKeyRequest(userKeyRaw: string, baseUrl: string) {
+async function validateUserKeyRequest(
+  userKeyRaw: string,
+  baseUrl: string
+): Promise<ValidateUserKeyResponse> {
   const userKey = (userKeyRaw || '').trim()
   const requestBody = { userKey }
   const res = await limitedFetch(`${baseUrl}${CLOUD_SYNC.PREFIX}/validate-user-key`, {
@@ -148,8 +161,19 @@ async function validateUserKeyRequest(userKeyRaw: string, baseUrl: string) {
     },
     body: JSON.stringify(requestBody)
   })
-  const json = await res.json()
-  return json
+  const responseText = await res.text()
+  if (!responseText.trim()) {
+    return { success: false, error: 'EMPTY_RESPONSE', status: res.status }
+  }
+  try {
+    const parsed: unknown = JSON.parse(responseText)
+    if (!isRecord(parsed)) {
+      return { success: false, error: 'INVALID_RESPONSE', status: res.status }
+    }
+    return parsed as ValidateUserKeyResponse
+  } catch {
+    return { success: false, error: 'INVALID_JSON_RESPONSE', status: res.status }
+  }
 }
 
 const persistDevUserKeyIfNeeded = (userKey: string) => {
@@ -401,8 +425,6 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
     }
     // 服务器端为当前 userKey 设置的上限（来自 /check）
     let serverLimit: number | null = null
-    // 不再掩码敏感信息，应用户要求完整打印
-
     // 0) validate-user-key：在进入流程前快速校验 userKey 是否有效且启用
     try {
       const valid = await validateUserKeyRequest(cloudSyncConfig.userKey, baseUrl)
@@ -414,13 +436,16 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
             : errorCode === 'USER_KEY_NOT_FOUND' || errorCode === 'INVALID_USER_KEY'
               ? 'cloudSync.errors.keyInvalid'
               : 'cloudSync.errors.cannotConnect'
-        // 仅错误场景记录日志（包含请求参数与返回结果）
         log.error('[cloudSync] /validate-user-key error', {
           request: {
             url: `${baseUrl}${CLOUD_SYNC.PREFIX}/validate-user-key`,
-            body: { userKey: cloudSyncConfig.userKey }
+            userKeyLength: String(cloudSyncConfig.userKey || '').length
           },
-          response: valid
+          response: {
+            success: valid.success,
+            error: valid.error,
+            status: valid.status
+          }
         })
         sendError(msg, { error: errorCode })
         sendState('failed')
@@ -430,7 +455,7 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
       log.error('[cloudSync] /validate-user-key network error', {
         request: {
           url: `${baseUrl}${CLOUD_SYNC.PREFIX}/validate-user-key`,
-          body: { userKey: cloudSyncConfig.userKey }
+          userKeyLength: String(cloudSyncConfig.userKey || '').length
         },
         error: _e
       })
@@ -460,7 +485,10 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
       log.error('[cloudSync] /check error', {
         request: {
           url: `${baseUrl}${CLOUD_SYNC.PREFIX}/check`,
-          body: { userKey: cloudSyncConfig.userKey, count: clientFingerprints.length, hash }
+          userKeyLength: String(cloudSyncConfig.userKey || '').length,
+          count: clientFingerprints.length,
+          hash,
+          mode
         },
         status: checkRes.status,
         response: checkJson
@@ -543,12 +571,11 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
           log.error('[cloudSync] /bidirectional-diff error', {
             request: {
               url: `${baseUrl}${CLOUD_SYNC.PREFIX}/bidirectional-diff`,
-              body: {
-                userKey: cloudSyncConfig.userKey,
-                clientFingerprints: batch,
-                batchIndex: Math.floor(i / batchSize),
-                batchSize
-              }
+              userKeyLength: String(cloudSyncConfig.userKey || '').length,
+              fingerprintCount: batch.length,
+              batchIndex: Math.floor(i / batchSize),
+              batchSize,
+              mode
             },
             status: diffRes.status,
             response: diffJson
@@ -595,7 +622,9 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
         log.error('[cloudSync] /analyze-diff error', {
           request: {
             url: `${baseUrl}${CLOUD_SYNC.PREFIX}/analyze-diff`,
-            body: { userKey: cloudSyncConfig.userKey, clientFingerprints: clientForAnalyze }
+            userKeyLength: String(cloudSyncConfig.userKey || '').length,
+            fingerprintCount: clientForAnalyze.length,
+            mode
           },
           status: analyzeRes.status,
           response: analyzeJson
@@ -636,7 +665,10 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
             log.error('[cloudSync] /pull-diff-page error: diff session expired', {
               request: {
                 url: `${baseUrl}${CLOUD_SYNC.PREFIX}/pull-diff-page`,
-                body: { userKey: cloudSyncConfig.userKey, diffSessionId, pageIndex: page }
+                userKeyLength: String(cloudSyncConfig.userKey || '').length,
+                diffSessionId,
+                pageIndex: page,
+                mode
               },
               status: pageRes.status,
               response: pageJson
@@ -657,7 +689,8 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
               log.error('[cloudSync] /analyze-diff retry error', {
                 request: {
                   url: `${baseUrl}${CLOUD_SYNC.PREFIX}/analyze-diff`,
-                  body: { userKey: cloudSyncConfig.userKey, clientFingerprints: clientForAnalyze }
+                  userKeyLength: String(cloudSyncConfig.userKey || '').length,
+                  fingerprintCount: clientForAnalyze.length
                 },
                 status: retryAnalyze.status,
                 response: retryAnalyzeJson
@@ -672,7 +705,10 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
           log.error('[cloudSync] /pull-diff-page error', {
             request: {
               url: `${baseUrl}${CLOUD_SYNC.PREFIX}/pull-diff-page`,
-              body: { userKey: cloudSyncConfig.userKey, diffSessionId, pageIndex: page }
+              userKeyLength: String(cloudSyncConfig.userKey || '').length,
+              diffSessionId,
+              pageIndex: page,
+              mode
             },
             status: pageRes.status,
             response: pageJson
@@ -738,7 +774,9 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
           log.error('[cloudSync] /add error', {
             request: {
               url: `${baseUrl}${CLOUD_SYNC.PREFIX}/add`,
-              body: { userKey: cloudSyncConfig.userKey, addFingerprints: slice }
+              userKeyLength: String(cloudSyncConfig.userKey || '').length,
+              fingerprintCount: slice.length,
+              mode
             },
             status: addRes.status,
             response: addJson
@@ -784,11 +822,10 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
           log.error('[cloudSync] /check verify error', {
             request: {
               url: `${baseUrl}${CLOUD_SYNC.PREFIX}/check`,
-              body: {
-                userKey: cloudSyncConfig.userKey,
-                count: mergedList.length,
-                hash: verifyHash
-              }
+              userKeyLength: String(cloudSyncConfig.userKey || '').length,
+              count: mergedList.length,
+              hash: verifyHash,
+              mode
             },
             status: verifyRes.status,
             response: verifyJson
@@ -804,7 +841,10 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
         log.error('[cloudSync] /check verify network error', {
           request: {
             url: `${baseUrl}${CLOUD_SYNC.PREFIX}/check`,
-            body: { userKey: cloudSyncConfig.userKey, count: mergedList.length, hash: verifyHash }
+            userKeyLength: String(cloudSyncConfig.userKey || '').length,
+            count: mergedList.length,
+            hash: verifyHash,
+            mode
           },
           error: _e
         })
@@ -849,9 +889,7 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
           log.error('[cloudSync] /curated-artist-sync error', {
             request: {
               url: `${baseUrl}/frkbapi/v1/curated-artist-sync/sync`,
-              body: {
-                userKey: cloudSyncConfig.userKey
-              }
+              userKeyLength: String(cloudSyncConfig.userKey || '').length
             },
             response: responsePayload
           })
@@ -863,9 +901,7 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
         log.error('[cloudSync] /curated-artist-sync network error', {
           request: {
             url: `${baseUrl}/frkbapi/v1/curated-artist-sync/sync`,
-            body: {
-              userKey: cloudSyncConfig.userKey
-            }
+            userKeyLength: String(cloudSyncConfig.userKey || '').length
           },
           error: curatedError
         })

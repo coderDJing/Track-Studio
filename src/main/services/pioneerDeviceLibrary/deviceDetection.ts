@@ -42,6 +42,14 @@ const WINDOWS_DRIVE_TYPE_LABELS: Record<number, string> = {
 const DRIVE_EJECT_WAIT_MS = 6000
 const DRIVE_EJECT_POLL_MS = 400
 const WINDOWS_SHELL_EJECT_WAIT_MS = 1600
+const WINDOWS_DRIVE_LIST_TIMEOUT_MS = 10_000
+const REMOVABLE_DRIVE_CACHE_TTL_MS = 5_000
+
+let removableDriveCache: {
+  value: PioneerRemovableDriveInfo[]
+  expiresAt: number
+} | null = null
+let removableDriveInflight: Promise<PioneerRemovableDriveInfo[]> | null = null
 
 function isChineseLocale(): boolean {
   try {
@@ -365,6 +373,7 @@ async function listWindowsRemovableDrives(): Promise<BaseDriveRow[]> {
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
       {
         windowsHide: true,
+        timeout: WINDOWS_DRIVE_LIST_TIMEOUT_MS,
         maxBuffer: 1024 * 1024 * 8
       }
     )
@@ -753,40 +762,58 @@ async function ejectLinuxRemovableDrive(rootPath: string): Promise<PioneerDriveE
 }
 
 export async function listPioneerRemovableDrives(): Promise<PioneerRemovableDriveInfo[]> {
-  const baseRows = await listPlatformRemovableDrives()
-
-  const results: PioneerRemovableDriveInfo[] = []
-  for (const baseRow of baseRows) {
-    try {
-      const pioneer = await probePioneerDeviceLibraryRoot(baseRow.path)
-      const identity =
-        pioneer.libraryTypes.length > 0 ? await ensurePioneerUsbIdentity(baseRow.path) : null
-      results.push({
-        ...baseRow,
-        frkbUsbUuid: identity?.uuid || undefined,
-        frkbUsbIdFilePath: identity?.filePath || undefined,
-        frkbUsbIdPersisted: identity?.persisted,
-        isPioneerDeviceLibrary: pioneer.libraryTypes.length > 0,
-        supportedLibraryTypes: pioneer.libraryTypes,
-        pioneer
-      })
-    } catch (error) {
-      log.error('[pioneer-device-library] pioneer probe failed', {
-        path: baseRow.path,
-        error
-      })
-      results.push({
-        ...baseRow,
-        isPioneerDeviceLibrary: false,
-        supportedLibraryTypes: [],
-        pioneer: { ...EMPTY_PIONEER_PROBE }
-      })
-    }
+  if (removableDriveCache && removableDriveCache.expiresAt > Date.now()) {
+    return removableDriveCache.value
   }
+  if (removableDriveInflight) return await removableDriveInflight
 
-  return results.sort((left, right) =>
-    left.path.localeCompare(right.path, undefined, { sensitivity: 'base' })
-  )
+  const request = (async () => {
+    const baseRows = await listPlatformRemovableDrives()
+
+    const results: PioneerRemovableDriveInfo[] = []
+    for (const baseRow of baseRows) {
+      try {
+        const pioneer = await probePioneerDeviceLibraryRoot(baseRow.path)
+        const identity =
+          pioneer.libraryTypes.length > 0 ? await ensurePioneerUsbIdentity(baseRow.path) : null
+        results.push({
+          ...baseRow,
+          frkbUsbUuid: identity?.uuid || undefined,
+          frkbUsbIdFilePath: identity?.filePath || undefined,
+          frkbUsbIdPersisted: identity?.persisted,
+          isPioneerDeviceLibrary: pioneer.libraryTypes.length > 0,
+          supportedLibraryTypes: pioneer.libraryTypes,
+          pioneer
+        })
+      } catch (error) {
+        log.error('[pioneer-device-library] pioneer probe failed', {
+          path: baseRow.path,
+          error
+        })
+        results.push({
+          ...baseRow,
+          isPioneerDeviceLibrary: false,
+          supportedLibraryTypes: [],
+          pioneer: { ...EMPTY_PIONEER_PROBE }
+        })
+      }
+    }
+
+    const sorted = results.sort((left, right) =>
+      left.path.localeCompare(right.path, undefined, { sensitivity: 'base' })
+    )
+    removableDriveCache = {
+      value: sorted,
+      expiresAt: Date.now() + REMOVABLE_DRIVE_CACHE_TTL_MS
+    }
+    return sorted
+  })()
+  removableDriveInflight = request
+  try {
+    return await request
+  } finally {
+    if (removableDriveInflight === request) removableDriveInflight = null
+  }
 }
 
 export async function ejectPioneerRemovableDrive(
@@ -815,6 +842,8 @@ export async function ejectPioneerRemovableDrive(
       detail: result.detail
     })
   }
+
+  removableDriveCache = null
 
   return result
 }
