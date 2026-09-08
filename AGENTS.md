@@ -12,8 +12,6 @@
 本地固定三份目录：API、主客户端、对照客户端。改代码只允许在前两份里进行。
 - 改代码：`D:\playground\FRKB-API` 与 `D:\playground\FRKB_Rapid-Audio-Organization-Tool`。
 - 禁止在 `D:\playground\FRKB_Rapid-Audio-Organization-Tool-5` 改功能代码，也禁止把文件拷过去当同步。
-- 主客户端提交并 push 之后，立刻在 Tool-5 执行 `git pull`，使其与主客户端 `main` 一致。
-- 用户要在两边验证的修复完成后，主动提交（中文 Conventional Commit）、push `main`、立刻在 Tool-5 `git pull`。不要等用户再说「提交push」。禁止打 tag，禁止 `--force` 推送。
 - 日志各落各的。用户说在哪个项目复现，就先读那个项目的日志；跨设备问题交叉读多份。
   - 主客户端开发日志：`D:\playground\FRKB_Rapid-Audio-Organization-Tool\log.txt`
   - Tool-5 开发日志：`D:\playground\FRKB_Rapid-Audio-Organization-Tool-5\log.txt`
