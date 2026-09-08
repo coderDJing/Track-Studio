@@ -9,6 +9,8 @@ import { resolveDevCloudSyncUserKey } from '../shared/cloudSyncDevUserKey'
 import { isCuratedLibrarySyncEnabled } from './librarySettingsDb'
 import { getCuratedLibraryAbsRoot, isPathInside } from './curatedLibrarySync/paths'
 import { enqueueCuratedLibrarySync } from './curatedLibrarySync/queue'
+import { isCuratedLibrarySyncRunning } from './curatedLibrarySync/engine'
+import { isCuratedLibraryTreeSyncSuppressed } from './curatedLibrarySync/treeSyncGuard'
 import {
   hasPendingCuratedLibraryJoinPrompt,
   offerCuratedLibraryJoinPrompt
@@ -20,6 +22,7 @@ let intervalHandle: ReturnType<typeof setInterval> | null = null
 let treeSyncTimer: ReturnType<typeof setTimeout> | null = null
 let treeListenerBound = false
 let runFingerprintSync: ((trigger: CloudSyncTrigger) => Promise<string>) | null = null
+let pendingTickIgnoresSuppress = false
 
 const TREE_SYNC_DEBOUNCE_MS = 2000
 
@@ -63,17 +66,30 @@ export async function runCuratedLibrarySyncTick(): Promise<void> {
   offerCuratedLibraryJoinPrompt(result)
 }
 
-function scheduleCuratedLibrarySyncAfterTreeChange(): void {
-  if (!canRunCuratedLibrarySyncNow()) return
+function queueCuratedLibrarySyncTick(respectSuppress: boolean): void {
+  if (!respectSuppress) pendingTickIgnoresSuppress = true
   if (treeSyncTimer) clearTimeout(treeSyncTimer)
+  const ignoreSuppress = pendingTickIgnoresSuppress
   treeSyncTimer = setTimeout(() => {
     treeSyncTimer = null
+    pendingTickIgnoresSuppress = false
+    if (!ignoreSuppress && isCuratedLibraryTreeSyncSuppressed()) return
+    if (isCuratedLibrarySyncRunning()) return
     void runCuratedLibrarySyncTick()
   }, TREE_SYNC_DEBOUNCE_MS)
 }
 
+function scheduleCuratedLibrarySyncAfterTreeChange(): void {
+  if (!canRunCuratedLibrarySyncNow()) return
+  if (isCuratedLibraryTreeSyncSuppressed()) return
+  if (isCuratedLibrarySyncRunning()) return
+  queueCuratedLibrarySyncTick(true)
+}
+
 export function scheduleCuratedLibrarySyncAfterLocalChange(): void {
-  scheduleCuratedLibrarySyncAfterTreeChange()
+  if (!canRunCuratedLibrarySyncNow()) return
+  if (isCuratedLibrarySyncRunning()) return
+  queueCuratedLibrarySyncTick(false)
 }
 
 /** 只改 cache / 树 DB、没有磁盘事件时，用这个判断是否落在精选库里再排队。 */

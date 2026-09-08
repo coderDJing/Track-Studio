@@ -57,6 +57,7 @@ import type {
 import { readCacheFields, type CuratedLocalFile, type CuratedLocalNode } from './scan'
 import { asOptionalPositiveInt, localNodePendingSinceLast } from './pendingLocal'
 import { adoptAliveHashMatch, liveMatchedFileApplyState } from './applyRemotePendingFile'
+import { countCloudFilesNeedingDownload, matchLocalFileForCloud } from './applyRemoteDownloadPlan'
 
 export type DeferredRemoteOp = {
   type: 'deleteFile' | 'moveFile' | 'deleteNode'
@@ -745,27 +746,36 @@ export const applyRemoteSnapshot = async (
       localByHash.set(file.contentSha256, list)
     }
     const adoptedLocalIds = new Set<string>()
-    const fileTotal = snapshot.files.length
-    let fileDone = 0
-    ctx.onFileProgress?.(0, fileTotal)
+    const downloadTotal = countCloudFilesNeedingDownload({
+      files: snapshot.files,
+      localById,
+      localByHash,
+      adoptIds: options.adoptIds,
+      shouldSkipRestore: (file) => shouldSkipRestoringCloudFile(file, options),
+      hasLocalParent: (parentUuid) => Boolean(localParentAbsOf(parentUuid, scope))
+    })
+    let downloadDone = 0
+    const noteDownloadProgress = () => {
+      if (downloadTotal <= 0) return
+      downloadDone += 1
+      ctx.onFileProgress?.(downloadDone, downloadTotal)
+    }
+    if (downloadTotal > 0) ctx.onFileProgress?.(0, downloadTotal)
 
     for (const file of snapshot.files) {
-      fileDone += 1
-      ctx.onFileProgress?.(fileDone, fileTotal)
       assertNotCancelled(ctx.signal)
       const localFile = localById.get(file.fileId)
-      let matched = localFile
-      if (!matched && options.adoptIds) {
-        const hashMatches = localByHash.get(file.sha256) || []
-        matched =
-          hashMatches.find(
-            (item) => !adoptedLocalIds.has(item.fileId) && item.fileName === file.fileName
-          ) || hashMatches.find((item) => !adoptedLocalIds.has(item.fileId))
-        if (matched && matched.fileId !== file.fileId) {
-          adoptedLocalIds.add(matched.fileId)
-          replaceCuratedSyncFileId(matched.fileId, file.fileId)
-          matched = { ...matched, fileId: file.fileId }
-        }
+      let matched = matchLocalFileForCloud(
+        file,
+        localById,
+        localByHash,
+        adoptedLocalIds,
+        options.adoptIds
+      )
+      if (matched && !localFile && matched.fileId !== file.fileId) {
+        adoptedLocalIds.add(matched.fileId)
+        replaceCuratedSyncFileId(matched.fileId, file.fileId)
+        matched = { ...matched, fileId: file.fileId }
       }
       const destDir = localParentAbsOf(file.parentUuid, scope)
       if (!destDir) continue
@@ -807,6 +817,7 @@ export const applyRemoteSnapshot = async (
           continue
         }
         if (current.contentSha256 !== file.sha256) {
+          noteDownloadProgress()
           const imported = await tryImportCloudFile(
             file,
             ctx,
@@ -861,6 +872,7 @@ export const applyRemoteSnapshot = async (
         })
         continue
       }
+      noteDownloadProgress()
       const imported = await tryImportCloudFile(file, ctx, scope)
       if (imported) {
         persistImportedIdentity(file, imported, absToRel(curatedRoot, imported), scope)

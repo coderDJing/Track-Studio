@@ -65,6 +65,7 @@ import {
   type DeferredRemoteOp
 } from './applyRemote'
 import { finishApplyUi, notifyTree, queueImportedApplyUi, resetApplyUiFlush } from './applyUiNotify'
+import { suppressCuratedLibraryTreeSync } from './treeSyncGuard'
 import {
   countCuratedLibraryAudioFiles,
   scanCuratedLibraryForSync,
@@ -194,10 +195,17 @@ export const getCuratedLibrarySyncActivity = (): CuratedLibrarySyncActivity => (
   running: running || sessionActivity.running
 })
 
-const scanLocalForSync = () =>
+const scanLocalForSync = (options?: { quiet?: boolean }) =>
   scanCuratedLibraryForSync({
-    onFileProgress: (done, total) => setActivity('scanning', done, total)
+    onFileProgress: options?.quiet
+      ? undefined
+      : (done, total) => setActivity('scanning', done, total)
   })
+
+const rescanAfterApply = async () => {
+  setActivity('applying')
+  return await scanLocalForSync({ quiet: true })
+}
 
 const buildJoinChoice = async (status: {
   fileCount: number
@@ -567,6 +575,7 @@ const runJoin = async (
   const release = beginLibraryTreeWatcherBulkOperation()
   let latest = local
   try {
+    setActivity('applying')
     const applied = await applyRemoteSnapshot(
       snapshot,
       local,
@@ -579,7 +588,7 @@ const runJoin = async (
       },
       applyCtx()
     )
-    latest = await scanLocalForSync()
+    latest = await rescanAfterApply()
     if (applied.diskFull) return { status: 'disk_full' }
     writeCuratedLibrarySyncDeferredOps(applied.deferred)
     const after = latest
@@ -615,7 +624,7 @@ const runJoin = async (
             applyCtx()
           )
           writeCuratedLibrarySyncDeferredOps([...applied.deferred, ...conflictApplied.deferred])
-          latest = await scanLocalForSync()
+          latest = await rescanAfterApply()
           persistAppliedSnapshot(pushed.snapshot, latest)
         } else {
           persistAppliedSnapshot(pushed.snapshot, after)
@@ -627,6 +636,7 @@ const runJoin = async (
       persistAppliedSnapshot(snapshot, after)
     }
   } finally {
+    suppressCuratedLibraryTreeSync()
     release()
     await finishApplyUi(local, latest)
   }
@@ -678,6 +688,7 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
   const release = beginLibraryTreeWatcherBulkOperation()
   let latest = local
   try {
+    setActivity('applying')
     const applyCloudAuthoritativeSnapshot = async (
       winning: CuratedLibrarySyncSnapshot,
       currentLocal: { files: CuratedLocalFile[]; nodes: CuratedLocalNode[] }
@@ -696,7 +707,7 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
         applyCtx()
       )
       await purgePendingDeletedCuratedNodeShells()
-      latest = await scanLocalForSync()
+      latest = await rescanAfterApply()
       if (applied.diskFull) return { status: 'disk_full' }
       writeCuratedLibrarySyncDeferredOps(applied.deferred)
       persistAppliedSnapshot(winning, latest)
@@ -729,7 +740,7 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
     }
     const applied = await applyRemoteSnapshot(snapshot, local, applyOptions, applyCtx())
     await purgePendingDeletedCuratedNodeShells()
-    latest = await scanLocalForSync()
+    latest = await rescanAfterApply()
     if (applied.diskFull) return { status: 'disk_full' }
     remainingDeferred.push(...applied.deferred)
     writeCuratedLibrarySyncDeferredOps(remainingDeferred)
@@ -762,7 +773,7 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
       )
       writeCuratedLibrarySyncDeferredOps([...remainingDeferred, ...conflictApplied.deferred])
       await purgePendingDeletedCuratedNodeShells()
-      latest = await scanLocalForSync()
+      latest = await rescanAfterApply()
       persistAppliedSnapshot(pushed.snapshot, latest)
       return { status: 'success' }
     }
@@ -770,6 +781,7 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
     writeCuratedLibrarySyncDeferredOps(remainingDeferred)
     return { status: 'success' }
   } finally {
+    suppressCuratedLibraryTreeSync()
     release()
     await finishApplyUi(local, latest)
   }
@@ -945,6 +957,7 @@ export const runCuratedLibrarySync = async (
     const cancelled = cancelRequested
     running = false
     abortController = null
+    suppressCuratedLibraryTreeSync()
     clearActivity()
     dismissProgress()
     if (!cancelled) {
