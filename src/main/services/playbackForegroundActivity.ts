@@ -22,11 +22,28 @@ const PLAYBACK_FOREGROUND_IDLE_GRACE_MS = 300
 const BACKGROUND_IO_WAIT_INTERVAL_MS = 60
 const BACKGROUND_FILE_IO_MAX_CONCURRENCY = 1
 
+export type FileIoPriority = 'visible' | 'foreground' | 'background' | 'maintenance' | 'prefetch'
+
+type FileIoWaiter = {
+  priority: number
+  sequence: number
+  resolve: () => void
+}
+
+const FILE_IO_PRIORITY: Record<FileIoPriority, number> = {
+  visible: 0,
+  foreground: 1,
+  background: 2,
+  maintenance: 3,
+  prefetch: 4
+}
+
 const foregroundEntries = new Map<string, PlaybackForegroundEntry>()
 let foregroundGraceUntilMs = 0
 let ipcRegistered = false
 let backgroundFileIoInFlight = 0
-const backgroundFileIoWaiters: Array<() => void> = []
+let backgroundFileIoSequence = 0
+const backgroundFileIoWaiters: FileIoWaiter[] = []
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
@@ -70,22 +87,29 @@ export const isAbsPathInPlaybackForeground = (absPath: string): boolean => {
   return false
 }
 
-const acquireBackgroundFileIoSlot = async (): Promise<() => void> => {
+const acquireBackgroundFileIoSlot = async (priority: FileIoPriority): Promise<() => void> => {
   if (backgroundFileIoInFlight < BACKGROUND_FILE_IO_MAX_CONCURRENCY) {
     backgroundFileIoInFlight += 1
     return releaseBackgroundFileIoSlot
   }
 
   await new Promise<void>((resolve) => {
-    backgroundFileIoWaiters.push(resolve)
+    backgroundFileIoWaiters.push({
+      priority: FILE_IO_PRIORITY[priority],
+      sequence: backgroundFileIoSequence++,
+      resolve
+    })
   })
   return releaseBackgroundFileIoSlot
 }
 
 const releaseBackgroundFileIoSlot = () => {
+  backgroundFileIoWaiters.sort(
+    (left, right) => left.priority - right.priority || left.sequence - right.sequence
+  )
   const next = backgroundFileIoWaiters.shift()
   if (next) {
-    next()
+    next.resolve()
     return
   }
   backgroundFileIoInFlight = Math.max(0, backgroundFileIoInFlight - 1)
@@ -135,10 +159,12 @@ export async function waitForPlaybackForegroundIdle(
 export async function runPlaybackAwareBackgroundFileIo<T>(
   context: string,
   payload: Record<string, unknown>,
-  task: () => Promise<T>
+  task: () => Promise<T>,
+  options: { priority?: FileIoPriority } = {}
 ): Promise<T> {
+  const priority = options.priority || 'background'
   await waitForPlaybackForegroundIdle(`${context}:before-slot`, payload)
-  const releaseSlot = await acquireBackgroundFileIoSlot()
+  const releaseSlot = await acquireBackgroundFileIoSlot(priority)
   try {
     await waitForPlaybackForegroundIdle(`${context}:after-slot`, payload)
     return await task()

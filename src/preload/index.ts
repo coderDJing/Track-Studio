@@ -193,6 +193,7 @@ const exactListenChannels = new Set([
   'progressSet',
   'readSongFileError',
   'readedSongFile',
+  'recycle-bin:empty-completed',
   'recording-library:changed',
   'releaseNotesRange',
   'setting-changed',

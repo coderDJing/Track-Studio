@@ -12,6 +12,16 @@ export type DeleteSummary = {
   removedPaths?: string[]
 }
 
+type EmptyRecycleBinJobStart = {
+  accepted?: unknown
+  jobId?: unknown
+}
+
+type EmptyRecycleBinJobCompletion = {
+  jobId?: unknown
+  summary?: unknown
+}
+
 const normalizePath = (p: string | undefined | null) => (p || '').replace(/\//g, '\\').toLowerCase()
 
 export const normalizeDeleteSummary = (summary: unknown): DeleteSummary => {
@@ -146,9 +156,38 @@ export async function emptyRecycleBinWithOptimisticUpdate(
     }
     clearRecycleBinPlayback(runtime)
 
-    const deleteSummary = normalizeDeleteSummary(
-      await window.electron.ipcRenderer.invoke('emptyRecycleBin')
+    let expectedJobId = ''
+    const bufferedCompletions = new Map<string, unknown>()
+    let resolveCompletion: (summary: unknown) => void = () => {}
+    const completionPromise = new Promise<unknown>((resolve) => {
+      resolveCompletion = resolve
+    })
+    const unsubscribe = window.electron.ipcRenderer.on(
+      'recycle-bin:empty-completed',
+      (_event, payload: EmptyRecycleBinJobCompletion) => {
+        const completedJobId = typeof payload?.jobId === 'string' ? payload.jobId : ''
+        if (!completedJobId) return
+        if (!expectedJobId) {
+          bufferedCompletions.set(completedJobId, payload.summary)
+          return
+        }
+        if (completedJobId === expectedJobId) resolveCompletion(payload.summary)
+      }
     )
+    let deleteSummary: DeleteSummary
+    try {
+      const started = (await window.electron.ipcRenderer.invoke(
+        'emptyRecycleBin'
+      )) as EmptyRecycleBinJobStart
+      expectedJobId = typeof started?.jobId === 'string' ? started.jobId : ''
+      if (!expectedJobId) throw new Error('empty recycle bin job was not started')
+      if (bufferedCompletions.has(expectedJobId)) {
+        resolveCompletion(bufferedCompletions.get(expectedJobId))
+      }
+      deleteSummary = normalizeDeleteSummary(await completionPromise)
+    } finally {
+      unsubscribe()
+    }
 
     await reloadRecycleBinSongsAreaIfNeeded(runtime)
 

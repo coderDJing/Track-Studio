@@ -1,6 +1,7 @@
 export type SongCoverSessionContext = {
   clientKey?: unknown
   generation?: unknown
+  priority?: unknown
 }
 
 export type SongCoverSession = {

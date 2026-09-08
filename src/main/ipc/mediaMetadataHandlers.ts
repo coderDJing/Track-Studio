@@ -90,6 +90,7 @@ export function registerMediaMetadataHandlers() {
         }
       }
       return await svcGetSongCoverThumb(filePath, size, listRootDir, {
+        priority: requestContext?.priority === 'prefetch' ? 'prefetch' : 'visible',
         shouldAbort: () =>
           event.sender.isDestroyed() || (!!session && songCoverSessions.isStale(session))
       })
@@ -122,6 +123,7 @@ export function registerMediaMetadataHandlers() {
         format: typeof payload?.format === 'string' ? payload.format : 'image/jpeg',
         data,
         context: {
+          priority: payload?.requestContext?.priority === 'prefetch' ? 'prefetch' : 'visible',
           shouldAbort: () =>
             event.sender.isDestroyed() || (!!session && songCoverSessions.isStale(session))
         }

@@ -35,20 +35,13 @@ import {
   type LibraryNodeRow
 } from '../../libraryTreeDb'
 import {
-  getRecycleBinRootAbs,
   moveFileToRecycleBin,
   normalizeRendererPlaylistPath,
   permanentlyDeleteFile,
   type RecycleBinMoveResult
 } from '../../recycleBinService'
 import {
-  listRecycleBinRecords,
-  deleteRecycleBinRecords,
-  type RecycleBinRecord
-} from '../../recycleBinDb'
-import {
   listMixtapeFilePathsByPlaylist,
-  listMixtapeFilePathsInUse,
   removeMixtapeItemsByPlaylist,
   replaceMixtapeFilePath
 } from '../../mixtapeDb'
@@ -67,11 +60,11 @@ import {
   removeSetItemsByPlaylistWithCustodyCleanup
 } from '../../ipc/setListHandlers'
 import { assertLibraryMergeMutationAllowed } from '../../services/libraryMerge/runtime'
+import { startRecycleBinEmptyTask } from '../../services/recycleBinEmptyTask'
 
 const MIXTAPE_WINDOW_OPEN_ERROR_CODE = 'MIXTAPE_WINDOW_OPEN'
 const FILE_BATCH_CONCURRENCY = 8
 const FILE_BATCH_YIELD_EVERY = 8
-const RECYCLE_BIN_DELETE_CONCURRENCY = 2
 
 const normalizeLibraryNodeType = (value: unknown): LibraryNodeType => {
   switch (value) {
@@ -96,7 +89,9 @@ const isRecycleBinMoveResult = (value: unknown): value is RecycleBinMoveResult =
 
 export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWindow | null) {
   const sendProgress = (payload: Record<string, unknown>) => {
-    getWindow()?.webContents.send('progressSet', payload)
+    const window = getWindow()
+    if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return
+    window.webContents.send('progressSet', payload)
   }
 
   const createProgressId = (prefix: string) =>
@@ -291,206 +286,9 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
     }
   })
 
-  ipcMain.handle('emptyRecycleBin', async () => {
+  ipcMain.handle('emptyRecycleBin', () => {
     assertLibraryMergeMutationAllowed()
-    const recycleBinPath = getRecycleBinRootAbs()
-    if (!recycleBinPath) {
-      return { total: 0, success: 0, failed: 0, removedPaths: [] }
-    }
-    const progressId = createProgressId('recycle_bin_empty')
-    const filePaths: string[] = []
-    const emptyDirCandidates: string[] = []
-    let success = 0
-    let failed = 0
-    let removedPaths: string[] = []
-    try {
-      if (!(await fs.pathExists(recycleBinPath))) {
-        return { total: 0, success: 0, failed: 0, removedPaths: [] }
-      }
-      sendProgress({
-        id: progressId,
-        titleKey: 'recycleBin.progressScanning',
-        now: 0,
-        total: 0,
-        isInitial: true,
-        noProgress: true
-      })
-      const walkAndCollectFiles = async (targetDir: string) => {
-        let entries: fs.Dirent[] = []
-        try {
-          entries = await fs.readdir(targetDir, { withFileTypes: true })
-        } catch {
-          return
-        }
-        for (const entry of entries) {
-          const entryPath = path.join(targetDir, entry.name)
-          if (entry.isDirectory()) {
-            await walkAndCollectFiles(entryPath)
-            emptyDirCandidates.push(entryPath)
-            continue
-          }
-          if (entry.isFile()) {
-            filePaths.push(entryPath)
-          }
-        }
-      }
-      await walkAndCollectFiles(recycleBinPath)
-      const libraryRoot = path.join(store.databaseDir, 'library')
-      const records = listRecycleBinRecords()
-      const normalizePathKey = (value: string) => {
-        const resolved = path.resolve(value)
-        return process.platform === 'win32' ? resolved.toLowerCase() : resolved
-      }
-      const recordByAbsPath = new Map<
-        string,
-        { record: RecycleBinRecord; recordKey: string; legacyPath: string | null }
-      >()
-      const referenceCandidates = [...filePaths]
-      for (const record of records) {
-        const absPath = path.isAbsolute(record.filePath)
-          ? record.filePath
-          : path.join(libraryRoot, record.filePath)
-        const legacyPath =
-          record.originalPlaylistPath && record.originalFileName
-            ? path.join(libraryRoot, record.originalPlaylistPath, record.originalFileName)
-            : null
-        recordByAbsPath.set(normalizePathKey(absPath), {
-          record,
-          recordKey: record.filePath,
-          legacyPath
-        })
-        if (legacyPath) referenceCandidates.push(legacyPath)
-      }
-      const referencedPathKeys = new Set(
-        listMixtapeFilePathsInUse(referenceCandidates).map(normalizePathKey)
-      )
-      const recordKeyByFilePath = new Map<string, string>()
-      const deleteTasks: Array<() => Promise<string>> = filePaths.map((entryPath) => async () => {
-        const entryPathKey = normalizePathKey(entryPath)
-        const prepared = recordByAbsPath.get(entryPathKey)
-        if (prepared) recordKeyByFilePath.set(entryPathKey, prepared.recordKey)
-        const referencedMixtapePath = referencedPathKeys.has(entryPathKey)
-          ? entryPath
-          : prepared?.legacyPath && referencedPathKeys.has(normalizePathKey(prepared.legacyPath))
-            ? prepared.legacyPath
-            : null
-        const options = {
-          recordLookup: prepared
-            ? { record: prepared.record, recordKey: prepared.recordKey }
-            : { record: null, recordKey: null },
-          referencedMixtapePath,
-          deferRecordDelete: true
-        }
-        const deleted = await permanentlyDeleteFile(entryPath, options)
-        if (!deleted) {
-          throw new Error(`permanently delete failed: ${entryPath}`)
-        }
-        return entryPath
-      })
-      if (deleteTasks.length > 0) {
-        sendProgress({
-          id: progressId,
-          titleKey: 'recycleBin.progressDeleting',
-          now: 0,
-          total: deleteTasks.length,
-          noProgress: false
-        })
-      }
-      const emptyResults: Array<string | Error> = []
-      const {
-        results,
-        success: runSuccess,
-        failed: runFailed,
-        skipped
-      } = deleteTasks.length > 0
-        ? await runWithConcurrency(deleteTasks, {
-            concurrency: RECYCLE_BIN_DELETE_CONCURRENCY,
-            stopOnENOSPC: false,
-            yieldEvery: 1,
-            onProgress: (done: number, total: number) => {
-              sendProgress({
-                id: progressId,
-                titleKey: 'recycleBin.progressDeleting',
-                now: done,
-                total,
-                noProgress: false
-              })
-            }
-          })
-        : { results: emptyResults, success: 0, failed: 0, skipped: 0 }
-      success = runSuccess
-      failed = runFailed
-      removedPaths = results.filter((item): item is string => typeof item === 'string')
-      const removedRecordKeys = removedPaths
-        .map((filePath) => recordKeyByFilePath.get(normalizePathKey(filePath)))
-        .filter((recordKey): recordKey is string => typeof recordKey === 'string')
-      const removedRecordKeySet = new Set<string>()
-      if (removedRecordKeys.length > 0) {
-        const deletedRecordCount = deleteRecycleBinRecords(removedRecordKeys)
-        if (deletedRecordCount === removedRecordKeys.length) {
-          for (const recordKey of removedRecordKeys) removedRecordKeySet.add(recordKey)
-        }
-      }
-      for (const dirPath of emptyDirCandidates.sort((left, right) => right.length - left.length)) {
-        try {
-          await fs.remove(dirPath)
-        } catch {}
-      }
-      const missingRecords: string[] = []
-      for (const record of records) {
-        if (removedRecordKeySet.has(record.filePath)) continue
-        const absPath = path.isAbsolute(record.filePath)
-          ? record.filePath
-          : path.join(libraryRoot, record.filePath)
-        if (!(await fs.pathExists(absPath))) {
-          missingRecords.push(record.filePath)
-        }
-      }
-      if (missingRecords.length > 0) {
-        deleteRecycleBinRecords(missingRecords)
-      }
-      const recycleBinEmpty = await isDirectoryEffectivelyEmpty(
-        recycleBinPath,
-        store.settingConfig.audioExt
-      )
-      if (recycleBinEmpty) {
-        const parentNode = findLibraryNodeByPath(
-          path.join('library', getCoreFsDirName('RecycleBin'))
-        )
-        if (parentNode) {
-          removeLibraryNodesByParentUuid(parentNode.uuid)
-        }
-      }
-      sendProgress({
-        id: progressId,
-        titleKey:
-          failed === 0 && skipped === 0
-            ? 'recycleBin.progressFinished'
-            : 'recycleBin.progressFailed',
-        now: 1,
-        total: 1
-      })
-      return {
-        total: filePaths.length,
-        success,
-        failed,
-        removedPaths
-      }
-    } catch (error) {
-      sendProgress({
-        id: progressId,
-        titleKey: 'recycleBin.progressFailed',
-        now: 1,
-        total: 1
-      })
-      log.error('清空回收站失败:', error)
-      return {
-        total: filePaths.length,
-        success,
-        failed: failed || Math.max(0, filePaths.length - success),
-        removedPaths
-      }
-    }
+    return startRecycleBinEmptyTask(getWindow, sendProgress)
   })
 
   ipcMain.handle('operateFileSystemChange', async (_e, operateArray: FileSystemOperation[]) => {

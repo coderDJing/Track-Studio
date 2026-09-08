@@ -234,7 +234,8 @@ async function moveFileToUniqueDestination(
           srcPath,
           destPath
         },
-        () => fs.move(srcPath, destPath, { overwrite: false })
+        () => fs.move(srcPath, destPath, { overwrite: false }),
+        { priority: 'foreground' }
       )
       return destPath
     } catch (error) {
@@ -463,7 +464,8 @@ export async function moveFileToRecycleBin(
             toRoot: recycleRoot,
             fromPath: srcPath,
             toPath: destPath
-          })
+          }),
+        { priority: 'foreground' }
       )
     } catch {}
     try {

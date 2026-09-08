@@ -123,7 +123,8 @@ export function useCoverThumbnails({
     filePath: string,
     response: CoverThumbResponse,
     converted: CoverDisplayWorkerResult,
-    taskGeneration: number
+    taskGeneration: number,
+    priority: QueuePriority
   ) => {
     if (!isCurrentGeneration(taskGeneration)) return
     void window.electron.ipcRenderer
@@ -134,7 +135,7 @@ export function useCoverThumbnails({
         legacyExt: response.legacyExt,
         format: converted.format,
         data: converted.data,
-        requestContext: { clientKey, generation: taskGeneration }
+        requestContext: { clientKey, generation: taskGeneration, priority }
       })
       .catch(() => {})
   }
@@ -142,7 +143,8 @@ export function useCoverThumbnails({
   const scheduleDisplayCache = (
     filePath: string,
     response: CoverThumbResponse,
-    taskGeneration: number
+    taskGeneration: number,
+    priority: QueuePriority
   ) => {
     const raw = toUint8Array(response.data)
     const imageHash = String(response.imageHash || '').trim()
@@ -152,7 +154,7 @@ export function useCoverThumbnails({
     const conversionKey = `${listRootDir}:${imageHash}`
     const converted = displayConversionCache.get(conversionKey)
     if (converted) {
-      persistDisplayCache(filePath, response, converted, taskGeneration)
+      persistDisplayCache(filePath, response, converted, taskGeneration, priority)
       return
     }
 
@@ -162,7 +164,7 @@ export function useCoverThumbnails({
         .resize(raw, response.format || 'image/jpeg', 256)
         .then((result) => {
           displayConversionCache.set(conversionKey, result)
-          persistDisplayCache(filePath, response, result, taskGeneration)
+          persistDisplayCache(filePath, response, result, taskGeneration, priority)
           return result
         })
         .finally(() => displayConversionInflight.delete(conversionKey))
@@ -171,14 +173,15 @@ export function useCoverThumbnails({
       return
     }
     void conversionTask
-      .then((result) => persistDisplayCache(filePath, response, result, taskGeneration))
+      .then((result) => persistDisplayCache(filePath, response, result, taskGeneration, priority))
       .catch(() => {})
   }
 
   const prepareDisplayResponse = (
     filePath: string,
     response: CoverThumbResponse,
-    taskGeneration: number
+    taskGeneration: number,
+    priority: QueuePriority
   ): CoverThumbResponse => {
     if (!response.needsDisplayCache) return response
     const raw = toUint8Array(response.data)
@@ -189,10 +192,10 @@ export function useCoverThumbnails({
     const conversionKey = `${listRootDir}:${imageHash}`
     const converted = displayConversionCache.get(conversionKey)
     if (!converted) {
-      scheduleDisplayCache(filePath, response, taskGeneration)
+      scheduleDisplayCache(filePath, response, taskGeneration, priority)
       return response
     }
-    persistDisplayCache(filePath, response, converted, taskGeneration)
+    persistDisplayCache(filePath, response, converted, taskGeneration, priority)
     return {
       ...response,
       format: converted.format,
@@ -313,7 +316,7 @@ export function useCoverThumbnails({
                 requestFilePath,
                 48,
                 resolveRootDir(),
-                { clientKey, generation: taskGeneration }
+                { clientKey, generation: taskGeneration, priority: runningPriority }
               )) as CoverThumbResponse | null)
 
           if (!isCurrentGeneration(taskGeneration)) {
@@ -321,7 +324,7 @@ export function useCoverThumbnails({
             return
           }
           const resp = rawResp
-            ? prepareDisplayResponse(requestFilePath, rawResp, taskGeneration)
+            ? prepareDisplayResponse(requestFilePath, rawResp, taskGeneration, runningPriority)
             : null
           if (!isCurrentGeneration(taskGeneration)) {
             resolve(null)

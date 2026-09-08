@@ -44,6 +44,8 @@ export default defineConfig({
             'src/main/workers/audioTimeBasisOffsetWorker.ts'
           ),
           songListScanWorker: resolve(__dirname, 'src/main/workers/songListScanWorker.ts'),
+          coverExtractionWorker: resolve(__dirname, 'src/main/workers/coverExtractionWorker.ts'),
+          recycleBinDeleteWorker: resolve(__dirname, 'src/main/workers/recycleBinDeleteWorker.ts'),
           songListTrackCountWorker: resolve(
             __dirname,
             'src/main/workers/songListTrackCountWorker.ts'
@@ -75,6 +77,12 @@ export default defineConfig({
             }
             if (chunk.name === 'songListScanWorker') {
               return 'workers/songListScanWorker.js'
+            }
+            if (chunk.name === 'coverExtractionWorker') {
+              return 'workers/coverExtractionWorker.js'
+            }
+            if (chunk.name === 'recycleBinDeleteWorker') {
+              return 'workers/recycleBinDeleteWorker.js'
             }
             if (chunk.name === 'songListTrackCountWorker') {
               return 'workers/songListTrackCountWorker.js'

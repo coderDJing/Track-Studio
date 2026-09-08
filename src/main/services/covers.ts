@@ -2,15 +2,23 @@ import path = require('path')
 import fs = require('fs-extra')
 import { operateHiddenFile, resolveLibraryPath } from '../utils'
 import * as LibraryCacheDb from '../libraryCacheDb'
+import { extractCoverOffMainThread } from './coverExtractionWorker'
+import { runPlaybackAwareBackgroundFileIo, type FileIoPriority } from './playbackForegroundActivity'
 
 const DISPLAY_CACHE_MARKER = '.display-v1'
 const COVER_THUMB_MAX_CONCURRENCY = 3
 let pendingPostScanSweepTimer: NodeJS.Timeout | null = null
 let activeCoverThumbTasks = 0
-const pendingCoverThumbTasks: Array<() => void> = []
+let coverThumbTaskSequence = 0
+const pendingCoverThumbTasks: Array<{
+  priority: number
+  sequence: number
+  resolve: () => void
+}> = []
 
 export type CoverThumbRequestContext = {
   shouldAbort?: () => boolean
+  priority?: 'visible' | 'prefetch'
 }
 
 export type CoverThumbResult = {
@@ -25,39 +33,16 @@ export type CoverThumbResult = {
   legacyExt?: string
 }
 
-const toNodeBuffer = (value: unknown): Buffer | null => {
-  if (!value) return null
-  if (Buffer.isBuffer(value)) return value
-  if (value instanceof Uint8Array) return Buffer.from(value)
-  if (ArrayBuffer.isView(value)) {
-    return Buffer.from(value.buffer, value.byteOffset, value.byteLength)
-  }
-  if (Array.isArray(value)) return Buffer.from(value)
-  if (value && typeof value === 'object' && 'data' in value && Array.isArray(value.data)) {
-    return Buffer.from(value.data)
-  }
-  return null
-}
-
 export async function getSongCover(
   filePath: string
 ): Promise<{ format: string; data: Buffer } | null> {
   try {
-    const mm = await import('music-metadata')
-    const metadata = await mm.parseFile(filePath)
-    let cover = mm.selectCover(metadata.common.picture)
-    if (!cover) {
-      const fsStat = await fs.stat(filePath)
-      const buffer = await fs.readFile(filePath)
-      const arr = await mm.parseBuffer(buffer, {
-        size: fsStat.size
-      })
-      cover = mm.selectCover(arr.common.picture)
-    }
-    if (!cover) return null
-    const data = toNodeBuffer(cover.data)
-    if (!data) return null
-    return { format: cover.format, data }
+    return await runPlaybackAwareBackgroundFileIo(
+      'cover:extract-full',
+      { filePath },
+      () => extractCoverOffMainThread(filePath, undefined, true),
+      { priority: 'visible' }
+    )
   } catch {
     return null
   }
@@ -100,26 +85,42 @@ const writeDisplayCacheFile = async (targetPath: string, data: Buffer) => {
   }
 }
 
+const releaseCoverThumbSlot = () => {
+  pendingCoverThumbTasks.sort(
+    (left, right) => left.priority - right.priority || left.sequence - right.sequence
+  )
+  const next = pendingCoverThumbTasks.shift()
+  if (next) {
+    next.resolve()
+    return
+  }
+  activeCoverThumbTasks = Math.max(0, activeCoverThumbTasks - 1)
+}
+
 const acquireCoverThumbSlot = async (
   context?: CoverThumbRequestContext
 ): Promise<(() => void) | null> => {
   if (context?.shouldAbort?.()) return null
   if (activeCoverThumbTasks >= COVER_THUMB_MAX_CONCURRENCY) {
-    await new Promise<void>((resolve) => pendingCoverThumbTasks.push(resolve))
+    await new Promise<void>((resolve) =>
+      pendingCoverThumbTasks.push({
+        priority: context?.priority === 'prefetch' ? 1 : 0,
+        sequence: coverThumbTaskSequence++,
+        resolve
+      })
+    )
+    if (context?.shouldAbort?.()) {
+      releaseCoverThumbSlot()
+      return null
+    }
+  } else {
+    activeCoverThumbTasks += 1
   }
-  if (context?.shouldAbort?.()) {
-    const next = pendingCoverThumbTasks.shift()
-    next?.()
-    return null
-  }
-  activeCoverThumbTasks += 1
   let released = false
   return () => {
     if (released) return
     released = true
-    activeCoverThumbTasks = Math.max(0, activeCoverThumbTasks - 1)
-    const next = pendingCoverThumbTasks.shift()
-    next?.()
+    releaseCoverThumbSlot()
   }
 }
 
@@ -131,7 +132,6 @@ async function loadSongCoverThumb(
 ): Promise<CoverThumbResult | null> {
   try {
     if (context?.shouldAbort?.()) return null
-    const mm = await import('music-metadata')
     const crypto = await import('crypto')
 
     // 解析 listRootDir 为绝对路径（允许 library 相对路径）
@@ -206,18 +206,16 @@ async function loadSongCoverThumb(
     }
 
     // 解析嵌入封面
-    let format = 'image/jpeg'
-    let data: Buffer | null = null
-    try {
-      const metadata = await mm.parseFile(filePath)
-      if (context?.shouldAbort?.()) return null
-      const cover = mm.selectCover(metadata.common.picture)
-      if (!cover) return null
-      format = cover.format || 'image/jpeg'
-      data = toNodeBuffer(cover.data)
-    } catch {
-      return null
-    }
+    const priority: FileIoPriority = context?.priority === 'prefetch' ? 'prefetch' : 'visible'
+    const cover = await runPlaybackAwareBackgroundFileIo(
+      'cover:extract',
+      { filePath },
+      () => extractCoverOffMainThread(filePath, context?.shouldAbort),
+      { priority }
+    )
+    if (context?.shouldAbort?.() || !cover) return null
+    const format = cover.format
+    const data = cover.data
     if (!data || data.length === 0) return null
 
     const imageHash = (await crypto).createHash('sha1').update(data).digest('hex')
@@ -252,7 +250,7 @@ export async function getSongCoverThumb(
   }
 }
 
-export async function persistSongCoverDisplayCache(params: {
+async function persistSongCoverDisplayCacheNow(params: {
   filePath: string
   listRootDir: string
   imageHash: string
@@ -294,6 +292,24 @@ export async function persistSongCoverDisplayCache(params: {
   } catch {
     return false
   }
+}
+
+export async function persistSongCoverDisplayCache(params: {
+  filePath: string
+  listRootDir: string
+  imageHash: string
+  legacyExt?: string
+  format: string
+  data: Buffer | Uint8Array
+  context?: CoverThumbRequestContext
+}): Promise<boolean> {
+  const priority: FileIoPriority = params.context?.priority === 'prefetch' ? 'prefetch' : 'visible'
+  return await runPlaybackAwareBackgroundFileIo(
+    'cover:persist-display-cache',
+    { filePath: params.filePath },
+    () => persistSongCoverDisplayCacheNow(params),
+    { priority }
+  )
 }
 
 export async function sweepSongListCovers(
