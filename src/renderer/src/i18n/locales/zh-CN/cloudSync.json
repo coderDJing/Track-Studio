@@ -77,11 +77,11 @@
         "firstSnapshotWait": "等待另一台设备提交首次快照超时，请稍后再试。"
       },
       "activityTitle": "当前同步",
-      "activityScanning": "正在核对本机精选库 {now}/{total}",
+      "activityScanning": "正在同步精选库",
       "activityDownloading": "正在从云端拉取精选库音频 {now}/{total}",
       "activityUploading": "正在上传精选库音频 {now}/{total}",
       "activityWaitingFirstSnapshot": "正在等待另一台设备完成首次快照",
-      "activityApplying": "正在整理精选库",
+      "activityApplying": "正在同步精选库",
       "activityFirstSnapshotHint": "首次快照提交前，云端曲目数会暂时显示 0 首。",
       "quota": "云端占用",
       "quotaValue": "{used} / {limit} · {count} 首",

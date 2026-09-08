@@ -195,16 +195,11 @@ export const getCuratedLibrarySyncActivity = (): CuratedLibrarySyncActivity => (
   running: running || sessionActivity.running
 })
 
-const scanLocalForSync = (options?: { quiet?: boolean }) =>
-  scanCuratedLibraryForSync({
-    onFileProgress: options?.quiet
-      ? undefined
-      : (done, total) => setActivity('scanning', done, total)
-  })
+const scanLocalForSync = () => scanCuratedLibraryForSync()
 
 const rescanAfterApply = async () => {
   setActivity('applying')
-  return await scanLocalForSync({ quiet: true })
+  return await scanLocalForSync()
 }
 
 const buildJoinChoice = async (status: {
@@ -548,6 +543,7 @@ const runJoin = async (
 ): Promise<CuratedLibrarySyncStartResult> => {
   writeCuratedLibrarySyncPendingJoinMode(mode)
   sessionCompletedWork = true
+  setActivity('applying')
   const local = await scanLocalForSync()
   const snapshot = await pullMergedSnapshot(null)
   if (mode === 'local-wins') {
@@ -678,6 +674,7 @@ const isDeletionOp = (op: CuratedLibrarySyncOp): boolean =>
 
 const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
   sessionCompletedWork = true
+  setActivity('applying')
   const local = await scanLocalForSync()
   let snapshot = await pullMergedSnapshot(getCuratedLibrarySyncLastAppliedRevision())
   const lastAppliedRevision = getCuratedLibrarySyncLastAppliedRevision()
@@ -789,6 +786,7 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
 
 const runFirstSnapshotUpload = async (): Promise<CuratedLibrarySyncStartResult> => {
   sessionCompletedWork = true
+  setActivity('applying')
   const local = await scanLocalForSync()
   const failedSha = await uploadMissingBlobs(local.files)
   if (failedSha.size > 0) {

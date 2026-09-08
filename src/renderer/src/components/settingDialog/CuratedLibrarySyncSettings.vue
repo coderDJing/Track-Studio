@@ -94,9 +94,6 @@ const activityPercent = computed(() => {
 
 const activityText = computed(() => {
   const { phase, now, total } = activity.value
-  if (phase === 'scanning') {
-    return t('cloudSync.curatedLibrary.activityScanning', { now, total })
-  }
   if (phase === 'downloading') {
     return t('cloudSync.curatedLibrary.activityDownloading', { now, total })
   }
@@ -106,7 +103,7 @@ const activityText = computed(() => {
   if (phase === 'waiting-first-snapshot') {
     return t('cloudSync.curatedLibrary.activityWaitingFirstSnapshot')
   }
-  if (phase === 'applying') {
+  if (phase === 'scanning' || phase === 'applying') {
     return t('cloudSync.curatedLibrary.activityApplying')
   }
   return ''
