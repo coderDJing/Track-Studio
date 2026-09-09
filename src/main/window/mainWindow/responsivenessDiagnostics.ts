@@ -93,6 +93,7 @@ const captureSnapshot = (
 export const attachMainWindowResponsivenessDiagnostics = (browserWindow: BrowserWindow) => {
   let rendererUnresponsiveAt: number | null = null
   let lastHeartbeatAt = Date.now()
+  let lastCpuUsage = process.cpuUsage()
   let stallIncident: {
     startedAtMs: number
     lastStallAtMs: number
@@ -120,6 +121,10 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
     const now = Date.now()
     const stallDurationMs = now - previousHeartbeatAt - MAIN_PROCESS_HEARTBEAT_INTERVAL_MS
     lastHeartbeatAt = now
+    const currentCpuUsage = process.cpuUsage()
+    const cpuUserMs = (currentCpuUsage.user - lastCpuUsage.user) / 1000
+    const cpuSystemMs = (currentCpuUsage.system - lastCpuUsage.system) / 1000
+    lastCpuUsage = currentCpuUsage
     // 必须每拍都采样，Electron 的 percentCPUUsage 是相对上次调用的增量。
     const processMetrics = browserWindow.isDestroyed()
       ? []
@@ -141,21 +146,29 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
       stallIncident.count += 1
       stallIncident.totalDurationMs += stallDurationMs
       stallIncident.maxDurationMs = Math.max(stallIncident.maxDurationMs, stallDurationMs)
-      return
+    } else {
+      stallIncident = {
+        startedAtMs: now,
+        lastStallAtMs: now,
+        count: 1,
+        totalDurationMs: stallDurationMs,
+        maxDurationMs: stallDurationMs
+      }
     }
-    stallIncident = {
-      startedAtMs: now,
-      lastStallAtMs: now,
-      count: 1,
-      totalDurationMs: stallDurationMs,
-      maxDurationMs: stallDurationMs
-    }
+    // 每次达到阈值都保留现场，避免同一轮后续更严重的卡顿只剩汇总计数。
     log.error('[main-window] main-process event loop stalled', {
+      incidentStartedAtMs: stallIncident.startedAtMs,
+      stallIndex: stallIncident.count,
       stallDurationMs,
       snapshot: captureSnapshot(browserWindow, {
         sinceMs: previousHeartbeatAt,
         processMetrics
-      })
+      }),
+      mainProcessInterval: {
+        elapsedMs: Math.max(0, now - previousHeartbeatAt),
+        cpuUserMs: Math.round(cpuUserMs),
+        cpuSystemMs: Math.round(cpuSystemMs)
+      }
     })
   }, MAIN_PROCESS_HEARTBEAT_INTERVAL_MS)
 
