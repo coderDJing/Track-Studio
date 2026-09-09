@@ -1,6 +1,7 @@
 import type { CompactVisualWaveformData } from '@shared/compactVisualWaveform'
 import { resolveSaturatedWaveformColor } from '@shared/waveformDisplayColor'
 import {
+  RAW_ENERGY_PRESENCE_FLOOR_AMP,
   resolveRawEnergyShapeParamsByDuration,
   shapeRawEnergyAmpValue
 } from '@renderer/components/beatGridRawWaveformEnvelope'
@@ -44,6 +45,7 @@ const COLUMN_TAIL_RELEASE = 0.42
 const COLUMN_ATTACK_MIN_AMP = 0.06
 const COLUMN_ATTACK_MIN_RISE = 0.04
 const COLUMN_ATTACK_RELATIVE_RISE = 0.65
+const COMPACT_FALLBACK_COLOR: WaveformRgbColor = { r: 235, g: 242, b: 248 }
 const DETAIL_HIGHLIGHT_DARK = '255, 255, 255'
 const DETAIL_HIGHLIGHT_LIGHT = '15, 23, 42'
 const CENTER_LINE_DARK = 'rgba(210, 236, 255, 0.28)'
@@ -151,7 +153,10 @@ const resolveCompactColorProfile = (
   const blue = data.colorBlue[selectedIndex] || 0
   const maxBand = Math.max(low, mid, high)
   const maxColor = Math.max(red, green, blue)
-  if (maxBand <= 0 && maxColor <= 0) return null
+  // 弱信号会把频段字节量化成 0，这里退回保底色，避免整列被判定为空白。
+  if (maxBand <= 0 && maxColor <= 0) {
+    return { frequencyRatios: undefined, color: COMPACT_FALLBACK_COLOR }
+  }
   const color =
     maxColor > 0
       ? resolveSaturatedWaveformColor({
@@ -159,11 +164,7 @@ const resolveCompactColorProfile = (
           g: toColorChannel(green),
           b: toColorChannel(blue)
         })
-      : {
-          r: 235,
-          g: 242,
-          b: 248
-        }
+      : COMPACT_FALLBACK_COLOR
 
   return {
     frequencyRatios:
@@ -190,8 +191,6 @@ const resolveCompactVisualColumn = (
   const safeEnd = clamp(localEndFrame, safeStart, detailFrames - 1)
   const globalStartFrame = safeStart
   const globalEndFrame = safeEnd
-  const colorProfile = resolveCompactColorProfile(data, globalStartFrame, globalEndFrame)
-  if (!colorProfile) return null
 
   let energySum = 0
   let energyPeak = 0
@@ -202,22 +201,24 @@ const resolveCompactVisualColumn = (
     energyPeak = Math.max(energyPeak, energy)
     count += 1
   }
+  // 能量被字节量化成 0 意味着这一段确实是静音（或低于 1/255 量化下限），才允许留白。
   if (count <= 0 || energyPeak <= 0) return null
 
+  const colorProfile = resolveCompactColorProfile(data, globalStartFrame, globalEndFrame)
   const shape = resolveRawEnergyShapeParamsByDuration(Math.max(0, Number(data.duration) || 0))
   const mean = clamp01(energySum / count)
   const base = mean * (1 - shape.peakBlendWeight) + energyPeak * shape.peakBlendWeight
-  const amp = shapeRawEnergyAmpValue(base, shape.outputGamma)
+  const amp = shapeRawEnergyAmpValue(base, shape.outputGamma, RAW_ENERGY_PRESENCE_FLOOR_AMP)
   if (amp <= 0) return null
-  const shapedAmp = colorProfile.frequencyRatios
+  const shapedAmp = colorProfile?.frequencyRatios
     ? resolveRekordboxRgbHeightAmp(amp, colorProfile.frequencyRatios)
     : amp
 
   return {
     ampTop: shapedAmp,
     ampBottom: shapedAmp,
-    color: colorProfile.color,
-    frequencyRatios: colorProfile.frequencyRatios
+    color: colorProfile?.color ?? COMPACT_FALLBACK_COLOR,
+    frequencyRatios: colorProfile?.frequencyRatios
   }
 }
 
