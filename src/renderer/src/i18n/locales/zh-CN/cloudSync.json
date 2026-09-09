@@ -1,6 +1,7 @@
 {
   "cloudSync": {
     "syncFingerprints": "同步指纹库与精选表演者",
+    "syncCuratedLibrary": "同步精选库",
     "settings": "云同步设置",
     "notConfigured": "尚未配置云同步",
     "notConfiguredHint": "尚未配置云同步，将打开设置面板",
@@ -76,6 +77,17 @@
         "protocolUnsupported": "当前客户端协议版本无法写入云端精选库。",
         "firstSnapshotWait": "等待另一台设备提交首次快照超时，请稍后再试。"
       },
+      "syncSuccess": "精选库同步成功",
+      "alreadyLatest": "精选库已是最新，无需同步",
+      "syncFailed": "精选库同步失败，请查看失败项后重试。",
+      "syncCancelled": "精选库同步已取消",
+      "manualHint": "将本机精选库与云端同步一次。",
+      "phases": {
+        "scanning": "检查",
+        "downloading": "拉取",
+        "uploading": "上传",
+        "applying": "应用"
+      },
       "activityTitle": "当前同步",
       "activityScanning": "正在同步精选库",
       "activityDownloading": "正在从云端拉取精选库音频 {now}/{total}",
@@ -93,11 +105,13 @@
       "liveHint": "勾选同步精选库并配置 userKey 后，云端有新修订会自动拉取。未接上这份云精选库前不会弹第一次对齐。",
       "conflictsTitle": "同步冲突",
       "conflictsCount": "{count} 项本机改动未能写入云端",
+      "conflictsCountShort": "冲突 {count} 项",
       "conflictLine": "{kind}：{name}",
       "conflictLineNamed": "{kind}：{name} → {otherName}",
       "viewConflicts": "查看冲突详情",
       "clearConflicts": "清除冲突记录",
       "failuresTitle": "传输失败",
+      "failuresCountShort": "失败 {count} 项",
       "failuresMore": "还有 {count} 项未显示。",
       "retryAll": "重试失败项",
       "clearFailures": "清除失败记录",

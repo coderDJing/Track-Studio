@@ -76,58 +76,82 @@ const showTerminalError = async (result: CuratedLibrarySyncStartResult) => {
   })
 }
 
+type ContinueOptions = {
+  quietTerminal?: boolean
+  allowWhenDisabled?: boolean
+}
+
 export const continueCuratedLibrarySyncUi = async (
   result: CuratedLibrarySyncStartResult,
-  options?: { quietTerminal?: boolean }
+  options?: ContinueOptions
 ): Promise<void> => {
-  if (result.status === 'needs_join_choice') {
-    const choice = await promptJoinChoice(result)
-    if (choice === 'cancel') {
-      await disableCuratedLibrarySyncAfterJoinCancel()
-      return
+  // 「第一次对齐」「覆盖云端」的二次确认会带参数重跑，用循环接续而不是再走一次入口，
+  // 避免重复触发入口的重入保护。
+  let current = result
+  for (;;) {
+    if (current.status === 'needs_join_choice') {
+      const choice = await promptJoinChoice(current)
+      if (choice === 'cancel') {
+        await disableCuratedLibrarySyncAfterJoinCancel()
+        return
+      }
+      current = await startCuratedLibrarySyncIpc({
+        trigger: 'manual',
+        joinMode: choice,
+        confirmOverwriteCloud: choice === 'local-wins',
+        allowWhenDisabled: options?.allowWhenDisabled
+      })
+      continue
     }
-    await runCuratedLibrarySyncUi({
-      trigger: 'manual',
-      joinMode: choice,
-      confirmOverwriteCloud: choice === 'local-wins'
-    })
-    return
-  }
-  if (result.status === 'needs_overwrite_cloud_confirm') {
-    const confirmed = await confirm({
-      title: t('cloudSync.curatedLibrary.overwriteTitle'),
-      content: [
-        t('cloudSync.curatedLibrary.overwriteWarning', {
-          local: result.localFileCount,
-          cloud: result.cloudFileCount
-        }),
-        t('cloudSync.curatedLibrary.overwriteConfirmHint')
-      ],
-      confirmText: t('cloudSync.curatedLibrary.overwriteConfirm'),
-      cancelText: t('common.cancel'),
-      innerHeight: 260
-    })
-    if (confirmed !== 'confirm') {
-      await disableCuratedLibrarySyncAfterJoinCancel()
-      return
+    if (current.status === 'needs_overwrite_cloud_confirm') {
+      const confirmed = await confirm({
+        title: t('cloudSync.curatedLibrary.overwriteTitle'),
+        content: [
+          t('cloudSync.curatedLibrary.overwriteWarning', {
+            local: current.localFileCount,
+            cloud: current.cloudFileCount
+          }),
+          t('cloudSync.curatedLibrary.overwriteConfirmHint')
+        ],
+        confirmText: t('cloudSync.curatedLibrary.overwriteConfirm'),
+        cancelText: t('common.cancel'),
+        innerHeight: 260
+      })
+      if (confirmed !== 'confirm') {
+        await disableCuratedLibrarySyncAfterJoinCancel()
+        return
+      }
+      current = await startCuratedLibrarySyncIpc({
+        trigger: 'manual',
+        joinMode: 'local-wins',
+        confirmOverwriteCloud: true,
+        allowWhenDisabled: options?.allowWhenDisabled
+      })
+      continue
     }
-    await runCuratedLibrarySyncUi({
-      trigger: 'manual',
-      joinMode: 'local-wins',
-      confirmOverwriteCloud: true
-    })
-    return
+    break
   }
   if (options?.quietTerminal) return
-  await showTerminalError(result)
+  await showTerminalError(current)
 }
+
+let flowRunning = false
 
 export const runCuratedLibrarySyncUi = async (
   extra?: CuratedLibrarySyncStartPayload
 ): Promise<void> => {
-  const result = await startCuratedLibrarySyncIpc({
-    trigger: 'manual',
-    ...extra
-  })
-  await continueCuratedLibrarySyncUi(result)
+  // 连点菜单时只保留一条链路：后来的调用直接忽略，避免连弹多个提示框。
+  if (flowRunning) return
+  flowRunning = true
+  try {
+    const result = await startCuratedLibrarySyncIpc({
+      trigger: 'manual',
+      ...extra
+    })
+    await continueCuratedLibrarySyncUi(result, {
+      allowWhenDisabled: extra?.allowWhenDisabled
+    })
+  } finally {
+    flowRunning = false
+  }
 }

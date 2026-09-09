@@ -7,6 +7,7 @@ import { t } from '@renderer/utils/translate'
 import { formatAnalysisRuntimeBytes } from '@renderer/utils/analysisRuntimeDownloadUi'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { runCuratedLibrarySyncUi } from '@renderer/composables/runCuratedLibrarySyncUi'
+import { useCuratedLibrarySyncStatus } from '@renderer/composables/useCuratedLibrarySyncStatus'
 import type {
   CuratedLibrarySyncActivity,
   CuratedLibrarySyncConflictItem,
@@ -16,6 +17,7 @@ import type {
 } from '../../../../shared/curatedLibrarySync'
 
 const runtime = useRuntimeStore()
+const { status: syncStatus } = useCuratedLibrarySyncStatus()
 
 const persistSetting = async () => {
   await window.electron.ipcRenderer.invoke(
@@ -55,7 +57,6 @@ const emptyOverview = (): CuratedLibrarySyncOverview => ({
 })
 
 const overview = ref<CuratedLibrarySyncOverview>(emptyOverview())
-const syncing = ref(false)
 const MAX_VISIBLE_FAILURES = 8
 let liveTimer: ReturnType<typeof setInterval> | null = null
 
@@ -80,7 +81,7 @@ const extraFailureCount = computed(() =>
   Math.max(0, overview.value.failures.length - visibleFailures.value.length)
 )
 
-const activity = computed(() => overview.value.activity || emptyActivity())
+const activity = computed(() => syncStatus.value || overview.value.activity || emptyActivity())
 
 const activityVisible = computed(
   () => activity.value.running === true && activity.value.phase !== 'idle'
@@ -145,14 +146,9 @@ watch(
 )
 
 const retryFailures = async () => {
-  if (syncing.value || !enabledModel.value) return
-  syncing.value = true
-  try {
-    await runCuratedLibrarySyncUi({ trigger: 'manual' })
-    await refreshOverview()
-  } finally {
-    syncing.value = false
-  }
+  if (!enabledModel.value || syncStatus.value.running) return
+  await runCuratedLibrarySyncUi({ trigger: 'manual' })
+  await refreshOverview()
 }
 
 const conflictLine = (item: CuratedLibrarySyncConflictItem) => {
@@ -246,11 +242,20 @@ onBeforeUnmount(() => {
       <div class="setting-hint">{{ t('cloudSync.curatedLibrary.liveHint') }}</div>
     </div>
 
-    <template v-if="activityVisible">
+    <template v-if="activityVisible || syncStatus.terminalStatus !== 'idle'">
       <div class="setting-block">{{ t('cloudSync.curatedLibrary.activityTitle') }}</div>
       <div class="setting-control">
-        <div class="status-value on">{{ activityText }}</div>
-        <div v-if="activity.total > 0" class="quota-bar">
+        <div v-if="activityVisible" class="status-value on">{{ activityText }}</div>
+        <div v-else-if="syncStatus.terminalStatus === 'success'" class="status-value on">
+          {{ t('cloudSync.curatedLibrary.syncSuccess') }}
+        </div>
+        <div v-else-if="syncStatus.terminalStatus === 'failed'" class="status-value warn">
+          {{ t('cloudSync.curatedLibrary.syncFailed') }}
+        </div>
+        <div v-else-if="syncStatus.terminalStatus === 'cancelled'" class="status-value warn">
+          {{ t('cloudSync.curatedLibrary.syncCancelled') }}
+        </div>
+        <div v-if="activityVisible && activity.total > 0" class="quota-bar">
           <div class="quota-bar-fill" :style="{ width: `${activityPercent}%` }" />
         </div>
         <div v-if="showFirstSnapshotHint" class="setting-hint">
@@ -333,7 +338,7 @@ onBeforeUnmount(() => {
           >
             <div
               class="button settings-inline-button"
-              :class="{ disabled: !enabledModel || syncing }"
+              :class="{ disabled: !enabledModel || syncStatus.running }"
               @click="enabledModel ? void retryFailures() : undefined"
             >
               {{ t('cloudSync.curatedLibrary.retryAll') }}
