@@ -8,6 +8,8 @@ type RawWaveformAmps = {
 type RawEnergyProfile = RawWaveformAmps & {
   base: number
   peak: number
+  samplePeak: number
+  hasSignal: boolean
   shape: RawEnergyShapeParams
 }
 
@@ -23,6 +25,11 @@ const RAW_ENERGY_FIXED_VISUAL_GAIN = 1
 const RAW_ENERGY_PEAK_BLEND_WEIGHT = 0.55
 const RAW_ENERGY_OUTPUT_GAMMA = 1.74
 const RAW_ENERGY_GATE = 0.02
+// 只有所有采样都严格为零才算真正的数字静音，允许渲染成空白。
+// 任何非零 PCM（包括极弱的残响、噪声底和衰减尾音）都必须保留最小可见波形。
+const RAW_ENERGY_SILENCE_SAMPLE_PEAK = 0
+// 有信号但整形后被门限压掉时，保底渲染的“细线”幅度，保证弱音段落仍然可见。
+export const RAW_ENERGY_PRESENCE_FLOOR_AMP = 0.012
 const RAW_ENERGY_ATTACK_WEIGHT = 0.78
 const RAW_ENERGY_ATTACK_RISE = 0.105
 const RAW_ENERGY_FULL_TRACK_START_SEC = 20
@@ -62,7 +69,9 @@ const resolveFrameEnergy = (rawData: RawWaveformData, frame: number) => {
     Number.isFinite(rmsLeft) &&
     Number.isFinite(rmsRight)
   ) {
-    return Math.sqrt((rmsLeft * rmsLeft + rmsRight * rmsRight) / 2)
+    const rms = Math.sqrt((rmsLeft * rmsLeft + rmsRight * rmsRight) / 2)
+    // RMS 为 0 但峰值非零时不能当成静音，否则弱信号会被整列丢弃。
+    if (rms > 0) return rms
   }
 
   const minLeft = rawData.minLeft[frame] || 0
@@ -111,10 +120,25 @@ const resolveRawEnergyShapeParams = (rawData: RawWaveformData): RawEnergyShapePa
   return resolveRawEnergyShapeParamsByDuration(durationSec)
 }
 
-export const shapeRawEnergyAmpValue = (value: number, outputGamma = RAW_ENERGY_OUTPUT_GAMMA) => {
-  const amp = value > 0 ? Math.pow(clamp(value, 0, 1), outputGamma) : 0
-  return amp < RAW_ENERGY_GATE ? 0 : amp
+/**
+ * 把归一化能量映射成可视幅度。
+ *
+ * `presenceFloorAmp` 用于“弱信号保底”：非静音片段即使被噪声门限压掉，也要退回到该幅度渲染一条细线，
+ * 只有真正的数字静音（由调用方判定后传入 0）才允许返回 0 并留白。
+ */
+export const shapeRawEnergyAmpValue = (
+  value: number,
+  outputGamma = RAW_ENERGY_OUTPUT_GAMMA,
+  presenceFloorAmp = 0
+) => {
+  if (!(value > 0)) return 0
+  const amp = Math.pow(clamp(value, 0, 1), outputGamma)
+  if (amp >= RAW_ENERGY_GATE) return amp
+  return presenceFloorAmp > 0 ? presenceFloorAmp : 0
 }
+
+export const hasRawEnergySignal = (samplePeak: number) =>
+  Number.isFinite(samplePeak) && samplePeak > RAW_ENERGY_SILENCE_SAMPLE_PEAK
 
 export const resolveRawEnergyAttackAmp = (
   base: number | undefined,
@@ -134,7 +158,8 @@ export const resolveRawEnergyAttackAmp = (
   const attackWeight = shapeParams?.attackWeight ?? RAW_ENERGY_ATTACK_WEIGHT
   return shapeRawEnergyAmpValue(
     base * (1 - attackWeight) + peak * attackWeight,
-    shapeParams?.outputGamma
+    shapeParams?.outputGamma,
+    peak > 0 ? RAW_ENERGY_PRESENCE_FLOOR_AMP : 0
   )
 }
 
@@ -153,12 +178,20 @@ export const resolveRawEnergyProfileByRange = (
       : 1
   let sum = 0
   let peak = 0
+  let samplePeak = 0
   let count = 0
   let lastFrame = startFrame
   const addFrame = (frame: number) => {
     const energy = resolveFrameEnergy(rawData, frame)
     sum += energy
     if (energy > peak) peak = energy
+    const frameSamplePeak = Math.max(
+      Math.abs(rawData.minLeft[frame] || 0),
+      Math.abs(rawData.maxLeft[frame] || 0),
+      Math.abs(rawData.minRight[frame] || 0),
+      Math.abs(rawData.maxRight[frame] || 0)
+    )
+    if (frameSamplePeak > samplePeak) samplePeak = frameSamplePeak
     count += 1
   }
   for (let frame = startFrame; frame <= endFrame; frame += step) {
@@ -175,6 +208,19 @@ export const resolveRawEnergyProfileByRange = (
   const normalizedPeak = clamp(peak / scale, 0, 1)
   const base =
     mean * (1 - shapeParams.peakBlendWeight) + normalizedPeak * shapeParams.peakBlendWeight
-  const amp = shapeRawEnergyAmpValue(base, shapeParams.outputGamma)
-  return { ampTop: amp, ampBottom: amp, base, peak: normalizedPeak, shape: shapeParams }
+  const hasSignal = hasRawEnergySignal(samplePeak / scale)
+  const amp = shapeRawEnergyAmpValue(
+    base,
+    shapeParams.outputGamma,
+    hasSignal ? RAW_ENERGY_PRESENCE_FLOOR_AMP : 0
+  )
+  return {
+    ampTop: amp,
+    ampBottom: amp,
+    base,
+    peak: normalizedPeak,
+    samplePeak: clamp(samplePeak / scale, 0, 1),
+    hasSignal,
+    shape: shapeParams
+  }
 }

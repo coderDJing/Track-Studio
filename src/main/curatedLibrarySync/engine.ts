@@ -33,6 +33,7 @@ import {
   CURATED_LIBRARY_SYNC_PROGRESS_ID,
   type CuratedLibrarySyncActivity,
   type CuratedLibrarySyncActivityPhase,
+  type CuratedLibrarySyncStatus,
   type CuratedLibrarySyncConflictItem,
   type CuratedLibrarySyncFailureItem,
   type CuratedLibrarySyncJoinMode,
@@ -101,7 +102,29 @@ const idleActivity = (): CuratedLibrarySyncActivity => ({
   now: 0,
   total: 0
 })
+const idleStatus = (): CuratedLibrarySyncStatus => ({
+  ...idleActivity(),
+  trigger: null,
+  terminalStatus: 'idle',
+  updatedAtMs: Date.now()
+})
 let sessionActivity: CuratedLibrarySyncActivity = idleActivity()
+let sessionStatus: CuratedLibrarySyncStatus = idleStatus()
+
+const emitSyncStatus = (): void => {
+  const win = mainWindow.instance
+  if (!win || win.isDestroyed()) return
+  win.webContents.send('curatedLibrarySync/status', sessionStatus)
+}
+
+const setStatus = (patch: Partial<CuratedLibrarySyncStatus>): void => {
+  sessionStatus = {
+    ...sessionStatus,
+    ...patch,
+    updatedAtMs: Math.max(Date.now(), sessionStatus.updatedAtMs + 1)
+  }
+  emitSyncStatus()
+}
 
 const bindPowerMonitor = () => {
   if (powerMonitorBound) return
@@ -184,6 +207,7 @@ const setActivity = (phase: CuratedLibrarySyncActivityPhase, now = 0, total = 0)
     now,
     total
   }
+  setStatus({ ...sessionActivity, terminalStatus: 'idle', message: undefined })
 }
 
 const clearActivity = (): void => {
@@ -194,6 +218,26 @@ export const getCuratedLibrarySyncActivity = (): CuratedLibrarySyncActivity => (
   ...sessionActivity,
   running: running || sessionActivity.running
 })
+
+export const getCuratedLibrarySyncStatus = (): CuratedLibrarySyncStatus => sessionStatus
+
+export const completeCuratedLibrarySyncStatus = (result: CuratedLibrarySyncStartResult): void => {
+  if (result.status === 'already_running' || result.status === 'needs_join_choice') return
+  if (result.status === 'needs_overwrite_cloud_confirm') return
+  const terminalStatus =
+    result.status === 'success'
+      ? result.changed === false
+        ? 'up_to_date'
+        : 'success'
+      : result.status === 'cancelled'
+        ? 'cancelled'
+        : 'failed'
+  setStatus({
+    ...idleActivity(),
+    terminalStatus,
+    message: result.status === 'failed' ? result.message : result.status
+  })
+}
 
 const scanLocalForSync = () => scanCuratedLibraryForSync()
 
@@ -676,8 +720,9 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
   sessionCompletedWork = true
   setActivity('applying')
   const local = await scanLocalForSync()
-  let snapshot = await pullMergedSnapshot(getCuratedLibrarySyncLastAppliedRevision())
   const lastAppliedRevision = getCuratedLibrarySyncLastAppliedRevision()
+  let snapshot = await pullMergedSnapshot(lastAppliedRevision)
+  let changed = lastAppliedRevision === null || snapshot.revision !== lastAppliedRevision
   // reset/回滚可能恰好发生在 status 与 pull 之间；不能把本机旧文件再推回刚清空的云端。
   if (lastAppliedRevision != null && snapshot.revision < lastAppliedRevision) {
     return await runJoin('cloud-wins')
@@ -708,9 +753,10 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
       if (applied.diskFull) return { status: 'disk_full' }
       writeCuratedLibrarySyncDeferredOps(applied.deferred)
       persistAppliedSnapshot(winning, latest)
-      return { status: 'success' }
+      return { status: 'success', changed: true }
     }
     const deferred = toDeferred(readCuratedLibrarySyncDeferredOps())
+    if (deferred.length > 0) changed = true
     const applyOptions = incrementalApplyOptions()
     const remainingDeferred = await retryDeferredRemoteOps(deferred, snapshot, applyCtx())
     const retainBefore = collectUnappliedCloudIds(snapshot, local, applyOptions)
@@ -719,6 +765,7 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
       new Set()
     ).filter(isDeletionOp)
     if (deletionOps.length > 0) {
+      changed = true
       const pushedDeletes = await pushCuratedOps({
         baseRevision: snapshot.revision,
         ops: deletionOps,
@@ -748,8 +795,9 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
     if (ops.length === 0) {
       persistAppliedSnapshot(snapshot, after)
       writeCuratedLibrarySyncDeferredOps(remainingDeferred)
-      return { status: 'success' }
+      return { status: 'success', changed }
     }
+    changed = true
     setActivity('applying')
     const pushed = await pushCuratedOps({
       baseRevision: snapshot.revision,
@@ -772,11 +820,11 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
       await purgePendingDeletedCuratedNodeShells()
       latest = await rescanAfterApply()
       persistAppliedSnapshot(pushed.snapshot, latest)
-      return { status: 'success' }
+      return { status: 'success', changed }
     }
     persistAppliedSnapshot(pushed.snapshot, after)
     writeCuratedLibrarySyncDeferredOps(remainingDeferred)
-    return { status: 'success' }
+    return { status: 'success', changed }
   } finally {
     suppressCuratedLibraryTreeSync()
     release()
@@ -832,7 +880,9 @@ export const runCuratedLibrarySync = async (
         ? 'realtime'
         : 'manual'
   if (running) return { status: 'already_running' }
-  if (!isCuratedLibrarySyncEnabled()) return { status: 'not_enabled' }
+  if (!isCuratedLibrarySyncEnabled() && !payload.allowWhenDisabled) {
+    return { status: 'not_enabled' }
+  }
   if (
     !resolveDevCloudSyncUserKey(String(store.settingConfig?.cloudSyncUserKey || '').trim(), is.dev)
   ) {
@@ -848,6 +898,15 @@ export const runCuratedLibrarySync = async (
   bindPowerMonitor()
   running = true
   cancelRequested = false
+  setStatus({
+    running: true,
+    trigger,
+    phase: 'scanning',
+    now: 0,
+    total: 0,
+    terminalStatus: 'idle',
+    message: undefined
+  })
   abortController = new AbortController()
   sessionFailures = []
   sessionConflicts = []
@@ -867,7 +926,9 @@ export const runCuratedLibrarySync = async (
       rewound = true
     }
     if (trigger === 'realtime' && !rewound) {
-      if (!status.snapshotReady || lastRevision === null) return { status: 'success' }
+      if (!status.snapshotReady || lastRevision === null) {
+        return { status: 'success', changed: false }
+      }
       return await runIncremental()
     }
     if (!status.snapshotReady) {
@@ -884,7 +945,7 @@ export const runCuratedLibrarySync = async (
         return await runFirstSnapshotUpload()
       }
       if (lastRevision !== null) {
-        return { status: 'success' }
+        return { status: 'success', changed: false }
       }
       // 空云端第一次：静默上传本机精选库，不弹对齐。
       try {
@@ -936,6 +997,7 @@ export const runCuratedLibrarySync = async (
     return await runIncremental()
   } catch (error) {
     if (cancelRequested || (error as { name?: string })?.name === 'AbortError') {
+      setStatus({ running: false, phase: 'idle', now: 0, total: 0, terminalStatus: 'cancelled' })
       return { status: 'cancelled' }
     }
     const code = String((error as { code?: unknown })?.code || '')

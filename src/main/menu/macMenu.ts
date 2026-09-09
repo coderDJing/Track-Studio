@@ -253,6 +253,14 @@ const buildFullMenu = () => {
             )
         },
         {
+          label: tMenu('cloudSync.syncCuratedLibrary'),
+          click: () =>
+            mainWindow.instance?.webContents.send(
+              'openDialogFromTray',
+              'cloudSync.syncCuratedLibrary'
+            )
+        },
+        {
           label: tMenu('cloudSync.settings'),
           click: () =>
             mainWindow.instance?.webContents.send('openDialogFromTray', 'cloudSync.settings')

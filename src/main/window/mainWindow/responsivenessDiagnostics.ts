@@ -138,8 +138,10 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
         const now = Date.now()
         const stallDurationMs = now - previousHeartbeatAt - MAIN_PROCESS_HEARTBEAT_INTERVAL_MS
         lastHeartbeatAt = now
-        const cpuUsage = process.cpuUsage(lastCpuUsage)
-        lastCpuUsage = process.cpuUsage()
+        const currentCpuUsage = process.cpuUsage()
+        const cpuUserMs = (currentCpuUsage.user - lastCpuUsage.user) / 1000
+        const cpuSystemMs = (currentCpuUsage.system - lastCpuUsage.system) / 1000
+        lastCpuUsage = currentCpuUsage
         const eventLoopUtilization: EventLoopUtilization =
           performance.eventLoopUtilization(lastEventLoopUtilization)
         lastEventLoopUtilization = performance.eventLoopUtilization()
@@ -164,16 +166,19 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
           stallIncident.count += 1
           stallIncident.totalDurationMs += stallDurationMs
           stallIncident.maxDurationMs = Math.max(stallIncident.maxDurationMs, stallDurationMs)
-          return
+        } else {
+          stallIncident = {
+            startedAtMs: now,
+            lastStallAtMs: now,
+            count: 1,
+            totalDurationMs: stallDurationMs,
+            maxDurationMs: stallDurationMs
+          }
         }
-        stallIncident = {
-          startedAtMs: now,
-          lastStallAtMs: now,
-          count: 1,
-          totalDurationMs: stallDurationMs,
-          maxDurationMs: stallDurationMs
-        }
+        // 每次达到阈值都保留现场，避免同一轮后续更严重的卡顿只剩汇总计数。
         log.error('[main-window] main-process event loop stalled', {
+          incidentStartedAtMs: stallIncident.startedAtMs,
+          stallIndex: stallIncident.count,
           stallDurationMs,
           snapshot: captureSnapshot(browserWindow, {
             sinceMs: previousHeartbeatAt,
@@ -181,8 +186,8 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
           }),
           mainProcessInterval: {
             elapsedMs: Math.max(0, now - previousHeartbeatAt),
-            cpuUserMs: Math.round(cpuUsage.user / 1000),
-            cpuSystemMs: Math.round(cpuUsage.system / 1000),
+            cpuUserMs: Math.round(cpuUserMs),
+            cpuSystemMs: Math.round(cpuSystemMs),
             eventLoopActiveMs: Math.round(eventLoopUtilization.active),
             eventLoopIdleMs: Math.round(eventLoopUtilization.idle),
             eventLoopUtilization: Math.round(eventLoopUtilization.utilization * 1000) / 1000,

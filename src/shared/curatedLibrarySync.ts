@@ -121,6 +121,21 @@ export type CuratedLibrarySyncActivity = {
   total: number
 }
 
+export type CuratedLibrarySyncTerminalStatus =
+  | 'idle'
+  | 'success'
+  | 'up_to_date'
+  | 'failed'
+  | 'cancelled'
+
+/** 主进程唯一精选库同步会话的实时状态。 */
+export type CuratedLibrarySyncStatus = CuratedLibrarySyncActivity & {
+  trigger: CuratedLibrarySyncTrigger | null
+  terminalStatus: CuratedLibrarySyncTerminalStatus
+  message?: string
+  updatedAtMs: number
+}
+
 export type CuratedLibrarySyncOverview = {
   liveConnected: boolean
   snapshotReady: boolean
@@ -143,10 +158,12 @@ export type CuratedLibrarySyncStartPayload = {
   trigger?: CuratedLibrarySyncTrigger
   joinMode?: CuratedLibrarySyncJoinMode
   confirmOverwriteCloud?: boolean
+  /** 一次性手动同步：允许在未开启「同步精选库」实时开关时仍然跑一次 */
+  allowWhenDisabled?: boolean
 }
 
 export type CuratedLibrarySyncStartResult =
-  | { status: 'success' }
+  | { status: 'success'; changed?: boolean }
   | { status: 'already_running' }
   | { status: 'cancelled' }
   | { status: 'not_enabled' }

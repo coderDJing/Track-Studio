@@ -2,7 +2,9 @@ import { ipcMain } from 'electron'
 import store from '../store'
 import {
   cancelCuratedLibrarySync,
+  completeCuratedLibrarySyncStatus,
   getCuratedLibrarySyncActivity,
+  getCuratedLibrarySyncStatus,
   isCuratedLibrarySyncRunning,
   runCuratedLibrarySync
 } from './engine'
@@ -123,6 +125,7 @@ export const registerCuratedLibrarySyncIpc = (): void => {
   ipcMain.handle('curatedLibrarySync/cancel', async () => cancelCuratedLibrarySync())
   ipcMain.handle('curatedLibrarySync/isRunning', () => isCuratedLibrarySyncRunning())
   ipcMain.handle('curatedLibrarySync/isLiveConnected', () => isCuratedLibraryLiveConnected())
+  ipcMain.handle('curatedLibrarySync/getStatus', () => getCuratedLibrarySyncStatus())
   ipcMain.handle('curatedLibrarySync/getOverview', () => buildOverview())
   ipcMain.handle('curatedLibrarySync/clearConflicts', () => {
     writeCuratedLibrarySyncConflicts([])
@@ -160,6 +163,7 @@ export const registerCuratedLibrarySyncIpc = (): void => {
         syncCuratedLibraryLiveSync()
         if (isCuratedLibrarySyncEnabled()) {
           const aligned = await runCuratedLibrarySync({ trigger: 'manual', joinMode: 'cloud-wins' })
+          completeCuratedLibrarySyncStatus(aligned)
           if (aligned.status !== 'success') {
             return {
               success: false,

@@ -8,15 +8,6 @@
 - `rust_package/` Rust N-API module, with tests in `rust_package/__test__/`.
 - `resources/` app assets, `build/` packaging assets, `vendor/` bundled ffmpeg/chromaprint binaries, `out/` build output, `docs/` VitePress documentation site.
 
-## 多实例开发
-本地固定三份目录：API、主客户端、对照客户端。改代码只允许在前两份里进行。
-- 改代码：`D:\playground\FRKB-API` 与 `D:\playground\FRKB_Rapid-Audio-Organization-Tool`。
-- 禁止在 `D:\playground\FRKB_Rapid-Audio-Organization-Tool-5` 改功能代码，也禁止把文件拷过去当同步。
-- 日志各落各的。用户说在哪个项目复现，就先读那个项目的日志；跨设备问题交叉读多份。
-  - 主客户端开发日志：`D:\playground\FRKB_Rapid-Audio-Organization-Tool\log.txt`
-  - Tool-5 开发日志：`D:\playground\FRKB_Rapid-Audio-Organization-Tool-5\log.txt`
-  - API：`D:\playground\FRKB-API\logs\`（`app-*.log` / `error-*.log`）
-
 ## Build, Test, and Development Commands
 - `pnpm install` installs root dependencies.
 - `pnpm run dev` starts the Electron + Vite dev workflow.
@@ -60,7 +51,7 @@
 
 ## Debug Logging
 - 涉及运行时排查、交互链路排查、状态机排查时，默认把调试日志写入 `log.txt` 可落盘链路，不要依赖浏览器控制台临时输出。
-- 开发模式通过 `pnpm run dev` 启动时，`log.txt` 固定在**当前这个客户端实例**的项目根目录；主客户端与 Tool-5 各有一份，禁止读错目录。只有打包运行时才读取 Electron `userData` 目录下的 `log.txt`，禁止混淆两者。
+- 开发模式通过 `pnpm run dev` 启动时，`log.txt` 固定在当前项目根目录；只有打包运行时才读取 Electron `userData` 目录下的 `log.txt`，禁止混淆两者。
 - Renderer 侧调试信息应通过现有 console bridge / `outputLog` / 主进程 `log` 体系进入 `log.txt`，确保我复现一次后，Codex 可以自行读取日志继续排查。
 - 禁止把“请把控制台日志复制给我”当成默认方案；除非日志链路本身损坏，否则应优先由 Codex 自己读取 `log.txt`。
 - 常驻代码里禁止保留非报错落盘日志；提交前默认必须清理 `log.info` / `log.warn` / `log.debug`、普通 `console.log` / `console.info` / `console.warn` / `console.debug`、以及各类 trace 型 `outputLog`。默认只保留真正的错误/异常日志进入 `log.txt`。若用户明确要求提交诊断日志用于排查未来偶发问题，可以保留对应日志，但必须说明触发条件、字段含义和后续清理条件，禁止把泛滥 trace 当成常驻日志提交。

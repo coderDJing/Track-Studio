@@ -9,7 +9,6 @@ import { resolveDevCloudSyncUserKey } from '../shared/cloudSyncDevUserKey'
 import { isCuratedLibrarySyncEnabled } from './librarySettingsDb'
 import { getCuratedLibraryAbsRoot, isPathInside } from './curatedLibrarySync/paths'
 import { enqueueCuratedLibrarySync } from './curatedLibrarySync/queue'
-import { isCuratedLibrarySyncRunning } from './curatedLibrarySync/engine'
 import { isCuratedLibraryTreeSyncSuppressed } from './curatedLibrarySync/treeSyncGuard'
 import {
   hasPendingCuratedLibraryJoinPrompt,
@@ -74,7 +73,6 @@ function queueCuratedLibrarySyncTick(respectSuppress: boolean): void {
     treeSyncTimer = null
     pendingTickIgnoresSuppress = false
     if (!ignoreSuppress && isCuratedLibraryTreeSyncSuppressed()) return
-    if (isCuratedLibrarySyncRunning()) return
     void runCuratedLibrarySyncTick()
   }, TREE_SYNC_DEBOUNCE_MS)
 }
@@ -82,13 +80,11 @@ function queueCuratedLibrarySyncTick(respectSuppress: boolean): void {
 function scheduleCuratedLibrarySyncAfterTreeChange(): void {
   if (!canRunCuratedLibrarySyncNow()) return
   if (isCuratedLibraryTreeSyncSuppressed()) return
-  if (isCuratedLibrarySyncRunning()) return
   queueCuratedLibrarySyncTick(true)
 }
 
 export function scheduleCuratedLibrarySyncAfterLocalChange(): void {
   if (!canRunCuratedLibrarySyncNow()) return
-  if (isCuratedLibrarySyncRunning()) return
   queueCuratedLibrarySyncTick(false)
 }
 

@@ -291,10 +291,12 @@ const resolveRawColumnByTimeRange = (
         maxSamplesPerPixel,
         rawColorUsesEnergyShape
       )
+  // 弱信号可能解析不出频段配色，但只要有非零幅度就必须保底出一条细线，不能整列留白。
+  const hasRawAmplitude = rawAmps.ampTop > 0 || rawAmps.ampBottom > 0
   const color =
     rawFftProfile?.color ??
     (isNativeRekordboxTriBand ? { r: 38, g: 82, b: 242 } : null) ??
-    (preferRawPeaksOnly ? RAW_PEAKS_ONLY_FALLBACK_COLOR : null)
+    (preferRawPeaksOnly || hasRawAmplitude ? RAW_PEAKS_ONLY_FALLBACK_COLOR : null)
   if (!color) return null
   return {
     ampTop: rawAmps.ampTop,
@@ -616,21 +618,23 @@ const buildWaveformColumns = (
       maxLow * MIXXX_RGB_COMPONENTS.low.b +
       maxMid * MIXXX_RGB_COMPONENTS.mid.b +
       maxHigh * MIXXX_RGB_COMPONENTS.high.b
-    const maxColor = Math.max(red, green, blue)
-    if (maxColor <= 0) continue
-
     const ampTop = Math.min(1, Math.sqrt(maxAllTop) / MIXXX_MAX_RGB_ENERGY)
     const ampBottom = Math.min(1, Math.sqrt(maxAllBottom) / MIXXX_MAX_RGB_ENERGY)
+    // 只要有非零幅度就必须渲染；配色解析不出来时退回保底色，而不是整列留白。
     if (ampTop <= 0 && ampBottom <= 0) continue
 
+    const maxColor = Math.max(red, green, blue)
     columns[x] = {
       ampTop: clamp(ampTop * safeWaveformGain, 0, 1),
       ampBottom: clamp(ampBottom * safeWaveformGain, 0, 1),
-      color: resolveSaturatedWaveformColor({
-        r: toColorChannel((red / maxColor) * 255 * MIXXX_RGB_BRIGHTNESS_SCALE),
-        g: toColorChannel((green / maxColor) * 255 * MIXXX_RGB_BRIGHTNESS_SCALE),
-        b: toColorChannel((blue / maxColor) * 255 * MIXXX_RGB_BRIGHTNESS_SCALE)
-      })
+      color:
+        maxColor > 0
+          ? resolveSaturatedWaveformColor({
+              r: toColorChannel((red / maxColor) * 255 * MIXXX_RGB_BRIGHTNESS_SCALE),
+              g: toColorChannel((green / maxColor) * 255 * MIXXX_RGB_BRIGHTNESS_SCALE),
+              b: toColorChannel((blue / maxColor) * 255 * MIXXX_RGB_BRIGHTNESS_SCALE)
+            })
+          : RAW_PEAKS_ONLY_FALLBACK_COLOR
     }
   }
 

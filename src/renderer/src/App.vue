@@ -18,6 +18,7 @@ import pkg from '../../../package.json'
 import cloudSyncSettingsDialog from './components/cloudSyncSettingsDialog.vue'
 import cloudSyncSyncDialog from './components/cloudSyncSyncDialog.vue'
 import cloudSyncSummaryDialog from './components/cloudSyncSummaryDialog.vue'
+import curatedLibrarySyncDialog from './components/curatedLibrarySyncDialog.vue'
 import FileOpInterruptedDialog from './components/fileOpInterruptedDialog.vue'
 import emitter from './utils/mitt'
 import { replaceExternalPlaylistFromPaths } from '@renderer/utils/externalPlaylist'
@@ -423,6 +424,7 @@ const openDialog = async (item: string) => {
   if (item === '云同步设置') item = 'cloudSync.settings'
   if (item === '同步曲目指纹库') item = 'cloudSync.syncFingerprints'
   if (item === '同步指纹库与精选表演者') item = 'cloudSync.syncFingerprints'
+  if (item === '同步精选库') item = 'cloudSync.syncCuratedLibrary'
   if (item === '手动添加曲目指纹') item = 'fingerprints.manualAdd'
   if (item === '导出曲目指纹库文件') item = 'fingerprints.exportDatabase'
   if (item === '导出指纹库文件') item = 'fingerprints.exportDatabase'
@@ -534,6 +536,10 @@ const openDialog = async (item: string) => {
     return
   }
   if (item === 'cloudSync.syncFingerprints') {
+    activeDialog.value = item
+    return
+  }
+  if (item === 'cloudSync.syncCuratedLibrary') {
     activeDialog.value = item
     return
   }
@@ -1084,6 +1090,10 @@ onBeforeUnmount(() => {
   <settingDialog v-if="activeDialog == 'settings'" @cancel="activeDialog = ''" />
   <cloudSyncSyncDialog
     v-if="activeDialog == 'cloudSync.syncFingerprints'"
+    @cancel="activeDialog = ''"
+  />
+  <curatedLibrarySyncDialog
+    v-if="activeDialog == 'cloudSync.syncCuratedLibrary'"
     @cancel="activeDialog = ''"
   />
   <globalSongSearchDialog

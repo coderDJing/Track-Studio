@@ -1,6 +1,7 @@
 {
   "cloudSync": {
     "syncFingerprints": "Sync fingerprints & curated artists",
+    "syncCuratedLibrary": "Sync curated library",
     "settings": "Cloud Sync Settings",
     "notConfigured": "Not configured",
     "notConfiguredHint": "Not configured. Opening settings...",
@@ -76,6 +77,17 @@
         "protocolUnsupported": "This client protocol version cannot write the cloud curated library.",
         "firstSnapshotWait": "Timed out waiting for another device to finish the first snapshot. Try again later."
       },
+      "syncSuccess": "Curated library sync completed",
+      "alreadyLatest": "The curated library is already up to date",
+      "syncFailed": "Curated library sync failed. Review failed items and retry.",
+      "syncCancelled": "Curated library sync cancelled",
+      "manualHint": "Sync this computer's curated library with the cloud once.",
+      "phases": {
+        "scanning": "Check",
+        "downloading": "Pull",
+        "uploading": "Upload",
+        "applying": "Apply"
+      },
       "activityTitle": "Current sync",
       "activityScanning": "Syncing curated library",
       "activityDownloading": "Pulling curated library audio from the cloud {now}/{total}",
@@ -93,11 +105,13 @@
       "liveHint": "After Sync curated library is on and a userKey is set, new cloud revisions are pulled automatically. The first-alignment prompt is not shown for live updates.",
       "conflictsTitle": "Sync conflicts",
       "conflictsCount": "{count} local changes did not land on the cloud",
+      "conflictsCountShort": "Conflicts: {count}",
       "conflictLine": "{kind}: {name}",
       "conflictLineNamed": "{kind}: {name} → {otherName}",
       "viewConflicts": "View conflict details",
       "clearConflicts": "Clear conflict list",
       "failuresTitle": "Transfer failures",
+      "failuresCountShort": "Failures: {count}",
       "failuresMore": "{count} more not shown.",
       "retryAll": "Retry failed items",
       "clearFailures": "Clear failure list",

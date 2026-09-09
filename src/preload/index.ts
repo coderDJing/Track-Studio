@@ -144,6 +144,7 @@ const exactListenChannels = new Set([
   'cloudSync/state',
   'cloudSync/summary',
   'curatedLibrarySync/notice',
+  'curatedLibrarySync/status',
   'curatedLibrarySync/needsJoin',
   'curatedLibrarySync/playlistsChanged',
   'curated-artists-updated',

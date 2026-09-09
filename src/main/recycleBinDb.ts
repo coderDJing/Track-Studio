@@ -143,22 +143,33 @@ export function upsertRecycleBinRecord(record: RecycleBinRecord): boolean {
         : null
     }
     if (!canonicalRecord.filePath) return false
-    const existing = getRecycleBinRecord(record.filePath)
+    const existing = getRecycleBinRecord(canonicalRecord.filePath)
     const existingMs = existing?.deletedAtMs ?? null
-    if (existingMs !== null && existingMs > record.deletedAtMs) {
+    if (existingMs !== null && existingMs > canonicalRecord.deletedAtMs) {
       return false
     }
     const write = db.transaction(() => {
-      const lookup = buildPathLookup(record.filePath)
+      const lookup = buildPathLookup(canonicalRecord.filePath)
       if (lookup.params.length > 0) {
         db.prepare(`DELETE FROM ${TABLE} WHERE ${lookup.clause}`).run(...lookup.params)
       }
+      // DELETE 使用 Windows 不区分大小写匹配，INSERT 却受 SQLite 主键的字节比较约束。
+      // 因此路径仅大小写不同（或 legacy 路径别名）时，旧实现会漏删并触发 UNIQUE(file_path)。
+      // 此处以同一个 canonical 路径做查找和写入，再用 ON CONFLICT 作为最终原子兜底。
       db.prepare(
         `INSERT INTO ${TABLE} (
          file_path, deleted_at_ms, original_playlist_path, original_file_name, source_type,
          file_id, content_sha256, content_size
        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(file_path) DO UPDATE SET
+          deleted_at_ms = excluded.deleted_at_ms,
+          original_playlist_path = excluded.original_playlist_path,
+          original_file_name = excluded.original_file_name,
+          source_type = excluded.source_type,
+          file_id = COALESCE(excluded.file_id, ${TABLE}.file_id),
+          content_sha256 = COALESCE(excluded.content_sha256, ${TABLE}.content_sha256),
+          content_size = COALESCE(excluded.content_size, ${TABLE}.content_size)`
       ).run(
         canonicalRecord.filePath,
         canonicalRecord.deletedAtMs,
