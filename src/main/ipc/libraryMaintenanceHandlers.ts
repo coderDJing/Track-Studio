@@ -239,124 +239,124 @@ export function registerLibraryMaintenanceHandlers() {
     const sourceType =
       payload && !Array.isArray(payload) && payload.sourceType ? payload.sourceType : null
     const uniquePaths = Array.from(new Set(filePaths.filter(Boolean)))
-    const setProtection = await protectSetReferencedFilesForDeletion(uniquePaths)
-    const protectedMovedPaths = setProtection.protectedFiles
-      .filter((item) => item.success)
-      .map((item) => item.filePath)
-    const protectedFailedCount = setProtection.protectedFiles.filter((item) => !item.success).length
-    const protectedHandledCount = setProtection.protectedFiles.length
-    const tasks: Array<() => Promise<RecycleBinMoveResult>> = []
-    for (const item of setProtection.unprotectedFiles) {
-      tasks.push(async () => {
-        await waitForPlaybackForegroundIdle('delSongs:task-start', {
-          filePath: item
-        })
-        const result = await moveFileToRecycleBin(item, {
-          originalPlaylistPath,
-          sourceType
-        })
-        if (result.status === 'failed') {
-          throw new Error(result.error || 'move to recycle bin failed')
-        }
-        return result
-      })
-    }
-    const batchId = `delSongs_${Date.now()}`
-    if (mainWindow.instance) {
-      mainWindow.instance.webContents.send('progressSet', {
-        id: batchId,
-        titleKey: 'library.deleteProgressRemoving',
-        now: protectedHandledCount,
-        total: uniquePaths.length,
-        isInitial: true
-      })
-    }
     const releaseLibraryTreeWatcherBulk = beginLibraryTreeWatcherBulkOperation()
-    const { success, failed, hasENOSPC, skipped, results } = await (async () => {
-      try {
-        return await runWithConcurrency(tasks, {
-          concurrency: DELETE_SONGS_BATCH_CONCURRENCY,
-          yieldEvery: DELETE_SONGS_BATCH_YIELD_EVERY,
-          onProgress: (done, total) => {
-            if (mainWindow.instance) {
-              mainWindow.instance.webContents.send('progressSet', {
-                id: batchId,
-                titleKey: 'library.deleteProgressRemoving',
-                now: protectedHandledCount + done,
-                total: protectedHandledCount + total
-              })
-            }
-          },
-          stopOnENOSPC: true,
-          onInterrupted: async (interruptPayload) =>
-            waitForUserDecision(mainWindow.instance ?? null, batchId, 'delSongs', interruptPayload)
+    try {
+      const setProtection = await protectSetReferencedFilesForDeletion(uniquePaths)
+      const protectedMovedPaths = setProtection.protectedFiles
+        .filter((item) => item.success)
+        .map((item) => item.filePath)
+      const protectedFailedCount = setProtection.protectedFiles.filter(
+        (item) => !item.success
+      ).length
+      const protectedHandledCount = setProtection.protectedFiles.length
+      const tasks: Array<() => Promise<RecycleBinMoveResult>> = []
+      for (const item of setProtection.unprotectedFiles) {
+        tasks.push(async () => {
+          await waitForPlaybackForegroundIdle('delSongs:task-start', {
+            filePath: item
+          })
+          const result = await moveFileToRecycleBin(item, {
+            originalPlaylistPath,
+            sourceType
+          })
+          if (result.status === 'failed') {
+            throw new Error(result.error || 'move to recycle bin failed')
+          }
+          return result
         })
-      } finally {
-        releaseLibraryTreeWatcherBulk()
       }
-    })()
-    if (hasENOSPC && mainWindow.instance) {
-      mainWindow.instance.webContents.send('file-batch-summary', {
-        context: 'delSongs',
+      const batchId = `delSongs_${Date.now()}`
+      if (mainWindow.instance) {
+        mainWindow.instance.webContents.send('progressSet', {
+          id: batchId,
+          titleKey: 'library.deleteProgressRemoving',
+          now: protectedHandledCount,
+          total: uniquePaths.length,
+          isInitial: true
+        })
+      }
+      const { success, failed, hasENOSPC, skipped, results } = await runWithConcurrency(tasks, {
+        concurrency: DELETE_SONGS_BATCH_CONCURRENCY,
+        yieldEvery: DELETE_SONGS_BATCH_YIELD_EVERY,
+        onProgress: (done, total) => {
+          if (mainWindow.instance) {
+            mainWindow.instance.webContents.send('progressSet', {
+              id: batchId,
+              titleKey: 'library.deleteProgressRemoving',
+              now: protectedHandledCount + done,
+              total: protectedHandledCount + total
+            })
+          }
+        },
+        stopOnENOSPC: true,
+        onInterrupted: async (interruptPayload) =>
+          waitForUserDecision(mainWindow.instance ?? null, batchId, 'delSongs', interruptPayload)
+      })
+      if (hasENOSPC && mainWindow.instance) {
+        mainWindow.instance.webContents.send('file-batch-summary', {
+          context: 'delSongs',
+          total: uniquePaths.length,
+          success: success + protectedMovedPaths.length,
+          failed: failed + protectedFailedCount,
+          hasENOSPC,
+          skipped,
+          errorSamples: results
+            .map((r, i) =>
+              r instanceof Error ? { code: getErrorCode(r), message: r.message, index: i } : null
+            )
+            .filter(Boolean)
+            .slice(0, 3)
+        })
+      }
+      if (mainWindow.instance) {
+        mainWindow.instance.webContents.send('progressSet', {
+          id: batchId,
+          titleKey: 'library.deleteProgressRemoving',
+          now: uniquePaths.length,
+          total: uniquePaths.length
+        })
+      }
+      const removedPaths = results
+        .filter(
+          (item): item is RecycleBinMoveResult =>
+            !(item instanceof Error) && isRecycleBinMoveResult(item)
+        )
+        .map((item) => item.srcPath)
+        .concat(protectedMovedPaths)
+      if (removedPaths.length > 0) {
+        let compacted = false
+        if (sourceSongListRoot) {
+          if (isSupportedPlaylistTrackNumberListRoot(sourceSongListRoot)) {
+            await compactSongListTrackNumbers(sourceSongListRoot)
+            compacted = true
+          }
+        } else {
+          const compactResult = await compactSongListTrackNumbersByFilePaths(removedPaths)
+          compacted = compactResult.roots > 0
+        }
+        if (compacted) {
+          markGlobalSongSearchDirty('delSongs')
+        }
+        if (removedPaths.some((item) => isPathInside(item, getCuratedLibraryAbsRoot()))) {
+          scheduleCuratedLibrarySyncAfterLocalChange()
+        }
+        if (removedPaths.some((item) => isInRecordingLibraryAbsPath(item))) {
+          mainWindow.instance?.webContents.send(RECORDING_LIBRARY_CHANGED_EVENT, {
+            hasRecordings: await hasRecordings()
+          })
+        }
+      }
+      return {
         total: uniquePaths.length,
         success: success + protectedMovedPaths.length,
         failed: failed + protectedFailedCount,
-        hasENOSPC,
         skipped,
-        errorSamples: results
-          .map((r, i) =>
-            r instanceof Error ? { code: getErrorCode(r), message: r.message, index: i } : null
-          )
-          .filter(Boolean)
-          .slice(0, 3)
-      })
-    }
-    if (mainWindow.instance) {
-      mainWindow.instance.webContents.send('progressSet', {
-        id: batchId,
-        titleKey: 'library.deleteProgressRemoving',
-        now: uniquePaths.length,
-        total: uniquePaths.length
-      })
-    }
-    const removedPaths = results
-      .filter(
-        (item): item is RecycleBinMoveResult =>
-          !(item instanceof Error) && isRecycleBinMoveResult(item)
-      )
-      .map((item) => item.srcPath)
-      .concat(protectedMovedPaths)
-    if (removedPaths.length > 0) {
-      let compacted = false
-      if (sourceSongListRoot) {
-        if (isSupportedPlaylistTrackNumberListRoot(sourceSongListRoot)) {
-          await compactSongListTrackNumbers(sourceSongListRoot)
-          compacted = true
-        }
-      } else {
-        const compactResult = await compactSongListTrackNumbersByFilePaths(removedPaths)
-        compacted = compactResult.roots > 0
+        hasENOSPC,
+        removedPaths,
+        protectedFiles: setProtection.protectedFiles
       }
-      if (compacted) {
-        markGlobalSongSearchDirty('delSongs')
-      }
-      if (removedPaths.some((item) => isPathInside(item, getCuratedLibraryAbsRoot()))) {
-        scheduleCuratedLibrarySyncAfterLocalChange()
-      }
-      if (removedPaths.some((item) => isInRecordingLibraryAbsPath(item))) {
-        mainWindow.instance?.webContents.send(RECORDING_LIBRARY_CHANGED_EVENT, {
-          hasRecordings: await hasRecordings()
-        })
-      }
-    }
-    return {
-      total: uniquePaths.length,
-      success: success + protectedMovedPaths.length,
-      failed: failed + protectedFailedCount,
-      skipped,
-      hasENOSPC,
-      removedPaths,
-      protectedFiles: setProtection.protectedFiles
+    } finally {
+      releaseLibraryTreeWatcherBulk()
     }
   }
 

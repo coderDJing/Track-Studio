@@ -87,6 +87,9 @@ function clearContentDebounceTimer() {
 
 function flushPendingContentPaths() {
   contentDebounceTimer = null
+  // 批量移动/删除期间目录只处于中间态，不能让视图快照服务扫描并推送这份半成品。
+  // 路径继续保留，等最外层 bulk 结束后再统一核对最终状态。
+  if (bulkOperationDepth > 0) return
   if (pendingContentPaths.size === 0) return
   const paths = [...pendingContentPaths]
   pendingContentPaths = new Set<string>()
@@ -98,14 +101,19 @@ function flushPendingContentPaths() {
   }
 }
 
+function scheduleContentChangeFlush() {
+  if (bulkOperationDepth > 0 || pendingContentPaths.size === 0) return
+  clearContentDebounceTimer()
+  contentDebounceTimer = setTimeout(flushPendingContentPaths, WATCH_DEBOUNCE_MS)
+}
+
 /** 记下一个改动过的绝对路径，攒够抖动窗口再一次性交给监听者。 */
 function queueContentChangePath(absPath: string) {
   if (!contentChangeListener || !absPath) return
   if (pendingContentPaths.size < MAX_PENDING_CONTENT_PATHS) {
     pendingContentPaths.add(absPath)
   }
-  clearContentDebounceTimer()
-  contentDebounceTimer = setTimeout(flushPendingContentPaths, WATCH_DEBOUNCE_MS)
+  scheduleContentChangeFlush()
 }
 
 /** Drop a scheduled reconcile that has not started yet (debounce window only). */
@@ -180,10 +188,15 @@ export function beginLibraryTreeWatcherBulkOperation(): () => void {
     if (released) return
     released = true
     bulkOperationDepth = Math.max(0, bulkOperationDepth - 1)
-    if (bulkOperationDepth > 0 || !pendingBulkReconcileWindow) return
-    const window = pendingBulkReconcileWindow
-    pendingBulkReconcileWindow = null
-    scheduleReconcile(window, true)
+    if (bulkOperationDepth > 0) return
+    // bulk 内累计的文件事件只在操作结束后触发一次内容核对，避免把逐首删除的
+    // 中间目录状态写成视图快照并推回 renderer。
+    scheduleContentChangeFlush()
+    if (pendingBulkReconcileWindow) {
+      const window = pendingBulkReconcileWindow
+      pendingBulkReconcileWindow = null
+      scheduleReconcile(window, true)
+    }
   }
 }
 
