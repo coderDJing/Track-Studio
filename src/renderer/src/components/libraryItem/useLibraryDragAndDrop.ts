@@ -173,7 +173,8 @@ export function useLibraryDragAndDrop({
       dragState.dragApproach = 'center'
       return
     }
-    if (!isTreeReorderAllowed()) {
+    // 自动排序只禁止歌单树内部重排，不能连系统文件/文件夹拖入歌单一起禁掉。
+    if (runtime.dragItemData && !isTreeReorderAllowed()) {
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'none'
       dragState.dragApproach = ''
       return
@@ -199,7 +200,7 @@ export function useLibraryDragAndDrop({
       dragState.dragApproach = 'center'
       return
     }
-    if (!isTreeReorderAllowed()) {
+    if (runtime.dragItemData && !isTreeReorderAllowed()) {
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'none'
       dragState.dragApproach = ''
       return
@@ -248,7 +249,7 @@ export function useLibraryDragAndDrop({
       }
       return
     }
-    if (!isTreeReorderAllowed()) {
+    if (runtime.dragItemData && !isTreeReorderAllowed()) {
       dragState.dragApproach = ''
       runtime.dragItemData = null
       return
