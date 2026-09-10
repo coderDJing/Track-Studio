@@ -12,7 +12,39 @@ permissions:
   contents: write
 
 jobs:
+  validate_release_tag:
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        startsWith(github.ref, 'refs/tags/') ||
+        (
+          github.ref == 'refs/heads/main' &&
+          startsWith(github.event.head_commit.message, 'chore(release):')
+        )
+      }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate release tag matches package version
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" != refs/tags/* ]]; then
+            echo "No tag push; release tag validation is not required for this run."
+            exit 0
+          fi
+          package_version="$(node -p "require('./package.json').version")"
+          if [[ "$TAG_NAME" != "$package_version" ]]; then
+            echo "::error::Release tag '$TAG_NAME' must exactly match package.json version '$package_version'."
+            exit 1
+          fi
+          echo "Validated release tag: $TAG_NAME"
+
   typecheck:
+    needs: [validate_release_tag]
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' ||
@@ -47,6 +79,7 @@ jobs:
         run: npx vue-tsc --noEmit
 
   build_win:
+    needs: [validate_release_tag]
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' ||
@@ -330,6 +363,7 @@ jobs:
             dist/*.yml
 
   build_rekordbox_runtime_mac_x64:
+    needs: [validate_release_tag]
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' ||
@@ -416,7 +450,7 @@ jobs:
         )
       }}
     runs-on: macos-latest
-    needs: [build_rekordbox_runtime_mac_x64]
+    needs: [validate_release_tag, build_rekordbox_runtime_mac_x64]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -824,7 +858,7 @@ jobs:
         (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
         startsWith(github.ref, 'refs/tags/')
       }}
-    needs: [typecheck, build_win, build_mac]
+    needs: [validate_release_tag, typecheck, build_win, build_mac]
     runs-on: ubuntu-latest
     steps:
       - name: Download Windows artifacts
