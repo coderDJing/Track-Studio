@@ -2,14 +2,21 @@ import path = require('path')
 import fs = require('fs-extra')
 import { operateHiddenFile, resolveLibraryPath } from '../utils'
 import * as LibraryCacheDb from '../libraryCacheDb'
-import { extractCoverOffMainThread } from './coverExtractionWorker'
+import {
+  extractCoverOffMainThread,
+  getCoverExtractionWorkerDiagnosticSnapshot,
+  type CoverExtractionTiming
+} from './coverExtractionWorker'
 import { runPlaybackAwareBackgroundFileIo, type FileIoPriority } from './playbackForegroundActivity'
 
 const DISPLAY_CACHE_MARKER = '.display-v1'
 const COVER_THUMB_MAX_CONCURRENCY = 3
+const RECENT_COVER_DIAGNOSTIC_TTL_MS = 60_000
+const MAX_RECENT_COVER_DIAGNOSTICS = 24
 let pendingPostScanSweepTimer: NodeJS.Timeout | null = null
 let activeCoverThumbTasks = 0
 let coverThumbTaskSequence = 0
+let coverDiagnosticSequence = 0
 const pendingCoverThumbTasks: Array<{
   priority: number
   sequence: number
@@ -17,7 +24,122 @@ const pendingCoverThumbTasks: Array<{
   resolve: () => void
 }> = []
 
+type CoverDiagnosticKind = 'thumbnail' | 'persist-display-cache'
+type CoverDiagnosticPhase =
+  | 'waiting-cover-slot'
+  | 'resolving-cache-root'
+  | 'loading-cache-index'
+  | 'preparing-cache-directory'
+  | 'reading-cache-file'
+  | 'waiting-extraction-file-io'
+  | 'hashing-source-image'
+  | 'waiting-persist-file-io'
+  | 'preparing-persist-data'
+  | 'writing-display-cache'
+  | 'updating-cache-index'
+  | 'removing-legacy-cache'
+  | 'completed'
+
+type CoverDiagnosticOperation = {
+  id: number
+  kind: CoverDiagnosticKind
+  fileName: string
+  priority: 'visible' | 'prefetch'
+  requestedSize?: number
+  phase: CoverDiagnosticPhase
+  startedAtMs: number
+  phaseStartedAtMs: number
+  phaseDurationsMs: Partial<Record<CoverDiagnosticPhase, number>>
+  endedAtMs?: number
+  sourceBytes?: number
+  outputBytes?: number
+  cacheStatus?: CoverThumbResult['cacheStatus']
+  workerTiming?: CoverExtractionTiming
+  outcome?: 'success' | 'empty' | 'aborted' | 'error'
+}
+
+const activeCoverDiagnostics = new Map<number, CoverDiagnosticOperation>()
+const recentCoverDiagnostics: CoverDiagnosticOperation[] = []
+
+const startCoverDiagnostic = (params: {
+  kind: CoverDiagnosticKind
+  filePath: string
+  priority: 'visible' | 'prefetch'
+  requestedSize?: number
+  phase: CoverDiagnosticPhase
+}): CoverDiagnosticOperation => {
+  const nowMs = Date.now()
+  const operation: CoverDiagnosticOperation = {
+    id: ++coverDiagnosticSequence,
+    kind: params.kind,
+    fileName: path.basename(params.filePath),
+    priority: params.priority,
+    requestedSize: params.requestedSize,
+    phase: params.phase,
+    startedAtMs: nowMs,
+    phaseStartedAtMs: nowMs,
+    phaseDurationsMs: {}
+  }
+  activeCoverDiagnostics.set(operation.id, operation)
+  return operation
+}
+
+const markCoverDiagnosticPhase = (
+  operation: CoverDiagnosticOperation,
+  phase: CoverDiagnosticPhase
+) => {
+  const nowMs = Date.now()
+  operation.phaseDurationsMs[operation.phase] =
+    (operation.phaseDurationsMs[operation.phase] || 0) +
+    Math.max(0, nowMs - operation.phaseStartedAtMs)
+  operation.phase = phase
+  operation.phaseStartedAtMs = nowMs
+}
+
+const pruneRecentCoverDiagnostics = (nowMs = Date.now()) => {
+  while (
+    recentCoverDiagnostics.length > 0 &&
+    nowMs - (recentCoverDiagnostics[0].endedAtMs ?? recentCoverDiagnostics[0].startedAtMs) >
+      RECENT_COVER_DIAGNOSTIC_TTL_MS
+  ) {
+    recentCoverDiagnostics.shift()
+  }
+}
+
+const completeCoverDiagnostic = (
+  operation: CoverDiagnosticOperation,
+  outcome: NonNullable<CoverDiagnosticOperation['outcome']>
+) => {
+  markCoverDiagnosticPhase(operation, 'completed')
+  operation.endedAtMs = Date.now()
+  operation.outcome = outcome
+  activeCoverDiagnostics.delete(operation.id)
+  recentCoverDiagnostics.push(operation)
+  pruneRecentCoverDiagnostics()
+  if (recentCoverDiagnostics.length > MAX_RECENT_COVER_DIAGNOSTICS) {
+    recentCoverDiagnostics.splice(0, recentCoverDiagnostics.length - MAX_RECENT_COVER_DIAGNOSTICS)
+  }
+}
+
+const summarizeCoverDiagnostic = (operation: CoverDiagnosticOperation, nowMs: number) => ({
+  kind: operation.kind,
+  fileName: operation.fileName,
+  priority: operation.priority,
+  requestedSize: operation.requestedSize,
+  phase: operation.phase,
+  durationMs: Math.max(0, (operation.endedAtMs ?? nowMs) - operation.startedAtMs),
+  currentPhaseDurationMs:
+    operation.phase === 'completed' ? 0 : Math.max(0, nowMs - operation.phaseStartedAtMs),
+  phaseDurationsMs: operation.phaseDurationsMs,
+  sourceBytes: operation.sourceBytes,
+  outputBytes: operation.outputBytes,
+  cacheStatus: operation.cacheStatus,
+  workerTiming: operation.workerTiming,
+  outcome: operation.outcome
+})
+
 export const getCoverTaskDiagnosticSnapshot = (nowMs = Date.now()) => {
+  pruneRecentCoverDiagnostics(nowMs)
   const visibleQueued = pendingCoverThumbTasks.filter((task) => task.priority === 0)
   const prefetchQueued = pendingCoverThumbTasks.filter((task) => task.priority !== 0)
   const oldestQueuedAtMs = pendingCoverThumbTasks.reduce<number | null>(
@@ -32,7 +154,14 @@ export const getCoverTaskDiagnosticSnapshot = (nowMs = Date.now()) => {
       visible: visibleQueued.length,
       prefetch: prefetchQueued.length
     },
-    oldestQueueWaitMs: oldestQueuedAtMs === null ? 0 : Math.max(0, nowMs - oldestQueuedAtMs)
+    oldestQueueWaitMs: oldestQueuedAtMs === null ? 0 : Math.max(0, nowMs - oldestQueuedAtMs),
+    operations: {
+      active: [...activeCoverDiagnostics.values()].map((operation) =>
+        summarizeCoverDiagnostic(operation, nowMs)
+      ),
+      recent: recentCoverDiagnostics.map((operation) => summarizeCoverDiagnostic(operation, nowMs))
+    },
+    extractionWorkers: getCoverExtractionWorkerDiagnosticSnapshot(nowMs)
   }
 }
 
@@ -149,13 +278,15 @@ async function loadSongCoverThumb(
   filePath: string,
   _size: number = 48,
   listRootDir?: string | null,
-  context?: CoverThumbRequestContext
+  context?: CoverThumbRequestContext,
+  diagnostic?: CoverDiagnosticOperation
 ): Promise<CoverThumbResult | null> {
   try {
     if (context?.shouldAbort?.()) return null
     const crypto = await import('crypto')
 
     // 解析 listRootDir 为绝对路径（允许 library 相对路径）
+    if (diagnostic) markCoverDiagnosticPhase(diagnostic, 'resolving-cache-root')
     let resolvedRoot: string | null = null
     if (listRootDir && typeof listRootDir === 'string' && listRootDir.length > 0) {
       let input = listRootDir
@@ -176,6 +307,7 @@ async function loadSongCoverThumb(
       : null
     let dbEntry: { hash: string; ext: string } | null = null
     if (useDiskCache && coversDir) {
+      if (diagnostic) markCoverDiagnosticPhase(diagnostic, 'loading-cache-index')
       const listRoot = resolvedRoot as string
       const entry = await LibraryCacheDb.loadCoverIndexEntry(listRoot, filePath)
       if (context?.shouldAbort?.()) return null
@@ -187,12 +319,14 @@ async function loadSongCoverThumb(
       }
     }
     if (useDiskCache && coversDir) {
+      if (diagnostic) markCoverDiagnosticPhase(diagnostic, 'preparing-cache-directory')
       await fs.ensureDir(coversDir)
       await operateHiddenFile(coversDir, async () => {})
     }
 
     // 命中索引则直接返回
     if (useDiskCache && coversDir && dbEntry) {
+      if (diagnostic) markCoverDiagnosticPhase(diagnostic, 'reading-cache-file')
       const ext = dbEntry.ext || '.jpg'
       const p = path.join(coversDir, `${dbEntry.hash}${ext}`)
       if (await fs.pathExists(p)) {
@@ -202,6 +336,11 @@ async function loadSongCoverThumb(
           const mime = mimeFromExt(ext)
           if (context?.shouldAbort?.()) return null
           if (isDisplayCacheExt(ext)) {
+            if (diagnostic) {
+              diagnostic.cacheStatus = 'hit'
+              diagnostic.sourceBytes = data.length
+              diagnostic.outputBytes = data.length
+            }
             return {
               format: mime,
               data,
@@ -210,6 +349,11 @@ async function loadSongCoverThumb(
               outputBytes: data.length,
               resized: false
             }
+          }
+          if (diagnostic) {
+            diagnostic.cacheStatus = 'hit'
+            diagnostic.sourceBytes = data.length
+            diagnostic.outputBytes = data.length
           }
           return {
             format: mime,
@@ -228,6 +372,7 @@ async function loadSongCoverThumb(
 
     // 解析嵌入封面
     const priority: FileIoPriority = context?.priority === 'prefetch' ? 'prefetch' : 'visible'
+    if (diagnostic) markCoverDiagnosticPhase(diagnostic, 'waiting-extraction-file-io')
     const cover = await runPlaybackAwareBackgroundFileIo(
       'cover:extract',
       { filePath },
@@ -239,6 +384,13 @@ async function loadSongCoverThumb(
     const data = cover.data
     if (!data || data.length === 0) return null
 
+    if (diagnostic) {
+      diagnostic.sourceBytes = data.length
+      diagnostic.outputBytes = data.length
+      diagnostic.cacheStatus = useDiskCache ? 'miss' : 'disabled'
+      diagnostic.workerTiming = cover.timing
+      markCoverDiagnosticPhase(diagnostic, 'hashing-source-image')
+    }
     const imageHash = (await crypto).createHash('sha1').update(data).digest('hex')
     return {
       format: format || 'image/jpeg',
@@ -262,11 +414,29 @@ export async function getSongCoverThumb(
   listRootDir?: string | null,
   context?: CoverThumbRequestContext
 ): Promise<CoverThumbResult | null> {
+  const diagnostic = startCoverDiagnostic({
+    kind: 'thumbnail',
+    filePath,
+    priority: context?.priority === 'prefetch' ? 'prefetch' : 'visible',
+    requestedSize: size,
+    phase: 'waiting-cover-slot'
+  })
   const release = await acquireCoverThumbSlot(context)
-  if (!release) return null
+  if (!release) {
+    completeCoverDiagnostic(diagnostic, 'aborted')
+    return null
+  }
+  let result: CoverThumbResult | null = null
   try {
-    return await loadSongCoverThumb(filePath, size, listRootDir, context)
+    result = await loadSongCoverThumb(filePath, size, listRootDir, context, diagnostic)
+    return result
+  } catch (error) {
+    completeCoverDiagnostic(diagnostic, 'error')
+    throw error
   } finally {
+    if (!diagnostic.outcome) {
+      completeCoverDiagnostic(diagnostic, result ? 'success' : 'empty')
+    }
     release()
   }
 }
@@ -279,32 +449,43 @@ async function persistSongCoverDisplayCacheNow(params: {
   format: string
   data: Buffer | Uint8Array
   context?: CoverThumbRequestContext
+  diagnostic?: CoverDiagnosticOperation
 }): Promise<boolean> {
-  const { filePath, listRootDir, imageHash, legacyExt, format, data, context } = params
+  const { filePath, listRootDir, imageHash, legacyExt, format, data, context, diagnostic } = params
   if (context?.shouldAbort?.() || !filePath || !listRootDir || !/^[a-f0-9]{40}$/i.test(imageHash)) {
     return false
   }
   try {
+    if (diagnostic) markCoverDiagnosticPhase(diagnostic, 'resolving-cache-root')
     let input = listRootDir
     if (process.platform === 'win32' && /^\//.test(input)) input = input.replace(/^\/+/, '')
     const resolvedRoot = path.isAbsolute(input) ? input : resolveLibraryPath(input).absPath
     if (!(await fs.pathExists(resolvedRoot)) || context?.shouldAbort?.()) return false
     const coversDir = path.join(resolvedRoot, '.frkb_covers')
+    if (diagnostic) markCoverDiagnosticPhase(diagnostic, 'preparing-cache-directory')
     await fs.ensureDir(coversDir)
     await operateHiddenFile(coversDir, async () => {})
     const ext = displayCacheExtFromFormat(format)
     const targetPath = path.join(coversDir, `${imageHash}${ext}`)
+    if (diagnostic) markCoverDiagnosticPhase(diagnostic, 'preparing-persist-data')
     const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data)
+    if (diagnostic) {
+      diagnostic.sourceBytes = data.byteLength
+      diagnostic.outputBytes = buffer.byteLength
+    }
     if (!buffer.length || context?.shouldAbort?.()) return false
+    if (diagnostic) markCoverDiagnosticPhase(diagnostic, 'writing-display-cache')
     if (!(await fs.pathExists(targetPath))) await writeDisplayCacheFile(targetPath, buffer)
     if (context?.shouldAbort?.()) return false
     const replacedLegacyExt =
       !legacyExt ||
       legacyExt === ext ||
       (await LibraryCacheDb.replaceCoverIndexExtByHash(resolvedRoot, imageHash, legacyExt, ext))
+    if (diagnostic) markCoverDiagnosticPhase(diagnostic, 'updating-cache-index')
     const saved = await LibraryCacheDb.upsertCoverIndexEntry(resolvedRoot, filePath, imageHash, ext)
     if (!saved) return false
     if (legacyExt && legacyExt !== ext && replacedLegacyExt) {
+      if (diagnostic) markCoverDiagnosticPhase(diagnostic, 'removing-legacy-cache')
       try {
         await fs.remove(path.join(coversDir, `${imageHash}${legacyExt}`))
       } catch {}
@@ -325,12 +506,29 @@ export async function persistSongCoverDisplayCache(params: {
   context?: CoverThumbRequestContext
 }): Promise<boolean> {
   const priority: FileIoPriority = params.context?.priority === 'prefetch' ? 'prefetch' : 'visible'
-  return await runPlaybackAwareBackgroundFileIo(
-    'cover:persist-display-cache',
-    { filePath: params.filePath },
-    () => persistSongCoverDisplayCacheNow(params),
-    { priority }
-  )
+  const diagnostic = startCoverDiagnostic({
+    kind: 'persist-display-cache',
+    filePath: params.filePath,
+    priority,
+    phase: 'waiting-persist-file-io'
+  })
+  let result = false
+  try {
+    result = await runPlaybackAwareBackgroundFileIo(
+      'cover:persist-display-cache',
+      { filePath: params.filePath },
+      () => persistSongCoverDisplayCacheNow({ ...params, diagnostic }),
+      { priority }
+    )
+    return result
+  } catch (error) {
+    completeCoverDiagnostic(diagnostic, 'error')
+    throw error
+  } finally {
+    if (!diagnostic.outcome) {
+      completeCoverDiagnostic(diagnostic, result ? 'success' : 'empty')
+    }
+  }
 }
 
 export async function sweepSongListCovers(
