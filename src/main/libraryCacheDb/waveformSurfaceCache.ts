@@ -441,29 +441,40 @@ export function loadWaveformSurfaceAvailabilityByMeta(
   const db = getLibraryDb()
   if (!db || !listRoot || !Array.isArray(entries) || entries.length === 0) return result
 
-  const rootKeys = new Set<string>()
+  const filesByRoot = new Map<string, Set<string>>()
   for (const entry of entries) {
-    const keys = resolveCacheKeys(listRoot, String(entry?.filePath || '').trim())
-    if (!keys) continue
-    rootKeys.add(keys.listRootKey)
-    if (keys.legacyListRoot) rootKeys.add(keys.legacyListRoot)
+    const candidates = resolveCacheCandidates(listRoot, String(entry?.filePath || '').trim())
+    if (!candidates) continue
+    for (const [root, file] of candidates) {
+      if (!root || !file) continue
+      const files = filesByRoot.get(root)
+      if (files) files.add(file)
+      else filesByRoot.set(root, new Set([file]))
+    }
   }
 
   const rowByRootFile = new Map<string, WaveformSurfaceRow>()
-  const loadRootStmt = db.prepare<WaveformSurfaceRow>(
-    `SELECT list_root, file_path, size, mtime_ms, cache_version,
-            list_preview_parameter_version, global_overview_parameter_version,
-            duration, sample_rate, list_preview_frame_count, global_overview_frame_count,
-            length(list_preview_payload) AS list_preview_payload_bytes,
-            length(global_overview_payload) AS global_overview_payload_bytes
-       FROM ${TABLE} WHERE list_root = ?`
-  )
-  for (const root of rootKeys) {
-    const rows = loadRootStmt.all(root)
-    for (const row of rows) {
-      const cachedFilePath = String(row?.file_path || '').trim()
-      if (!cachedFilePath) continue
-      rowByRootFile.set(`${root}\0${cachedFilePath}`, row)
+  const maxFilesPerQuery = 400
+  for (const [root, fileSet] of filesByRoot) {
+    const files = [...fileSet]
+    for (let offset = 0; offset < files.length; offset += maxFilesPerQuery) {
+      const chunk = files.slice(offset, offset + maxFilesPerQuery)
+      const placeholders = chunk.map(() => '?').join(', ')
+      const rows = db
+        .prepare<WaveformSurfaceRow>(
+          `SELECT list_root, file_path, size, mtime_ms, cache_version,
+                  list_preview_parameter_version, global_overview_parameter_version,
+                  duration, sample_rate, list_preview_frame_count, global_overview_frame_count,
+                  length(list_preview_payload) AS list_preview_payload_bytes,
+                  length(global_overview_payload) AS global_overview_payload_bytes
+             FROM ${TABLE} WHERE list_root = ? AND file_path IN (${placeholders})`
+        )
+        .all(root, ...chunk)
+      for (const row of rows) {
+        const cachedFilePath = String(row?.file_path || '').trim()
+        if (!cachedFilePath) continue
+        rowByRootFile.set(`${root}\0${cachedFilePath}`, row)
+      }
     }
   }
 

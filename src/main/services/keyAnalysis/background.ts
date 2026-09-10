@@ -470,12 +470,23 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
       }
       return results
     }
-    let processedAll = true
-    let lastRowId = backgroundCursor
+    type EvaluatedRow = {
+      rowId: number
+      absFilePath?: string
+      size?: number
+      mtimeMs?: number
+      needsCoreAnalysis?: boolean
+    }
+    const evaluatedRows: EvaluatedRow[] = []
+    const waveformChecksByRoot = new Map<
+      string,
+      Array<{ rowId: number; filePath: string; size: number; mtimeMs: number }>
+    >()
     for (const row of rows) {
       const rowId = Number(row?.rowId)
       if (!Number.isFinite(rowId)) continue
-      lastRowId = rowId
+      const evaluated: EvaluatedRow = { rowId }
+      evaluatedRows.push(evaluated)
       const filePath = typeof row?.file_path === 'string' ? row.file_path.trim() : ''
       if (!filePath) continue
       let info: CachedAnalysisInfo | null = null
@@ -493,23 +504,48 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
       const absFilePath = LibraryCacheDb.resolveCacheFilePath(listRoot, filePath)
       if (!absFilePath) continue
       if (isExcludedCoreLibraryAbsPath(absFilePath)) continue
+      evaluated.absFilePath = absFilePath
+      evaluated.needsCoreAnalysis = !hasKey || !hasBpm || !hasEnergy || !hasStructure
+      if (evaluated.needsCoreAnalysis) continue
       const size = Number(row?.size)
       const mtimeMs = Number(row?.mtime_ms)
-      let hasWaveform = false
       if (Number.isFinite(size) && Number.isFinite(mtimeMs)) {
-        hasWaveform = await LibraryCacheDb.hasWaveformSurfaceCacheEntryByMeta(
-          listRoot,
-          absFilePath,
-          size,
-          mtimeMs
-        )
+        evaluated.size = size
+        evaluated.mtimeMs = mtimeMs
+        const checks = waveformChecksByRoot.get(listRoot)
+        const check = { rowId, filePath: absFilePath, size, mtimeMs }
+        if (checks) checks.push(check)
+        else waveformChecksByRoot.set(listRoot, [check])
       }
-      if (!hasKey || !hasBpm || !hasEnergy || !hasWaveform || !hasStructure) {
-        results.push(absFilePath)
-        if (results.length >= limit) {
-          processedAll = false
-          break
-        }
+    }
+
+    const waveformAvailableByRowId = new Map<number, boolean>()
+    for (const [listRoot, checks] of waveformChecksByRoot) {
+      const availability = LibraryCacheDb.loadWaveformSurfaceAvailabilityByMeta(listRoot, checks)
+      for (const check of checks) {
+        waveformAvailableByRowId.set(check.rowId, availability.get(check.filePath) === true)
+      }
+      // A library may contain many small playlists. Let timers and foreground IPC run between
+      // playlist groups instead of draining every synchronous SQLite batch in one turn.
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      if (deps.hasForegroundWork()) return results
+    }
+
+    let processedAll = true
+    let lastRowId = backgroundCursor
+    for (const evaluated of evaluatedRows) {
+      lastRowId = evaluated.rowId
+      if (!evaluated.absFilePath) continue
+      const needsAnalysis =
+        evaluated.needsCoreAnalysis === true ||
+        evaluated.size === undefined ||
+        evaluated.mtimeMs === undefined ||
+        waveformAvailableByRowId.get(evaluated.rowId) !== true
+      if (!needsAnalysis) continue
+      results.push(evaluated.absFilePath)
+      if (results.length >= limit) {
+        processedAll = false
+        break
       }
     }
     backgroundCursor = lastRowId

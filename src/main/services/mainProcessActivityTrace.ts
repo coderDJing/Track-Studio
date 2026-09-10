@@ -10,8 +10,8 @@ import {
   getMainThreadActivitySnapshot,
   summarizeIpcArgHint
 } from './mainProcessActivityTraceState'
+import { TracedEventListenerRegistry, type EventListenerFn } from './tracedEventListeners'
 
-type EventListenerFn = (...args: unknown[]) => unknown
 type InvokeListener = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown
 
 type PowerTraceState = {
@@ -28,7 +28,7 @@ const powerTrace: PowerTraceState = {
   lastUnlockScreenAtMs: null
 }
 
-const wrappedListeners = new Map<string, WeakMap<EventListenerFn, EventListenerFn>>()
+const listenerRegistry = new TracedEventListenerRegistry()
 let installed = false
 let powerMonitorAttached = false
 
@@ -82,18 +82,9 @@ const wrapInvokeListener = (channel: string, listener: InvokeListener): InvokeLi
   }
 }
 
-const getOrCreateWrappedListener = (
-  channel: string,
-  listener: EventListenerFn
-): EventListenerFn => {
-  let byListener = wrappedListeners.get(channel)
-  if (!byListener) {
-    byListener = new WeakMap<EventListenerFn, EventListenerFn>()
-    wrappedListeners.set(channel, byListener)
-  }
-  const existing = byListener.get(listener)
-  if (existing) return existing
-  const wrapped: EventListenerFn = (...rawArgs) => {
+const createWrappedListener =
+  (channel: string, listener: EventListenerFn): EventListenerFn =>
+  (...rawArgs) => {
     const id = beginIpcActivity('ipc-on', channel, rawArgs.slice(1))
     try {
       const result = listener(...rawArgs)
@@ -107,12 +98,6 @@ const getOrCreateWrappedListener = (
       throw error
     }
   }
-  byListener.set(listener, wrapped)
-  return wrapped
-}
-
-const resolveWrappedListener = (channel: string, listener: EventListenerFn): EventListenerFn =>
-  wrappedListeners.get(channel)?.get(listener) || listener
 
 const attachPowerMonitorListeners = (): void => {
   if (powerMonitorAttached) return
@@ -214,7 +199,9 @@ export const installMainProcessActivityTrace = (): void => {
       if (typeof channel !== 'string' || typeof listener !== 'function') {
         return original(channel as never, listener as never)
       }
-      const wrapped = getOrCreateWrappedListener(channel, listener)
+      const wrapped = listenerRegistry.createAndRemember(channel, listener, (callback) =>
+        createWrappedListener(channel, callback)
+      )
       return original(channel, wrapped as never)
     }) as typeof ipcMain.on
 
@@ -224,8 +211,15 @@ export const installMainProcessActivityTrace = (): void => {
     if (typeof channel !== 'string' || typeof listener !== 'function') {
       return originalOnce(channel as never, listener as never)
     }
-    const wrapped = getOrCreateWrappedListener(channel, listener)
-    return originalOnce(channel, wrapped as never)
+    const onceWrapped = listenerRegistry.createOnce(
+      channel,
+      listener,
+      (callback) => createWrappedListener(channel, callback),
+      (callback) => originalRemoveListener(channel, callback as never)
+    )
+    // EventEmitter.once() internally dispatches through this.on(). Calling the captured once
+    // after patching on() would wrap the listener twice and make removeListener() miss it.
+    return originalOn(channel, onceWrapped as never)
   }) as typeof ipcMain.once
 
   const patchRemove = (original: typeof ipcMain.removeListener): typeof ipcMain.removeListener =>
@@ -233,7 +227,7 @@ export const installMainProcessActivityTrace = (): void => {
       if (typeof channel !== 'string' || typeof listener !== 'function') {
         return original(channel as never, listener as never)
       }
-      return original(channel, resolveWrappedListener(channel, listener) as never)
+      return original(channel, listenerRegistry.take(channel, listener) as never)
     }) as typeof ipcMain.removeListener
 
   ipcMain.removeListener = patchRemove(originalRemoveListener)

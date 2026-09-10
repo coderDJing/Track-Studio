@@ -1,5 +1,9 @@
 import { parentPort } from 'node:worker_threads'
 import type { MixxxWaveformData } from '../waveformCodec'
+import {
+  collectTransferableArrayBuffers,
+  copyBuffersToTransferableViews
+} from './transferableBuffers'
 
 type DecodeJob = {
   jobId: number
@@ -341,5 +345,9 @@ parentPort?.on('message', async (job: DecodeJob) => {
     response.error = (error as Error)?.message ?? String(error)
   }
 
-  parentPort?.postMessage(response)
+  const transferableResponse = copyBuffersToTransferableViews(response)
+  parentPort?.postMessage(
+    transferableResponse,
+    collectTransferableArrayBuffers(transferableResponse)
+  )
 })
