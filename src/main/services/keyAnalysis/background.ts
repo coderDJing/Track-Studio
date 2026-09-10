@@ -1,4 +1,4 @@
-import nodeFs from 'node:fs'
+import type { Dirent } from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { EventEmitter } from 'node:events'
@@ -286,13 +286,13 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
     return roots
   }
 
-  const resolveSongListRootsFromFs = (): string[] => {
+  const resolveSongListRootsFromFs = async (): Promise<string[]> => {
     const rootDir = store.databaseDir
     if (!rootDir) return []
     const libraryRoot = path.join(rootDir, 'library')
-    let libraryEntries: nodeFs.Dirent[] = []
+    let libraryEntries: Dirent[] = []
     try {
-      libraryEntries = nodeFs.readdirSync(libraryRoot, { withFileTypes: true })
+      libraryEntries = await fs.readdir(libraryRoot, { withFileTypes: true })
     } catch {
       return []
     }
@@ -305,9 +305,9 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
         continue
       }
       const libraryDir = path.join(libraryRoot, libraryEntry.name)
-      let songListEntries: nodeFs.Dirent[] = []
+      let songListEntries: Dirent[] = []
       try {
-        songListEntries = nodeFs.readdirSync(libraryDir, { withFileTypes: true })
+        songListEntries = await fs.readdir(libraryDir, { withFileTypes: true })
       } catch {
         continue
       }
@@ -335,13 +335,13 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
       .map(([, root]) => root)
   }
 
-  const refreshBackgroundRoots = (): string[] => {
+  const refreshBackgroundRoots = async (): Promise<string[]> => {
     const now = Date.now()
     const shouldRefresh =
       now - backgroundRootsLastRefresh >= BACKGROUND_FS_REFRESH_MS || backgroundRoots.length === 0
     if (!shouldRefresh) return backgroundRoots
     const nodeRoots = resolveSongListRoots()
-    const fsRoots = resolveSongListRootsFromFs()
+    const fsRoots = await resolveSongListRootsFromFs()
     const nextRoots = mergeSongListRoots(nodeRoots, fsRoots)
     const signature = nextRoots.join('|')
     if (signature !== backgroundRootsSignature) {
@@ -378,7 +378,7 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
   }
 
   const cleanupOrphanedCovers = async () => {
-    const roots = refreshBackgroundRoots()
+    const roots = await refreshBackgroundRoots()
     if (roots.length === 0) return
 
     const audioExts = getAudioExtensions()
@@ -522,7 +522,7 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
   const collectBackgroundFsCandidates = async (limit: number): Promise<string[]> => {
     const results: string[] = []
     if (limit <= 0 || !store.databaseDir || deps.hasForegroundWork()) return results
-    const roots = refreshBackgroundRoots()
+    const roots = await refreshBackgroundRoots()
     if (roots.length === 0) return results
     const audioExts = getAudioExtensions()
     if (audioExts.size === 0) return results

@@ -1,4 +1,5 @@
-import { deflateSync, inflateSync } from 'node:zlib'
+import { promisify } from 'node:util'
+import { deflate, inflate } from 'node:zlib'
 import {
   UNIFIED_DISPLAY_WAVEFORM_CACHE_VERSION,
   UNIFIED_DISPLAY_WAVEFORM_PARAMETER_VERSION,
@@ -40,6 +41,8 @@ type UnifiedDisplayWaveformRow = {
 
 const TABLE = 'unified_display_waveform_cache'
 const MAGIC = 'UDW1'
+const deflateAsync = promisify(deflate)
+const inflateAsync = promisify(inflate)
 
 const normalizeMeta = (row: unknown): UnifiedDisplayWaveformMeta | null => {
   if (!isSqliteRow(row)) return null
@@ -81,16 +84,16 @@ const toBuffer = (value: unknown): Buffer | null => {
   return null
 }
 
-const writeHeader = (payload: Buffer, header: Record<string, unknown>) => {
+const writeHeader = async (payload: Buffer, header: Record<string, unknown>) => {
   const headerBuffer = Buffer.from(JSON.stringify(header), 'utf8')
   const prefix = Buffer.alloc(8)
   prefix.write(MAGIC, 0, 4, 'ascii')
   prefix.writeUInt32LE(headerBuffer.byteLength, 4)
-  return deflateSync(Buffer.concat([prefix, headerBuffer, payload]))
+  return await deflateAsync(Buffer.concat([prefix, headerBuffer, payload]))
 }
 
-const readPayload = (compressed: Buffer) => {
-  const decoded = inflateSync(compressed)
+const readPayload = async (compressed: Buffer) => {
+  const decoded = await inflateAsync(compressed)
   if (decoded.byteLength < 8 || decoded.subarray(0, 4).toString('ascii') !== MAGIC) return null
   const headerLength = decoded.readUInt32LE(4)
   const payloadStart = 8 + headerLength
@@ -121,9 +124,9 @@ const readPayload = (compressed: Buffer) => {
   return { header, readBytes }
 }
 
-function encodeUnifiedDisplayWaveformCacheData(
+async function encodeUnifiedDisplayWaveformCacheData(
   data: UnifiedDisplayWaveformDetailData
-): Buffer | null {
+): Promise<Buffer | null> {
   if (!data || data.version !== UNIFIED_DISPLAY_WAVEFORM_CACHE_VERSION) return null
   if (data.parameterVersion !== UNIFIED_DISPLAY_WAVEFORM_PARAMETER_VERSION) return null
   if (!data.height?.length || !data.attack?.length || !data.colorIndex?.length) return null
@@ -160,10 +163,10 @@ function encodeUnifiedDisplayWaveformCacheData(
   })
 }
 
-function decodeUnifiedDisplayWaveformCacheData(
+async function decodeUnifiedDisplayWaveformCacheData(
   meta: UnifiedDisplayWaveformMeta,
   payload: Buffer
-): UnifiedDisplayWaveformDetailData | null {
+): Promise<UnifiedDisplayWaveformDetailData | null> {
   if (!meta || !payload) return null
   if (
     meta.cacheVersion !== UNIFIED_DISPLAY_WAVEFORM_CACHE_VERSION ||
@@ -172,7 +175,7 @@ function decodeUnifiedDisplayWaveformCacheData(
   ) {
     return null
   }
-  const decoded = readPayload(payload)
+  const decoded = await readPayload(payload)
   if (!decoded) return null
   const height = decoded.readBytes(decoded.header.heightLength)
   const attack = decoded.readBytes(decoded.header.attackLength)
@@ -329,7 +332,7 @@ export async function loadUnifiedDisplayWaveformCacheData(
       await removeUnifiedDisplayWaveformCacheEntry(listRoot, filePath)
       return null
     }
-    const decoded = decodeUnifiedDisplayWaveformCacheData(meta, payload)
+    const decoded = await decodeUnifiedDisplayWaveformCacheData(meta, payload)
     if (!decoded) {
       await removeUnifiedDisplayWaveformCacheEntry(listRoot, filePath)
       return null
@@ -350,7 +353,7 @@ export async function upsertUnifiedDisplayWaveformCacheEntry(
   const db = getLibraryDb()
   const keys = resolveCacheKeys(listRoot, filePath)
   if (!db || !keys || !data) return false
-  const payload = encodeUnifiedDisplayWaveformCacheData(data)
+  const payload = await encodeUnifiedDisplayWaveformCacheData(data)
   if (!payload) return false
   try {
     const upsertMain = db.prepare(

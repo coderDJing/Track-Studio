@@ -1,5 +1,6 @@
 import { parentPort } from 'node:worker_threads'
 import type { MixxxWaveformData } from '../waveformCodec'
+import { collectTransferableArrayBuffers } from './transferableBuffers'
 import { COMPACT_VISUAL_WAVEFORM_COLOR_RAW_RATE } from '../../shared/compactVisualWaveform'
 import {
   buildUnifiedDisplayWaveformDetailFromMixxx,
@@ -689,5 +690,5 @@ parentPort?.on('message', async (job: KeyJob) => {
     })
   }
 
-  parentPort?.postMessage(response)
+  parentPort?.postMessage(response, collectTransferableArrayBuffers(response.result))
 })
