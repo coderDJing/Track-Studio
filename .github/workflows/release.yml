@@ -386,6 +386,11 @@ jobs:
       - name: Fetch Intel FFmpeg static libs
         run: |
           set -euo pipefail
+          # The hosted Intel runner ships an unrelated HashiCorp tap with a
+          # broken vagrant formula, which makes `brew update` emit an error.
+          if brew tap | grep -Fxq 'hashicorp/tap'; then
+            brew untap hashicorp/tap
+          fi
           brew update
           brew install ffmpeg
           mkdir -p dist/ffmpeg-x64-dev/lib dist/ffmpeg-x64-dev/include
@@ -518,6 +523,10 @@ jobs:
 
           # 使用 Homebrew 安装 arm64 版本 (native on arm64 runner)
           echo "Installing arm64 ffmpeg via Homebrew"
+          # Keep unrelated broken taps from making Homebrew metadata updates noisy.
+          if brew tap | grep -Fxq 'hashicorp/tap'; then
+            brew untap hashicorp/tap
+          fi
           brew update
           brew install ffmpeg
           ARM64_FFMPEG_PATH="$(brew --prefix)/bin/ffmpeg"
