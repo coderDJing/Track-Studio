@@ -1,4 +1,5 @@
 import { app, ipcMain, powerMonitor, type IpcMainInvokeEvent } from 'electron'
+import { log } from '../log'
 import { getBackgroundTaskExecutionStatus } from './backgroundOrchestrator'
 import { getCoverTaskDiagnosticSnapshot } from './covers'
 import { getBackgroundFileIoDiagnosticSnapshot } from './playbackForegroundActivity'
@@ -33,9 +34,33 @@ let installed = false
 let powerMonitorAttached = false
 
 const toMb = (bytes: number): number => Math.round((bytes / (1024 * 1024)) * 10) / 10
+const SLOW_COVER_IPC_RETURN_HANDOFF_THRESHOLD_MS = 250
 
-const scheduleEndMainThreadActivity = (id: number): void => {
-  const finish = () => endMainThreadActivity(id)
+const getIpcResultBytes = (result: unknown): number | null => {
+  if (result === null || typeof result !== 'object') return null
+  const data = (result as Record<string, unknown>).data
+  if (Buffer.isBuffer(data) || data instanceof Uint8Array || data instanceof ArrayBuffer) {
+    return data.byteLength
+  }
+  return null
+}
+
+const scheduleEndMainThreadActivity = (
+  id: number,
+  slowCoverReturn?: { channel: string; startedAtMs: number; resultBytes: number | null }
+): void => {
+  const finish = () => {
+    endMainThreadActivity(id)
+    if (!slowCoverReturn) return
+    const elapsedMs = Math.max(0, Date.now() - slowCoverReturn.startedAtMs)
+    if (elapsedMs >= SLOW_COVER_IPC_RETURN_HANDOFF_THRESHOLD_MS) {
+      log.info('[cover-diagnostics] slow ipc return handoff', {
+        channel: slowCoverReturn.channel,
+        elapsedMs,
+        resultBytes: slowCoverReturn.resultBytes
+      })
+    }
+  }
   try {
     setImmediate(finish)
   } catch {
@@ -72,7 +97,17 @@ const wrapInvokeListener = (channel: string, listener: InvokeListener): InvokeLi
           argCount: returnHint.argCount,
           argHint: returnHint.argHint
         })
-        scheduleEndMainThreadActivity(returnId)
+        const returnStartedAtMs = Date.now()
+        scheduleEndMainThreadActivity(
+          returnId,
+          channel === 'getSongCoverThumb'
+            ? {
+                channel,
+                startedAtMs: returnStartedAtMs,
+                resultBytes: getIpcResultBytes(result)
+              }
+            : undefined
+        )
       }
       return result
     } catch (error) {
