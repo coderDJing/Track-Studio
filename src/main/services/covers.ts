@@ -2,21 +2,17 @@ import path = require('path')
 import fs = require('fs-extra')
 import { operateHiddenFile, resolveLibraryPath } from '../utils'
 import * as LibraryCacheDb from '../libraryCacheDb'
-import { log } from '../log'
 import {
   extractCoverOffMainThread,
   getCoverExtractionWorkerDiagnosticSnapshot,
   type CoverExtractionTiming
 } from './coverExtractionWorker'
 import { runPlaybackAwareBackgroundFileIo, type FileIoPriority } from './playbackForegroundActivity'
-import { isPackagedRcBuild } from './rcDiagnostics'
 
 const DISPLAY_CACHE_MARKER = '.display-v1'
 const COVER_THUMB_MAX_CONCURRENCY = 3
 const RECENT_COVER_DIAGNOSTIC_TTL_MS = 60_000
 const MAX_RECENT_COVER_DIAGNOSTICS = 24
-const SLOW_COVER_OPERATION_THRESHOLD_MS = 1_000
-const coverSlowDiagnosticsEnabled = isPackagedRcBuild()
 let pendingPostScanSweepTimer: NodeJS.Timeout | null = null
 let activeCoverThumbTasks = 0
 let coverThumbTaskSequence = 0
@@ -122,23 +118,6 @@ const completeCoverDiagnostic = (
   pruneRecentCoverDiagnostics()
   if (recentCoverDiagnostics.length > MAX_RECENT_COVER_DIAGNOSTICS) {
     recentCoverDiagnostics.splice(0, recentCoverDiagnostics.length - MAX_RECENT_COVER_DIAGNOSTICS)
-  }
-
-  const durationMs = Math.max(0, operation.endedAtMs - operation.startedAtMs)
-  if (coverSlowDiagnosticsEnabled && durationMs >= SLOW_COVER_OPERATION_THRESHOLD_MS) {
-    log.info('[cover-diagnostics] slow operation', {
-      kind: operation.kind,
-      fileName: operation.fileName,
-      priority: operation.priority,
-      requestedSize: operation.requestedSize,
-      durationMs,
-      phaseDurationsMs: operation.phaseDurationsMs,
-      sourceBytes: operation.sourceBytes,
-      outputBytes: operation.outputBytes,
-      cacheStatus: operation.cacheStatus,
-      workerTiming: operation.workerTiming,
-      outcome: operation.outcome
-    })
   }
 }
 

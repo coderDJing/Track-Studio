@@ -287,8 +287,6 @@ ipcMain.handle('cloudSync/testConnectivity', async (_e, payload: { userKey: stri
 
 async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
   const silent = isScheduledTrigger(trigger)
-  const startedAt = Date.now()
-  log.info('[cloud-sync] start', { trigger })
   // 频控：限制 5 分钟内最多 10 次同步启动
   // 在接近上限时（第 9 次或第 10 次）给出友好提示并告知下一次安全操作时间
   {
@@ -468,15 +466,7 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
 
     // 1) /check（集合哈希：小写、升序、无分隔符；空数组等价于 sha256('')）
     const mode = getFingerprintMode()
-    const fingerprintStartedAt = Date.now()
-    log.info('[cloud-sync] collection hash start', { trigger, mode })
     const { hash, fingerprints: clientFingerprints } = await getCollectionHashForSync(mode)
-    log.info('[cloud-sync] collection hash end', {
-      trigger,
-      mode,
-      elapsedMs: Date.now() - fingerprintStartedAt,
-      fingerprintCount: clientFingerprints.length
-    })
     const checkRes = await limitedFetch(`${baseUrl}${CLOUD_SYNC.PREFIX}/check`, {
       method: 'POST',
       headers: {
@@ -956,13 +946,6 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
       mainWindow.instance.webContents.send('cloudSync/summary', summary)
     }
     sendState('success')
-    log.info('[cloud-sync] end', {
-      trigger,
-      result: 'success',
-      elapsedMs: Date.now() - startedAt,
-      fingerprintNeedSync,
-      curatedArtistNeedSync
-    })
     return 'success'
   } catch (e: unknown) {
     const error = (isRecord(e) ? e : null) as ErrorLike | null
@@ -983,11 +966,6 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
     log.error('[cloudSync] sync failed', { error: e, message: msg })
     sendError(msg, e)
     sendState('failed')
-    log.info('[cloud-sync] end', {
-      trigger,
-      result: 'failed',
-      elapsedMs: Date.now() - startedAt
-    })
     return 'failed'
   } finally {
     ipcMain.removeListener('cloudSync/cancel', onCancel)

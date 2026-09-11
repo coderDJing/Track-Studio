@@ -31,6 +31,10 @@ import {
 import { getCuratedSyncFileById, replaceCuratedSyncFileId } from './identityDb'
 import { persistCloudIdentityFromDisk, persistMatchedCloudFile } from './applyRemoteIdentity'
 import {
+  createCuratedApplyDiagnostics,
+  type CuratedApplyDiagnostics
+} from './applyRemoteDiagnostics'
+import {
   canonicalizeCloudParentUuid,
   curatedRelativeToAbs,
   findCuratedLibraryNode,
@@ -522,7 +526,8 @@ const sortNodesParentsFirst = (nodes: CuratedLibrarySyncCloudNode[]) => {
 const applyTrackNumbers = async (
   files: CuratedLibrarySyncCloudFile[],
   scope: CloudParentScope,
-  localById: Map<string, CuratedLocalFile>
+  localById: Map<string, CuratedLocalFile>,
+  diagnostics: CuratedApplyDiagnostics
 ) => {
   const grouped = new Map<string, CuratedLibrarySyncCloudFile[]>()
   for (const file of files) {
@@ -532,31 +537,41 @@ const applyTrackNumbers = async (
     grouped.set(parentUuid, list)
   }
   for (const [parentUuid, group] of grouped) {
-    const listRoot =
-      parentUuid === scope.curatedUuid ? getCuratedLibraryAbsRoot() : getNodeAbsPath(parentUuid)
-    if (!listRoot) continue
-    const ordered = [...group].sort((left, right) => {
-      const leftNum = Number(left.trackNumber) || Number.MAX_SAFE_INTEGER
-      const rightNum = Number(right.trackNumber) || Number.MAX_SAFE_INTEGER
-      if (leftNum !== rightNum) return leftNum - rightNum
-      return left.fileName.localeCompare(right.fileName)
-    })
-    const alreadyOrdered = ordered.every(
-      (file, index) =>
-        normalizePlaylistTrackNumber(localById.get(file.fileId)?.trackNumber) === index + 1
+    await diagnostics.measure(
+      'track-number-list',
+      { parentUuid, fileCount: group.length },
+      async () => {
+        const listRoot =
+          parentUuid === scope.curatedUuid ? getCuratedLibraryAbsRoot() : getNodeAbsPath(parentUuid)
+        if (!listRoot) return
+        const ordered = [...group].sort((left, right) => {
+          const leftNum = Number(left.trackNumber) || Number.MAX_SAFE_INTEGER
+          const rightNum = Number(right.trackNumber) || Number.MAX_SAFE_INTEGER
+          if (leftNum !== rightNum) return leftNum - rightNum
+          return left.fileName.localeCompare(right.fileName)
+        })
+        const alreadyOrdered = ordered.every(
+          (file, index) =>
+            normalizePlaylistTrackNumber(localById.get(file.fileId)?.trackNumber) === index + 1
+        )
+        if (alreadyOrdered) return
+        const absPaths: string[] = []
+        for (const file of ordered) {
+          const identity = getCuratedSyncFileById(file.fileId)
+          const abs =
+            (identity?.relativePath && curatedRelativeToAbs(identity.relativePath)) ||
+            path.join(listRoot, file.fileName)
+          if (await fs.pathExists(abs)) absPaths.push(abs)
+        }
+        if (absPaths.length > 0) {
+          await diagnostics.measure(
+            'track-number-write',
+            { parentUuid, fileCount: absPaths.length },
+            () => setSongListTrackNumbersByOrder({ listRoot, orderedFilePaths: absPaths })
+          )
+        }
+      }
     )
-    if (alreadyOrdered) continue
-    const absPaths: string[] = []
-    for (const file of ordered) {
-      const identity = getCuratedSyncFileById(file.fileId)
-      const abs =
-        (identity?.relativePath && curatedRelativeToAbs(identity.relativePath)) ||
-        path.join(listRoot, file.fileName)
-      if (await fs.pathExists(abs)) absPaths.push(abs)
-    }
-    if (absPaths.length > 0) {
-      await setSongListTrackNumbersByOrder({ listRoot, orderedFilePaths: absPaths })
-    }
   }
 }
 
@@ -679,25 +694,41 @@ export const applyRemoteSnapshot = async (
     curatedUuid: curated.uuid,
     snapshotNodeIds: new Set(snapshot.nodes.map((node) => node.uuid))
   }
+  const diagnostics = createCuratedApplyDiagnostics({
+    cloudFileCount: snapshot.files.length,
+    cloudNodeCount: snapshot.nodes.length,
+    localFileCount: local.files.length,
+    localNodeCount: local.nodes.length,
+    extrasMode: options.extras,
+    preservePendingLocal: options.preservePendingLocal === true
+  })
+  let diagnosticOutcome = 'success'
 
   try {
     const orderedNodes = sortNodesParentsFirst(
       snapshot.nodes.filter((node) => node.parentUuid && node.uuid)
     )
     const localNodeIds = new Set(local.nodes.map((node) => node.uuid))
-    for (const node of orderedNodes) {
-      assertNotCancelled(ctx.signal)
-      const pendingDeleted = livePendingDeletedNodeIds(options)
-      if (shouldSkipRecreatingLocallyMissingCloudNode(node.uuid, localNodeIds, options)) {
-        if (pendingDeleted.has(node.uuid)) {
-          await removeLocalPendingCuratedNodeShell(node.uuid, curatedRoot)
+    const endNodeApply = diagnostics.begin('nodes', { nodeCount: orderedNodes.length })
+    try {
+      for (const node of orderedNodes) {
+        assertNotCancelled(ctx.signal)
+        const pendingDeleted = livePendingDeletedNodeIds(options)
+        if (shouldSkipRecreatingLocallyMissingCloudNode(node.uuid, localNodeIds, options)) {
+          if (pendingDeleted.has(node.uuid)) {
+            await removeLocalPendingCuratedNodeShell(node.uuid, curatedRoot)
+          }
+          continue
         }
-        continue
+        await ensureCloudNodeLocal(node, scope, options)
       }
-      await ensureCloudNodeLocal(node, scope, options)
+    } finally {
+      endNodeApply()
     }
-    await purgePendingDeletedCuratedNodeShells()
-    await ctx.onNodesReady?.()
+    await diagnostics.measure('nodes-ready', {}, async () => {
+      await purgePendingDeletedCuratedNodeShells()
+      await ctx.onNodesReady?.()
+    })
 
     const cloudFileIds = new Set(snapshot.files.map((file) => file.fileId))
     const localById = new Map(local.files.map((file) => [file.fileId, file]))
@@ -724,214 +755,278 @@ export const applyRemoteSnapshot = async (
     }
     if (downloadTotal > 0) ctx.onFileProgress?.(0, downloadTotal)
 
-    for (const file of snapshot.files) {
-      assertNotCancelled(ctx.signal)
-      const localFile = localById.get(file.fileId)
-      let matched = matchLocalFileForCloud(
-        file,
-        localById,
-        localByHash,
-        adoptedLocalIds,
-        options.adoptIds
-      )
-      if (matched && !localFile && matched.fileId !== file.fileId) {
-        adoptedLocalIds.add(matched.fileId)
-        replaceCuratedSyncFileId(matched.fileId, file.fileId)
-        matched = { ...matched, fileId: file.fileId }
-      }
-      const destDir = localParentAbsOf(file.parentUuid, scope)
-      if (!destDir) continue
-      if (matched) {
-        let current = matched
-        const lastFile = options.lastAppliedFiles?.get(file.fileId)
-        const lastNodeIds = new Set(options.lastAppliedNodes?.keys() || [])
-        if (shouldPreservePendingLocal(options)) {
-          current = await adoptAliveHashMatch(current, file.fileId, file.sha256, localByHash)
-          const liveState = await liveMatchedFileApplyState(
-            current,
-            lastFile,
-            scope.curatedUuid,
-            lastNodeIds
-          )
-          if (liveState !== 'stable') {
+    const endFileApply = diagnostics.begin('files', {
+      fileCount: snapshot.files.length,
+      downloadCount: downloadTotal
+    })
+    try {
+      for (const file of snapshot.files) {
+        assertNotCancelled(ctx.signal)
+        const fileDetails = { fileId: file.fileId, fileName: file.fileName }
+        const localFile = localById.get(file.fileId)
+        let matched = matchLocalFileForCloud(
+          file,
+          localById,
+          localByHash,
+          adoptedLocalIds,
+          options.adoptIds
+        )
+        if (matched && !localFile && matched.fileId !== file.fileId) {
+          const endReplaceIdentity = diagnostics.begin('replace-file-id', fileDetails)
+          try {
+            adoptedLocalIds.add(matched.fileId)
+            replaceCuratedSyncFileId(matched.fileId, file.fileId)
+            matched = { ...matched, fileId: file.fileId }
+          } finally {
+            endReplaceIdentity()
+          }
+        }
+        const destDir = localParentAbsOf(file.parentUuid, scope)
+        if (!destDir) continue
+        if (matched) {
+          let current = matched
+          const lastFile = options.lastAppliedFiles?.get(file.fileId)
+          const lastNodeIds = new Set(options.lastAppliedNodes?.keys() || [])
+          if (shouldPreservePendingLocal(options)) {
+            current = await diagnostics.measure('adopt-alive-hash', fileDetails, () =>
+              adoptAliveHashMatch(current, file.fileId, file.sha256, localByHash)
+            )
+            const liveState = await diagnostics.measure('live-file-state', fileDetails, () =>
+              liveMatchedFileApplyState(current, lastFile, scope.curatedUuid, lastNodeIds)
+            )
+            if (liveState !== 'stable') {
+              continue
+            }
+          }
+          const destPath = path.join(destDir, file.fileName)
+          if (isBusyPath(current.absPath, ctx)) {
+            deferred.push({
+              type: 'moveFile',
+              fileId: file.fileId,
+              parentUuid: file.parentUuid,
+              fileName: file.fileName,
+              sha256: file.sha256
+            })
             continue
           }
-        }
-        const destPath = path.join(destDir, file.fileName)
-        if (isBusyPath(current.absPath, ctx)) {
-          deferred.push({
-            type: 'moveFile',
-            fileId: file.fileId,
-            parentUuid: file.parentUuid,
-            fileName: file.fileName,
-            sha256: file.sha256
-          })
-          continue
-        }
-        if (!(await ensureRemoteDestinationAvailable(destPath, current.absPath, ctx))) {
-          deferred.push({
-            type: 'moveFile',
-            fileId: file.fileId,
-            parentUuid: file.parentUuid,
-            fileName: file.fileName,
-            sha256: file.sha256
-          })
-          continue
-        }
-        if (current.contentSha256 !== file.sha256) {
-          noteDownloadProgress()
-          const imported = await tryImportCloudFile(
-            file,
-            ctx,
-            scope,
-            sameAbsPath(current.absPath, destPath)
+          const destinationAvailable = await diagnostics.measure(
+            'ensure-destination',
+            fileDetails,
+            () => ensureRemoteDestinationAvailable(destPath, current.absPath, ctx)
           )
-          if (imported) {
-            if (!sameAbsPath(current.absPath, destPath)) {
-              await moveFileToRecycleBin(current.absPath)
-            }
-            const relativePath = path.posix.join(
-              path.relative(curatedRoot, destDir).replace(/\\/g, '/'),
-              path.basename(imported)
-            )
-            await persistCloudIdentityFromDisk({
-              file,
-              absPath: imported,
-              relativePath,
-              parentUuid: canonicalParentUuidOf(file.parentUuid, scope)
+          if (!destinationAvailable) {
+            deferred.push({
+              type: 'moveFile',
+              fileId: file.fileId,
+              parentUuid: file.parentUuid,
+              fileName: file.fileName,
+              sha256: file.sha256
             })
-            emitImported(ctx, file, imported)
+            continue
+          }
+          if (current.contentSha256 !== file.sha256) {
+            noteDownloadProgress()
+            const imported = await diagnostics.measure('replace-content', fileDetails, () =>
+              tryImportCloudFile(file, ctx, scope, sameAbsPath(current.absPath, destPath))
+            )
+            if (imported) {
+              if (!sameAbsPath(current.absPath, destPath)) {
+                await diagnostics.measure('recycle-replaced-file', fileDetails, () =>
+                  moveFileToRecycleBin(current.absPath)
+                )
+              }
+              const relativePath = path.posix.join(
+                path.relative(curatedRoot, destDir).replace(/\\/g, '/'),
+                path.basename(imported)
+              )
+              await diagnostics.measure('persist-downloaded-identity', fileDetails, () =>
+                persistCloudIdentityFromDisk({
+                  file,
+                  absPath: imported,
+                  relativePath,
+                  parentUuid: canonicalParentUuidOf(file.parentUuid, scope)
+                })
+              )
+              emitImported(ctx, file, imported)
+            }
+            continue
+          }
+          if (!sameAbsPath(current.absPath, destPath)) {
+            const moved = await diagnostics.measure('move-file', fileDetails, () =>
+              relocateLibraryAudioFile({
+                sourceAbs: current.absPath,
+                destAbs: destPath,
+                mode: 'move'
+              })
+            )
+            const movedStat = await fs.stat(moved)
+            await diagnostics.measure('persist-moved-identity', fileDetails, () =>
+              persistMatchedCloudFile({
+                file,
+                absPath: moved,
+                relativePath: absToRel(curatedRoot, moved),
+                parentUuid: canonicalParentUuidOf(file.parentUuid, scope),
+                listRoot: destDir,
+                previous: {
+                  ...current,
+                  contentSize: movedStat.size,
+                  mtimeMs: movedStat.mtimeMs
+                }
+              })
+            )
+          } else {
+            await diagnostics.measure('persist-matched-identity', fileDetails, () =>
+              persistMatchedCloudFile({
+                file,
+                absPath: current.absPath,
+                relativePath: absToRel(curatedRoot, current.absPath),
+                parentUuid: canonicalParentUuidOf(file.parentUuid, scope),
+                listRoot: destDir,
+                previous: current
+              })
+            )
           }
           continue
         }
-        if (!sameAbsPath(current.absPath, destPath)) {
-          const moved = await relocateLibraryAudioFile({
-            sourceAbs: current.absPath,
-            destAbs: destPath,
-            mode: 'move'
+        if (shouldSkipRestoringCloudFile(file, options)) continue
+        const destPath = path.join(destDir, file.fileName)
+        const destinationAvailable = await diagnostics.measure(
+          'ensure-new-destination',
+          fileDetails,
+          () => ensureRemoteDestinationAvailable(destPath, null, ctx)
+        )
+        if (!destinationAvailable) {
+          deferred.push({
+            type: 'moveFile',
+            fileId: file.fileId,
+            parentUuid: file.parentUuid,
+            fileName: file.fileName,
+            sha256: file.sha256
           })
-          const movedStat = await fs.stat(moved)
-          await persistMatchedCloudFile({
-            file,
-            absPath: moved,
-            relativePath: absToRel(curatedRoot, moved),
-            parentUuid: canonicalParentUuidOf(file.parentUuid, scope),
-            listRoot: destDir,
-            previous: {
-              ...current,
-              contentSize: movedStat.size,
-              mtimeMs: movedStat.mtimeMs
-            }
-          })
-        } else {
-          await persistMatchedCloudFile({
-            file,
-            absPath: current.absPath,
-            relativePath: absToRel(curatedRoot, current.absPath),
-            parentUuid: canonicalParentUuidOf(file.parentUuid, scope),
-            listRoot: destDir,
-            previous: current
-          })
+          continue
         }
-        continue
+        noteDownloadProgress()
+        const imported = await diagnostics.measure('import-new-file', fileDetails, () =>
+          tryImportCloudFile(file, ctx, scope)
+        )
+        if (imported) {
+          await diagnostics.measure('persist-new-identity', fileDetails, () =>
+            persistCloudIdentityFromDisk({
+              file,
+              absPath: imported,
+              relativePath: absToRel(curatedRoot, imported),
+              parentUuid: canonicalParentUuidOf(file.parentUuid, scope)
+            })
+          )
+          emitImported(ctx, file, imported)
+        }
       }
-      if (shouldSkipRestoringCloudFile(file, options)) continue
-      const destPath = path.join(destDir, file.fileName)
-      if (!(await ensureRemoteDestinationAvailable(destPath, null, ctx))) {
-        deferred.push({
-          type: 'moveFile',
-          fileId: file.fileId,
-          parentUuid: file.parentUuid,
-          fileName: file.fileName,
-          sha256: file.sha256
-        })
-        continue
-      }
-      noteDownloadProgress()
-      const imported = await tryImportCloudFile(file, ctx, scope)
-      if (imported) {
-        await persistCloudIdentityFromDisk({
-          file,
-          absPath: imported,
-          relativePath: absToRel(curatedRoot, imported),
-          parentUuid: canonicalParentUuidOf(file.parentUuid, scope)
-        })
-        emitImported(ctx, file, imported)
-      }
+    } finally {
+      endFileApply()
     }
 
     if (options.applyTombstones !== false) {
-      deferred.push(...(await applyFileTombstones(snapshot, localById, curatedRoot, ctx, options)))
-      deferred.push(...(await applyNodeTombstones(snapshot, curatedRoot, ctx)))
+      deferred.push(
+        ...(await diagnostics.measure(
+          'file-tombstones',
+          { tombstoneCount: snapshot.tombstones.length },
+          () => applyFileTombstones(snapshot, localById, curatedRoot, ctx, options)
+        ))
+      )
+      deferred.push(
+        ...(await diagnostics.measure(
+          'node-tombstones',
+          { tombstoneCount: snapshot.tombstones.length },
+          () => applyNodeTombstones(snapshot, curatedRoot, ctx)
+        ))
+      )
     }
 
     if (options.extras === 'delete') {
-      const extraFiles = local.files.filter((localFile) => !cloudFileIds.has(localFile.fileId))
-      for (const localFile of extraFiles) {
-        assertNotCancelled(ctx.signal)
-        if (isBusyPath(localFile.absPath, ctx)) {
-          deferred.push({ type: 'deleteFile', fileId: localFile.fileId })
-          continue
-        }
-        await deleteLocalFile(localFile.absPath, ctx)
-      }
-      const cloudNodeIds = new Set(snapshot.nodes.map((node) => node.uuid))
-      const localNodes = [...local.nodes].reverse()
-      const audioExts = audioExtSet()
-      for (const node of localNodes) {
-        if (cloudNodeIds.has(node.uuid)) continue
-        const abs = getNodeAbsPath(node.uuid)
-        if (!abs || !isPathInside(abs, curatedRoot)) continue
-        const leftovers = await listAudioFiles(abs, audioExts)
-        let leftoverBusy = false
-        for (const leftover of leftovers) {
-          if (isBusyPath(leftover, ctx)) {
-            leftoverBusy = true
+      const endDeleteExtras = diagnostics.begin('delete-extras')
+      try {
+        const extraFiles = local.files.filter((localFile) => !cloudFileIds.has(localFile.fileId))
+        for (const localFile of extraFiles) {
+          assertNotCancelled(ctx.signal)
+          if (isBusyPath(localFile.absPath, ctx)) {
+            deferred.push({ type: 'deleteFile', fileId: localFile.fileId })
             continue
           }
-          await deleteLocalFile(leftover, ctx)
+          await deleteLocalFile(localFile.absPath, ctx)
         }
-        if (leftoverBusy || (await dirHasAudioFiles(abs, audioExts))) {
-          deferred.push({ type: 'deleteNode', nodeUuid: node.uuid })
-          continue
+        const cloudNodeIds = new Set(snapshot.nodes.map((node) => node.uuid))
+        const localNodes = [...local.nodes].reverse()
+        const audioExts = audioExtSet()
+        for (const node of localNodes) {
+          if (cloudNodeIds.has(node.uuid)) continue
+          const abs = getNodeAbsPath(node.uuid)
+          if (!abs || !isPathInside(abs, curatedRoot)) continue
+          const leftovers = await listAudioFiles(abs, audioExts)
+          let leftoverBusy = false
+          for (const leftover of leftovers) {
+            if (isBusyPath(leftover, ctx)) {
+              leftoverBusy = true
+              continue
+            }
+            await deleteLocalFile(leftover, ctx)
+          }
+          if (leftoverBusy || (await dirHasAudioFiles(abs, audioExts))) {
+            deferred.push({ type: 'deleteNode', nodeUuid: node.uuid })
+            continue
+          }
+          await fs.remove(abs)
+          removeLibraryNode(node.uuid)
         }
-        await fs.remove(abs)
-        removeLibraryNode(node.uuid)
+      } finally {
+        endDeleteExtras()
       }
     }
 
     const skipTrackParents = new Set<string>()
     if (shouldPreservePendingLocal(options)) {
-      for (const localFile of local.files) {
-        const lastFile = options.lastAppliedFiles?.get(localFile.fileId)
-        if (!lastFile) continue
-        const live = await readCacheFields(localFile.absPath)
-        const liveTrack = live.trackNumber ?? localFile.trackNumber
-        const liveAdded = live.addedAtMs ?? localFile.addedAtMs
-        if (
-          asOptionalPositiveInt(lastFile.trackNumber) !== asOptionalPositiveInt(liveTrack) ||
-          asOptionalPositiveInt(lastFile.addedAtMs) !== asOptionalPositiveInt(liveAdded)
-        ) {
-          skipTrackParents.add(localFile.parentUuid)
-          skipTrackParents.add(localParentUuidOf(localFile.parentUuid, scope))
+      await diagnostics.measure(
+        'detect-pending-track-edits',
+        { fileCount: local.files.length },
+        async () => {
+          for (const localFile of local.files) {
+            const lastFile = options.lastAppliedFiles?.get(localFile.fileId)
+            if (!lastFile) continue
+            const live = await readCacheFields(localFile.absPath)
+            const liveTrack = live.trackNumber ?? localFile.trackNumber
+            const liveAdded = live.addedAtMs ?? localFile.addedAtMs
+            if (
+              asOptionalPositiveInt(lastFile.trackNumber) !== asOptionalPositiveInt(liveTrack) ||
+              asOptionalPositiveInt(lastFile.addedAtMs) !== asOptionalPositiveInt(liveAdded)
+            ) {
+              skipTrackParents.add(localFile.parentUuid)
+              skipTrackParents.add(localParentUuidOf(localFile.parentUuid, scope))
+            }
+          }
         }
-      }
+      )
     }
-    await applyTrackNumbers(
-      snapshot.files.filter((file) => {
-        if (skipTrackParents.size === 0) return true
-        return (
-          !skipTrackParents.has(file.parentUuid) &&
-          !skipTrackParents.has(localParentUuidOf(file.parentUuid, scope))
-        )
-      }),
-      scope,
-      localById
+    const trackNumberFiles = snapshot.files.filter((file) => {
+      if (skipTrackParents.size === 0) return true
+      return (
+        !skipTrackParents.has(file.parentUuid) &&
+        !skipTrackParents.has(localParentUuidOf(file.parentUuid, scope))
+      )
+    })
+    await diagnostics.measure(
+      'track-numbers',
+      { fileCount: trackNumberFiles.length, skippedParentCount: skipTrackParents.size },
+      () => applyTrackNumbers(trackNumberFiles, scope, localById, diagnostics)
     )
     return { deferred, diskFull: false }
   } catch (error) {
-    if (isEnospc(error)) return { deferred, diskFull: true }
+    if (isEnospc(error)) {
+      diagnosticOutcome = 'disk-full'
+      return { deferred, diskFull: true }
+    }
+    diagnosticOutcome = (error as { name?: string })?.name === 'AbortError' ? 'cancelled' : 'failed'
     throw error
+  } finally {
+    diagnostics.finish({ outcome: diagnosticOutcome, deferredCount: deferred.length })
   }
 }
 

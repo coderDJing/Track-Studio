@@ -4,7 +4,6 @@ import { log } from '../log'
 import mainWindow from '../window/mainWindow'
 import { isLibraryMergeActive } from '../services/libraryMerge'
 import { isLibraryRelocateActive, hasLibraryRelocateJournalSync } from '../services/libraryRelocate'
-import { isPackagedRcBuild } from '../services/rcDiagnostics'
 import { beginLibraryTreeWatcherBulkOperation } from '../libraryTreeWatcher'
 import { runPlaybackAwareBackgroundFileIo } from '../services/playbackForegroundActivity'
 import { is } from '@electron-toolkit/utils'
@@ -49,7 +48,7 @@ import {
   commitFirstCuratedSnapshot,
   fetchCuratedLibraryStatus,
   pullCuratedSnapshot,
-  pushCuratedOps as pushCuratedOpsCore,
+  pushCuratedOps,
   replaceCuratedSnapshot
 } from './apiClient'
 import { uploadBlobWithResume } from './blobTransfer'
@@ -57,7 +56,7 @@ import { collectDroppedOps } from './conflictDiff'
 import { isFirstSnapshotRace, mapCuratedSyncError, mapTransferErrorKey } from './reports'
 import { parseCuratedLibrarySnapshot, mergeCuratedLibrarySnapshot } from './snapshotMerge'
 import {
-  applyRemoteSnapshot as applyRemoteSnapshotCore,
+  applyRemoteSnapshot,
   buildCloudEntitiesFromLocal,
   collectUnappliedCloudIds,
   diffLocalAgainstSnapshot,
@@ -97,47 +96,6 @@ let powerMonitorBound = false
 let sessionFailures: CuratedLibrarySyncFailureItem[] = []
 let sessionConflicts: CuratedLibrarySyncConflictItem[] = []
 let sessionCompletedWork = false
-const SLOW_CURATED_SYNC_PHASE_THRESHOLD_MS = 500
-const curatedSyncDiagnosticsEnabled = isPackagedRcBuild()
-let curatedSyncDiagnosticTrigger: CuratedLibrarySyncTrigger | null = null
-
-const measureCuratedSyncPhase = async <T>(phase: string, task: () => Promise<T>): Promise<T> => {
-  const startedAt = Date.now()
-  try {
-    return await task()
-  } finally {
-    const elapsedMs = Date.now() - startedAt
-    if (curatedSyncDiagnosticsEnabled && elapsedMs >= SLOW_CURATED_SYNC_PHASE_THRESHOLD_MS) {
-      log.info('[curated-library-sync] slow phase', {
-        trigger: curatedSyncDiagnosticTrigger,
-        phase,
-        elapsedMs
-      })
-    }
-  }
-}
-
-const measureCuratedSyncCpuPhase = <T>(phase: string, task: () => T): T => {
-  const startedAt = Date.now()
-  try {
-    return task()
-  } finally {
-    const elapsedMs = Date.now() - startedAt
-    if (curatedSyncDiagnosticsEnabled && elapsedMs >= SLOW_CURATED_SYNC_PHASE_THRESHOLD_MS) {
-      log.info('[curated-library-sync] slow cpu phase', {
-        trigger: curatedSyncDiagnosticTrigger,
-        phase,
-        elapsedMs
-      })
-    }
-  }
-}
-
-const applyRemoteSnapshot = (...args: Parameters<typeof applyRemoteSnapshotCore>) =>
-  measureCuratedSyncPhase('apply-remote-snapshot', () => applyRemoteSnapshotCore(...args))
-
-const pushCuratedOps = (...args: Parameters<typeof pushCuratedOpsCore>) =>
-  measureCuratedSyncPhase('push-ops', () => pushCuratedOpsCore(...args))
 const idleActivity = (): CuratedLibrarySyncActivity => ({
   running: false,
   phase: 'idle',
@@ -281,12 +239,11 @@ export const completeCuratedLibrarySyncStatus = (result: CuratedLibrarySyncStart
   })
 }
 
-const scanLocalForSync = () =>
-  measureCuratedSyncPhase('scan-local', () => scanCuratedLibraryForSync())
+const scanLocalForSync = () => scanCuratedLibraryForSync()
 
 const rescanAfterApply = async () => {
   setActivity('applying')
-  return await measureCuratedSyncPhase('rescan-after-apply', () => scanCuratedLibraryForSync())
+  return await scanLocalForSync()
 }
 
 const buildJoinChoice = async (status: {
@@ -632,13 +589,9 @@ const runJoin = async (
   sessionCompletedWork = true
   setActivity('applying')
   const local = await scanLocalForSync()
-  const snapshot = await measureCuratedSyncPhase('pull-merged-snapshot', () =>
-    pullMergedSnapshot(null)
-  )
+  const snapshot = await pullMergedSnapshot(null)
   if (mode === 'local-wins') {
-    const failedSha = await measureCuratedSyncPhase('upload-missing-blobs', () =>
-      uploadMissingBlobs(local.files, cloudBlobShaSet(snapshot))
-    )
+    const failedSha = await uploadMissingBlobs(local.files, cloudBlobShaSet(snapshot))
     if (failedSha.size > 0) {
       return { status: 'failed', message: 'cloudSync.curatedLibrary.errors.uploadIncomplete' }
     }
@@ -680,9 +633,7 @@ const runJoin = async (
     writeCuratedLibrarySyncDeferredOps(applied.deferred)
     const after = latest
     if (mode === 'merge') {
-      const failedSha = await measureCuratedSyncPhase('upload-missing-blobs', () =>
-        uploadMissingBlobs(after.files, cloudBlobShaSet(snapshot))
-      )
+      const failedSha = await uploadMissingBlobs(after.files, cloudBlobShaSet(snapshot))
       const retain = collectUnappliedCloudIds(snapshot, after, {
         extras: 'keep',
         adoptIds: true,
@@ -770,9 +721,7 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
   setActivity('applying')
   const local = await scanLocalForSync()
   const lastAppliedRevision = getCuratedLibrarySyncLastAppliedRevision()
-  let snapshot = await measureCuratedSyncPhase('pull-merged-snapshot', () =>
-    pullMergedSnapshot(lastAppliedRevision)
-  )
+  let snapshot = await pullMergedSnapshot(lastAppliedRevision)
   let changed = lastAppliedRevision === null || snapshot.revision !== lastAppliedRevision
   // reset/回滚可能恰好发生在 status 与 pull 之间；不能把本机旧文件再推回刚清空的云端。
   if (lastAppliedRevision != null && snapshot.revision < lastAppliedRevision) {
@@ -809,13 +758,9 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
     const deferred = toDeferred(readCuratedLibrarySyncDeferredOps())
     if (deferred.length > 0) changed = true
     const applyOptions = incrementalApplyOptions()
-    const remainingDeferred = await measureCuratedSyncPhase('retry-deferred-ops', () =>
-      retryDeferredRemoteOps(deferred, snapshot, applyCtx())
-    )
-    const initialOps = measureCuratedSyncCpuPhase('compute-initial-ops', () => {
-      const retainBefore = collectUnappliedCloudIds(snapshot, local, applyOptions)
-      return omitFailedBlobOps(buildPushOps(local, snapshot, retainBefore), new Set())
-    })
+    const remainingDeferred = await retryDeferredRemoteOps(deferred, snapshot, applyCtx())
+    const retainBefore = collectUnappliedCloudIds(snapshot, local, applyOptions)
+    const initialOps = omitFailedBlobOps(buildPushOps(local, snapshot, retainBefore), new Set())
     if (
       !changed &&
       deferred.length === 0 &&
@@ -850,13 +795,9 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
     remainingDeferred.push(...applied.deferred)
     writeCuratedLibrarySyncDeferredOps(remainingDeferred)
     const after = latest
-    const failedSha = await measureCuratedSyncPhase('upload-missing-blobs', () =>
-      uploadMissingBlobs(after.files, cloudBlobShaSet(snapshot))
-    )
-    const ops = measureCuratedSyncCpuPhase('compute-push-ops', () => {
-      const retain = collectUnappliedCloudIds(snapshot, after, applyOptions)
-      return omitFailedBlobOps(buildPushOps(after, snapshot, retain), failedSha)
-    })
+    const failedSha = await uploadMissingBlobs(after.files, cloudBlobShaSet(snapshot))
+    const retain = collectUnappliedCloudIds(snapshot, after, applyOptions)
+    const ops = omitFailedBlobOps(buildPushOps(after, snapshot, retain), failedSha)
     if (ops.length === 0) {
       persistAppliedSnapshot(snapshot, after)
       writeCuratedLibrarySyncDeferredOps(remainingDeferred)
@@ -901,9 +842,7 @@ const runFirstSnapshotUpload = async (): Promise<CuratedLibrarySyncStartResult> 
   sessionCompletedWork = true
   setActivity('applying')
   const local = await scanLocalForSync()
-  const failedSha = await measureCuratedSyncPhase('upload-missing-blobs', () =>
-    uploadMissingBlobs(local.files)
-  )
+  const failedSha = await uploadMissingBlobs(local.files)
   if (failedSha.size > 0) {
     return { status: 'failed', message: 'cloudSync.curatedLibrary.errors.uploadIncomplete' }
   }
@@ -963,8 +902,6 @@ export const runCuratedLibrarySync = async (
     return pendingJoin
   }
   bindPowerMonitor()
-  const diagnosticStartedAt = Date.now()
-  curatedSyncDiagnosticTrigger = trigger
   running = true
   cancelRequested = false
   setStatus({
@@ -984,9 +921,7 @@ export const runCuratedLibrarySync = async (
   try {
     dismissProgress()
     throwIfCancelled()
-    let status = await measureCuratedSyncPhase('fetch-status', () =>
-      fetchCuratedLibraryStatus(abortController?.signal)
-    )
+    let status = await fetchCuratedLibraryStatus(abortController?.signal)
     cacheQuotaFromStatus(status)
     let lastRevision = getCuratedLibrarySyncLastAppliedRevision()
     let rewound = false
@@ -1086,17 +1021,6 @@ export const runCuratedLibrarySync = async (
     return { status: 'failed', message: mapCuratedSyncError(message) }
   } finally {
     const cancelled = cancelRequested
-    if (curatedSyncDiagnosticsEnabled) {
-      log.info('[curated-library-sync] run end', {
-        trigger,
-        elapsedMs: Date.now() - diagnosticStartedAt,
-        cancelled,
-        completedWork: sessionCompletedWork,
-        failureCount: sessionFailures.length,
-        conflictCount: sessionConflicts.length
-      })
-    }
-    curatedSyncDiagnosticTrigger = null
     running = false
     abortController = null
     suppressCuratedLibraryTreeSync()

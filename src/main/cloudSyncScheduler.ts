@@ -16,7 +16,6 @@ import {
 } from './curatedLibrarySync/joinPrompt'
 import type { CloudSyncTrigger } from '../types/cloudSync'
 import { bindLibraryTreeMutationListener } from './libraryTreeWatcher'
-import { log } from './log'
 
 let intervalHandle: ReturnType<typeof setInterval> | null = null
 let treeSyncTimer: ReturnType<typeof setTimeout> | null = null
@@ -112,26 +111,10 @@ function ensureLibraryTreeSyncTrigger(): void {
 }
 
 async function runScheduledTick(): Promise<void> {
-  const startedAt = Date.now()
-  const fingerprintRunnable = isCloudSyncAutoRunnable() && !!runFingerprintSync
-  const curatedRunnable = canRunCuratedLibrarySyncNow()
-  log.info('[cloud-sync-scheduler] scheduled tick start', {
-    fingerprintRunnable,
-    curatedRunnable,
-    intervalMs: normalizeCloudSyncAutoIntervalMs(store.settingConfig?.cloudSyncAutoIntervalMs)
-  })
-  let fingerprintResult: string | null = null
-  try {
-    if (fingerprintRunnable && runFingerprintSync) {
-      fingerprintResult = await runFingerprintSync('scheduled')
-    }
-    await runCuratedLibrarySyncTick()
-  } finally {
-    log.info('[cloud-sync-scheduler] scheduled tick end', {
-      elapsedMs: Date.now() - startedAt,
-      fingerprintResult
-    })
+  if (isCloudSyncAutoRunnable() && runFingerprintSync) {
+    await runFingerprintSync('scheduled')
   }
+  await runCuratedLibrarySyncTick()
 }
 
 export function restartCloudSyncScheduler(options?: { immediate?: boolean }): void {
