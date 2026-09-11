@@ -1,6 +1,6 @@
 {
   "name": "frkb",
-  "version": "1.2.4-rc.202609101511",
+  "version": "1.2.4-rc.202609110916",
   "description": "Track Studio — Rapid Audio Organization Tool",
   "license": "PolyForm-Noncommercial-1.0.0",
   "main": "./out/main/index.js",
