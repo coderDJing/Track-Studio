@@ -61,6 +61,7 @@ import {
 } from '../../ipc/setListHandlers'
 import { assertLibraryMergeMutationAllowed } from '../../services/libraryMerge/runtime'
 import { startRecycleBinEmptyTask } from '../../services/recycleBinEmptyTask'
+import { beginLibraryTreeWatcherBulkOperation } from '../../libraryTreeWatcher'
 
 const MIXTAPE_WINDOW_OPEN_ERROR_CODE = 'MIXTAPE_WINDOW_OPEN'
 const FILE_BATCH_CONCURRENCY = 8
@@ -294,6 +295,7 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
   ipcMain.handle('operateFileSystemChange', async (_e, operateArray: FileSystemOperation[]) => {
     assertLibraryMergeMutationAllowed()
     const results: Array<{ uuid: string; status: string }> = []
+    let releaseLibraryTreeWatcherBulk: (() => void) | null = null
     const deleteProgressItems = operateArray.filter((item) => item.type === 'delete')
     const deleteProgressBatch =
       deleteProgressItems.length > 1
@@ -386,6 +388,9 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
         details: results
       }
     }
+    if (operateArray.some((item) => item.type === 'delete' || item.type === 'permanentlyDelete')) {
+      releaseLibraryTreeWatcherBulk = beginLibraryTreeWatcherBulkOperation()
+    }
     try {
       for (const item of operateArray) {
         let operationStatus = 'processed'
@@ -453,6 +458,9 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
           const mixtapeFilePaths =
             item.nodeType === 'mixtapeList' ? listMixtapeFilePathsByPlaylist(item.uuid) : []
           const { absPath: dirPath } = resolveLibraryPath(item.path)
+          // 删除会持续搬运大量音频；快照若还活着，后台核对可能把中间态推回界面。
+          // 快照是可丢弃的读缓存，即使后续删除失败也只会在下次打开时重建。
+          deletePlaylistViewSnapshotsUnderRoot(dirPath)
           const isEmpty = await isDirectoryEffectivelyEmpty(dirPath, store.settingConfig.audioExt)
           if (isEmpty) {
             rememberCuratedLibraryNodeDeletion(item.uuid, dirPath)
@@ -575,6 +583,7 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
             item.nodeType === 'mixtapeList' ? listMixtapeFilePathsByPlaylist(item.uuid) : []
           const setListUuidsToClear = collectSetListUuidsForSubtree(item.uuid)
           const { absPath } = resolveLibraryPath(item.path)
+          deletePlaylistViewSnapshotsUnderRoot(absPath)
           const audioFiles = await collectFilesWithExtensions(absPath, store.settingConfig.audioExt)
           const setProtection = await protectSetReferencedFilesForDeletion(audioFiles)
           const protectedFailedCount = setProtection.protectedFiles.filter(
@@ -650,6 +659,8 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
       failDeleteProgressBatch()
       log.error('operateFileSystemChange error:', error)
       return { success: false, error: (error as Error).message, details: results }
+    } finally {
+      releaseLibraryTreeWatcherBulk?.()
     }
   })
 }
