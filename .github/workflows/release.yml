@@ -423,7 +423,9 @@ jobs:
           # The hosted Intel runner ships an unrelated HashiCorp tap with a
           # broken vagrant formula, which makes `brew update` emit an error.
           if brew tap | grep -Fxq 'hashicorp/tap'; then
-            brew untap hashicorp/tap
+            # The runner may have packer installed from this tap; force only
+            # removes the tap metadata and leaves unrelated formulae intact.
+            brew untap --force hashicorp/tap
           fi
           brew update
           brew install ffmpeg
@@ -559,7 +561,9 @@ jobs:
           echo "Installing arm64 ffmpeg via Homebrew"
           # Keep unrelated broken taps from making Homebrew metadata updates noisy.
           if brew tap | grep -Fxq 'hashicorp/tap'; then
-            brew untap hashicorp/tap
+            # The runner may have packer installed from this tap; force only
+            # removes the tap metadata and leaves unrelated formulae intact.
+            brew untap --force hashicorp/tap
           fi
           brew update
           brew install ffmpeg
