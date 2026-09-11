@@ -5,7 +5,9 @@ import { collectFilesWithExtensions } from '../nodeTaskUtils'
 import { findLibraryNodeByPath, findSongListRootByPath, loadLibraryNodes } from '../libraryTreeDb'
 import { normalizeOrder } from '../libraryTreeDbHelpers'
 import * as LibraryCacheDb from '../libraryCacheDb'
+import { log } from '../log'
 import { getRecycleBinRecordByFileId } from '../recycleBinDb'
+import { isPackagedRcBuild } from '../services/rcDiagnostics'
 import { normalizePlaylistTrackNumber } from '../services/playlistTrackNumbers'
 import { normalizeAddedAtMs } from '../../shared/songAddedAt'
 import { hashFileSha256 } from './hashFile'
@@ -36,6 +38,9 @@ export type CuratedLocalNode = {
   sortOrder: number | null
   updatedAtMs: number
 }
+
+const SLOW_CURATED_SCAN_THRESHOLD_MS = 500
+const curatedScanDiagnosticsEnabled = isPackagedRcBuild()
 
 const getAudioExts = (): string[] => {
   const list = store.settingConfig?.audioExt
@@ -95,6 +100,18 @@ export const scanCuratedLibraryForSync = async (options?: {
   files: CuratedLocalFile[]
   nodes: CuratedLocalNode[]
 }> => {
+  const scanStartedAt = Date.now()
+  let enumerateMs = 0
+  let statMs = 0
+  let cacheFieldsMs = 0
+  let parentResolveMs = 0
+  let hashMs = 0
+  let hashedFileCount = 0
+  let hashedBytes = 0
+  let identityMatchMs = 0
+  let identityUpsertMs = 0
+  let missingReconcileMs = 0
+  let nodeSnapshotMs = 0
   const curatedRoot = getCuratedLibraryAbsRoot()
   const libraryRoot = getLibraryAbsRoot()
   const curatedNode = findCuratedLibraryNode()
@@ -102,8 +119,10 @@ export const scanCuratedLibraryForSync = async (options?: {
     return { files: [], nodes: [] }
   }
   const audioExts = getAudioExts()
+  const enumerateStartedAt = Date.now()
   const absFiles =
     audioExts.length > 0 ? await collectFilesWithExtensions(curatedRoot, audioExts) : []
+  enumerateMs = Date.now() - enumerateStartedAt
   const existingByPath = new Map<string, CuratedSyncFileRow>()
   const existingById = new Map<string, CuratedSyncFileRow>()
   const pathKey = (value: string): string =>
@@ -125,16 +144,22 @@ export const scanCuratedLibraryForSync = async (options?: {
     if (!relativePath) continue
     let stat: { size: number; mtimeMs: number }
     try {
+      const statStartedAt = Date.now()
       const raw = await fs.stat(absPath)
+      statMs += Date.now() - statStartedAt
       stat = { size: raw.size, mtimeMs: raw.mtimeMs }
     } catch {
       continue
     }
+    const cacheStartedAt = Date.now()
     const cache = await readCacheFields(absPath)
+    cacheFieldsMs += Date.now() - cacheStartedAt
+    const parentStartedAt = Date.now()
     const parentUuid = toCloudParentUuid(
       await resolveParentUuid(absPath, curatedNode.uuid),
       curatedNode.uuid
     )
+    parentResolveMs += Date.now() - parentStartedAt
     const fileName = path.basename(absPath)
     const previous = existingByPath.get(pathKey(relativePath))
     let contentSha256 = previous?.contentSha256 || ''
@@ -144,10 +169,15 @@ export const scanCuratedLibraryForSync = async (options?: {
       previous.mtimeMs !== stat.mtimeMs ||
       !contentSha256
     ) {
+      const hashStartedAt = Date.now()
       contentSha256 = await hashFileSha256(absPath)
+      hashMs += Date.now() - hashStartedAt
+      hashedFileCount += 1
+      hashedBytes += stat.size
     }
     let fileId = previous?.fileId || ''
     if (!fileId) {
+      const identityMatchStartedAt = Date.now()
       let orphan = [...existingById.values()].find(
         (row) =>
           !usedIds.has(row.fileId) &&
@@ -173,6 +203,7 @@ export const scanCuratedLibraryForSync = async (options?: {
         }
       }
       fileId = orphan?.fileId || createCuratedSyncFileId()
+      identityMatchMs += Date.now() - identityMatchStartedAt
     }
     usedIds.add(fileId)
     const addedAtMs = cache.addedAtMs ?? previous?.addedAtMs ?? now
@@ -198,11 +229,14 @@ export const scanCuratedLibraryForSync = async (options?: {
       location: 'curated',
       locationPath: relativePath
     }
+    const upsertStartedAt = Date.now()
     upsertCuratedSyncFile(row)
+    identityUpsertMs += Date.now() - upsertStartedAt
     files.push({ ...row, absPath })
     options?.onFileProgress?.(files.length, total)
   }
 
+  const missingReconcileStartedAt = Date.now()
   for (const row of existingById.values()) {
     if (usedIds.has(row.fileId) || row.location !== 'curated') continue
     const abs = row.relativePath ? curatedRelativeToAbs(row.relativePath) : null
@@ -215,7 +249,9 @@ export const scanCuratedLibraryForSync = async (options?: {
       updatedAtMs: now
     })
   }
+  missingReconcileMs = Date.now() - missingReconcileStartedAt
 
+  const nodeSnapshotStartedAt = Date.now()
   const nodes: CuratedLocalNode[] = []
   const allNodes = loadLibraryNodes() || []
   const children = new Map<string, typeof allNodes>()
@@ -241,6 +277,27 @@ export const scanCuratedLibraryForSync = async (options?: {
     }
     const kids = children.get(node.uuid) || []
     stack.push(...kids)
+  }
+
+  nodeSnapshotMs = Date.now() - nodeSnapshotStartedAt
+  const elapsedMs = Date.now() - scanStartedAt
+  if (curatedScanDiagnosticsEnabled && elapsedMs >= SLOW_CURATED_SCAN_THRESHOLD_MS) {
+    log.info('[curated-library-sync] slow local scan', {
+      elapsedMs,
+      fileCount: files.length,
+      nodeCount: nodes.length,
+      enumerateMs,
+      statMs,
+      cacheFieldsMs,
+      parentResolveMs,
+      hashMs,
+      hashedFileCount,
+      hashedBytes,
+      identityMatchMs,
+      identityUpsertMs,
+      missingReconcileMs,
+      nodeSnapshotMs
+    })
   }
 
   return { files, nodes }
