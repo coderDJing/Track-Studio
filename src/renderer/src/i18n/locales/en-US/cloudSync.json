@@ -2,6 +2,7 @@
   "cloudSync": {
     "syncFingerprints": "Sync fingerprints & curated artists",
     "syncCuratedLibrary": "Sync curated library",
+    "alreadyLatest": "Fingerprint and curated artist cloud data is up to date; no sync is needed.",
     "settings": "Cloud Sync Settings",
     "notConfigured": "Not configured",
     "notConfiguredHint": "Not configured. Opening settings...",

@@ -23,12 +23,14 @@ const { t } = useI18n()
 
 const configured = ref<boolean | null>(null)
 const logMsg = ref('')
+const completedAlreadyLatest = ref(false)
 
 // 同步状态全部来自 store（单一数据源，最小化后由 App.vue 常驻监听器维护）
 const syncing = computed(() => runtime.cloudSync.syncing)
 const phase = computed(() => runtime.cloudSync.phase)
 const percent = computed(() => runtime.cloudSync.percent)
 const progressDetails = computed(() => runtime.cloudSync.details)
+const displayPercent = computed(() => (completedAlreadyLatest.value ? 100 : percent.value))
 
 const stages = [
   { key: 'checking', label: 'cloudSync.phases.checking' },
@@ -48,6 +50,8 @@ const phaseIndexMap: Record<string, number> = stages.reduce(
 const currentPhaseIndex = computed(() => phaseIndexMap[phase.value] ?? -1)
 
 const startSync = async () => {
+  logMsg.value = ''
+  completedAlreadyLatest.value = false
   const res = await window.electron.ipcRenderer.invoke('cloudSync/start')
   if (res === 'not_configured') {
     logMsg.value = t('cloudSync.notConfiguredHint')
@@ -60,6 +64,10 @@ const startSync = async () => {
         }, 50)
       })
     }, 300)
+    return
+  }
+  if (res === 'already_latest') {
+    completedAlreadyLatest.value = true
     return
   }
   // syncing 状态由主进程回送的 cloudSync/state:'syncing' 驱动（App.vue 常驻监听）
@@ -98,13 +106,16 @@ onUnmounted(() => {
         </div>
         <div class="progress">
           <div class="bar">
-            <div class="fill" :style="{ width: percent + '%' }">
+            <div class="fill" :style="{ width: displayPercent + '%' }">
               <div class="gloss"></div>
             </div>
-            <div class="percentText">{{ percent }}%</div>
+            <div class="percentText">{{ displayPercent }}%</div>
           </div>
           <div class="progress-details">
-            <template v-if="phase === 'checking'">
+            <template v-if="completedAlreadyLatest">
+              <span>{{ t('cloudSync.alreadyLatest') }}</span>
+            </template>
+            <template v-else-if="phase === 'checking'">
               <span
                 >{{ t('cloudSync.clientCount') }}: {{ progressDetails.clientCount ?? '-' }}</span
               >

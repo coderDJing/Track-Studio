@@ -918,11 +918,6 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
     await wait(120)
     sendProgress('finalizing', 100)
     const alreadyLatest = !fingerprintNeedSync && !curatedArtistNeedSync
-    if (alreadyLatest) {
-      sendNotice({
-        message: 'cloudSync.errors.alreadyLatest'
-      })
-    }
     const endAt = Date.now()
     const pulledToClientCount = toNumber(pulledToClientTotal)
     const addedToServerCount = toNumber(addedToServerTotal)
@@ -946,7 +941,7 @@ async function startCloudSync(trigger: CloudSyncTrigger = 'manual') {
       mainWindow.instance.webContents.send('cloudSync/summary', summary)
     }
     sendState('success')
-    return 'success'
+    return alreadyLatest ? 'already_latest' : 'success'
   } catch (e: unknown) {
     const error = (isRecord(e) ? e : null) as ErrorLike | null
     const cause = (isRecord(error?.cause) ? error?.cause : null) as ErrorLike | null

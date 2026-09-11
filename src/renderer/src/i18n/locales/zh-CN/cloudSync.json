@@ -2,6 +2,7 @@
   "cloudSync": {
     "syncFingerprints": "同步指纹库与精选表演者",
     "syncCuratedLibrary": "同步精选库",
+    "alreadyLatest": "指纹库与精选表演者的云端数据已是最新，无需同步",
     "settings": "云同步设置",
     "notConfigured": "尚未配置云同步",
     "notConfiguredHint": "尚未配置云同步，将打开设置面板",
