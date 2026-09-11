@@ -16,7 +16,10 @@ import { protectSetReferencedFilesForDeletion } from '../ipc/setListHandlers'
 import { getRecycleBinRecordByFileId, type RecycleBinRecord } from '../recycleBinDb'
 import { moveFileToRecycleBin, restoreRecycleBinFile } from '../recycleBinService'
 import { stampPlaylistSongsAddedAt } from '../services/playlistAddedAt'
-import { setSongListTrackNumbersByOrder } from '../services/playlistTrackNumbers'
+import {
+  normalizePlaylistTrackNumber,
+  setSongListTrackNumbersByOrder
+} from '../services/playlistTrackNumbers'
 import { runPlaybackAwareBackgroundFileIo } from '../services/playbackForegroundActivity'
 import { downloadBlobFile } from './apiClient'
 import { isPathBusyForRemoteMutation } from './busyPaths'
@@ -25,12 +28,8 @@ import {
   relocateLibraryDirectoryFiles,
   rememberImportedCuratedTracks
 } from './localMutations'
-import {
-  getCuratedSyncFileById,
-  upsertCuratedSyncFile,
-  replaceCuratedSyncFileId,
-  type CuratedSyncFileRow
-} from './identityDb'
+import { getCuratedSyncFileById, replaceCuratedSyncFileId } from './identityDb'
+import { persistCloudIdentityFromDisk, persistMatchedCloudFile } from './applyRemoteIdentity'
 import {
   canonicalizeCloudParentUuid,
   curatedRelativeToAbs,
@@ -384,53 +383,6 @@ const emitImported = (
   })
 }
 
-const persistImportedIdentity = (
-  file: CuratedLibrarySyncCloudFile,
-  absPath: string,
-  relativePath: string,
-  scope: CloudParentScope
-) => {
-  const existing = getCuratedSyncFileById(file.fileId)
-  const row: CuratedSyncFileRow = {
-    fileId: file.fileId,
-    relativePath,
-    parentUuid: canonicalParentUuidOf(file.parentUuid, scope),
-    fileName: path.basename(absPath),
-    contentSha256: file.sha256,
-    contentSize: file.size,
-    mtimeMs: Date.now(),
-    trackNumber: file.trackNumber,
-    addedAtMs: file.addedAtMs,
-    updatedAtMs: file.updatedAtMs,
-    location: 'curated',
-    locationPath: relativePath
-  }
-  if (existing && existing.fileId !== file.fileId) {
-    replaceCuratedSyncFileId(existing.fileId, file.fileId)
-  }
-  upsertCuratedSyncFile(row)
-}
-
-const persistMatchedCloudFile = async (
-  file: CuratedLibrarySyncCloudFile,
-  absPath: string,
-  destDir: string,
-  curatedRoot: string,
-  scope: CloudParentScope,
-  previousAddedAtMs: number | null
-) => {
-  persistImportedIdentity(file, absPath, absToRel(curatedRoot, absPath), scope)
-  const cloudAdded = file.addedAtMs
-  if (cloudAdded == null || !Number.isFinite(cloudAdded) || cloudAdded === previousAddedAtMs) {
-    return
-  }
-  await stampPlaylistSongsAddedAt({
-    listRoot: destDir,
-    filePaths: [absPath],
-    addedAtMs: cloudAdded
-  })
-}
-
 const deleteLocalFile = async (absPath: string, ctx: ApplyRemoteContext): Promise<boolean> => {
   if (isBusyPath(absPath, ctx)) return false
   const setProtection = await protectSetReferencedFilesForDeletion([absPath])
@@ -567,7 +519,11 @@ const sortNodesParentsFirst = (nodes: CuratedLibrarySyncCloudNode[]) => {
   return ordered
 }
 
-const applyTrackNumbers = async (files: CuratedLibrarySyncCloudFile[], scope: CloudParentScope) => {
+const applyTrackNumbers = async (
+  files: CuratedLibrarySyncCloudFile[],
+  scope: CloudParentScope,
+  localById: Map<string, CuratedLocalFile>
+) => {
   const grouped = new Map<string, CuratedLibrarySyncCloudFile[]>()
   for (const file of files) {
     const parentUuid = localParentUuidOf(file.parentUuid, scope)
@@ -585,6 +541,11 @@ const applyTrackNumbers = async (files: CuratedLibrarySyncCloudFile[], scope: Cl
       if (leftNum !== rightNum) return leftNum - rightNum
       return left.fileName.localeCompare(right.fileName)
     })
+    const alreadyOrdered = ordered.every(
+      (file, index) =>
+        normalizePlaylistTrackNumber(localById.get(file.fileId)?.trackNumber) === index + 1
+    )
+    if (alreadyOrdered) continue
     const absPaths: string[] = []
     for (const file of ordered) {
       const identity = getCuratedSyncFileById(file.fileId)
@@ -829,15 +790,16 @@ export const applyRemoteSnapshot = async (
             if (!sameAbsPath(current.absPath, destPath)) {
               await moveFileToRecycleBin(current.absPath)
             }
-            persistImportedIdentity(
-              file,
-              imported,
-              path.posix.join(
-                path.relative(curatedRoot, destDir).replace(/\\/g, '/'),
-                path.basename(imported)
-              ),
-              scope
+            const relativePath = path.posix.join(
+              path.relative(curatedRoot, destDir).replace(/\\/g, '/'),
+              path.basename(imported)
             )
+            await persistCloudIdentityFromDisk({
+              file,
+              absPath: imported,
+              relativePath,
+              parentUuid: canonicalParentUuidOf(file.parentUuid, scope)
+            })
             emitImported(ctx, file, imported)
           }
           continue
@@ -848,16 +810,28 @@ export const applyRemoteSnapshot = async (
             destAbs: destPath,
             mode: 'move'
           })
-          await persistMatchedCloudFile(file, moved, destDir, curatedRoot, scope, current.addedAtMs)
-        } else {
-          await persistMatchedCloudFile(
+          const movedStat = await fs.stat(moved)
+          await persistMatchedCloudFile({
             file,
-            current.absPath,
-            destDir,
-            curatedRoot,
-            scope,
-            current.addedAtMs
-          )
+            absPath: moved,
+            relativePath: absToRel(curatedRoot, moved),
+            parentUuid: canonicalParentUuidOf(file.parentUuid, scope),
+            listRoot: destDir,
+            previous: {
+              ...current,
+              contentSize: movedStat.size,
+              mtimeMs: movedStat.mtimeMs
+            }
+          })
+        } else {
+          await persistMatchedCloudFile({
+            file,
+            absPath: current.absPath,
+            relativePath: absToRel(curatedRoot, current.absPath),
+            parentUuid: canonicalParentUuidOf(file.parentUuid, scope),
+            listRoot: destDir,
+            previous: current
+          })
         }
         continue
       }
@@ -876,7 +850,12 @@ export const applyRemoteSnapshot = async (
       noteDownloadProgress()
       const imported = await tryImportCloudFile(file, ctx, scope)
       if (imported) {
-        persistImportedIdentity(file, imported, absToRel(curatedRoot, imported), scope)
+        await persistCloudIdentityFromDisk({
+          file,
+          absPath: imported,
+          relativePath: absToRel(curatedRoot, imported),
+          parentUuid: canonicalParentUuidOf(file.parentUuid, scope)
+        })
         emitImported(ctx, file, imported)
       }
     }
@@ -946,7 +925,8 @@ export const applyRemoteSnapshot = async (
           !skipTrackParents.has(localParentUuidOf(file.parentUuid, scope))
         )
       }),
-      scope
+      scope,
+      localById
     )
     return { deferred, diskFull: false }
   } catch (error) {

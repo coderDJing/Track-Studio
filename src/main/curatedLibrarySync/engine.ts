@@ -812,12 +812,19 @@ const runIncremental = async (): Promise<CuratedLibrarySyncStartResult> => {
     const remainingDeferred = await measureCuratedSyncPhase('retry-deferred-ops', () =>
       retryDeferredRemoteOps(deferred, snapshot, applyCtx())
     )
-    const deletionOps = measureCuratedSyncCpuPhase('compute-deletion-ops', () => {
+    const initialOps = measureCuratedSyncCpuPhase('compute-initial-ops', () => {
       const retainBefore = collectUnappliedCloudIds(snapshot, local, applyOptions)
-      return omitFailedBlobOps(buildPushOps(local, snapshot, retainBefore), new Set()).filter(
-        isDeletionOp
-      )
+      return omitFailedBlobOps(buildPushOps(local, snapshot, retainBefore), new Set())
     })
+    if (
+      !changed &&
+      deferred.length === 0 &&
+      remainingDeferred.length === 0 &&
+      initialOps.length === 0
+    ) {
+      return { status: 'success', changed: false }
+    }
+    const deletionOps = initialOps.filter(isDeletionOp)
     if (deletionOps.length > 0) {
       changed = true
       const pushedDeletes = await pushCuratedOps({

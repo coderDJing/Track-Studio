@@ -5,6 +5,7 @@ import { collectFilesWithExtensions } from '../nodeTaskUtils'
 import { findLibraryNodeByPath, findSongListRootByPath, loadLibraryNodes } from '../libraryTreeDb'
 import { normalizeOrder } from '../libraryTreeDbHelpers'
 import * as LibraryCacheDb from '../libraryCacheDb'
+import type { SongCacheEntry } from '../libraryCacheDb'
 import { log } from '../log'
 import { getRecycleBinRecordByFileId } from '../recycleBinDb'
 import { isPackagedRcBuild } from '../services/rcDiagnostics'
@@ -56,9 +57,16 @@ const getAudioExts = (): string[] => {
     .filter(Boolean)
 }
 
-const resolveParentUuid = async (absPath: string, curatedUuid: string): Promise<string> => {
+const resolveParentUuid = async (
+  absPath: string,
+  curatedUuid: string,
+  knownListRoot?: string | null
+): Promise<string> => {
   const dbRoot = String(store.databaseDir || '').trim()
-  const listRoot = await findSongListRootByPath(path.dirname(absPath))
+  const listRoot =
+    knownListRoot !== undefined
+      ? knownListRoot
+      : await findSongListRootByPath(path.dirname(absPath))
   if (listRoot && dbRoot) {
     const mapped = path.relative(dbRoot, listRoot).replace(/\\/g, '/')
     const node = findLibraryNodeByPath(mapped)
@@ -138,6 +146,45 @@ export const scanCuratedLibraryForSync = async (options?: {
   const now = Date.now()
   const total = absFiles.length
   options?.onFileProgress?.(0, total)
+  const listRootByDirectory = new Map<string, string | null>()
+  const songCacheByListRoot = new Map<string, Promise<Map<string, SongCacheEntry>>>()
+  const normalizeAbsPath = (value: string): string => {
+    const resolved = path.resolve(value)
+    return process.platform === 'win32' ? resolved.toLocaleLowerCase() : resolved
+  }
+  const readCacheFieldsForScan = async (
+    absPath: string
+  ): Promise<{
+    listRoot: string | null
+    trackNumber: number | null
+    addedAtMs: number | null
+  }> => {
+    const directoryKey = normalizeAbsPath(path.dirname(absPath))
+    let listRoot = listRootByDirectory.get(directoryKey)
+    if (listRoot === undefined) {
+      listRoot = (await findSongListRootByPath(path.dirname(absPath))) || null
+      listRootByDirectory.set(directoryKey, listRoot)
+    }
+    if (!listRoot) return { listRoot: null, trackNumber: null, addedAtMs: null }
+    const listRootKey = normalizeAbsPath(listRoot)
+    let cachePromise = songCacheByListRoot.get(listRootKey)
+    if (!cachePromise) {
+      cachePromise = LibraryCacheDb.loadSongCache(listRoot).then((cache) => {
+        const normalized = new Map<string, SongCacheEntry>()
+        for (const [filePath, entry] of cache || []) {
+          normalized.set(normalizeAbsPath(filePath), entry)
+        }
+        return normalized
+      })
+      songCacheByListRoot.set(listRootKey, cachePromise)
+    }
+    const entry = (await cachePromise).get(normalizeAbsPath(absPath))
+    return {
+      listRoot,
+      trackNumber: normalizePlaylistTrackNumber(entry?.info?.playlistTrackNumber) ?? null,
+      addedAtMs: normalizeAddedAtMs(entry?.info?.addedAtMs) ?? null
+    }
+  }
 
   for (const absPath of absFiles) {
     const relativePath = absToCuratedRelative(absPath)
@@ -152,11 +199,11 @@ export const scanCuratedLibraryForSync = async (options?: {
       continue
     }
     const cacheStartedAt = Date.now()
-    const cache = await readCacheFields(absPath)
+    const cache = await readCacheFieldsForScan(absPath)
     cacheFieldsMs += Date.now() - cacheStartedAt
     const parentStartedAt = Date.now()
     const parentUuid = toCloudParentUuid(
-      await resolveParentUuid(absPath, curatedNode.uuid),
+      await resolveParentUuid(absPath, curatedNode.uuid, cache.listRoot),
       curatedNode.uuid
     )
     parentResolveMs += Date.now() - parentStartedAt
@@ -207,7 +254,7 @@ export const scanCuratedLibraryForSync = async (options?: {
     }
     usedIds.add(fileId)
     const addedAtMs = cache.addedAtMs ?? previous?.addedAtMs ?? now
-    const changed =
+    const semanticChanged =
       !previous ||
       previous.fileId !== fileId ||
       previous.contentSha256 !== contentSha256 ||
@@ -225,13 +272,21 @@ export const scanCuratedLibraryForSync = async (options?: {
       mtimeMs: stat.mtimeMs,
       trackNumber: cache.trackNumber,
       addedAtMs,
-      updatedAtMs: changed ? now : (previous?.updatedAtMs ?? now),
+      updatedAtMs: semanticChanged ? now : (previous?.updatedAtMs ?? now),
       location: 'curated',
       locationPath: relativePath
     }
-    const upsertStartedAt = Date.now()
-    upsertCuratedSyncFile(row)
-    identityUpsertMs += Date.now() - upsertStartedAt
+    const identityChanged =
+      semanticChanged ||
+      previous?.contentSize !== row.contentSize ||
+      previous?.mtimeMs !== row.mtimeMs ||
+      previous?.location !== row.location ||
+      previous?.locationPath !== row.locationPath
+    if (identityChanged) {
+      const upsertStartedAt = Date.now()
+      upsertCuratedSyncFile(row)
+      identityUpsertMs += Date.now() - upsertStartedAt
+    }
     files.push({ ...row, absPath })
     options?.onFileProgress?.(files.length, total)
   }
