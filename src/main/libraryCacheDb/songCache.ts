@@ -62,6 +62,14 @@ function hasBpmValue(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
 }
 
+export function hasSongCacheBeatGridValue(info: ISongInfo | null | undefined): boolean {
+  return (
+    normalizeSongBeatGridMapV2(info?.beatGridMap, { allowSingleClip: true }) !== null ||
+    hasBpmValue(info?.bpm) ||
+    info?.beatGridStatus === 'no-bpm'
+  )
+}
+
 export function normalizeSongCacheInfoForStorage(
   info: ISongInfo,
   absoluteFilePath: string
@@ -230,7 +238,7 @@ function getSongCacheRowByAbsPath(
 ): SongCacheRowHit | null {
   if (!db || absPathCandidates.length === 0) return null
   try {
-    const expr = "json_extract(info_json, '$.filePath')"
+    const expr = "CASE WHEN json_valid(info_json) THEN json_extract(info_json, '$.filePath') END"
     const stmt = db.prepare<SongCacheDbRow>(
       `SELECT list_root, file_path, size, mtime_ms, info_json FROM song_cache WHERE ${toLooseCompareExprRaw(
         expr
@@ -543,7 +551,7 @@ export async function loadSongCacheEntry(
       !row ||
       row.info_json === undefined ||
       !hasKeyText(currentInfo?.key) ||
-      !hasBpmValue(currentInfo?.bpm)
+      !hasSongCacheBeatGridValue(currentInfo)
     if (needsGlobalMerge) {
       const fileCandidates = [fileKey, fileKeyRaw, legacyFilePath, filePath].filter(
         (value): value is string => typeof value === 'string' && value.length > 0
@@ -557,7 +565,7 @@ export async function loadSongCacheEntry(
       let mergeSource: SongCacheRowHit | null = null
       if (loose && loose.row && loose.row.info_json !== undefined) {
         const looseInfo = parseInfoJson(loose.row.info_json)
-        if (hasKeyText(looseInfo?.key) || hasBpmValue(looseInfo?.bpm)) {
+        if (hasKeyText(looseInfo?.key) || hasSongCacheBeatGridValue(looseInfo)) {
           if (!(hitListRoot === loose.hitListRoot && hitFilePath === loose.hitFilePath)) {
             mergeSource = loose
           }
@@ -577,7 +585,7 @@ export async function loadSongCacheEntry(
           const byAbs = getSongCacheRowByAbsPath(db, absCandidates)
           if (byAbs && byAbs.row && byAbs.row.info_json !== undefined) {
             const byAbsInfo = parseInfoJson(byAbs.row.info_json)
-            if (hasKeyText(byAbsInfo?.key) || hasBpmValue(byAbsInfo?.bpm)) {
+            if (hasKeyText(byAbsInfo?.key) || hasSongCacheBeatGridValue(byAbsInfo)) {
               if (!(hitListRoot === byAbs.hitListRoot && hitFilePath === byAbs.hitFilePath)) {
                 mergeSource = byAbs
               }
@@ -594,7 +602,7 @@ export async function loadSongCacheEntry(
           const global = getSongCacheRowGlobal(db, absCandidates)
           if (global && global.row && global.row.info_json !== undefined) {
             const globalInfo = parseInfoJson(global.row.info_json)
-            if (hasKeyText(globalInfo?.key) || hasBpmValue(globalInfo?.bpm)) {
+            if (hasKeyText(globalInfo?.key) || hasSongCacheBeatGridValue(globalInfo)) {
               if (!(hitListRoot === global.hitListRoot && hitFilePath === global.hitFilePath)) {
                 mergeSource = global
               }

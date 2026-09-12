@@ -453,7 +453,8 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
         !payloadResult.songStructureError
       ) {
         await deps.persistence.persistSongStructure(job.filePath, payloadResult.songStructure, {
-          shouldPersist
+          shouldPersist,
+          beatGridMap: payloadResult.structureBeatGridMap
         })
       }
     } catch (error) {

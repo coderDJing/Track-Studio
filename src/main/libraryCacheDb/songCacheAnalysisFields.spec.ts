@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { ISongInfo } from '../../types/globals'
-import { normalizeSongCacheInfoForStorage, stripSongCoreAnalysisFields } from './songCache'
+import {
+  hasSongCacheBeatGridValue,
+  normalizeSongCacheInfoForStorage,
+  stripSongCoreAnalysisFields
+} from './songCache'
 import { createSongBeatGridMapV2FromFixedGrid } from '../../shared/songBeatGridMapV2'
 
 const createSongInfo = (): ISongInfo => {
@@ -117,5 +121,23 @@ describe('normalizeSongCacheInfoForStorage', () => {
     expect(result).not.toHaveProperty('downbeatBeatOffset')
     expect(result).not.toHaveProperty('barBeatOffset')
     expect(result).not.toHaveProperty('beatGridSource')
+  })
+
+  it('treats a canonical v2 map as complete rhythm data after root BPM fields are removed', () => {
+    const normalized = normalizeSongCacheInfoForStorage(createSongInfo(), 'D:/music/test.mp3')
+
+    expect(normalized).not.toHaveProperty('bpm')
+    expect(hasSongCacheBeatGridValue(normalized)).toBe(true)
+  })
+
+  it('does not repeatedly search other cache roots after a conclusive no-BPM result', () => {
+    expect(
+      hasSongCacheBeatGridValue({
+        ...createSongInfo(),
+        beatGridMap: undefined,
+        bpm: undefined,
+        beatGridStatus: 'no-bpm'
+      })
+    ).toBe(true)
   })
 })

@@ -58,7 +58,7 @@ import type {
   CuratedLibrarySyncCloudNode,
   CuratedLibrarySyncSnapshot
 } from '../../shared/curatedLibrarySync'
-import { readCacheFields, type CuratedLocalFile, type CuratedLocalNode } from './scan'
+import type { CuratedLocalFile, CuratedLocalNode } from './scan'
 import { asOptionalPositiveInt, localNodePendingSinceLast } from './pendingLocal'
 import { adoptAliveHashMatch, liveMatchedFileApplyState } from './applyRemotePendingFile'
 import { countCloudFilesNeedingDownload, matchLocalFileForCloud } from './applyRemoteDownloadPlan'
@@ -991,12 +991,11 @@ export const applyRemoteSnapshot = async (
           for (const localFile of local.files) {
             const lastFile = options.lastAppliedFiles?.get(localFile.fileId)
             if (!lastFile) continue
-            const live = await readCacheFields(localFile.absPath)
-            const liveTrack = live.trackNumber ?? localFile.trackNumber
-            const liveAdded = live.addedAtMs ?? localFile.addedAtMs
             if (
-              asOptionalPositiveInt(lastFile.trackNumber) !== asOptionalPositiveInt(liveTrack) ||
-              asOptionalPositiveInt(lastFile.addedAtMs) !== asOptionalPositiveInt(liveAdded)
+              asOptionalPositiveInt(lastFile.trackNumber) !==
+                asOptionalPositiveInt(localFile.trackNumber) ||
+              asOptionalPositiveInt(lastFile.addedAtMs) !==
+                asOptionalPositiveInt(localFile.addedAtMs)
             ) {
               skipTrackParents.add(localFile.parentUuid)
               skipTrackParents.add(localParentUuidOf(localFile.parentUuid, scope))

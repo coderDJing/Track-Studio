@@ -13,6 +13,11 @@ import {
 } from '../../../shared/songStructure'
 import { loadSharedSongGridDefinition } from '../sharedSongGrid'
 import { normalizePath, type DoneEntry } from './types'
+import {
+  normalizeSongBeatGridMapV2,
+  type SongBeatGridMapV2
+} from '../../../shared/songBeatGridMapV2'
+import { CURRENT_BEAT_GRID_ALGORITHM_VERSION } from '../beatGridAlgorithmVersion'
 
 type EnsureStructureSongCacheEntry = (
   listRoot: string,
@@ -39,7 +44,7 @@ export const createPersistSongStructure = (params: CreateStructurePersistencePar
   return async (
     filePath: string,
     songStructure: SongStructureAnalysis | null | undefined,
-    options: { shouldPersist?: () => boolean } = {}
+    options: { shouldPersist?: () => boolean; beatGridMap?: SongBeatGridMapV2 } = {}
   ) => {
     const shouldPersist = () => options.shouldPersist?.() !== false
     const normalizedPath = normalizePath(filePath)
@@ -48,14 +53,20 @@ export const createPersistSongStructure = (params: CreateStructurePersistencePar
     const structureSignature = JSON.stringify(normalizedSongStructure)
     const matchesPersistedStructure = (value: unknown) =>
       JSON.stringify(normalizeSongStructureAnalysis(value)) === structureSignature
+    const resultBeatGridMap = normalizeSongBeatGridMapV2(options.beatGridMap, {
+      allowSingleClip: true
+    })
     const loadCurrentGridValidation = async () => {
       if (!shouldPersist()) return { currentGrid: null, valid: false }
       const currentGrid = await loadSharedSongGridDefinition(filePath)
-      if (!currentGrid || !shouldPersist()) return { currentGrid, valid: false }
+      if (!shouldPersist()) return { currentGrid, valid: false }
+      const validationGrid =
+        currentGrid ?? (resultBeatGridMap ? { filePath, beatGridMap: resultBeatGridMap } : null)
+      if (!validationGrid) return { currentGrid, valid: false }
       return {
-        currentGrid,
+        currentGrid: validationGrid,
         valid: hasCurrentSongStructureAnalysis({
-          ...currentGrid,
+          ...validationGrid,
           songStructure: normalizedSongStructure
         })
       }
@@ -86,7 +97,15 @@ export const createPersistSongStructure = (params: CreateStructurePersistencePar
         await params.ensureSongCacheEntry(
           listRoot,
           filePath,
-          { songStructure: normalizedSongStructure },
+          {
+            songStructure: normalizedSongStructure,
+            ...(resultBeatGridMap
+              ? {
+                  beatGridMap: resultBeatGridMap,
+                  beatGridAlgorithmVersion: CURRENT_BEAT_GRID_ALGORITHM_VERSION
+                }
+              : {})
+          },
           { size: stat.size, mtimeMs: stat.mtimeMs },
           { shouldPersist, validateBeforeWrite: isCurrentGridCandidate }
         )
@@ -106,6 +125,12 @@ export const createPersistSongStructure = (params: CreateStructurePersistencePar
             stripBeatThisDebugInfo({
               ...(cached?.info || buildLiteSongInfo(filePath)),
               filePath,
+              ...(resultBeatGridMap
+                ? {
+                    beatGridMap: resultBeatGridMap,
+                    beatGridAlgorithmVersion: CURRENT_BEAT_GRID_ALGORITHM_VERSION
+                  }
+                : {}),
               songStructure: normalizedSongStructure,
               analysisOnly: true
             })

@@ -141,4 +141,42 @@ describe('createPersistSongStructure', () => {
 
     expect(updated).toEqual([])
   })
+
+  it('共享网格暂时不可读时将 worker 使用的网格与段落结果原子写入', async () => {
+    const structure = createStructure()
+    mocks.loadSharedSongGridDefinition
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ filePath: FILE_PATH, beatGridMap: BEAT_GRID_MAP })
+    let persistedStructure: SongStructureAnalysis | undefined
+    const ensureSongCacheEntry = vi.fn(async (_root, _filePath, payload) => {
+      persistedStructure = payload.songStructure ?? undefined
+    })
+    mocks.loadSongCacheEntry.mockImplementation(async () => ({
+      info: { songStructure: persistedStructure }
+    }))
+    const events = new EventEmitter()
+    const updated: unknown[] = []
+    events.on('structure-updated', (payload) => updated.push(payload))
+    const persistSongStructure = createPersistSongStructure({
+      doneByPath: new Map(),
+      events,
+      ensureSongCacheEntry,
+      cleanupMissingPersistTarget: vi.fn(),
+      isMissingFileError: () => false
+    })
+
+    await persistSongStructure(FILE_PATH, structure, { beatGridMap: BEAT_GRID_MAP })
+
+    expect(ensureSongCacheEntry).toHaveBeenCalledWith(
+      LIST_ROOT,
+      FILE_PATH,
+      expect.objectContaining({
+        beatGridMap: BEAT_GRID_MAP,
+        songStructure: structure
+      }),
+      expect.anything(),
+      expect.anything()
+    )
+    expect(updated).toEqual([{ filePath: FILE_PATH, songStructure: structure }])
+  })
 })

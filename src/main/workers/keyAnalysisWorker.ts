@@ -57,6 +57,7 @@ type KeyResultPayload = {
   bpmError?: string
   songStructureError?: string
   songStructure?: SongStructureAnalysisV23
+  structureBeatGridMap?: SongBeatGridMapV2
   energyScore?: number
   energyAlgorithmVersion?: number
   mixxxWaveformData?: MixxxWaveformData | null
@@ -446,6 +447,16 @@ const analyzeKeyForFileInternal = async (
         const normalizedBpm = Number(result.bpm)
         if (!Number.isFinite(normalizedBpm) || normalizedBpm <= 0) {
           result.bpmError = 'invalid bpm value from Beat This! analyzer'
+        } else {
+          const analyzedBeatGridMap = createSongBeatGridMapV2FromFixedGrid({
+            bpm: normalizedBpm,
+            firstBeatMs: result.firstBeatMs,
+            downbeatBeatOffset: result.downbeatBeatOffset,
+            source: 'analysis'
+          })
+          if (!analyzedBeatGridMap) {
+            result.bpmError = 'invalid v2 beat grid from Beat This! analyzer'
+          }
         }
       }
 
@@ -628,8 +639,10 @@ const analyzeKeyForFileInternal = async (
         waveformData: structureWaveformData,
         beatGridMap
       })
-      if (songStructure) result.songStructure = songStructure
-      else result.songStructureError = 'v23 structure analyzer returned no result'
+      if (songStructure) {
+        result.songStructure = songStructure
+        result.structureBeatGridMap = beatGridMap
+      } else result.songStructureError = 'v23 structure analyzer returned no result'
     }
   }
 

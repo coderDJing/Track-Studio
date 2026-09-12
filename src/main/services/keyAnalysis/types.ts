@@ -208,6 +208,7 @@ type KeyAnalysisWorkerPartialResult = {
 type KeyAnalysisWorkerResult = KeyAnalysisWorkerPartialResult & {
   mixxxWaveformData?: MixxxWaveformData | null
   unifiedDisplayWaveformData?: UnifiedDisplayWaveformDetailData | null
+  structureBeatGridMap?: SongBeatGridMapV2
 }
 
 export type KeyAnalysisBackgroundStatus = {

@@ -876,6 +876,21 @@ export function applyLibraryDbSchema(instance: SqliteDatabase, userVersion: numb
     CREATE INDEX IF NOT EXISTS idx_playlist_view_snapshot_root
       ON playlist_view_snapshot(list_root);
     CREATE INDEX IF NOT EXISTS idx_song_cache_file ON song_cache(file_path);
+    CREATE INDEX IF NOT EXISTS idx_song_cache_file_normalized
+      ON song_cache(REPLACE(LOWER(file_path), '/', '\\'));
+    CREATE INDEX IF NOT EXISTS idx_song_cache_root_file_normalized
+      ON song_cache(
+        REPLACE(LOWER(list_root), '/', '\\'),
+        REPLACE(LOWER(file_path), '/', '\\')
+      );
+    CREATE INDEX IF NOT EXISTS idx_song_cache_info_file_path_normalized
+      ON song_cache(
+        REPLACE(
+          LOWER(CASE WHEN json_valid(info_json) THEN json_extract(info_json, '$.filePath') END),
+          '/',
+          '\\'
+        )
+      );
   `)
   if (!listTableColumns(instance, 'playlist_view_snapshot').has('missing_waveform_json')) {
     instance.exec(
