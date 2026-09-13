@@ -70,22 +70,6 @@ const resolveParentUuid = async (
   return curatedUuid
 }
 
-export const readCacheFields = async (
-  absPath: string
-): Promise<{ trackNumber: number | null; addedAtMs: number | null }> => {
-  try {
-    const listRoot = await findSongListRootByPath(path.dirname(absPath))
-    if (!listRoot) return { trackNumber: null, addedAtMs: null }
-    const entry = await LibraryCacheDb.loadSongCacheEntry(listRoot, absPath)
-    return {
-      trackNumber: normalizePlaylistTrackNumber(entry?.info?.playlistTrackNumber) ?? null,
-      addedAtMs: normalizeAddedAtMs(entry?.info?.addedAtMs) ?? null
-    }
-  } catch {
-    return { trackNumber: null, addedAtMs: null }
-  }
-}
-
 /** 只数精选库音频文件，不哈希。第一次对齐弹窗只需要数量。 */
 export const countCuratedLibraryAudioFiles = async (): Promise<number> => {
   const curatedRoot = getCuratedLibraryAbsRoot()

@@ -1,7 +1,9 @@
 import path from 'node:path'
 import fs from 'fs-extra'
 import type { CuratedLibrarySyncCloudFile } from '../../shared/curatedLibrarySync'
-import { readCacheFields, type CuratedLocalFile } from './scan'
+import type { CuratedCacheFields } from './cacheFields'
+import { readCacheFields } from './cacheFields'
+import type { CuratedLocalFile } from './scan'
 import { localFilePendingSinceLast } from './pendingLocal'
 import { notifyCuratedFilePathChanged, replaceCuratedSyncFileId } from './identityDb'
 import { sameAbsPath } from './paths'
@@ -29,9 +31,9 @@ export const liveMatchedFileApplyState = async (
   matched: CuratedLocalFile,
   lastFile: CuratedLibrarySyncCloudFile | undefined,
   curatedUuid: string,
-  lastNodeIds: Set<string>
+  lastNodeIds: Set<string>,
+  cachedFields?: CuratedCacheFields
 ): Promise<'missing' | 'pending' | 'stable'> => {
-  if (!(await fs.pathExists(matched.absPath))) return 'missing'
   try {
     const stat = await fs.stat(matched.absPath)
     if (
@@ -43,7 +45,7 @@ export const liveMatchedFileApplyState = async (
   } catch {
     return 'missing'
   }
-  const liveCache = await readCacheFields(matched.absPath)
+  const liveCache = cachedFields ?? (await readCacheFields(matched.absPath))
   const live = {
     parentUuid: matched.parentUuid,
     fileName: path.basename(matched.absPath),

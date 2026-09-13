@@ -1,4 +1,5 @@
 import { log } from '../log'
+import { performance } from 'node:perf_hooks'
 import { isPackagedRcBuild } from '../services/rcDiagnostics'
 import {
   beginMainThreadActivity,
@@ -8,16 +9,27 @@ import {
 type DiagnosticValue = string | number | boolean | null
 type DiagnosticDetails = Record<string, DiagnosticValue>
 
-type CompletedStep = {
+type CompletedStepSummary = {
   name: string
-  elapsedMs: number
-  cpuUserMs: number
-  cpuSystemMs: number
+  count: number
+  totalElapsedMs: number
+  maxElapsedMs: number
   details: DiagnosticDetails
 }
 
 const SLOW_APPLY_THRESHOLD_MS = 500
 const MAX_SLOWEST_STEPS = 12
+const TRACED_ACTIVITY_NAMES = new Set([
+  'nodes',
+  'nodes-ready',
+  'live-cache-before-files',
+  'files',
+  'file-tombstones',
+  'node-tombstones',
+  'delete-extras',
+  'live-cache-before-track-numbers',
+  'track-numbers'
+])
 
 const toMs = (microseconds: number): number => Math.round(microseconds / 1000)
 
@@ -38,27 +50,38 @@ export const createCuratedApplyDiagnostics = (
   const enabled = isPackagedRcBuild()
   const startedAtMs = Date.now()
   const startedCpu = process.cpuUsage()
-  const steps: CompletedStep[] = []
+  const stepSummaries = new Map<string, CompletedStepSummary>()
 
   const begin = (name: string, stepDetails: DiagnosticDetails = {}): (() => void) => {
     if (!enabled) return () => undefined
-    const stepStartedAtMs = Date.now()
-    const stepStartedCpu = process.cpuUsage()
-    const activityId = beginMainThreadActivity({
-      kind: 'sync',
-      name: `curated-apply:${name}`,
-      argHint: buildHint(stepDetails)
-    })
+    const stepStartedAtMs = performance.now()
+    const activityId = TRACED_ACTIVITY_NAMES.has(name)
+      ? beginMainThreadActivity({
+          kind: 'sync',
+          name: `curated-apply:${name}`,
+          argHint: buildHint(stepDetails)
+        })
+      : null
     return () => {
-      endMainThreadActivity(activityId)
-      const cpu = process.cpuUsage(stepStartedCpu)
-      steps.push({
-        name,
-        elapsedMs: Date.now() - stepStartedAtMs,
-        cpuUserMs: toMs(cpu.user),
-        cpuSystemMs: toMs(cpu.system),
-        details: stepDetails
-      })
+      if (activityId !== null) endMainThreadActivity(activityId)
+      const elapsedMs = performance.now() - stepStartedAtMs
+      const summary = stepSummaries.get(name)
+      if (!summary) {
+        stepSummaries.set(name, {
+          name,
+          count: 1,
+          totalElapsedMs: elapsedMs,
+          maxElapsedMs: elapsedMs,
+          details: stepDetails
+        })
+        return
+      }
+      summary.count += 1
+      summary.totalElapsedMs += elapsedMs
+      if (elapsedMs > summary.maxElapsedMs) {
+        summary.maxElapsedMs = elapsedMs
+        summary.details = stepDetails
+      }
     }
   }
 
@@ -86,9 +109,16 @@ export const createCuratedApplyDiagnostics = (
       cpuSystemMs: toMs(cpu.system),
       ...details,
       ...finishDetails,
-      slowestSteps: [...steps]
-        .sort((left, right) => right.elapsedMs - left.elapsedMs)
+      slowestSteps: [...stepSummaries.values()]
+        .sort((left, right) => right.totalElapsedMs - left.totalElapsedMs)
         .slice(0, MAX_SLOWEST_STEPS)
+        .map((step) => ({
+          name: step.name,
+          count: step.count,
+          elapsedMs: Math.round(step.totalElapsedMs),
+          maxElapsedMs: Math.round(step.maxElapsedMs * 10) / 10,
+          details: step.details
+        }))
     })
   }
 

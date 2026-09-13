@@ -16,10 +16,6 @@ import { protectSetReferencedFilesForDeletion } from '../ipc/setListHandlers'
 import { getRecycleBinRecordByFileId, type RecycleBinRecord } from '../recycleBinDb'
 import { moveFileToRecycleBin, restoreRecycleBinFile } from '../recycleBinService'
 import { stampPlaylistSongsAddedAt } from '../services/playlistAddedAt'
-import {
-  normalizePlaylistTrackNumber,
-  setSongListTrackNumbersByOrder
-} from '../services/playlistTrackNumbers'
 import { runPlaybackAwareBackgroundFileIo } from '../services/playbackForegroundActivity'
 import { downloadBlobFile } from './apiClient'
 import { isPathBusyForRemoteMutation } from './busyPaths'
@@ -62,6 +58,8 @@ import type { CuratedLocalFile, CuratedLocalNode } from './scan'
 import { asOptionalPositiveInt, localNodePendingSinceLast } from './pendingLocal'
 import { adoptAliveHashMatch, liveMatchedFileApplyState } from './applyRemotePendingFile'
 import { countCloudFilesNeedingDownload, matchLocalFileForCloud } from './applyRemoteDownloadPlan'
+import { applyRemoteTrackNumbers } from './applyRemoteTrackNumbers'
+import { readCacheFieldsBatch } from './cacheFields'
 
 export type DeferredRemoteOp = {
   type: 'deleteFile' | 'moveFile' | 'deleteNode'
@@ -523,58 +521,6 @@ const sortNodesParentsFirst = (nodes: CuratedLibrarySyncCloudNode[]) => {
   return ordered
 }
 
-const applyTrackNumbers = async (
-  files: CuratedLibrarySyncCloudFile[],
-  scope: CloudParentScope,
-  localById: Map<string, CuratedLocalFile>,
-  diagnostics: CuratedApplyDiagnostics
-) => {
-  const grouped = new Map<string, CuratedLibrarySyncCloudFile[]>()
-  for (const file of files) {
-    const parentUuid = localParentUuidOf(file.parentUuid, scope)
-    const list = grouped.get(parentUuid) || []
-    list.push(file)
-    grouped.set(parentUuid, list)
-  }
-  for (const [parentUuid, group] of grouped) {
-    await diagnostics.measure(
-      'track-number-list',
-      { parentUuid, fileCount: group.length },
-      async () => {
-        const listRoot =
-          parentUuid === scope.curatedUuid ? getCuratedLibraryAbsRoot() : getNodeAbsPath(parentUuid)
-        if (!listRoot) return
-        const ordered = [...group].sort((left, right) => {
-          const leftNum = Number(left.trackNumber) || Number.MAX_SAFE_INTEGER
-          const rightNum = Number(right.trackNumber) || Number.MAX_SAFE_INTEGER
-          if (leftNum !== rightNum) return leftNum - rightNum
-          return left.fileName.localeCompare(right.fileName)
-        })
-        const alreadyOrdered = ordered.every(
-          (file, index) =>
-            normalizePlaylistTrackNumber(localById.get(file.fileId)?.trackNumber) === index + 1
-        )
-        if (alreadyOrdered) return
-        const absPaths: string[] = []
-        for (const file of ordered) {
-          const identity = getCuratedSyncFileById(file.fileId)
-          const abs =
-            (identity?.relativePath && curatedRelativeToAbs(identity.relativePath)) ||
-            path.join(listRoot, file.fileName)
-          if (await fs.pathExists(abs)) absPaths.push(abs)
-        }
-        if (absPaths.length > 0) {
-          await diagnostics.measure(
-            'track-number-write',
-            { parentUuid, fileCount: absPaths.length },
-            () => setSongListTrackNumbersByOrder({ listRoot, orderedFilePaths: absPaths })
-          )
-        }
-      }
-    )
-  }
-}
-
 const applyFileTombstones = async (
   snapshot: CuratedLibrarySyncSnapshot,
   localById: Map<string, CuratedLocalFile>,
@@ -755,6 +701,16 @@ export const applyRemoteSnapshot = async (
     }
     if (downloadTotal > 0) ctx.onFileProgress?.(0, downloadTotal)
 
+    const preservePendingLocal = shouldPreservePendingLocal(options)
+    const liveCacheBeforeFiles = preservePendingLocal
+      ? await diagnostics.measure(
+          'live-cache-before-files',
+          { fileCount: local.files.length },
+          () => readCacheFieldsBatch(local.files.map((file) => file.absPath))
+        )
+      : null
+    const lastAppliedNodeIds = new Set(options.lastAppliedNodes?.keys() || [])
+
     const endFileApply = diagnostics.begin('files', {
       fileCount: snapshot.files.length,
       downloadCount: downloadTotal
@@ -786,13 +742,18 @@ export const applyRemoteSnapshot = async (
         if (matched) {
           let current = matched
           const lastFile = options.lastAppliedFiles?.get(file.fileId)
-          const lastNodeIds = new Set(options.lastAppliedNodes?.keys() || [])
-          if (shouldPreservePendingLocal(options)) {
+          if (preservePendingLocal) {
             current = await diagnostics.measure('adopt-alive-hash', fileDetails, () =>
               adoptAliveHashMatch(current, file.fileId, file.sha256, localByHash)
             )
             const liveState = await diagnostics.measure('live-file-state', fileDetails, () =>
-              liveMatchedFileApplyState(current, lastFile, scope.curatedUuid, lastNodeIds)
+              liveMatchedFileApplyState(
+                current,
+                lastFile,
+                scope.curatedUuid,
+                lastAppliedNodeIds,
+                liveCacheBeforeFiles?.get(current.absPath)
+              )
             )
             if (liveState !== 'stable') {
               continue
@@ -982,40 +943,15 @@ export const applyRemoteSnapshot = async (
       }
     }
 
-    const skipTrackParents = new Set<string>()
-    if (shouldPreservePendingLocal(options)) {
-      await diagnostics.measure(
-        'detect-pending-track-edits',
-        { fileCount: local.files.length },
-        async () => {
-          for (const localFile of local.files) {
-            const lastFile = options.lastAppliedFiles?.get(localFile.fileId)
-            if (!lastFile) continue
-            if (
-              asOptionalPositiveInt(lastFile.trackNumber) !==
-                asOptionalPositiveInt(localFile.trackNumber) ||
-              asOptionalPositiveInt(lastFile.addedAtMs) !==
-                asOptionalPositiveInt(localFile.addedAtMs)
-            ) {
-              skipTrackParents.add(localFile.parentUuid)
-              skipTrackParents.add(localParentUuidOf(localFile.parentUuid, scope))
-            }
-          }
-        }
-      )
-    }
-    const trackNumberFiles = snapshot.files.filter((file) => {
-      if (skipTrackParents.size === 0) return true
-      return (
-        !skipTrackParents.has(file.parentUuid) &&
-        !skipTrackParents.has(localParentUuidOf(file.parentUuid, scope))
-      )
+    await applyRemoteTrackNumbers({
+      files: snapshot.files,
+      localFiles: local.files,
+      localById,
+      scope,
+      preservePendingLocal,
+      lastAppliedFiles: options.lastAppliedFiles,
+      diagnostics
     })
-    await diagnostics.measure(
-      'track-numbers',
-      { fileCount: trackNumberFiles.length, skippedParentCount: skipTrackParents.size },
-      () => applyTrackNumbers(trackNumberFiles, scope, localById, diagnostics)
-    )
     return { deferred, diskFull: false }
   } catch (error) {
     if (isEnospc(error)) {
