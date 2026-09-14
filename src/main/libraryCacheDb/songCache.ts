@@ -12,6 +12,7 @@ import {
   resolveAbsoluteListRoot,
   resolveAbsoluteFilePath,
   normalizeInfoJsonFilePath,
+  normalizePath,
   normalizeRoot,
   stripBeatThisDebugInfo
 } from './pathResolvers'
@@ -37,6 +38,11 @@ type SongCacheDbRow = {
 
 type SongCacheRootRow = {
   list_root?: string
+}
+
+type SongCacheAnalysisSourceRow = {
+  list_root?: string
+  info_json?: unknown
 }
 
 type SongCacheRowHit = {
@@ -468,6 +474,55 @@ export async function loadSongCache(listRoot: string): Promise<Map<string, SongC
     log.error('[sqlite] song cache load failed', error)
     return null
   }
+}
+
+/**
+ * 批量读取同一音频在其他歌单缓存中的分析结果。
+ *
+ * 这里只读，不在循环中迁移或写回缓存；调用方合并完成后统一 replaceSongCache，避免打开大歌单时
+ * 因数千次同步 SQLite 查询与自动提交长时间阻塞主进程。
+ */
+export async function loadSongCacheAnalysisSources(
+  listRoot: string,
+  filePaths: string[]
+): Promise<Map<string, ISongInfo[]>> {
+  const result = new Map<string, ISongInfo[]>()
+  const db = getLibraryDb()
+  if (!db || !listRoot || filePaths.length === 0) return result
+  const resolvedRoot = resolveListRootInput(listRoot)
+  if (!resolvedRoot) return result
+  const currentRoot = normalizeRoot(resolvedRoot.key)
+  const normalizedPaths = [...new Set(filePaths.map(normalizePath).filter(Boolean))]
+  if (normalizedPaths.length === 0) return result
+
+  try {
+    await ensureSongCacheMigrated(db, listRoot)
+    const chunkSize = 400
+    const normalizedInfoPathExpr =
+      "REPLACE(LOWER(CASE WHEN json_valid(info_json) THEN json_extract(info_json, '$.filePath') END), '/', '\\')"
+    for (let offset = 0; offset < normalizedPaths.length; offset += chunkSize) {
+      const chunk = normalizedPaths.slice(offset, offset + chunkSize)
+      const placeholders = chunk.map(() => '?').join(', ')
+      const rows = db
+        .prepare<SongCacheAnalysisSourceRow>(
+          `SELECT list_root, info_json FROM song_cache WHERE ${normalizedInfoPathExpr} IN (${placeholders})`
+        )
+        .all(...chunk)
+      for (const row of rows) {
+        if (normalizeRoot(row.list_root) === currentRoot) continue
+        const info = parseInfoJson(row.info_json)
+        if (!info?.filePath) continue
+        const key = normalizePath(info.filePath)
+        if (!key) continue
+        const sources = result.get(key)
+        if (sources) sources.push(info)
+        else result.set(key, [info])
+      }
+    }
+  } catch (error) {
+    log.error('[sqlite] song cache analysis source load failed', error)
+  }
+  return result
 }
 
 export async function loadSongCacheEntry(

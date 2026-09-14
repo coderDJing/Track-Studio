@@ -194,6 +194,14 @@ export function registerPlaylistHandlers() {
           statMs: result.perf?.statMs,
           parseMetadataMs: result.perf?.parseMetadataMs,
           refreshMissingMs: result.perf?.refreshMissingMs,
+          refreshMissingCount: result.perf?.refreshMissingCount,
+          refreshMissingChangedCount: result.perf?.refreshMissingChangedCount,
+          cacheCheckMs: result.perf?.cacheCheckMs,
+          cacheRows: result.perf?.cacheRows,
+          cacheHits: result.perf?.cacheHits,
+          totalMs: result.perf?.totalMs,
+          failedCount: result.perf?.failedCount,
+          skippedCount: result.perf?.skippedCount,
           parsedCount: result.perf?.parsedCount
         }
       })

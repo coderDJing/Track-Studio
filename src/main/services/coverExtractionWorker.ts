@@ -32,7 +32,7 @@ type WorkerResponse = {
 const COVER_EXTRACTION_TIMEOUT_MS = 12_000
 const COVER_ABORT_POLL_MS = 80
 const RECENT_WORKER_DIAGNOSTIC_TTL_MS = 60_000
-const MAX_RECENT_WORKER_DIAGNOSTICS = 20
+const MAX_RECENT_WORKER_DIAGNOSTICS = 8
 
 type CoverWorkerPhase =
   | 'creating-worker'

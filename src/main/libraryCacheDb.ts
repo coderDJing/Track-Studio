@@ -4,6 +4,7 @@ export { resolveCacheListRootAbs, resolveCacheFilePath } from './libraryCacheDb/
 
 export {
   loadSongCache,
+  loadSongCacheAnalysisSources,
   loadSongCacheEntry,
   updateSongCacheKey,
   clearSongCacheAnalysisFields,

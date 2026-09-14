@@ -72,6 +72,14 @@ const summarizeActiveResources = (): Record<string, number> => {
   }
 }
 
+const stringifyDiagnostic = (value: unknown): string => {
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return JSON.stringify({ serializationFailed: true })
+  }
+}
+
 const captureSnapshot = (
   browserWindow: BrowserWindow,
   options?: { sinceMs?: number; processMetrics?: SlimProcessMetric[] }
@@ -176,24 +184,27 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
           }
         }
         // 每次达到阈值都保留现场，避免同一轮后续更严重的卡顿只剩汇总计数。
-        log.error('[main-window] main-process event loop stalled', {
-          incidentStartedAtMs: stallIncident.startedAtMs,
-          stallIndex: stallIncident.count,
-          stallDurationMs,
-          snapshot: captureSnapshot(browserWindow, {
-            sinceMs: previousHeartbeatAt,
-            processMetrics
-          }),
-          mainProcessInterval: {
-            elapsedMs: Math.max(0, now - previousHeartbeatAt),
-            cpuUserMs: Math.round(cpuUserMs),
-            cpuSystemMs: Math.round(cpuSystemMs),
-            eventLoopActiveMs: Math.round(eventLoopUtilization.active),
-            eventLoopIdleMs: Math.round(eventLoopUtilization.idle),
-            eventLoopUtilization: Math.round(eventLoopUtilization.utilization * 1000) / 1000,
-            activeResources: summarizeActiveResources()
-          }
-        })
+        log.error(
+          '[main-window] main-process event loop stalled',
+          stringifyDiagnostic({
+            incidentStartedAtMs: stallIncident.startedAtMs,
+            stallIndex: stallIncident.count,
+            stallDurationMs,
+            snapshot: captureSnapshot(browserWindow, {
+              sinceMs: previousHeartbeatAt,
+              processMetrics
+            }),
+            mainProcessInterval: {
+              elapsedMs: Math.max(0, now - previousHeartbeatAt),
+              cpuUserMs: Math.round(cpuUserMs),
+              cpuSystemMs: Math.round(cpuSystemMs),
+              eventLoopActiveMs: Math.round(eventLoopUtilization.active),
+              eventLoopIdleMs: Math.round(eventLoopUtilization.idle),
+              eventLoopUtilization: Math.round(eventLoopUtilization.utilization * 1000) / 1000,
+              activeResources: summarizeActiveResources()
+            }
+          })
+        )
       }, MAIN_PROCESS_HEARTBEAT_INTERVAL_MS)
     : null
 
@@ -203,9 +214,10 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
       return
     }
     rendererUnresponsiveAt = Date.now()
-    log.error('[main-window] renderer unresponsive', {
-      snapshot: captureSnapshot(browserWindow)
-    })
+    log.error(
+      '[main-window] renderer unresponsive',
+      stringifyDiagnostic({ snapshot: captureSnapshot(browserWindow) })
+    )
   })
 
   browserWindow.webContents.on('responsive', () => {
@@ -216,10 +228,13 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
     const durationMs = Date.now() - rendererUnresponsiveAt
     const sinceMs = rendererUnresponsiveAt
     rendererUnresponsiveAt = null
-    log.error('[main-window] renderer recovered', {
-      durationMs,
-      snapshot: captureSnapshot(browserWindow, { sinceMs })
-    })
+    log.error(
+      '[main-window] renderer recovered',
+      stringifyDiagnostic({
+        durationMs,
+        snapshot: captureSnapshot(browserWindow, { sinceMs })
+      })
+    )
   })
 
   browserWindow.webContents.on('render-process-gone', (_event, details) => {
@@ -227,11 +242,14 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
       rendererUnresponsiveAt === null ? null : Math.max(0, Date.now() - rendererUnresponsiveAt)
     const sinceMs = rendererUnresponsiveAt ?? Date.now() - 5_000
     rendererUnresponsiveAt = null
-    log.error('[main-window] render-process-gone', {
-      details,
-      unresponsiveDurationMs: durationMs,
-      snapshot: captureSnapshot(browserWindow, { sinceMs })
-    })
+    log.error(
+      '[main-window] render-process-gone',
+      stringifyDiagnostic({
+        details,
+        unresponsiveDurationMs: durationMs,
+        snapshot: captureSnapshot(browserWindow, { sinceMs })
+      })
+    )
   })
 
   const dispose = () => {

@@ -53,6 +53,7 @@ describe('getMainThreadActivitySnapshot', () => {
     beginMainThreadActivity({ kind: 'ipc-handle', name: 'fast' })
     vi.setSystemTime(4_000)
     const snapshot = getMainThreadActivitySnapshot(1_000)
+    expect(snapshot.pendingTotal).toBe(2)
     expect(snapshot.pending.map((item) => item.name)).toEqual(['sqlite:wal_checkpoint', 'fast'])
     expect(snapshot.longest).toEqual({
       kind: 'sync',
@@ -81,6 +82,7 @@ describe('getMainThreadActivitySnapshot', () => {
     expect(snapshot.slowest.map((item) => item.name)).toEqual(['songList:scan'])
     expect(snapshot.slowest[0]?.durationMs).toBe(22_000)
     expect(snapshot.pending).toEqual([])
+    expect(snapshot.pendingTotal).toBe(0)
   })
 
   it('runTracedSync 结束后能读到耗时', () => {
@@ -97,5 +99,17 @@ describe('getMainThreadActivitySnapshot', () => {
       durationMs: 3_400,
       pending: false
     })
+  })
+
+  it('待处理任务很多时保留总数并限制快照体积', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    for (let index = 0; index < 20; index += 1) {
+      beginMainThreadActivity({ kind: 'ipc-handle', name: `pending-${index}` })
+    }
+    vi.setSystemTime(2_000)
+    const snapshot = getMainThreadActivitySnapshot(1_000)
+    expect(snapshot.pendingTotal).toBe(20)
+    expect(snapshot.pending).toHaveLength(12)
   })
 })

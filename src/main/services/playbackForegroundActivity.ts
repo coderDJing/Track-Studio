@@ -20,15 +20,19 @@ const PLAYBACK_FOREGROUND_ACTIVITY_CHANNEL = 'player:foreground-activity'
 const PLAYBACK_FOREGROUND_STALE_MS = 8000
 const PLAYBACK_FOREGROUND_IDLE_GRACE_MS = 300
 const BACKGROUND_IO_WAIT_INTERVAL_MS = 60
-const BACKGROUND_FILE_IO_MAX_CONCURRENCY = 1
+const STANDARD_FILE_IO_MAX_CONCURRENCY = 1
+const FOREGROUND_FILE_IO_MAX_CONCURRENCY = 1
 
 export type FileIoPriority = 'visible' | 'foreground' | 'background' | 'maintenance' | 'prefetch'
 
 type FileIoWaiter = {
+  lane: FileIoLane
   priority: number
   sequence: number
   resolve: () => void
 }
+
+type FileIoLane = 'standard' | 'foreground'
 
 type BackgroundFileIoState =
   | 'waiting-for-playback-before-slot'
@@ -55,12 +59,24 @@ const FILE_IO_PRIORITY: Record<FileIoPriority, number> = {
 const foregroundEntries = new Map<string, PlaybackForegroundEntry>()
 let foregroundGraceUntilMs = 0
 let ipcRegistered = false
-let backgroundFileIoInFlight = 0
 let backgroundFileIoSequence = 0
 let backgroundFileIoOperationSequence = 0
-let backgroundFileIoHandoffScheduled = false
+const fileIoInFlight: Record<FileIoLane, number> = {
+  standard: 0,
+  foreground: 0
+}
+const fileIoHandoffScheduled: Record<FileIoLane, boolean> = {
+  standard: false,
+  foreground: false
+}
 const backgroundFileIoWaiters: FileIoWaiter[] = []
 const backgroundFileIoOperations = new Map<number, BackgroundFileIoOperation>()
+
+const resolveFileIoLane = (priority: FileIoPriority): FileIoLane =>
+  priority === 'foreground' ? 'foreground' : 'standard'
+
+const getFileIoLaneLimit = (lane: FileIoLane): number =>
+  lane === 'foreground' ? FOREGROUND_FILE_IO_MAX_CONCURRENCY : STANDARD_FILE_IO_MAX_CONCURRENCY
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
@@ -96,9 +112,14 @@ export const getBackgroundFileIoDiagnosticSnapshot = (nowMs = Date.now()) => {
     queuedByPriority[operation.priority] = (queuedByPriority[operation.priority] || 0) + 1
   }
   return {
-    concurrencyLimit: BACKGROUND_FILE_IO_MAX_CONCURRENCY,
-    inFlight: backgroundFileIoInFlight,
-    handoffScheduled: backgroundFileIoHandoffScheduled,
+    concurrencyLimit: STANDARD_FILE_IO_MAX_CONCURRENCY + FOREGROUND_FILE_IO_MAX_CONCURRENCY,
+    laneLimits: {
+      standard: STANDARD_FILE_IO_MAX_CONCURRENCY,
+      foreground: FOREGROUND_FILE_IO_MAX_CONCURRENCY
+    },
+    inFlight: fileIoInFlight.standard + fileIoInFlight.foreground,
+    inFlightByLane: { ...fileIoInFlight },
+    handoffScheduled: fileIoHandoffScheduled.standard || fileIoHandoffScheduled.foreground,
     foregroundActivityCount: foregroundEntries.size,
     foregroundGraceRemainingMs: Math.max(0, foregroundGraceUntilMs - nowMs),
     queuedByPriority,
@@ -131,37 +152,40 @@ export const isAbsPathInPlaybackForeground = (absPath: string): boolean => {
 }
 
 const acquireBackgroundFileIoSlot = async (priority: FileIoPriority): Promise<() => void> => {
-  if (backgroundFileIoInFlight < BACKGROUND_FILE_IO_MAX_CONCURRENCY) {
-    backgroundFileIoInFlight += 1
-    return releaseBackgroundFileIoSlot
+  const lane = resolveFileIoLane(priority)
+  if (fileIoInFlight[lane] < getFileIoLaneLimit(lane)) {
+    fileIoInFlight[lane] += 1
+    return () => releaseBackgroundFileIoSlot(lane)
   }
 
   await new Promise<void>((resolve) => {
     backgroundFileIoWaiters.push({
+      lane,
       priority: FILE_IO_PRIORITY[priority],
       sequence: backgroundFileIoSequence++,
       resolve
     })
   })
-  return releaseBackgroundFileIoSlot
+  return () => releaseBackgroundFileIoSlot(lane)
 }
 
-const releaseBackgroundFileIoSlot = () => {
-  if (backgroundFileIoHandoffScheduled) return
-  backgroundFileIoHandoffScheduled = true
+const releaseBackgroundFileIoSlot = (lane: FileIoLane) => {
+  if (fileIoHandoffScheduled[lane]) return
+  fileIoHandoffScheduled[lane] = true
   // Give timers and incoming higher-priority work a chance to run between queued disk tasks.
   // Resolving the next waiter inline can keep a large deletion batch inside one microtask chain.
   setImmediate(() => {
-    backgroundFileIoHandoffScheduled = false
+    fileIoHandoffScheduled[lane] = false
     backgroundFileIoWaiters.sort(
       (left, right) => left.priority - right.priority || left.sequence - right.sequence
     )
-    const next = backgroundFileIoWaiters.shift()
+    const nextIndex = backgroundFileIoWaiters.findIndex((waiter) => waiter.lane === lane)
+    const next = nextIndex >= 0 ? backgroundFileIoWaiters.splice(nextIndex, 1)[0] : undefined
     if (next) {
       next.resolve()
       return
     }
-    backgroundFileIoInFlight = Math.max(0, backgroundFileIoInFlight - 1)
+    fileIoInFlight[lane] = Math.max(0, fileIoInFlight[lane] - 1)
   })
 }
 

@@ -54,6 +54,8 @@ const getFingerprintMode = (): FingerprintMode =>
 
 // 简单的全局节流器：相邻请求至少间隔 650ms，保证每分钟 <= 100 次
 const RATE_LIMIT_MIN_INTERVAL_MS = 650
+const VALIDATE_USER_KEY_MAX_ATTEMPTS = 2
+const VALIDATE_USER_KEY_RETRY_STATUSES = new Set([502, 503, 504])
 function createRateLimiter(minIntervalMs: number) {
   let nextAvailableAt = 0
   return async function limitOnce() {
@@ -153,27 +155,36 @@ async function validateUserKeyRequest(
 ): Promise<ValidateUserKeyResponse> {
   const userKey = (userKeyRaw || '').trim()
   const requestBody = { userKey }
-  const res = await limitedFetch(`${baseUrl}${CLOUD_SYNC.PREFIX}/validate-user-key`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${CLOUD_SYNC.API_SECRET_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(requestBody)
-  })
-  const responseText = await res.text()
-  if (!responseText.trim()) {
-    return { success: false, error: 'EMPTY_RESPONSE', status: res.status }
-  }
-  try {
-    const parsed: unknown = JSON.parse(responseText)
-    if (!isRecord(parsed)) {
-      return { success: false, error: 'INVALID_RESPONSE', status: res.status }
+  for (let attempt = 1; attempt <= VALIDATE_USER_KEY_MAX_ATTEMPTS; attempt += 1) {
+    const res = await limitedFetch(`${baseUrl}${CLOUD_SYNC.PREFIX}/validate-user-key`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${CLOUD_SYNC.API_SECRET_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    })
+    const responseText = await res.text()
+    if (
+      attempt < VALIDATE_USER_KEY_MAX_ATTEMPTS &&
+      VALIDATE_USER_KEY_RETRY_STATUSES.has(res.status)
+    ) {
+      continue
     }
-    return parsed as ValidateUserKeyResponse
-  } catch {
-    return { success: false, error: 'INVALID_JSON_RESPONSE', status: res.status }
+    if (!responseText.trim()) {
+      return { success: false, error: 'EMPTY_RESPONSE', status: res.status }
+    }
+    try {
+      const parsed: unknown = JSON.parse(responseText)
+      if (!isRecord(parsed)) {
+        return { success: false, error: 'INVALID_RESPONSE', status: res.status }
+      }
+      return parsed as ValidateUserKeyResponse
+    } catch {
+      return { success: false, error: 'INVALID_JSON_RESPONSE', status: res.status }
+    }
   }
+  return { success: false, error: 'EMPTY_RESPONSE' }
 }
 
 const persistDevUserKeyIfNeeded = (userKey: string) => {

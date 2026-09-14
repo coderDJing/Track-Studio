@@ -71,6 +71,7 @@ export type ScanSongListResult = {
     skippedCount: number
     refreshMissingMs: number
     refreshMissingCount: number
+    refreshMissingChangedCount: number
   }
 }
 
@@ -445,7 +446,8 @@ export async function scanSongList(
         listMode: fileScan.mode,
         skippedCount: fileScan.skipped,
         refreshMissingMs: perfRefreshMissing.ms,
-        refreshMissingCount: perfRefreshMissing.count
+        refreshMissingCount: perfRefreshMissing.count,
+        refreshMissingChangedCount: perfRefreshMissing.changed
       }
     }
   }
@@ -508,6 +510,8 @@ export async function scanSongList(
           initialized: ensureResult.initialized,
           repaired: ensureResult.repaired
         }
+      }
+      if (ensureResult.changed || perfRefreshMissing.changed > 0) {
         await writeSongCacheIfNeeded(verifiedSongs)
       }
       verifiedSongs = sortSongsByPlaylistTrackNumber(verifiedSongs, cacheRoot)
@@ -518,12 +522,12 @@ export async function scanSongList(
     return buildScanResult(verifiedSongs, 0, 0, 0, true)
   }
 
-  // 跨库补分析是"每首一次 loadSongCacheEntry"的串行开销，且 loadSongCacheEntry 内部
-  // 还可能做非索引松散比较与写回，因此单独计量，别混进 cacheCheckMs 里看不出来。
-  const perfRefreshMissing = { ms: 0, count: 0 }
+  // 跨库分析一次批量只读，合并后随本次扫描统一写回，避免逐首同步查询和自动提交阻塞主进程。
+  const perfRefreshMissing = { ms: 0, count: 0, changed: 0 }
   const refreshMissingAnalysisFromOtherRoots = async () => {
     if (!cacheFromDb || !cacheRoot || cacheMap.size === 0 || filesStatList.length === 0) return
     const startedAt = Date.now()
+    const missingEntries: Array<{ key: string; file: string; entry: CacheEntry }> = []
     for (const st of filesStatList) {
       const entry = cacheMap.get(st.key)
       if (!entry || !entry.info) continue
@@ -533,12 +537,26 @@ export async function scanSongList(
         !hasUsableSongEnergyAnalysis(entry.info)
       if (!missingAnalysis) continue
       perfRefreshMissing.count += 1
-      const refreshed = await LibraryCacheDb.loadSongCacheEntry(cacheRoot, st.file)
-      if (refreshed?.info) {
-        cacheMap.set(st.key, refreshed)
-        if (refreshed.info.analysisOnly) {
-          analysisOnlyByPath.set(st.key, refreshed.info)
-        }
+      missingEntries.push({ key: st.key, file: st.file, entry })
+    }
+    const sourcesByPath = await LibraryCacheDb.loadSongCacheAnalysisSources(
+      cacheRoot,
+      missingEntries.map(({ file }) => file)
+    )
+    for (const { key, file, entry } of missingEntries) {
+      const sources = sourcesByPath.get(normalizePathKey(file))
+      if (!sources?.length) continue
+      const nextInfo = { ...entry.info }
+      const before = JSON.stringify(nextInfo)
+      for (const source of sources) {
+        preserveCachedAnalysisFields(nextInfo, discardStaleAnalysisFields(source))
+      }
+      if (JSON.stringify(nextInfo) === before) continue
+      const refreshed = { ...entry, info: nextInfo }
+      cacheMap.set(key, refreshed)
+      perfRefreshMissing.changed += 1
+      if (nextInfo.analysisOnly) {
+        analysisOnlyByPath.set(key, nextInfo)
       }
     }
     perfRefreshMissing.ms += Date.now() - startedAt

@@ -23,6 +23,7 @@ type InternalActivityRecord = {
 
 const MAX_COMPLETED_RECORDS = 40
 const MAX_SNAPSHOT_RECORDS = 12
+const MAX_PENDING_SNAPSHOT_RECORDS = 12
 const MAX_ARG_HINT_LENGTH = 80
 
 let nextActivityId = 1
@@ -119,14 +120,16 @@ const overlapsWindow = (record: InternalActivityRecord, sinceMs: number, now: nu
 export const getMainThreadActivitySnapshot = (
   sinceMs: number
 ): {
+  pendingTotal: number
   pending: MainThreadActivityRecord[]
   slowest: MainThreadActivityRecord[]
   longest?: Pick<MainThreadActivityRecord, 'kind' | 'name' | 'durationMs' | 'pending'>
 } => {
   const now = Date.now()
-  const pending = [...activeRecords.values()]
+  const allPending = [...activeRecords.values()]
     .map((record) => toPublicRecord(record, now))
     .sort((left, right) => right.durationMs - left.durationMs)
+  const pending = allPending.slice(0, MAX_PENDING_SNAPSHOT_RECORDS)
   const slowest = completedRecords
     .filter((record) => overlapsWindow(record, sinceMs, now))
     .map((record) => toPublicRecord(record, now))
@@ -136,6 +139,7 @@ export const getMainThreadActivitySnapshot = (
     (left, right) => right.durationMs - left.durationMs
   )[0]
   return {
+    pendingTotal: allPending.length,
     pending,
     slowest,
     longest: longest

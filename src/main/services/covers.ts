@@ -11,8 +11,10 @@ import { runPlaybackAwareBackgroundFileIo, type FileIoPriority } from './playbac
 
 const DISPLAY_CACHE_MARKER = '.display-v1'
 const COVER_THUMB_MAX_CONCURRENCY = 3
+const COVER_CACHE_DIRECTORY_TIMEOUT_MS = 8_000
 const RECENT_COVER_DIAGNOSTIC_TTL_MS = 60_000
-const MAX_RECENT_COVER_DIAGNOSTICS = 24
+const MAX_RECENT_COVER_DIAGNOSTICS = 8
+const MAX_ACTIVE_COVER_DIAGNOSTICS = 12
 let pendingPostScanSweepTimer: NodeJS.Timeout | null = null
 let activeCoverThumbTasks = 0
 let coverThumbTaskSequence = 0
@@ -60,6 +62,27 @@ type CoverDiagnosticOperation = {
 
 const activeCoverDiagnostics = new Map<number, CoverDiagnosticOperation>()
 const recentCoverDiagnostics: CoverDiagnosticOperation[] = []
+
+const prepareCoverCacheDirectory = async (coversDir: string): Promise<void> => {
+  let timeout: NodeJS.Timeout | null = null
+  try {
+    await Promise.race([
+      (async () => {
+        await fs.ensureDir(coversDir)
+        await operateHiddenFile(coversDir, async () => {})
+      })(),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error('cover cache directory preparation timed out')),
+          COVER_CACHE_DIRECTORY_TIMEOUT_MS
+        )
+        timeout.unref?.()
+      })
+    ])
+  } finally {
+    if (timeout) clearTimeout(timeout)
+  }
+}
 
 const startCoverDiagnostic = (params: {
   kind: CoverDiagnosticKind
@@ -156,9 +179,10 @@ export const getCoverTaskDiagnosticSnapshot = (nowMs = Date.now()) => {
     },
     oldestQueueWaitMs: oldestQueuedAtMs === null ? 0 : Math.max(0, nowMs - oldestQueuedAtMs),
     operations: {
-      active: [...activeCoverDiagnostics.values()].map((operation) =>
-        summarizeCoverDiagnostic(operation, nowMs)
-      ),
+      active: [...activeCoverDiagnostics.values()]
+        .map((operation) => summarizeCoverDiagnostic(operation, nowMs))
+        .sort((left, right) => right.durationMs - left.durationMs)
+        .slice(0, MAX_ACTIVE_COVER_DIAGNOSTICS),
       recent: recentCoverDiagnostics.map((operation) => summarizeCoverDiagnostic(operation, nowMs))
     },
     extractionWorkers: getCoverExtractionWorkerDiagnosticSnapshot(nowMs)
@@ -320,8 +344,7 @@ async function loadSongCoverThumb(
     }
     if (useDiskCache && coversDir) {
       if (diagnostic) markCoverDiagnosticPhase(diagnostic, 'preparing-cache-directory')
-      await fs.ensureDir(coversDir)
-      await operateHiddenFile(coversDir, async () => {})
+      await prepareCoverCacheDirectory(coversDir)
     }
 
     // 命中索引则直接返回
@@ -463,8 +486,7 @@ async function persistSongCoverDisplayCacheNow(params: {
     if (!(await fs.pathExists(resolvedRoot)) || context?.shouldAbort?.()) return false
     const coversDir = path.join(resolvedRoot, '.frkb_covers')
     if (diagnostic) markCoverDiagnosticPhase(diagnostic, 'preparing-cache-directory')
-    await fs.ensureDir(coversDir)
-    await operateHiddenFile(coversDir, async () => {})
+    await prepareCoverCacheDirectory(coversDir)
     const ext = displayCacheExtFromFormat(format)
     const targetPath = path.join(coversDir, `${imageHash}${ext}`)
     if (diagnostic) markCoverDiagnosticPhase(diagnostic, 'preparing-persist-data')
