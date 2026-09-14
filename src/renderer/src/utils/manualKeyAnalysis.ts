@@ -36,29 +36,38 @@ type ScanSongListResult = {
   missingWaveformFilePaths?: string[]
 }
 
+type MissingAnalysisScanOptions = MissingAnalysisOptions & {
+  onPlaylistScanned?: () => void
+}
+
 export const scanSongListsForMissingAnalysisFiles = async (
   uuids: string[],
   requiresRuntimeAnalysis: boolean,
-  options: MissingAnalysisOptions = {}
+  options: MissingAnalysisScanOptions = {}
 ): Promise<string[]> => {
+  const { onPlaylistScanned, ...missingAnalysisOptions } = options
   const files: string[] = []
   const seen = new Set<string>()
   for (const uuid of uuids) {
     const dirPath = libraryUtils.findDirPathByUuid(uuid)
-    const scan = (await window.electron.ipcRenderer.invoke(
-      'scanSongList',
-      dirPath,
-      uuid
-    )) as ScanSongListResult | null
-    if (!Array.isArray(scan?.scanData)) continue
-    files.push(
-      ...collectMissingAnalysisFilesFromSongs(scan.scanData, requiresRuntimeAnalysis, seen, {
-        ...options,
-        missingWaveformFilePaths: Array.isArray(scan.missingWaveformFilePaths)
-          ? scan.missingWaveformFilePaths
-          : undefined
-      })
-    )
+    try {
+      const scan = (await window.electron.ipcRenderer.invoke(
+        'scanSongList',
+        dirPath,
+        uuid
+      )) as ScanSongListResult | null
+      if (!Array.isArray(scan?.scanData)) continue
+      files.push(
+        ...collectMissingAnalysisFilesFromSongs(scan.scanData, requiresRuntimeAnalysis, seen, {
+          ...missingAnalysisOptions,
+          missingWaveformFilePaths: Array.isArray(scan.missingWaveformFilePaths)
+            ? scan.missingWaveformFilePaths
+            : undefined
+        })
+      )
+    } finally {
+      onPlaylistScanned?.()
+    }
   }
   return files
 }

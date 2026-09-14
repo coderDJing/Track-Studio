@@ -329,17 +329,22 @@ export const uniqueFilePaths = (files: string[]) => {
 
 export const collectSetPlaylistMissingAnalysisFiles = async (
   uuids: string[],
-  requiresRuntimeAnalysis: boolean
+  requiresRuntimeAnalysis: boolean,
+  options: { onPlaylistScanned?: () => void } = {}
 ): Promise<string[]> => {
   const files: string[] = []
   const seen = new Set<string>()
   for (const uuid of uuids) {
-    const songs = await loadSetPlaylistSongs(uuid)
-    files.push(
-      ...collectMissingAnalysisFilesFromSongs(songs, requiresRuntimeAnalysis, seen, {
-        includeSongStructure: true
-      })
-    )
+    try {
+      const songs = await loadSetPlaylistSongs(uuid)
+      files.push(
+        ...collectMissingAnalysisFilesFromSongs(songs, requiresRuntimeAnalysis, seen, {
+          includeSongStructure: true
+        })
+      )
+    } finally {
+      options.onPlaylistScanned?.()
+    }
   }
   return files
 }

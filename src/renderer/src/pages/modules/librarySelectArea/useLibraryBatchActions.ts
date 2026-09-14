@@ -4,6 +4,7 @@ import confirm from '@renderer/components/confirmDialog'
 import rightClickMenu from '@renderer/components/rightClickMenu'
 import emitter from '@renderer/utils/mitt'
 import libraryUtils from '@renderer/utils/libraryUtils'
+import { createMissingAnalysisScanProgress } from '@renderer/utils/missingAnalysisScanProgress'
 import { invokeMetadataAutoFill } from '@renderer/utils/metadataAutoFill'
 import {
   fetchAcoustIdClientKeyStatus,
@@ -205,9 +206,36 @@ export function useLibraryBatchActions(options: {
   const handleAnalyzeMissingForLibrary = async (libraryName: string) => {
     const uuids = collectSongLists(findLibraryNode(libraryName)).map((item) => item.uuid)
     const requiresRuntimeAnalysis = runtime.analysisRuntime.available === true
-    const files = await scanSongListsForMissingAnalysisFiles(uuids, requiresRuntimeAnalysis, {
-      includeSongStructure: true
-    })
+    if (!uuids.length) {
+      await confirm({
+        title: t('dialog.hint'),
+        content: [t('tracks.noMissingAnalysisTracks')],
+        confirmShow: false
+      })
+      return
+    }
+    const scanProgress = createMissingAnalysisScanProgress(uuids.length)
+    runtime.isProgressing = true
+    let files: string[] = []
+    try {
+      files = await scanSongListsForMissingAnalysisFiles(uuids, requiresRuntimeAnalysis, {
+        includeSongStructure: true,
+        onPlaylistScanned: scanProgress.markPlaylistScanned
+      })
+      scanProgress.complete()
+    } catch (error: unknown) {
+      scanProgress.dismiss()
+      const message =
+        error instanceof Error && error.message.trim() ? error.message : t('common.unknownError')
+      await confirm({
+        title: t('common.error'),
+        content: [message],
+        confirmShow: false
+      })
+      return
+    } finally {
+      runtime.isProgressing = false
+    }
     if (files.length) {
       await promptAndQueueManualKeyAnalysisBatch(files, 'tracks.analyzingMissingTracks')
       return

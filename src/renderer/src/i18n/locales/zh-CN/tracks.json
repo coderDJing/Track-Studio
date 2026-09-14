@@ -68,6 +68,7 @@
     "convertNonMp3ToMp3": "统一转为 MP3",
     "editMetadata": "编辑曲目信息",
     "analyzeMissingTracks": "分析未分析歌曲",
+    "scanningMissingAnalysisPlaylists": "正在扫描歌单，检查待分析歌曲",
     "analyzingTracks": "正在分析歌曲",
     "analyzingMissingTracks": "正在分析未分析歌曲",
     "reanalyzingTracks": "正在重新分析歌曲",

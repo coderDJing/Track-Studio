@@ -10,6 +10,7 @@ import {
 } from '@renderer/utils/rekordboxDesktopPlaylist'
 import { t } from '@renderer/utils/translate'
 import libraryUtils from '@renderer/utils/libraryUtils'
+import { createMissingAnalysisScanProgress } from '@renderer/utils/missingAnalysisScanProgress'
 import { DEFAULT_MIXTAPE_STEM_PROFILE } from '@shared/mixtapeStemProfiles'
 import { analyzeFingerprintsForPaths } from '@renderer/utils/fingerprintActions'
 import { invokeMetadataAutoFill } from '@renderer/utils/metadataAutoFill'
@@ -959,21 +960,47 @@ export function useLibraryContextMenu({
         break
       }
       case 'tracks.analyzeMissingTracks': {
+        if (runtime.isProgressing) {
+          await confirmTaskBusy()
+          return
+        }
         const operateUuids = getOperateUuids()
         const songListUuids = collectSongListUuids(operateUuids)
         const setListUuids = collectSetListUuids(operateUuids)
         if (!songListUuids.length && !setListUuids.length) break
         const requiresRuntimeAnalysis = runtime.analysisRuntime.available === true
-        const [songListFiles, setListFiles] = await Promise.all([
-          songListUuids.length
-            ? scanSongListsForMissingAnalysisFiles(songListUuids, requiresRuntimeAnalysis, {
-                includeSongStructure: true
-              })
-            : Promise.resolve([]),
-          setListUuids.length
-            ? collectSetPlaylistMissingAnalysisFiles(setListUuids, requiresRuntimeAnalysis)
-            : Promise.resolve([])
-        ])
+        const scanProgress = createMissingAnalysisScanProgress(
+          songListUuids.length + setListUuids.length
+        )
+        runtime.isProgressing = true
+        let songListFiles: string[] = []
+        let setListFiles: string[] = []
+        try {
+          ;[songListFiles, setListFiles] = await Promise.all([
+            songListUuids.length
+              ? scanSongListsForMissingAnalysisFiles(songListUuids, requiresRuntimeAnalysis, {
+                  includeSongStructure: true,
+                  onPlaylistScanned: scanProgress.markPlaylistScanned
+                })
+              : Promise.resolve([]),
+            setListUuids.length
+              ? collectSetPlaylistMissingAnalysisFiles(setListUuids, requiresRuntimeAnalysis, {
+                  onPlaylistScanned: scanProgress.markPlaylistScanned
+                })
+              : Promise.resolve([])
+          ])
+          scanProgress.complete()
+        } catch (error: unknown) {
+          scanProgress.dismiss()
+          await confirm({
+            title: t('common.error'),
+            content: [getErrorMessage(error)],
+            confirmShow: false
+          })
+          return
+        } finally {
+          runtime.isProgressing = false
+        }
         const files = uniqueFilePaths([...songListFiles, ...setListFiles])
         if (!files.length) {
           await confirm({

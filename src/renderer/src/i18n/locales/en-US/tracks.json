@@ -68,6 +68,7 @@
     "convertNonMp3ToMp3": "Convert All to MP3",
     "editMetadata": "Edit track info",
     "analyzeMissingTracks": "Analyze missing tracks",
+    "scanningMissingAnalysisPlaylists": "Scanning playlists for missing analysis",
     "analyzingTracks": "Analyzing tracks",
     "analyzingMissingTracks": "Analyzing missing tracks",
     "reanalyzingTracks": "Re-analyzing tracks",
