@@ -257,7 +257,8 @@ export function registerLibraryMaintenanceHandlers() {
           })
           const result = await moveFileToRecycleBin(item, {
             originalPlaylistPath,
-            sourceType
+            sourceType,
+            deferDerivedCacheTransfer: true
           })
           if (result.status === 'failed') {
             throw new Error(result.error || 'move to recycle bin failed')

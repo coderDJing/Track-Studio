@@ -41,6 +41,7 @@ import {
   type LibraryMergeScope
 } from './types'
 import { isLibraryMergeMutationLocked, setLibraryMergeMutationLocked } from './mutationGate'
+import { waitForAllRecycleBinCacheTransfers } from '../recycleBinCacheTransferQueue'
 
 export { isLibraryMergeMutationLocked } from './mutationGate'
 
@@ -216,6 +217,7 @@ export const acquireLibraryMergeMutationLock = async (
   // Drop pending orchestrator work and wait for any running bounded callback.
   const resumeBackgroundTasks = await interruptBackgroundTaskExecution()
   try {
+    await waitForAllRecycleBinCacheTransfers()
     // Pending-only analysis queues never need a confirm dialog.
     await silentClearPendingOnlyKeyAnalysis()
 

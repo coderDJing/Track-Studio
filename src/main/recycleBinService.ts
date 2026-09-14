@@ -14,6 +14,7 @@ import {
   clearTrackCache,
   findSongListRoot,
   purgeCoverCacheForTrack,
+  transferTrackCoreCache,
   transferTrackCaches
 } from './services/cacheMaintenance'
 import { findSongListRootByPath } from './libraryTreeDb'
@@ -35,6 +36,10 @@ import { listMixtapeItemsByFilePath, replaceMixtapeFilePath } from './mixtapeDb'
 import { replaceMixtapeStemAssetFilePath } from './mixtapeStemDb'
 import { updateSetItemFilePathReferences } from './setListDb'
 import { runPlaybackAwareBackgroundFileIo } from './services/playbackForegroundActivity'
+import {
+  enqueueRecycleBinCacheTransfer,
+  waitForRecycleBinCacheTransfers
+} from './services/recycleBinCacheTransferQueue'
 
 type RecycleBinSourceType = 'external' | 'import_dedup' | 'unknown'
 
@@ -46,6 +51,7 @@ type RecycleBinMoveOptions = {
   fileId?: string | null
   contentSha256?: string | null
   contentSize?: number | null
+  deferDerivedCacheTransfer?: boolean
 }
 
 export type RecycleBinMoveResult = {
@@ -466,23 +472,28 @@ export async function moveFileToRecycleBin(
     await fs.ensureDir(recycleRoot)
     const originalFileName = options.originalFileName || path.basename(srcPath)
     const destPath = await moveFileToUniqueDestination(srcPath, recycleRoot, originalFileName)
-    try {
-      await runPlaybackAwareBackgroundFileIo(
-        'recycle-bin:transfer-track-caches',
-        {
-          srcPath,
-          destPath
-        },
-        () =>
-          transferTrackCaches({
-            fromRoot: sourceListRoot,
-            toRoot: recycleRoot,
-            fromPath: srcPath,
-            toPath: destPath
-          }),
-        { priority: 'foreground' }
-      )
-    } catch {}
+    const cacheTransferParams = {
+      fromRoot: sourceListRoot,
+      toRoot: recycleRoot,
+      fromPath: srcPath,
+      toPath: destPath
+    }
+    const deferredCacheContext = options.deferDerivedCacheTransfer
+      ? await transferTrackCoreCache(cacheTransferParams).catch(() => null)
+      : null
+    if (!options.deferDerivedCacheTransfer) {
+      try {
+        await runPlaybackAwareBackgroundFileIo(
+          'recycle-bin:transfer-track-caches',
+          {
+            srcPath,
+            destPath
+          },
+          () => transferTrackCaches(cacheTransferParams),
+          { priority: 'foreground' }
+        )
+      } catch {}
+    }
     try {
       invalidateKeyAnalysisCache([srcPath, destPath])
     } catch {}
@@ -517,6 +528,9 @@ export async function moveFileToRecycleBin(
         notifyLibraryFsChanged(destPath)
       } catch {}
     }
+    if (deferredCacheContext) {
+      void enqueueRecycleBinCacheTransfer(cacheTransferParams, deferredCacheContext)
+    }
     return { status: 'moved', srcPath, destPath, destRelativePath: rel }
   } catch (error) {
     log.error('[recycleBin] move failed', { srcPath, error })
@@ -538,6 +552,7 @@ export async function restoreRecycleBinFile(filePath: string): Promise<RecycleBi
     : resolveRecycleBinRecordAbsPath(record.filePath)
   if (!srcPath) return { status: 'missing_file', srcPath: filePath }
   try {
+    await waitForRecycleBinCacheTransfers([srcPath])
     if (!(await fs.pathExists(srcPath))) {
       if (recordKey) deleteRecycleBinRecord(recordKey)
       return { status: 'missing_file', srcPath }
@@ -599,6 +614,7 @@ export async function permanentlyDeleteFile(
   const srcPath = path.isAbsolute(filePath)
     ? filePath
     : resolveRecycleBinRecordAbsPath(record?.filePath || filePath) || filePath
+  await waitForRecycleBinCacheTransfers([srcPath])
   let referencedMixtapePath = options.referencedMixtapePath
   if (referencedMixtapePath === undefined) {
     const mixtapeRefs = listMixtapeItemsByFilePath(srcPath)

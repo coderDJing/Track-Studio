@@ -3,11 +3,8 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { readManifestFile, writeManifest } from '../../databaseManifest'
-import {
-  inspectLibraryMergeSource,
-  mergeFrkbLibraries,
-  recoverIncompleteLibraryMerges
-} from './index'
+import { inspectLibraryMergeSource } from './inspection'
+import { mergeFrkbLibraries, recoverIncompleteLibraryMerges } from './service'
 
 type SqliteDatabase = InstanceType<typeof import('better-sqlite3')>
 
@@ -582,7 +579,7 @@ describe('FRKB library merge service', () => {
     ).rejects.toMatchObject({ code: 'TARGET_VERSION_INCOMPATIBLE' })
   })
 
-  it('upgrades an older source schema in an isolated snapshot without modifying the source', async () => {
+  it('rejects a source requiring protected schema migration without modifying the source', async () => {
     const targetRoot = await makeRoot('target-schema-snapshot')
     const sourceRoot = await makeRoot('source-schema-snapshot')
     await addSongList({
@@ -600,15 +597,13 @@ describe('FRKB library merge service', () => {
       sourceDb.close()
     }
 
-    const inspection = await inspectLibraryMergeSource({
-      sourceRoot,
-      targetRoot,
-      appVersion: '1.2.1'
-    })
-    expect(inspection.songListCount).toBe(1)
-    const result = await mergeFrkbLibraries({ sourceRoot, targetRoot, mode: 'copy' })
-
-    expect(result.songListCount).toBe(1)
+    await expect(
+      inspectLibraryMergeSource({
+        sourceRoot,
+        targetRoot,
+        appVersion: '1.2.1'
+      })
+    ).rejects.toMatchObject({ code: 'SOURCE_SCHEMA_UPGRADE_FAILED' })
     const sourceDbAfterMerge = openDb(sourceRoot)
     try {
       expect(sourceDbAfterMerge.pragma('user_version', { simple: true })).toBe(34)
@@ -619,7 +614,7 @@ describe('FRKB library merge service', () => {
       fs.access(
         path.join(targetRoot, 'library', 'FilterLibrary', 'House', 'Incoming', 'source.mp3')
       )
-    ).resolves.toBeUndefined()
+    ).rejects.toThrow()
   })
 
   it('deletes the source only after a successful target merge', async () => {
@@ -1191,6 +1186,15 @@ describe('FRKB library merge service', () => {
       )
       expect(JSON.parse(onlyCache?.info_json || '{}').filePath).toBe(
         path.join(playlistRoot, sourceOnlyName)
+      )
+      const importedCollisionCache = db
+        .prepare('SELECT list_root, info_json FROM song_cache WHERE file_path = ?')
+        .get(importedCollision) as { list_root: string; info_json: string } | undefined
+      expect(importedCollisionCache?.list_root).toBe(
+        path.join('library', 'CuratedLibrary', 'House', 'Favorites')
+      )
+      expect(JSON.parse(importedCollisionCache?.info_json || '{}').filePath).toBe(
+        path.join(playlistRoot, importedCollision!)
       )
       // Existing target playlist uuid remains; source playlist uuid is not inserted.
       expect(

@@ -11,6 +11,7 @@ import {
   normalizeLibraryMergeCacheFilePath,
   normalizeLibraryMergeCacheRoot
 } from './plan'
+import { getMergeFilePathKey } from './planFiles'
 import {
   LIBRARY_MERGE_ANALYSIS_TABLES,
   mergeRegisteredLibraryMetadata,
@@ -262,7 +263,8 @@ const copyAnalysisRows = (
   targetDb: SqliteDatabase,
   sourceRoot: string,
   sourceListRootToTarget: Map<string, { targetRel: string; targetAbs: string }>,
-  targetStats: Map<string, TargetFileStat>
+  targetStats: Map<string, TargetFileStat>,
+  sourceFilePathToTarget: Map<string, string>
 ): number => {
   let copied = 0
   for (const tableName of LIBRARY_MERGE_ANALYSIS_TABLES) {
@@ -287,12 +289,23 @@ const copyAnalysisRows = (
         String(sourceRow.file_path || '')
       )
       if (!sourceFilePath || path.dirname(sourceFilePath) !== '.') continue
-      const targetKey = `${root.targetListRoot}\u0000${sourceFilePath}`
+      const sourceAbs = path.resolve(sourceRoot, root.sourceListRoot, sourceFilePath)
+      const targetAbs = sourceFilePathToTarget.get(getMergeFilePathKey(sourceAbs))
+      if (!targetAbs) continue
+      const targetFilePath = path.relative(root.targetListAbs, targetAbs)
+      if (
+        !targetFilePath ||
+        path.isAbsolute(targetFilePath) ||
+        path.dirname(targetFilePath) !== '.'
+      ) {
+        continue
+      }
+      const targetKey = `${root.targetListRoot}\u0000${targetFilePath}`
       const targetStat = targetStats.get(targetKey)
       if (!targetStat) continue
       const nextRow: Record<string, unknown> = { ...sourceRow }
       nextRow.list_root = root.targetListRoot
-      nextRow.file_path = sourceFilePath
+      nextRow.file_path = targetFilePath
       if (columns.includes('size')) nextRow.size = targetStat.size
       if (columns.includes('mtime_ms')) nextRow.mtime_ms = targetStat.mtimeMs
       if (tableName === 'song_cache' && columns.includes('info_json')) {
@@ -845,7 +858,8 @@ export async function mergeFrkbLibraries(
         targetDb,
         sourceRoot,
         plan.sourceListRootToTarget,
-        targetStats
+        targetStats,
+        plan.sourceFilePathToTarget
       )
       if (scope === 'full') {
         mergeRegisteredLibraryRowTransforms({

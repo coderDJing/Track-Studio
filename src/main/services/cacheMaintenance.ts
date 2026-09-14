@@ -1,7 +1,7 @@
 import path = require('path')
 import fs = require('fs-extra')
 import { ISongInfo } from '../../types/globals'
-import { mapRendererPathToFsPath, operateHiddenFile } from '../utils'
+import { mapRendererPathToFsPath } from '../utils'
 import store from '../store'
 import * as LibraryCacheDb from '../libraryCacheDb'
 import { findSongListRootByPath, loadLibraryNodes } from '../libraryTreeDb'
@@ -11,24 +11,24 @@ import {
   isUnderPath,
   removeLibraryStemAssetFiles
 } from './libraryStemAssetStorage'
-import {
-  removeMixtapeStemAssetsByFilePath,
-  replaceMixtapeStemAssetFilePath
-} from '../mixtapeStemDb'
+import { removeMixtapeStemAssetsByFilePath } from '../mixtapeStemDb'
 import { cancelKeyAnalysisForPaths } from './keyAnalysisQueue'
 import { getCoreFsDirName } from '../coreLibraries'
 import { resolveCanonicalSongBeatGridV2 } from '../../shared/songAnalysisCompleteness'
 import type { TrackReanalysisPlan } from '../../shared/trackReanalysisSelection'
-import { log } from '../log'
+import type { CacheFileStat } from './trackCacheTransfer'
+
+export {
+  transferTrackCaches,
+  transferTrackCoreCache,
+  transferTrackDerivedCaches,
+  type CacheFileStat,
+  type TrackCacheTransferContext,
+  type TrackCacheTransferMode,
+  type TrackCacheTransferParams
+} from './trackCacheTransfer'
 
 const SET_CUSTODY_DIR_NAME = '__set_custody__'
-
-type CacheFileStat = {
-  size: number
-  mtimeMs: number
-}
-
-type TrackCacheTransferMode = 'move' | 'copy'
 
 const normalizePath = (value: string): string => {
   if (!value) return ''
@@ -217,176 +217,6 @@ export async function updateSongCacheEntry(
         size: stat.size,
         mtimeMs: stat.mtimeMs
       })
-    }
-  } catch {}
-}
-
-export async function transferTrackCaches(params: {
-  fromRoot: string | null
-  toRoot: string | null
-  fromPath: string
-  toPath: string
-  fromStat?: CacheFileStat | null
-  toStat?: CacheFileStat | null
-  mode?: TrackCacheTransferMode
-}): Promise<void> {
-  const { fromRoot, toRoot, fromPath, toPath } = params
-  if (!fromPath || !toPath) return
-  if (normalizePath(fromPath) === normalizePath(toPath)) return
-  const removeSource = params.mode !== 'copy'
-
-  if (removeSource) {
-    const libraryRoot = getLibraryRootAbs()
-    try {
-      if (libraryRoot) {
-        replaceMixtapeStemAssetFilePath({
-          libraryRoot,
-          oldFilePath: fromPath,
-          newFilePath: toPath
-        })
-      }
-    } catch {}
-  }
-
-  if (!fromRoot || !toRoot) return
-  if (
-    normalizePath(fromRoot) === normalizePath(toRoot) &&
-    normalizePath(fromPath) === normalizePath(toPath)
-  ) {
-    return
-  }
-
-  let toStat: CacheFileStat | null = params.toStat || null
-  if (!toStat) {
-    try {
-      const fsStat = await fs.stat(toPath)
-      toStat = { size: fsStat.size, mtimeMs: fsStat.mtimeMs }
-    } catch {
-      return
-    }
-  }
-  let fromStat: CacheFileStat | null = params.fromStat || null
-  if (!fromStat && !removeSource) {
-    try {
-      const fsStat = await fs.stat(fromPath)
-      fromStat = { size: fsStat.size, mtimeMs: fsStat.mtimeMs }
-    } catch {}
-  }
-  if (!fromStat) {
-    fromStat = toStat
-  }
-  if (!fromStat || !toStat) return
-
-  const cacheEntry = await LibraryCacheDb.loadSongCacheEntry(fromRoot, fromPath).catch(() => null)
-  const cacheSize = cacheEntry ? Number(cacheEntry.size) : NaN
-  const cacheMtime = cacheEntry ? Number(cacheEntry.mtimeMs) : NaN
-  const sizeMatches = !!cacheEntry && Number.isFinite(cacheSize) && cacheSize === toStat.size
-  // 移动是同一份文件；mtime 常被 Windows/杀毒改掉。若仍按 mtime 比对，分析结果不会跟到新歌单，
-  // 而且用新 mtime 去读波形缓存还会把源缓存当过期删掉。
-  const reuseCache = removeSource
-    ? sizeMatches
-    : !!(cacheEntry && isCacheStatMatch(cacheEntry, fromStat))
-  const waveformLoadStat =
-    reuseCache && Number.isFinite(cacheMtime) ? { size: cacheSize, mtimeMs: cacheMtime } : fromStat
-
-  try {
-    if (cacheEntry && reuseCache) {
-      const nextInfo = { ...cacheEntry.info, filePath: toPath }
-      const updated = await LibraryCacheDb.upsertSongCacheEntry(toRoot, toPath, {
-        size: toStat.size,
-        mtimeMs: toStat.mtimeMs,
-        info: nextInfo
-      })
-      if (updated && removeSource) {
-        await LibraryCacheDb.removeSongCacheEntry(fromRoot, fromPath)
-      }
-    }
-  } catch (error) {
-    log.error('[cache] 移动曲目时分析结果迁移失败', { fromPath, toPath, error })
-  }
-
-  try {
-    const unified = await LibraryCacheDb.loadUnifiedDisplayWaveformCacheData(
-      fromRoot,
-      fromPath,
-      waveformLoadStat
-    )
-    if (unified) {
-      const updated = await LibraryCacheDb.upsertUnifiedDisplayWaveformCacheEntry(
-        toRoot,
-        toPath,
-        toStat,
-        unified
-      )
-      if (updated) {
-        if (removeSource) {
-          await LibraryCacheDb.removeUnifiedDisplayWaveformCacheEntry(fromRoot, fromPath)
-          await LibraryCacheDb.removeMixtapeRawWaveformCacheEntry(fromRoot, fromPath)
-        }
-        await LibraryCacheDb.removeMixtapeRawWaveformCacheEntry(toRoot, toPath)
-      }
-    }
-  } catch {}
-  try {
-    const listPreview = await LibraryCacheDb.loadWaveformListPreviewCacheData(
-      fromRoot,
-      fromPath,
-      waveformLoadStat
-    )
-    const globalOverview = await LibraryCacheDb.loadWaveformGlobalOverviewCacheData(
-      fromRoot,
-      fromPath,
-      waveformLoadStat
-    )
-    if (listPreview && globalOverview) {
-      const updated = await LibraryCacheDb.upsertWaveformSurfaceCacheEntry(toRoot, toPath, toStat, {
-        listPreview,
-        globalOverview
-      })
-      if (updated && removeSource) {
-        await LibraryCacheDb.removeWaveformSurfaceCacheEntry(fromRoot, fromPath)
-      }
-    }
-  } catch {}
-  if (removeSource) {
-    await LibraryCacheDb.removeCompactVisualWaveformCacheEntry(fromRoot, fromPath)
-    await LibraryCacheDb.removeWaveformCacheEntry(fromRoot, fromPath)
-  }
-  await LibraryCacheDb.removeCompactVisualWaveformCacheEntry(toRoot, toPath)
-  await LibraryCacheDb.removeWaveformCacheEntry(toRoot, toPath)
-
-  try {
-    const cover = await LibraryCacheDb.loadCoverIndexEntry(fromRoot, fromPath)
-    if (!cover) return
-    const ext = cover.ext || '.jpg'
-    const fromCoversDir = path.join(fromRoot, '.frkb_covers')
-    const toCoversDir = path.join(toRoot, '.frkb_covers')
-    const fromCoverPath = path.join(fromCoversDir, `${cover.hash}${ext}`)
-    const toCoverPath = path.join(toCoversDir, `${cover.hash}${ext}`)
-    if (normalizePath(fromCoverPath) !== normalizePath(toCoverPath)) {
-      await fs.ensureDir(toCoversDir)
-      await operateHiddenFile(toCoversDir, async () => {})
-      try {
-        if ((await fs.pathExists(fromCoverPath)) && !(await fs.pathExists(toCoverPath))) {
-          await fs.copy(fromCoverPath, toCoverPath)
-          await operateHiddenFile(toCoverPath, async () => {})
-        }
-      } catch {}
-    }
-    const saved = await LibraryCacheDb.upsertCoverIndexEntry(toRoot, toPath, cover.hash, ext)
-    if (saved && removeSource) {
-      const removed = await LibraryCacheDb.removeCoverIndexEntry(fromRoot, fromPath)
-      if (removed) {
-        const remaining = await LibraryCacheDb.countCoverIndexByHash(fromRoot, removed.hash)
-        if (remaining === 0) {
-          const staleCoverPath = path.join(fromCoversDir, `${removed.hash}${removed.ext || '.jpg'}`)
-          try {
-            if (await fs.pathExists(staleCoverPath)) {
-              await fs.remove(staleCoverPath)
-            }
-          } catch {}
-        }
-      }
     }
   } catch {}
 }

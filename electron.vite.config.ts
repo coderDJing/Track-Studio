@@ -46,6 +46,10 @@ export default defineConfig({
           songListScanWorker: resolve(__dirname, 'src/main/workers/songListScanWorker.ts'),
           coverExtractionWorker: resolve(__dirname, 'src/main/workers/coverExtractionWorker.ts'),
           recycleBinDeleteWorker: resolve(__dirname, 'src/main/workers/recycleBinDeleteWorker.ts'),
+          recycleBinCacheTransferWorker: resolve(
+            __dirname,
+            'src/main/workers/recycleBinCacheTransferWorker.ts'
+          ),
           songListTrackCountWorker: resolve(
             __dirname,
             'src/main/workers/songListTrackCountWorker.ts'
@@ -83,6 +87,9 @@ export default defineConfig({
             }
             if (chunk.name === 'recycleBinDeleteWorker') {
               return 'workers/recycleBinDeleteWorker.js'
+            }
+            if (chunk.name === 'recycleBinCacheTransferWorker') {
+              return 'workers/recycleBinCacheTransferWorker.js'
             }
             if (chunk.name === 'songListTrackCountWorker') {
               return 'workers/songListTrackCountWorker.js'

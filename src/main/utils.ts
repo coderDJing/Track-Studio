@@ -17,6 +17,7 @@ import { isENOSPCError } from './nodeErrorUtils'
 
 export { ensureEnglishCoreLibraries, getCoreFsDirName } from './coreLibraries'
 export { isENOSPCError } from './nodeErrorUtils'
+export { operateHiddenFile } from './services/hiddenFileOperation'
 
 interface SongsAnalyseResult {
   songsAnalyseResult: md5[]
@@ -266,46 +267,6 @@ export async function getLibrary(options: { skipSync?: boolean } = {}) {
   if (!resolvedRoot.children) resolvedRoot.children = []
   sortChildren(resolvedRoot)
   return resolvedRoot
-}
-
-export const operateHiddenFile = async (
-  filePath: string,
-  operateFunction: () => Promise<unknown> | unknown
-) => {
-  // 统一 await，无论传入同步/异步
-  const run = async () => await Promise.resolve(operateFunction())
-
-  if (os.platform() !== 'win32') {
-    // 非 Windows：直接运行
-    return run()
-  }
-
-  const { execFile } = require('child_process')
-  const { promisify } = require('util')
-  const execFileAsync = promisify(execFile)
-
-  // 独立处理 attrib 错误，避免覆盖业务异常
-  const tryAttrib = async (attribute: '+h' | '-h') => {
-    try {
-      await execFileAsync('attrib', [attribute, filePath], { windowsHide: true })
-    } catch {
-      // 静默忽略 attrib 失败（可能：文件不存在、被移动、权限受限）
-    }
-  }
-
-  // 若存在则去隐藏，再执行业务，最后若存在则设隐藏
-  const existedBefore = await fs.pathExists(filePath)
-  if (existedBefore) {
-    await tryAttrib('-h')
-  }
-  try {
-    await run()
-  } finally {
-    const existsAfter = await fs.pathExists(filePath)
-    if (existsAfter) {
-      await tryAttrib('+h')
-    }
-  }
 }
 
 export const collectFilesWithExtensions = async (dir: string, extensions: string[] = []) => {

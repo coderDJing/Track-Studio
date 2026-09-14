@@ -126,6 +126,7 @@ import { closeLibraryDb } from './libraryDb'
 import { isLibrarySetupActive } from './librarySetupState'
 import { openSafeExternalUrl } from './window/externalNavigation'
 import { isPackagedRcBuild } from './services/rcDiagnostics'
+import { stopRecycleBinCacheTransferQueue } from './services/recycleBinCacheTransferQueue'
 
 const devRuntime = configureDevRuntime(is.dev, log)
 configureLogTransports()
@@ -379,6 +380,7 @@ const cleanupAppRuntimeResources = () => {
   stopCloudSyncScheduler()
   stopCuratedLibraryLiveSync()
   stopPlaylistViewSnapshotIdleVerification()
+  stopRecycleBinCacheTransferQueue()
   void cancelCuratedLibrarySync()
   terminateRegisteredChildProcesses()
   closeLibraryDb()

@@ -8,6 +8,7 @@ import {
   waitForLibraryTreeWatcherIdle
 } from '../../libraryTreeWatcher'
 import { interruptBackgroundTaskExecution } from '../backgroundOrchestrator'
+import { waitForAllRecycleBinCacheTransfers } from '../recycleBinCacheTransferQueue'
 import {
   cancelAllKeyAnalysisForLibraryMerge,
   getKeyAnalysisLibraryMergeActivity
@@ -170,6 +171,7 @@ const quiesceLibraryRuntime = async (): Promise<void> => {
   stopLibraryTreeWatcher()
   discardPendingLibraryTreeReconcile()
   await interruptBackgroundTaskExecution()
+  await waitForAllRecycleBinCacheTransfers()
   const keyActivity = getKeyAnalysisLibraryMergeActivity()
   if (keyActivity.any && !keyActivity.inFlight) {
     await cancelAllKeyAnalysisForLibraryMerge()

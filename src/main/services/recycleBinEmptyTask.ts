@@ -22,6 +22,7 @@ import {
   scanRecycleBinOffMainThread,
   type RecycleBinDeleteEntry
 } from './recycleBinDeleteWorker'
+import { waitForRecycleBinCacheTransfers } from './recycleBinCacheTransferQueue'
 
 export const RECYCLE_BIN_EMPTY_COMPLETED_CHANNEL = 'recycle-bin:empty-completed'
 
@@ -99,6 +100,7 @@ const runRecycleBinEmptyJob = async (
       return emptySummary()
     }
     const filePaths = initialScan.filePaths
+    await waitForRecycleBinCacheTransfers(filePaths)
     total = filePaths.length
     if (total > 0) {
       sendProgress({
