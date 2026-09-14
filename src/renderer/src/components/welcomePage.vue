@@ -505,7 +505,7 @@ onUnmounted(() => {
   position: relative;
   width: 100%;
   height: 100%;
-  padding: 20px;
+  padding: 16px 20px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -515,7 +515,7 @@ onUnmounted(() => {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .welcome-container--horizontal {
@@ -546,7 +546,7 @@ onUnmounted(() => {
   max-width: 430px;
   flex-shrink: 0;
   min-width: 0;
-  gap: 12px;
+  gap: 10px;
 }
 
 .welcome-content--horizontal {
@@ -559,8 +559,8 @@ onUnmounted(() => {
 }
 
 .welcome-logo {
-  width: 150px;
-  height: 150px;
+  width: 140px;
+  height: 140px;
   flex-shrink: 0;
 }
 
