@@ -7,6 +7,7 @@ type ScanSongListResult = Awaited<ReturnType<typeof scanSongList>>
 type WorkerRequest = {
   requestId: number
   mode?: 'scan' | 'verify'
+  deferCacheWrite?: boolean
   scanPath: string | string[]
   audioExt: string[]
   songListUUID: string
@@ -14,9 +15,11 @@ type WorkerRequest = {
 }
 
 type WorkerResponse = {
+  type?: 'scan-result' | 'cache-write-complete'
   requestId?: number
   result?: ScanSongListResult
   error?: string
+  cacheWritePending?: boolean
 }
 
 type PendingScan = {
@@ -28,6 +31,7 @@ type PendingScan = {
 type ScanWorkerState = {
   worker: Worker
   pending: PendingScan | null
+  cacheWriteRequestId: number | null
   idleTimer: NodeJS.Timeout | null
   terminating: boolean
 }
@@ -55,7 +59,9 @@ const retireWorker = (state: ScanWorkerState) => {
 }
 
 const releaseWorker = (state: ScanWorkerState) => {
-  if (!workerStates.has(state) || state.terminating || state.pending) return
+  if (!workerStates.has(state) || state.terminating || state.pending || state.cacheWriteRequestId) {
+    return
+  }
   if (idleWorkers.length >= MAX_IDLE_WORKERS) {
     retireWorker(state)
     return
@@ -77,18 +83,29 @@ const createWorkerState = (): ScanWorkerState => {
   const state: ScanWorkerState = {
     worker: new Worker(workerPath),
     pending: null,
+    cacheWriteRequestId: null,
     idleTimer: null,
     terminating: false
   }
   workerStates.add(state)
   state.worker.on('message', (payload: WorkerResponse) => {
+    if (payload?.type === 'cache-write-complete') {
+      if (state.cacheWriteRequestId !== payload.requestId) return
+      state.cacheWriteRequestId = null
+      releaseWorker(state)
+      return
+    }
     const pending = state.pending
     if (!pending || payload?.requestId !== pending.requestId) return
     state.pending = null
     if (payload.error) pending.reject(new Error(payload.error))
     else if (payload.result) pending.resolve(payload.result)
     else pending.reject(new Error('scanSongList worker returned empty result'))
-    releaseWorker(state)
+    if (payload.cacheWritePending) {
+      state.cacheWriteRequestId = pending.requestId
+    } else {
+      releaseWorker(state)
+    }
   })
   state.worker.on('error', (error) => {
     workerStates.delete(state)

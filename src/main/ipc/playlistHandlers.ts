@@ -129,7 +129,9 @@ export function registerPlaylistHandlers() {
         scanPath,
         audioExt: store.settingConfig.audioExt,
         songListUUID,
-        databaseDir: store.databaseDir
+        databaseDir: store.databaseDir,
+        // 缓存落盘只影响下次冷启动，不该挡住这次首开的列表和视图快照。
+        deferCacheWrite: true
       })
       const workerDurationMs = Date.now() - workerStartedAt
       activity.update('worker-result-received', {
@@ -203,6 +205,7 @@ export function registerPlaylistHandlers() {
           cacheMatchMs: result.perf?.cacheMatchMs,
           metadataModuleLoadMs: result.perf?.metadataModuleLoadMs,
           cacheWriteMs: result.perf?.cacheWriteMs,
+          cacheWriteDeferred: result.perf?.cacheWriteDeferred,
           trackFinalizeMs: result.perf?.trackFinalizeMs,
           cacheRows: result.perf?.cacheRows,
           cacheHits: result.perf?.cacheHits,

@@ -1,4 +1,4 @@
-import { app, type BrowserWindow, type ProcessMetric } from 'electron'
+import type { BrowserWindow } from 'electron'
 import { performance, type EventLoopUtilization } from 'node:perf_hooks'
 import { log } from '../../log'
 import { getMainProcessStallContext } from '../../services/mainProcessActivityTrace'
@@ -10,53 +10,11 @@ const MAIN_PROCESS_STALL_THRESHOLD_MS = 3_000
 const MAIN_PROCESS_HEARTBEAT_INTERVAL_MS = 1_000
 const MAIN_PROCESS_STALL_INCIDENT_GRACE_MS = 30_000
 
-type SlimProcessMetric = {
-  pid: number
-  type: string
-  serviceName?: string
-  percentCPUUsage?: number
-  cumulativeCPUUsage?: number
-  workingSetKb?: number
-  peakWorkingSetKb?: number
-  privateKb?: number
-}
-
 const getRendererPid = (browserWindow: BrowserWindow): number | null => {
   try {
     return browserWindow.webContents.getOSProcessId()
   } catch {
     return null
-  }
-}
-
-const summarizeProcessMetrics = (metrics: ProcessMetric[]): SlimProcessMetric[] =>
-  metrics.map((metric) => ({
-    pid: metric.pid,
-    type: metric.type,
-    serviceName:
-      'serviceName' in metric ? String(metric.serviceName || '') || undefined : undefined,
-    percentCPUUsage: metric.cpu?.percentCPUUsage,
-    cumulativeCPUUsage: metric.cpu?.cumulativeCPUUsage,
-    workingSetKb: metric.memory?.workingSetSize,
-    peakWorkingSetKb: metric.memory?.peakWorkingSetSize,
-    privateKb: metric.memory?.privateBytes
-  }))
-
-const getProcessMetrics = (rendererPid: number | null): SlimProcessMetric[] => {
-  try {
-    return summarizeProcessMetrics(
-      app
-        .getAppMetrics()
-        .filter(
-          (metric) =>
-            metric.pid === rendererPid ||
-            metric.type === 'Browser' ||
-            metric.type === 'GPU' ||
-            metric.type === 'Utility'
-        )
-    )
-  } catch {
-    return []
   }
 }
 
@@ -80,10 +38,7 @@ const stringifyDiagnostic = (value: unknown): string => {
   }
 }
 
-const captureSnapshot = (
-  browserWindow: BrowserWindow,
-  options?: { sinceMs?: number; processMetrics?: SlimProcessMetric[] }
-) => {
+const captureSnapshot = (browserWindow: BrowserWindow, options?: { sinceMs?: number }) => {
   const rendererPid = getRendererPid(browserWindow)
   let url: string | null = null
   try {
@@ -99,7 +54,8 @@ const captureSnapshot = (
     loading: browserWindow.webContents.isLoading(),
     focused: browserWindow.isFocused(),
     visible: browserWindow.isVisible(),
-    processMetrics: options?.processMetrics ?? getProcessMetrics(rendererPid),
+    // app.getAppMetrics() 是同步跨进程调用。在大型 Electron 会话中它本身能阻塞主进程数秒，
+    // 不能作为每秒心跳或卡顿现场的采样方式，否则诊断器会制造它要检测的卡顿。
     playlistScans: getPlaylistScanDiagnosticSnapshot(),
     playlistOpenPerf: getPlaylistOpenPerfSnapshot(),
     ...getMainProcessStallContext(sinceMs)
@@ -110,7 +66,7 @@ const captureSnapshot = (
  * 记录 Windows 未响应的可定位证据：
  * - Electron 事件用于区分 renderer 卡死、恢复和崩溃；
  * - 心跳延迟用于发现主进程消息循环被同步任务或原生调用阻塞的情况；
- * - 每次心跳都采样进程 CPU，卡住时才能看到卡顿窗口内的占用，而不是恢复后的 0。
+ * - 心跳只做轻量时间/CPU 采样；禁止在这里调用同步跨进程 Electron 指标 API。
  */
 export const attachMainWindowResponsivenessDiagnostics = (browserWindow: BrowserWindow) => {
   const rcDiagnosticsEnabled = isPackagedRcBuild()
@@ -153,10 +109,6 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
         const eventLoopUtilization: EventLoopUtilization =
           performance.eventLoopUtilization(lastEventLoopUtilization)
         lastEventLoopUtilization = performance.eventLoopUtilization()
-        // 必须每拍都采样，Electron 的 percentCPUUsage 是相对上次调用的增量。
-        const processMetrics = browserWindow.isDestroyed()
-          ? []
-          : getProcessMetrics(getRendererPid(browserWindow))
         if (browserWindow.isDestroyed()) {
           return
         }
@@ -190,10 +142,7 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
             incidentStartedAtMs: stallIncident.startedAtMs,
             stallIndex: stallIncident.count,
             stallDurationMs,
-            snapshot: captureSnapshot(browserWindow, {
-              sinceMs: previousHeartbeatAt,
-              processMetrics
-            }),
+            snapshot: captureSnapshot(browserWindow, { sinceMs: previousHeartbeatAt }),
             mainProcessInterval: {
               elapsedMs: Math.max(0, now - previousHeartbeatAt),
               cpuUserMs: Math.round(cpuUserMs),

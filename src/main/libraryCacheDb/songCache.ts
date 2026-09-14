@@ -51,6 +51,13 @@ type SongCacheRowHit = {
   hitFilePath: string
 }
 
+type PreparedSongCacheRow = {
+  filePath: string
+  size: number
+  mtimeMs: number
+  infoJson: string
+}
+
 function parseInfoJson(raw: unknown): ISongInfo | null {
   if (raw === undefined || raw === null) return null
   try {
@@ -866,7 +873,8 @@ export async function clearSongCacheAnalysisFields(
 
 export async function replaceSongCache(
   listRoot: string,
-  entries: Map<string, SongCacheEntry>
+  entries: Map<string, SongCacheEntry>,
+  options: { markSnapshotStale?: boolean } = {}
 ): Promise<boolean> {
   const db = getLibraryDb()
   if (!db || !listRoot) return false
@@ -879,26 +887,68 @@ export async function replaceSongCache(
       ? resolvedRoot.legacyAbs
       : undefined
   try {
-    const insert = db.prepare(
-      'INSERT OR REPLACE INTO song_cache (list_root, file_path, size, mtime_ms, info_json) VALUES (?, ?, ?, ?, ?)'
+    const incomingByPath = new Map<string, PreparedSongCacheRow>()
+    for (const [filePath, entry] of entries) {
+      const resolvedFile = resolveFilePathInput(listRootAbs, filePath)
+      if (!resolvedFile) continue
+      const absFilePath = resolveAbsoluteFilePath(listRootKey, resolvedFile.key)
+      const infoJson = normalizeInfoJsonFilePath(
+        JSON.stringify(normalizeSongCacheInfoForStorage(entry.info, absFilePath)),
+        absFilePath
+      )
+      incomingByPath.set(resolvedFile.key, {
+        filePath: resolvedFile.key,
+        size: entry.size,
+        mtimeMs: entry.mtimeMs,
+        infoJson
+      })
+    }
+    const existingRows = db
+      .prepare<SongCacheDbRow>(
+        'SELECT file_path, size, mtime_ms, info_json FROM song_cache WHERE list_root = ?'
+      )
+      .all(listRootKey)
+    const existingByPath = new Map(
+      existingRows
+        .filter((row): row is SongCacheDbRow & { file_path: string } => Boolean(row.file_path))
+        .map((row) => [String(row.file_path), row])
     )
-    const wipe = db.prepare('DELETE FROM song_cache WHERE list_root = ?')
+    const legacyRow = legacyListRoot
+      ? db
+          .prepare<SongCacheRootRow>('SELECT list_root FROM song_cache WHERE list_root = ? LIMIT 1')
+          .get(legacyListRoot)
+      : null
+    const upsert = db.prepare(
+      'INSERT INTO song_cache (list_root, file_path, size, mtime_ms, info_json) VALUES (?, ?, ?, ?, ?) ON CONFLICT(list_root, file_path) DO UPDATE SET size = excluded.size, mtime_ms = excluded.mtime_ms, info_json = excluded.info_json'
+    )
+    const removeEntry = db.prepare('DELETE FROM song_cache WHERE list_root = ? AND file_path = ?')
+    const removeRoot = db.prepare('DELETE FROM song_cache WHERE list_root = ?')
+    let changed = Boolean(legacyRow)
     const run = db.transaction(() => {
-      wipe.run(listRootKey)
-      if (legacyListRoot) wipe.run(legacyListRoot)
-      for (const [filePath, entry] of entries) {
-        const resolvedFile = resolveFilePathInput(listRootAbs, filePath)
-        if (!resolvedFile) continue
-        const absFilePath = resolveAbsoluteFilePath(listRootKey, resolvedFile.key)
-        const infoJson = normalizeInfoJsonFilePath(
-          JSON.stringify(normalizeSongCacheInfoForStorage(entry.info, absFilePath)),
-          absFilePath
-        )
-        insert.run(listRootKey, resolvedFile.key, entry.size, entry.mtimeMs, infoJson)
+      if (legacyListRoot) removeRoot.run(legacyListRoot)
+      for (const row of incomingByPath.values()) {
+        const existing = existingByPath.get(row.filePath)
+        if (
+          existing &&
+          toNumber(existing.size) === row.size &&
+          toNumber(existing.mtime_ms) === row.mtimeMs &&
+          String(existing.info_json) === row.infoJson
+        ) {
+          continue
+        }
+        upsert.run(listRootKey, row.filePath, row.size, row.mtimeMs, row.infoJson)
+        changed = true
+      }
+      for (const filePath of existingByPath.keys()) {
+        if (incomingByPath.has(filePath)) continue
+        removeEntry.run(listRootKey, filePath)
+        changed = true
       }
     })
     run()
-    markPlaylistViewSnapshotContentStale(listRootKey)
+    if (changed && options.markSnapshotStale !== false) {
+      markPlaylistViewSnapshotContentStale(listRootKey)
+    }
     return true
   } catch (error) {
     log.error('[sqlite] song cache replace failed', error)

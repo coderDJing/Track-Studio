@@ -34,10 +34,17 @@ import {
 import { preserveCachedAddedAtMs } from '../../shared/songAddedAt'
 import { computePlaylistIdentityDigest } from './playlistIdentitySignature'
 
+type DeferredSongCacheWrite = () => Promise<void>
+
 type ScanSongListOptions = {
   enablePostScanTasks?: boolean
   /** 只做磁盘身份核对 + 缓存命中，不解析新文件。核对失败时返回空列表并标记 cacheIdentityVerified=false。 */
   verifiedOnly?: boolean
+  /**
+   * 首开歌单时让 worker 先返回可展示列表，再继续落盘缓存。回调拥有写入任务的生命周期，
+   * 必须在 worker 被复用前执行它，避免同一个 SQLite 连接并发写入。
+   */
+  enqueueDeferredSongCacheWrite?: (write: DeferredSongCacheWrite) => void
 }
 
 export type ScanSongListResult = {
@@ -70,6 +77,7 @@ export type ScanSongListResult = {
     cacheMatchMs: number
     metadataModuleLoadMs: number
     cacheWriteMs: number
+    cacheWriteDeferred: boolean
     trackFinalizeMs: number
     statMs: number
     /** 'native' = 枚举与 stat 走原生一遍过；'js' = 原生模块不可用，走两轮 JS 实现。 */
@@ -392,6 +400,7 @@ export async function scanSongList(
 
   let perfMetadataModuleLoadMs = 0
   let perfCacheWriteMs = 0
+  let perfCacheWriteDeferred = false
   let perfTrackFinalizeMs = 0
 
   function convertSecondsToMinutesSeconds(seconds: number) {
@@ -467,6 +476,7 @@ export async function scanSongList(
         cacheMatchMs: perfCacheMatchMs,
         metadataModuleLoadMs: perfMetadataModuleLoadMs,
         cacheWriteMs: perfCacheWriteMs,
+        cacheWriteDeferred: perfCacheWriteDeferred,
         trackFinalizeMs: perfTrackFinalizeMs,
         statMs: fileScan.statMs,
         listMode: fileScan.mode,
@@ -480,42 +490,54 @@ export async function scanSongList(
 
   const writeSongCacheIfNeeded = async (songs: ISongInfo[]) => {
     if (!cacheRoot || !cacheFromDb) return
-    const startedAt = Date.now()
-    try {
-      const infoMap = new Map<string, ISongInfo>()
-      for (const info of songs) {
-        infoMap.set(normalizePathKey(info.filePath), enrichSongInfo(info))
-      }
-      const newEntriesMap = new Map<string, CacheEntry>()
-      for (const st of filesStatList) {
-        const info = infoMap.get(st.key)
-        if (!info) continue
-        const nextInfo = { ...info }
-        const cached = cacheMap.get(st.key)
-        if (cached?.info) {
-          preserveCachedKeyAndBpm(nextInfo, cached.info)
-          const cachedStatMatches =
-            cached.size === st.size && Math.abs(cached.mtimeMs - st.mtimeMs) < 1
-          if (cachedStatMatches) {
-            preserveCachedGridAnalysisFields(nextInfo, cached.info)
-            preserveCachedEnergyAnalysisFields(nextInfo, cached.info)
-          }
-          if (nextInfo.analysisOnly === undefined && cached.info.analysisOnly) {
-            nextInfo.analysisOnly = true
-          }
-          preserveCachedUserListFields(nextInfo, cached.info)
+    const performWrite: DeferredSongCacheWrite = async () => {
+      const startedAt = Date.now()
+      try {
+        const infoMap = new Map<string, ISongInfo>()
+        for (const info of songs) {
+          infoMap.set(normalizePathKey(info.filePath), enrichSongInfo(info))
         }
-        newEntriesMap.set(st.file, {
-          size: st.size,
-          mtimeMs: st.mtimeMs,
-          info: enrichSongInfo(nextInfo)
+        const newEntriesMap = new Map<string, CacheEntry>()
+        for (const st of filesStatList) {
+          const info = infoMap.get(st.key)
+          if (!info) continue
+          const nextInfo = { ...info }
+          const cached = cacheMap.get(st.key)
+          if (cached?.info) {
+            preserveCachedKeyAndBpm(nextInfo, cached.info)
+            const cachedStatMatches =
+              cached.size === st.size && Math.abs(cached.mtimeMs - st.mtimeMs) < 1
+            if (cachedStatMatches) {
+              preserveCachedGridAnalysisFields(nextInfo, cached.info)
+              preserveCachedEnergyAnalysisFields(nextInfo, cached.info)
+            }
+            if (nextInfo.analysisOnly === undefined && cached.info.analysisOnly) {
+              nextInfo.analysisOnly = true
+            }
+            preserveCachedUserListFields(nextInfo, cached.info)
+          }
+          newEntriesMap.set(st.file, {
+            size: st.size,
+            mtimeMs: st.mtimeMs,
+            info: enrichSongInfo(nextInfo)
+          })
+        }
+        await LibraryCacheDb.replaceSongCache(cacheRoot, newEntriesMap, {
+          // 首开主进程会在收到扫描结果后立即保存同一份视图快照；异步写缓存不能再把
+          // 这份新快照标脏，否则会徒增一次后台重扫。
+          markSnapshotStale: !options.enqueueDeferredSongCacheWrite
         })
+      } catch {
+      } finally {
+        perfCacheWriteMs += Date.now() - startedAt
       }
-      await LibraryCacheDb.replaceSongCache(cacheRoot, newEntriesMap)
-    } catch {
-    } finally {
-      perfCacheWriteMs += Date.now() - startedAt
     }
+    if (options.enqueueDeferredSongCacheWrite) {
+      perfCacheWriteDeferred = true
+      options.enqueueDeferredSongCacheWrite(performWrite)
+      return
+    }
+    await performWrite()
   }
 
   const finalizeVerifiedCacheHit = async () => {
