@@ -10,9 +10,10 @@ import {
   type WaveformListPreviewData,
   type WaveformSurfaceKind
 } from '../../shared/waveformSurfaceCache'
-import { closeLibraryDb, initLibraryDb } from '../libraryDb'
+import { closeLibraryDb, getLibraryDb, initLibraryDb } from '../libraryDb'
 import store from '../store'
 import {
+  loadWaveformListPreviewCacheData,
   loadWaveformSurfaceAvailabilityByMeta,
   upsertWaveformSurfaceCacheEntry
 } from './waveformSurfaceCache'
@@ -103,5 +104,36 @@ describe('loadWaveformSurfaceAvailabilityByMeta', () => {
     expect(availability.get(first)).toBe(true)
     expect(availability.get(second)).toBe(false)
     expect(availability.get(missing)).toBe(false)
+  })
+
+  it('defers payload validation until actual waveform data is read', async () => {
+    const { listRoot } = await createLibraryRoot()
+    const filePath = path.join(listRoot, 'damaged.mp3')
+    await upsertWaveformSurfaceCacheEntry(
+      listRoot,
+      filePath,
+      { size: 100, mtimeMs: 1_000 },
+      {
+        listPreview: makeSurface('listPreview', 4) as WaveformListPreviewData,
+        globalOverview: makeSurface('globalOverview', 6) as WaveformGlobalOverviewData
+      }
+    )
+    const db = getLibraryDb()
+    if (!db) throw new Error('library database was not initialized')
+    db.prepare('UPDATE waveform_surface_cache SET list_preview_payload = zeroblob(1)').run()
+
+    const availability = loadWaveformSurfaceAvailabilityByMeta(listRoot, [
+      { filePath, size: 100, mtimeMs: 1_000 }
+    ])
+    expect(availability.get(filePath)).toBe(true)
+
+    await expect(
+      loadWaveformListPreviewCacheData(listRoot, filePath, { size: 100, mtimeMs: 1_000 })
+    ).resolves.toBeNull()
+
+    const afterRemoval = loadWaveformSurfaceAvailabilityByMeta(listRoot, [
+      { filePath, size: 100, mtimeMs: 1_000 }
+    ])
+    expect(afterRemoval.get(filePath)).toBe(false)
   })
 })

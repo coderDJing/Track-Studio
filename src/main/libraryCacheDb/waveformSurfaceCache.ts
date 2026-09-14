@@ -442,9 +442,13 @@ export function loadWaveformSurfaceAvailabilityByMeta(
   if (!db || !listRoot || !Array.isArray(entries) || entries.length === 0) return result
 
   const filesByRoot = new Map<string, Set<string>>()
+  const candidatesByFilePath = new Map<string, Array<[string, string | undefined]>>()
   for (const entry of entries) {
-    const candidates = resolveCacheCandidates(listRoot, String(entry?.filePath || '').trim())
+    const filePath = String(entry?.filePath || '').trim()
+    if (!filePath) continue
+    const candidates = resolveCacheCandidates(listRoot, filePath)
     if (!candidates) continue
+    candidatesByFilePath.set(filePath, candidates)
     for (const [root, file] of candidates) {
       if (!root || !file) continue
       const files = filesByRoot.get(root)
@@ -464,9 +468,7 @@ export function loadWaveformSurfaceAvailabilityByMeta(
         .prepare<WaveformSurfaceRow>(
           `SELECT list_root, file_path, size, mtime_ms, cache_version,
                   list_preview_parameter_version, global_overview_parameter_version,
-                  duration, sample_rate, list_preview_frame_count, global_overview_frame_count,
-                  length(list_preview_payload) AS list_preview_payload_bytes,
-                  length(global_overview_payload) AS global_overview_payload_bytes
+                  duration, sample_rate, list_preview_frame_count, global_overview_frame_count
              FROM ${TABLE} WHERE list_root = ? AND file_path IN (${placeholders})`
         )
         .all(root, ...chunk)
@@ -481,7 +483,7 @@ export function loadWaveformSurfaceAvailabilityByMeta(
   for (const entry of entries) {
     const filePath = String(entry?.filePath || '').trim()
     if (!filePath) continue
-    const candidates = resolveCacheCandidates(listRoot, filePath)
+    const candidates = candidatesByFilePath.get(filePath)
     let available = false
     if (candidates) {
       for (const [root, file] of candidates) {
@@ -489,10 +491,11 @@ export function loadWaveformSurfaceAvailabilityByMeta(
         const row = rowByRootFile.get(`${root}\0${file}`)
         if (!row) continue
         const meta = normalizeMeta(row)
-        available = Boolean(
-          isMetaMatch(meta, { size: entry.size, mtimeMs: entry.mtimeMs }) &&
-          hasValidPayloads(row, meta!)
-        )
+        // 批量打开歌单时只做轻量元数据预检。对大 BLOB 调用 length() 会迫使 SQLite
+        // 访问分散的溢出页，在大型资料库里会把数毫秒查询放大到数秒。
+        // 表结构保证两个 payload 均为 NOT NULL；实际读取波形时仍由
+        // loadWaveformSurfaceByKind 校验精确长度，损坏行会被删除并重新生成。
+        available = isMetaMatch(meta, { size: entry.size, mtimeMs: entry.mtimeMs })
         break
       }
     }

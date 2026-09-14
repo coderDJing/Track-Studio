@@ -64,6 +64,13 @@ export type ScanSongListResult = {
     /** 以下为定位慢开销的细分项：读缓存表、stat、跨库补分析各花了多久。 */
     cacheLoadMs: number
     cacheRows: number
+    cacheRootResolveMs: number
+    identityDigestMs: number
+    waveformAvailabilityMs: number
+    cacheMatchMs: number
+    metadataModuleLoadMs: number
+    cacheWriteMs: number
+    trackFinalizeMs: number
     statMs: number
     /** 'native' = 枚举与 stat 走原生一遍过；'js' = 原生模块不可用，走两轮 JS 实现。 */
     listMode: 'native' | 'js'
@@ -315,7 +322,9 @@ export async function scanSongList(
     mtimeMs: number
     info: ISongInfo
   }
+  const perfCacheRootResolveStart = Date.now()
   const cacheRoot = await resolvePlaylistCacheRoot(scanPath)
+  const perfCacheRootResolveMs = Date.now() - perfCacheRootResolveStart
   let cacheMap = new Map<string, CacheEntry>()
   let cacheFromDb = false
   const perfCacheLoadStart = Date.now()
@@ -337,8 +346,11 @@ export async function scanSongList(
   const perfCacheLoadMs = Date.now() - perfCacheLoadStart
 
   const perfCacheCheckStart = Date.now()
+  const perfIdentityDigestStart = Date.now()
   const identityDigest = computePlaylistIdentityDigest(filesStatList)
+  const perfIdentityDigestMs = Date.now() - perfIdentityDigestStart
   const filesStatByKey = new Map(filesStatList.map((item) => [item.key, item]))
+  const perfWaveformAvailabilityStart = Date.now()
   const waveformAvailability = cacheRoot
     ? LibraryCacheDb.loadWaveformSurfaceAvailabilityByMeta(
         cacheRoot,
@@ -349,6 +361,7 @@ export async function scanSongList(
         }))
       )
     : new Map<string, boolean>()
+  const perfWaveformAvailabilityMs = Date.now() - perfWaveformAvailabilityStart
   const missingWaveformFilePaths = cacheRoot
     ? filesStatList
         .filter((item) => waveformAvailability.get(item.file) !== true)
@@ -358,6 +371,7 @@ export async function scanSongList(
   const filesToParse: string[] = []
   const analysisOnlyByPath = new Map<string, ISongInfo>()
   const isAnalysisOnly = (info?: ISongInfo | null): boolean => Boolean(info?.analysisOnly)
+  const perfCacheMatchStart = Date.now()
   for (const it of filesStatList) {
     const c = cacheMap.get(it.key)
     if (c && c.size === it.size && Math.abs(c.mtimeMs - it.mtimeMs) < 1) {
@@ -373,7 +387,12 @@ export async function scanSongList(
       filesToParse.push(it.file)
     }
   }
+  const perfCacheMatchMs = Date.now() - perfCacheMatchStart
   const perfCacheCheckEnd = Date.now()
+
+  let perfMetadataModuleLoadMs = 0
+  let perfCacheWriteMs = 0
+  let perfTrackFinalizeMs = 0
 
   function convertSecondsToMinutesSeconds(seconds: number) {
     const minutes = Math.floor(seconds / 60)
@@ -442,6 +461,13 @@ export async function scanSongList(
         parsedCount,
         cacheLoadMs: perfCacheLoadMs,
         cacheRows: cacheMap.size,
+        cacheRootResolveMs: perfCacheRootResolveMs,
+        identityDigestMs: perfIdentityDigestMs,
+        waveformAvailabilityMs: perfWaveformAvailabilityMs,
+        cacheMatchMs: perfCacheMatchMs,
+        metadataModuleLoadMs: perfMetadataModuleLoadMs,
+        cacheWriteMs: perfCacheWriteMs,
+        trackFinalizeMs: perfTrackFinalizeMs,
         statMs: fileScan.statMs,
         listMode: fileScan.mode,
         skippedCount: fileScan.skipped,
@@ -454,6 +480,7 @@ export async function scanSongList(
 
   const writeSongCacheIfNeeded = async (songs: ISongInfo[]) => {
     if (!cacheRoot || !cacheFromDb) return
+    const startedAt = Date.now()
     try {
       const infoMap = new Map<string, ISongInfo>()
       for (const info of songs) {
@@ -485,10 +512,14 @@ export async function scanSongList(
         })
       }
       await LibraryCacheDb.replaceSongCache(cacheRoot, newEntriesMap)
-    } catch {}
+    } catch {
+    } finally {
+      perfCacheWriteMs += Date.now() - startedAt
+    }
   }
 
   const finalizeVerifiedCacheHit = async () => {
+    const finalizeStartedAt = Date.now()
     let verifiedSongs = cachedInfos.map((info) => discardStaleAnalysisFields({ ...info }))
     for (const info of verifiedSongs) {
       const key = normalizePathKey(info.filePath)
@@ -519,6 +550,7 @@ export async function scanSongList(
     if (options.enablePostScanTasks !== false) {
       void scheduleSongListPostScanTasks(scanPath, verifiedSongs, { missingWaveformFilePaths })
     }
+    perfTrackFinalizeMs += Date.now() - finalizeStartedAt
     return buildScanResult(verifiedSongs, 0, 0, 0, true)
   }
 
@@ -573,7 +605,9 @@ export async function scanSongList(
 
   await refreshMissingAnalysisFromOtherRoots()
 
+  const metadataModuleLoadStartedAt = Date.now()
   const mm = await import('music-metadata')
+  perfMetadataModuleLoadMs += Date.now() - metadataModuleLoadStartedAt
   const perfParseStart = Date.now()
   const FALLBACK_ONLY_EXTS = new Set(['.ac3', '.dts', '.tak', '.tta'])
 
@@ -741,6 +775,7 @@ export async function scanSongList(
   }
   const perfParseEnd = Date.now()
 
+  const trackFinalizeStartedAt = Date.now()
   if (cacheRoot) {
     const ensureResult = ensurePlaylistTrackNumbers(songInfoArr, cacheRoot)
     if (ensureResult.changed) {
@@ -751,6 +786,7 @@ export async function scanSongList(
     }
     songInfoArr = sortSongsByPlaylistTrackNumber(songInfoArr, cacheRoot)
   }
+  perfTrackFinalizeMs += Date.now() - trackFinalizeStartedAt
 
   // 回写缓存
   await writeSongCacheIfNeeded(songInfoArr)
