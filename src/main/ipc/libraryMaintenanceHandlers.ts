@@ -56,6 +56,11 @@ import {
 import { protectSetReferencedFilesForDeletion } from './setListHandlers'
 import { assertLibraryMergeMutationAllowed } from '../services/libraryMerge/runtime'
 
+export const RECYCLE_BIN_BACKGROUND_DELETE_COMPLETED_CHANNEL =
+  'recycle-bin:background-delete-completed'
+
+let activeRecycleBinBackgroundDeleteJobId = ''
+
 const DIRTY_DATA_SQL_TABLES = [
   'song_cache',
   'cover_index',
@@ -390,8 +395,7 @@ export function registerLibraryMaintenanceHandlers() {
     }
   )
 
-  ipcMain.handle('permanentlyDelSongs', async (_e, songFilePaths: string[]) => {
-    assertLibraryMergeMutationAllowed()
+  const executePermanentlyDelSongs = async (songFilePaths: string[]) => {
     const uniquePaths = Array.isArray(songFilePaths)
       ? Array.from(new Set(songFilePaths.filter(Boolean)))
       : []
@@ -459,6 +463,51 @@ export function registerLibraryMaintenanceHandlers() {
         removedPaths: []
       }
     }
+  }
+
+  ipcMain.handle('permanentlyDelSongs', async (_e, songFilePaths: string[]) => {
+    assertLibraryMergeMutationAllowed()
+    return await executePermanentlyDelSongs(songFilePaths)
+  })
+
+  // “删除当前播放曲目前所有曲目”已先在 renderer 乐观移除；这里仅启动真实删除，
+  // 不能让磁盘/缓存清理的完成时间继续占住播放器操作。完成后把精确摘要推回同一 renderer。
+  ipcMain.handle('recycleBin:permanently-delete-background', (event, songFilePaths: string[]) => {
+    assertLibraryMergeMutationAllowed()
+    if (activeRecycleBinBackgroundDeleteJobId) {
+      return { accepted: false, jobId: activeRecycleBinBackgroundDeleteJobId }
+    }
+    const uniquePaths = Array.isArray(songFilePaths)
+      ? Array.from(new Set(songFilePaths.filter(Boolean)))
+      : []
+    if (uniquePaths.length === 0) return { accepted: false, jobId: '' }
+
+    const jobId = `recycle_bin_delete_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`
+    const sender = event.sender
+    activeRecycleBinBackgroundDeleteJobId = jobId
+    setImmediate(() => {
+      const finish = (summary: {
+        total: number
+        success: number
+        failed: number
+        removedPaths: string[]
+      }) => {
+        if (activeRecycleBinBackgroundDeleteJobId === jobId) {
+          activeRecycleBinBackgroundDeleteJobId = ''
+        }
+        if (sender.isDestroyed()) return
+        sender.send(RECYCLE_BIN_BACKGROUND_DELETE_COMPLETED_CHANNEL, { jobId, summary })
+      }
+      void executePermanentlyDelSongs(uniquePaths).then(finish, () => {
+        finish({
+          total: uniquePaths.length,
+          success: 0,
+          failed: uniquePaths.length,
+          removedPaths: []
+        })
+      })
+    })
+    return { accepted: true, jobId }
   })
 
   ipcMain.handle('recycleBin:list', async () => {

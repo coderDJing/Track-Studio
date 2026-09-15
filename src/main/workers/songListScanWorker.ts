@@ -1,11 +1,12 @@
 import { parentPort } from 'node:worker_threads'
 import store from '../store'
-import { scanSongList } from '../services/scanSongs'
+import { loadMissingWaveformFilePaths, scanSongList } from '../services/scanSongs'
 
 type WorkerRequest = {
   requestId?: number
   mode?: 'scan' | 'verify'
   deferCacheWrite?: boolean
+  deferWaveformAvailability?: boolean
   scanPath: string | string[]
   audioExt: string[]
   songListUUID: string
@@ -29,19 +30,39 @@ parentPort?.on('message', async (payload: WorkerRequest) => {
           ? (write) => {
               deferredCacheWrite.task = write
             }
-          : undefined
+          : undefined,
+        deferWaveformAvailabilityCheck: payload?.deferWaveformAvailability === true
       }
     )
+    const deferredWaveformAvailabilityCheck = result.deferredWaveformAvailabilityCheck
+    const { deferredWaveformAvailabilityCheck: _deferredCheck, ...resultForRenderer } = result
     const pendingCacheWrite = deferredCacheWrite.task
     parentPort?.postMessage({
       type: 'scan-result',
       requestId,
-      result,
-      cacheWritePending: pendingCacheWrite !== null
+      result: resultForRenderer,
+      cacheWritePending: pendingCacheWrite !== null,
+      waveformAvailabilityPending: !!deferredWaveformAvailabilityCheck
     })
     if (pendingCacheWrite) {
       await pendingCacheWrite()
       parentPort?.postMessage({ type: 'cache-write-complete', requestId })
+    }
+    if (deferredWaveformAvailabilityCheck) {
+      let missingWaveformFilePaths: string[] = []
+      try {
+        missingWaveformFilePaths = loadMissingWaveformFilePaths(deferredWaveformAvailabilityCheck)
+      } catch {}
+      parentPort?.postMessage({
+        type: 'waveform-availability-complete',
+        requestId,
+        waveformAvailability: {
+          songListUUID: result.songListUUID,
+          identityDigest: result.identityDigest,
+          listRoot: deferredWaveformAvailabilityCheck.cacheRoot,
+          missingWaveformFilePaths
+        }
+      })
     }
   } catch (error) {
     parentPort?.postMessage({

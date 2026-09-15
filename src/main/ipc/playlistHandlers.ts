@@ -131,7 +131,10 @@ export function registerPlaylistHandlers() {
         songListUUID,
         databaseDir: store.databaseDir,
         // 缓存落盘只影响下次冷启动，不该挡住这次首开的列表和视图快照。
-        deferCacheWrite: true
+        deferCacheWrite: true,
+        // 波形缓存的完整性核对可能触发大量离散 SQLite 页读取；结果到达后再补快照，
+        // 不能让它延迟用户已可展示的歌曲列表。
+        deferWaveformAvailability: true
       })
       const workerDurationMs = Date.now() - workerStartedAt
       activity.update('worker-result-received', {

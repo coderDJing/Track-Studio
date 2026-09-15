@@ -1,4 +1,4 @@
-import { nextTick, type Ref } from 'vue'
+import { nextTick, onUnmounted, type Ref } from 'vue'
 import type { ISongInfo } from 'src/types/globals'
 import type { useRuntimeStore } from '@renderer/stores/runtime'
 import confirm from '@renderer/components/confirmDialog'
@@ -21,6 +21,21 @@ type DeleteSummary = {
 type OptimisticRestoreItem = {
   song: ISongInfo
   index: number
+}
+
+type BackgroundPermanentDeleteStart = {
+  accepted?: unknown
+  jobId?: unknown
+}
+
+type BackgroundPermanentDeleteCompletion = {
+  jobId?: unknown
+  summary?: unknown
+}
+
+type PendingBackgroundPermanentDelete = {
+  listUUID: string
+  restoreItems: OptimisticRestoreItem[]
 }
 
 type DeleteAllAbovePerf = {
@@ -86,6 +101,54 @@ export const createDelAllAbove = (params: {
   )
   const normalizePath = (filePath: string | undefined | null) =>
     normalizeFilePathForComparison(filePath, caseInsensitiveFilePath)
+  const pendingBackgroundDeletes = new Map<string, PendingBackgroundPermanentDelete>()
+  const bufferedBackgroundCompletions = new Map<string, unknown>()
+
+  const reconcileBackgroundPermanentDelete = async (
+    jobId: string,
+    rawSummary: unknown
+  ): Promise<void> => {
+    const pending = pendingBackgroundDeletes.get(jobId)
+    if (!pending) {
+      bufferedBackgroundCompletions.set(jobId, rawSummary)
+      return
+    }
+    pendingBackgroundDeletes.delete(jobId)
+    const summary = toDeleteSummary(rawSummary)
+    const removedPathSet = new Set(
+      (summary.removedPaths || []).map((filePath) => normalizePath(filePath))
+    )
+    const failedRestoreItems = pending.restoreItems.filter(
+      (item) => !removedPathSet.has(normalizePath(item.song.filePath))
+    )
+    if (failedRestoreItems.length > 0) {
+      emitter.emit('songsArea/optimistic-restore', {
+        listUUID: pending.listUUID,
+        items: failedRestoreItems
+      })
+    }
+    if (Number(summary.success || 0) > 0) {
+      emitter.emit('playlistContentChanged', { uuids: [pending.listUUID] })
+    }
+    if (Number(summary.failed || 0) > 0) {
+      await showDeleteSummaryIfNeeded(summary, { restoredFailed: failedRestoreItems.length > 0 })
+    }
+  }
+
+  const stopListeningForBackgroundDeletes = window.electron.ipcRenderer.on(
+    'recycle-bin:background-delete-completed',
+    (_event, payload: BackgroundPermanentDeleteCompletion) => {
+      const jobId = typeof payload?.jobId === 'string' ? payload.jobId : ''
+      if (!jobId) return
+      void reconcileBackgroundPermanentDelete(jobId, payload.summary)
+    }
+  )
+
+  onUnmounted(() => {
+    stopListeningForBackgroundDeletes()
+    pendingBackgroundDeletes.clear()
+    bufferedBackgroundCompletions.clear()
+  })
 
   const buildSongsAreaOptimisticRestoreItems = (
     listUUID: string,
@@ -169,10 +232,33 @@ export const createDelAllAbove = (params: {
       const ipcStartedAt = performance.now()
       try {
         if (isInRecycleBin) {
-          const summary = await window.electron.ipcRenderer.invoke('permanentlyDelSongs', [
-            ...delPaths
-          ])
-          deleteSummary = toDeleteSummary(summary)
+          const started = (await window.electron.ipcRenderer.invoke(
+            'recycleBin:permanently-delete-background',
+            [...delPaths]
+          )) as BackgroundPermanentDeleteStart
+          const jobId = typeof started?.jobId === 'string' ? started.jobId : ''
+          if (started?.accepted !== true || !jobId) {
+            throw new Error('background permanent delete was not started')
+          }
+          pendingBackgroundDeletes.set(jobId, {
+            listUUID: currentSongListUUID,
+            restoreItems: optimisticRestoreItems
+          })
+          const buffered = bufferedBackgroundCompletions.get(jobId)
+          if (buffered !== undefined) {
+            bufferedBackgroundCompletions.delete(jobId)
+            void reconcileBackgroundPermanentDelete(jobId, buffered)
+          }
+          // 列表已经乐观移除；真实删除完成后由 completion 消息精确恢复失败项。
+          deleteSummary = {
+            total: delPaths.length,
+            success: delPaths.length,
+            failed: 0,
+            removedPaths: [...delPaths]
+          }
+          finalSummary = deleteSummary
+          shouldRestorePlaybackList = false
+          return
         } else {
           const songListPath = libraryUtils.findDirPathByUuid(currentSongListUUID)
           const payload =

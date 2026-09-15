@@ -13,7 +13,8 @@ import {
   normalizeSnapshotListRoot,
   savePlaylistViewSnapshot,
   touchPlaylistViewSnapshotIdentity,
-  touchPlaylistViewSnapshotVerified
+  touchPlaylistViewSnapshotVerified,
+  updatePlaylistViewSnapshotMissingWaveformFilePaths
 } from '../libraryCacheDb/playlistViewSnapshot'
 import { loadSongCacheFileStats } from '../libraryCacheDb/songCacheFileStats'
 import { normalizePath, resolveCacheListRootAbs } from '../libraryCacheDb/pathResolvers'
@@ -21,7 +22,11 @@ import { createSongListItemComparator } from '../../shared/songListItemCompare'
 import { planSongListMerge } from '../../shared/playlistViewMerge'
 import { computePlaylistIdentityDigest } from './playlistIdentitySignature'
 import { listPlaylistAudioFilesWithStat, PLAYLIST_STAT_CONCURRENCY } from './playlistScanPrepare'
-import { scanSongListOffMainThread } from './songListScanWorker'
+import {
+  onDeferredWaveformAvailability,
+  scanSongListOffMainThread,
+  type DeferredWaveformAvailabilityResult
+} from './songListScanWorker'
 import type { scanSongList } from './scanSongs'
 
 type ScanSongListResult = Awaited<ReturnType<typeof scanSongList>>
@@ -90,6 +95,7 @@ const pendingRequests = new Map<string, VerificationRequest>()
 const runningUuids = new Set<string>()
 const rerunUuids = new Set<string>()
 let idleTimer: NodeJS.Timeout | null = null
+const pendingWaveformAvailabilityByPlaylist = new Map<string, DeferredWaveformAvailabilityResult>()
 
 const normalizeUuid = (value: unknown): string => String(value || '').trim()
 
@@ -100,6 +106,34 @@ const sameStringList = (left: readonly string[], right: readonly string[]): bool
   }
   return true
 }
+
+const applyDeferredWaveformAvailability = (payload: DeferredWaveformAvailabilityResult): void => {
+  const songListUUID = normalizeUuid(payload?.songListUUID)
+  if (!songListUUID) return
+  const meta = loadPlaylistViewSnapshotMeta(songListUUID)
+  if (!meta) {
+    // worker 可能在主进程把首个扫描结果落快照前就完成；暂存一份，由保存路径接住。
+    pendingWaveformAvailabilityByPlaylist.set(songListUUID, payload)
+    return
+  }
+  if (
+    normalizeSnapshotListRoot(meta.listRoot) !== normalizeSnapshotListRoot(payload.listRoot) ||
+    meta.identityDigest !== String(payload.identityDigest || '')
+  ) {
+    return
+  }
+  const updated = updatePlaylistViewSnapshotMissingWaveformFilePaths(payload)
+  if (!updated) return
+  pushRefresh({
+    songListUUID,
+    revision: updated.revision,
+    items: updated.items,
+    missingWaveformFilePaths: updated.missingWaveformFilePaths,
+    reason: 'verify-mismatch'
+  })
+}
+
+onDeferredWaveformAvailability(applyDeferredWaveformAvailability)
 
 /**
  * 前台打开：一次主键查询 + 一次 JSON.parse，零文件系统访问。
@@ -205,6 +239,11 @@ export function savePlaylistViewSnapshotFromScan(
     items: result.scanData,
     missingWaveformFilePaths: result.missingWaveformFilePaths || []
   })
+  const pending = pendingWaveformAvailabilityByPlaylist.get(uuid)
+  if (pending) {
+    pendingWaveformAvailabilityByPlaylist.delete(uuid)
+    applyDeferredWaveformAvailability(pending)
+  }
 }
 
 /** 按 uuid 去抖 + 单飞。同一张歌单连着来十个事件，也只核对一次。 */

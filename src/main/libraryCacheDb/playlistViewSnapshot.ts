@@ -57,6 +57,7 @@ type SnapshotStatements = {
   upsert: ReturnType<SqliteDatabase['prepare']>
   touchVerified: ReturnType<SqliteDatabase['prepare']>
   touchIdentity: ReturnType<SqliteDatabase['prepare']>
+  updateMissingWaveformsByIdentity: ReturnType<SqliteDatabase['prepare']>
   markStaleByRoot: ReturnType<SqliteDatabase['prepare']>
   deleteByUuid: ReturnType<SqliteDatabase['prepare']>
   deleteByRoot: ReturnType<SqliteDatabase['prepare']>
@@ -109,6 +110,16 @@ function getStatements(db: SqliteDatabase): SnapshotStatements {
     // 大歌单的 items_json 有几 MB，为"没变化"付一次全量写是纯浪费。
     touchIdentity: db.prepare(
       `UPDATE playlist_view_snapshot SET identity_digest = ?, verified_at_ms = ? WHERE song_list_uuid = ?`
+    ),
+    // 波形可用性在首开后异步补齐。身份、根目录和 JSON 都相同就一个字节也不写，
+    // 避免后台核对把无变化的视图误推回 renderer。
+    updateMissingWaveformsByIdentity: db.prepare(
+      `UPDATE playlist_view_snapshot
+       SET missing_waveform_json = ?, revision = revision + 1, built_at_ms = ?
+       WHERE song_list_uuid = ?
+         AND list_root = ?
+         AND identity_digest = ?
+         AND missing_waveform_json != ?`
     ),
     markStaleByRoot: db.prepare(
       `UPDATE playlist_view_snapshot SET verified_at_ms = 0 WHERE list_root = ? AND verified_at_ms != 0`
@@ -249,6 +260,47 @@ export function touchPlaylistViewSnapshotIdentity(
     getStatements(db).touchIdentity.run(String(identityDigest || ''), verifiedAtMs, uuid)
   } catch (error) {
     log.error('[playlist-snapshot] touch identity failed', error)
+  }
+}
+
+/**
+ * 只更新已落盘快照的“缺波形”字段；扫描身份已经变化的旧结果绝不能覆盖新快照。
+ * 返回 null 表示不存在、已经过期或内容未变，调用方据此保持 renderer 完全静默。
+ */
+export function updatePlaylistViewSnapshotMissingWaveformFilePaths(input: {
+  songListUUID: string
+  listRoot: string
+  identityDigest: string
+  missingWaveformFilePaths: readonly string[]
+}): PlaylistViewSnapshotRecord | null {
+  const uuid = normalizeUuid(input.songListUUID)
+  const listRoot = normalizeSnapshotListRoot(input.listRoot)
+  const identityDigest = String(input.identityDigest || '')
+  if (!uuid || !listRoot || !identityDigest) return null
+  const db = getLibraryDb()
+  if (!db) return null
+  const missingWaveformFilePaths = Array.from(
+    new Set(
+      (input.missingWaveformFilePaths || [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+    )
+  )
+  const missingJson = JSON.stringify(missingWaveformFilePaths)
+  try {
+    const result = getStatements(db).updateMissingWaveformsByIdentity.run(
+      missingJson,
+      Date.now(),
+      uuid,
+      listRoot,
+      identityDigest,
+      missingJson
+    )
+    if (!Number(result.changes)) return null
+    return loadPlaylistViewSnapshot(uuid)
+  } catch (error) {
+    log.error('[playlist-snapshot] update waveform availability failed', error)
+    return null
   }
 }
 

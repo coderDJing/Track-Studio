@@ -8,6 +8,7 @@ type WorkerRequest = {
   requestId: number
   mode?: 'scan' | 'verify'
   deferCacheWrite?: boolean
+  deferWaveformAvailability?: boolean
   scanPath: string | string[]
   audioExt: string[]
   songListUUID: string
@@ -15,11 +16,20 @@ type WorkerRequest = {
 }
 
 type WorkerResponse = {
-  type?: 'scan-result' | 'cache-write-complete'
+  type?: 'scan-result' | 'cache-write-complete' | 'waveform-availability-complete'
   requestId?: number
   result?: ScanSongListResult
   error?: string
   cacheWritePending?: boolean
+  waveformAvailabilityPending?: boolean
+  waveformAvailability?: DeferredWaveformAvailabilityResult
+}
+
+export type DeferredWaveformAvailabilityResult = {
+  songListUUID: string
+  identityDigest: string
+  listRoot: string
+  missingWaveformFilePaths: string[]
 }
 
 type PendingScan = {
@@ -32,6 +42,7 @@ type ScanWorkerState = {
   worker: Worker
   pending: PendingScan | null
   cacheWriteRequestId: number | null
+  waveformAvailabilityRequestId: number | null
   idleTimer: NodeJS.Timeout | null
   terminating: boolean
 }
@@ -41,6 +52,16 @@ const IDLE_WORKER_TTL_MS = 30_000
 const idleWorkers: ScanWorkerState[] = []
 const workerStates = new Set<ScanWorkerState>()
 let nextRequestId = 0
+const waveformAvailabilityListeners = new Set<
+  (result: DeferredWaveformAvailabilityResult) => void
+>()
+
+export const onDeferredWaveformAvailability = (
+  listener: (result: DeferredWaveformAvailabilityResult) => void
+) => {
+  waveformAvailabilityListeners.add(listener)
+  return () => waveformAvailabilityListeners.delete(listener)
+}
 
 const removeIdleWorker = (state: ScanWorkerState) => {
   const index = idleWorkers.indexOf(state)
@@ -59,7 +80,13 @@ const retireWorker = (state: ScanWorkerState) => {
 }
 
 const releaseWorker = (state: ScanWorkerState) => {
-  if (!workerStates.has(state) || state.terminating || state.pending || state.cacheWriteRequestId) {
+  if (
+    !workerStates.has(state) ||
+    state.terminating ||
+    state.pending ||
+    state.cacheWriteRequestId ||
+    state.waveformAvailabilityRequestId
+  ) {
     return
   }
   if (idleWorkers.length >= MAX_IDLE_WORKERS) {
@@ -84,6 +111,7 @@ const createWorkerState = (): ScanWorkerState => {
     worker: new Worker(workerPath),
     pending: null,
     cacheWriteRequestId: null,
+    waveformAvailabilityRequestId: null,
     idleTimer: null,
     terminating: false
   }
@@ -95,6 +123,20 @@ const createWorkerState = (): ScanWorkerState => {
       releaseWorker(state)
       return
     }
+    if (payload?.type === 'waveform-availability-complete') {
+      if (state.waveformAvailabilityRequestId !== payload.requestId) return
+      state.waveformAvailabilityRequestId = null
+      const result = payload.waveformAvailability
+      if (result) {
+        for (const listener of waveformAvailabilityListeners) {
+          try {
+            listener(result)
+          } catch {}
+        }
+      }
+      releaseWorker(state)
+      return
+    }
     const pending = state.pending
     if (!pending || payload?.requestId !== pending.requestId) return
     state.pending = null
@@ -103,9 +145,11 @@ const createWorkerState = (): ScanWorkerState => {
     else pending.reject(new Error('scanSongList worker returned empty result'))
     if (payload.cacheWritePending) {
       state.cacheWriteRequestId = pending.requestId
-    } else {
-      releaseWorker(state)
     }
+    if (payload.waveformAvailabilityPending) {
+      state.waveformAvailabilityRequestId = pending.requestId
+    }
+    releaseWorker(state)
   })
   state.worker.on('error', (error) => {
     workerStates.delete(state)

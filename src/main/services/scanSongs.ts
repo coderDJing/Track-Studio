@@ -36,6 +36,11 @@ import { computePlaylistIdentityDigest } from './playlistIdentitySignature'
 
 type DeferredSongCacheWrite = () => Promise<void>
 
+export type DeferredWaveformAvailabilityCheck = {
+  cacheRoot: string
+  entries: Array<{ filePath: string; size: number; mtimeMs: number }>
+}
+
 type ScanSongListOptions = {
   enablePostScanTasks?: boolean
   /** 只做磁盘身份核对 + 缓存命中，不解析新文件。核对失败时返回空列表并标记 cacheIdentityVerified=false。 */
@@ -45,6 +50,11 @@ type ScanSongListOptions = {
    * 必须在 worker 被复用前执行它，避免同一个 SQLite 连接并发写入。
    */
   enqueueDeferredSongCacheWrite?: (write: DeferredSongCacheWrite) => void
+  /**
+   * 波形表在大型资料库里可能散落在大量 SQLite 页上。首开时先交付歌曲列表，
+   * 由扫描 worker 在交付后继续核对波形；完成后再按同一份身份摘要更新快照。
+   */
+  deferWaveformAvailabilityCheck?: boolean
 }
 
 export type ScanSongListResult = {
@@ -58,6 +68,8 @@ export type ScanSongListResult = {
   cacheIdentityVerified: boolean
   /** 本次扫描时磁盘上的文件身份摘要（路径+size+mtime）。快照层用它判断"还要不要重扫"。 */
   identityDigest: string
+  /** 仅供扫描 worker 在首个结果交付后继续完成，绝不能透传到 renderer。 */
+  deferredWaveformAvailabilityCheck?: DeferredWaveformAvailabilityCheck
   perf: {
     listFilesMs: number
     cacheCheckMs: number
@@ -306,6 +318,22 @@ export const scheduleSongListPostScanTasks = async (
   scheduleSongListCoverSweep(cacheRoot, currentFilePaths)
 }
 
+/**
+ * 只在扫描 worker 已把歌曲列表交付后调用。此查询可能因波形 BLOB 所在页分散而较慢，
+ * 不能再挡住首开或用户触发的“刷新分析字段”。
+ */
+export const loadMissingWaveformFilePaths = (
+  check: DeferredWaveformAvailabilityCheck
+): string[] => {
+  const cacheRoot = String(check?.cacheRoot || '').trim()
+  const entries = Array.isArray(check?.entries) ? check.entries : []
+  if (!cacheRoot || entries.length === 0) return []
+  const availability = LibraryCacheDb.loadWaveformSurfaceAvailabilityByMeta(cacheRoot, entries)
+  return entries
+    .filter((entry) => availability.get(entry.filePath) !== true)
+    .map((entry) => entry.filePath)
+}
+
 // 扫描歌单目录，带 SQLite 缓存
 export async function scanSongList(
   scanPath: string | string[],
@@ -358,23 +386,27 @@ export async function scanSongList(
   const identityDigest = computePlaylistIdentityDigest(filesStatList)
   const perfIdentityDigestMs = Date.now() - perfIdentityDigestStart
   const filesStatByKey = new Map(filesStatList.map((item) => [item.key, item]))
+  const waveformAvailabilityEntries = filesStatList.map((item) => ({
+    filePath: item.file,
+    size: item.size,
+    mtimeMs: item.mtimeMs
+  }))
+  const deferWaveformAvailabilityCheck =
+    options.deferWaveformAvailabilityCheck === true &&
+    !!cacheRoot &&
+    waveformAvailabilityEntries.length > 0
   const perfWaveformAvailabilityStart = Date.now()
-  const waveformAvailability = cacheRoot
-    ? LibraryCacheDb.loadWaveformSurfaceAvailabilityByMeta(
-        cacheRoot,
-        filesStatList.map((item) => ({
-          filePath: item.file,
-          size: item.size,
-          mtimeMs: item.mtimeMs
-        }))
-      )
-    : new Map<string, boolean>()
+  const waveformAvailability =
+    cacheRoot && !deferWaveformAvailabilityCheck
+      ? LibraryCacheDb.loadWaveformSurfaceAvailabilityByMeta(cacheRoot, waveformAvailabilityEntries)
+      : new Map<string, boolean>()
   const perfWaveformAvailabilityMs = Date.now() - perfWaveformAvailabilityStart
-  const missingWaveformFilePaths = cacheRoot
-    ? filesStatList
-        .filter((item) => waveformAvailability.get(item.file) !== true)
-        .map((item) => item.file)
-    : []
+  const missingWaveformFilePaths =
+    cacheRoot && !deferWaveformAvailabilityCheck
+      ? filesStatList
+          .filter((item) => waveformAvailability.get(item.file) !== true)
+          .map((item) => item.file)
+      : []
   const cachedInfos: ISongInfo[] = []
   const filesToParse: string[] = []
   const analysisOnlyByPath = new Map<string, ISongInfo>()
@@ -458,6 +490,14 @@ export async function scanSongList(
       playlistTrackNumbering,
       cacheIdentityVerified,
       identityDigest,
+      ...(deferWaveformAvailabilityCheck
+        ? {
+            deferredWaveformAvailabilityCheck: {
+              cacheRoot,
+              entries: waveformAvailabilityEntries
+            }
+          }
+        : {}),
       perf: {
         listFilesMs: fileScan.listMs,
         cacheCheckMs: perfCacheCheckEnd - perfCacheCheckStart,

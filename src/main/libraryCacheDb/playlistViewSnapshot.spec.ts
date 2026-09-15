@@ -9,7 +9,8 @@ import {
   deletePlaylistViewSnapshotsUnderRoot,
   loadPlaylistViewSnapshotMeta,
   prunePlaylistViewSnapshots,
-  savePlaylistViewSnapshot
+  savePlaylistViewSnapshot,
+  updatePlaylistViewSnapshotMissingWaveformFilePaths
 } from './playlistViewSnapshot'
 
 const temporaryRoots: string[] = []
@@ -43,6 +44,46 @@ afterEach(async () => {
 })
 
 describe('playlist view snapshot path invalidation', () => {
+  it('updates deferred waveform availability only for the matching scan identity', async () => {
+    const root = await createLibraryRoot()
+    const listRoot = path.join(root, 'library', 'Folder', 'Playlist')
+    const filePath = path.join(listRoot, 'missing.mp3')
+    const revision = savePlaylistViewSnapshot({
+      songListUUID: 'waveform-deferred',
+      listRoot,
+      identityDigest: 'identity-a',
+      items: []
+    })
+    expect(revision).not.toBeNull()
+
+    expect(
+      updatePlaylistViewSnapshotMissingWaveformFilePaths({
+        songListUUID: 'waveform-deferred',
+        listRoot,
+        identityDigest: 'identity-b',
+        missingWaveformFilePaths: [filePath]
+      })
+    ).toBeNull()
+
+    const updated = updatePlaylistViewSnapshotMissingWaveformFilePaths({
+      songListUUID: 'waveform-deferred',
+      listRoot,
+      identityDigest: 'identity-a',
+      missingWaveformFilePaths: [filePath]
+    })
+    expect(updated?.missingWaveformFilePaths).toEqual([filePath])
+    expect(updated?.revision).toBe(Number(revision) + 1)
+
+    expect(
+      updatePlaylistViewSnapshotMissingWaveformFilePaths({
+        songListUUID: 'waveform-deferred',
+        listRoot,
+        identityDigest: 'identity-a',
+        missingWaveformFilePaths: [filePath]
+      })
+    ).toBeNull()
+  })
+
   it('delete under root removes nested playlists but not sibling prefixes', async () => {
     const root = await createLibraryRoot()
     const parent = path.join(root, 'library', 'Folder')

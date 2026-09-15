@@ -37,6 +37,14 @@ type MixtapeAppendResult = {
   skippedNoBpm?: number
 }
 
+type MoveSongsToDirSummary = {
+  movedEntries: Array<{
+    sourcePath: string
+    targetPath: string
+  }>
+  failed: number
+}
+
 type OptimisticRestoreItem = {
   song: ISongInfo
   index: number
@@ -799,50 +807,112 @@ export function usePlayerControlsLogic({
         nextPlayingSong = nextList[nextIndex]
       }
 
-      // 先执行移动操作，因为这可能会影响状态或触发其他事件
-      const movedPaths = (await window.electron.ipcRenderer.invoke(
-        'moveSongsToDir',
-        [filePathToMove],
-        targetDirPath,
-        {
-          curatedArtistNames: [songToMove?.artist || '']
-        }
-      )) as string[]
-      await copySongCueDefinitionsToTargets([
-        {
-          targetFilePath: movedPaths[0],
-          sourceSong: songToMove
-        }
+      const playingSongSnapshot = runtime.playingData.playingSong
+        ? { ...runtime.playingData.playingSong }
+        : null
+      const playingListSnapshot = [...runtime.playingData.playingSongListData]
+      const playingListUuidSnapshot = runtime.playingData.playingSongListUUID
+      const movingCurrentPlayingSong =
+        playingListUuidSnapshot === sourceListUuid &&
+        normalizePath(playingSongSnapshot?.filePath) === normalizePath(filePathToMove)
+      const optimisticRestoreItems = buildSongsAreaOptimisticRestoreItems(sourceListUuid, [
+        filePathToMove
       ])
+      let playbackAdvancedBeforeMove = false
+      let moveSucceeded = false
 
-      // 先切到下一首，再广播移除事件，避免全局 songsRemoved 监听把当前播放上下文误清空。
-      const currentPlayingFilePath = normalizePath(runtime.playingData.playingSong?.filePath)
-      const nextPlayingFilePath = normalizePath(nextPlayingSong?.filePath)
-      if (nextPlayingSong) {
-        if (currentPlayingFilePath && currentPlayingFilePath === nextPlayingFilePath) {
-          // 下一首就是当前正在播放的歌，只更新列表数据，不重新加载
-          runtime.playingData.playingSongListData = nextList
-        } else {
+      // 主播放器先切歌，立刻释放被移动歌曲的播放资源；文件移动和缓存迁移随后在后台继续。
+      if (movingCurrentPlayingSong) {
+        if (nextPlayingSong) {
           switchPlaybackToSong({
             listUUID: sourceListUuid,
             listData: nextList,
             song: nextPlayingSong
           })
+        } else {
+          clearPlayerStateForDelete()
+          finalizeDestroyedPlayerState()
         }
-      } else {
-        if (audioPlayer.value) {
-          if (audioPlayer.value.isPlaying()) {
-            audioPlayer.value.pause()
+        playbackAdvancedBeforeMove = true
+        emitter.emit('songsArea/optimistic-remove', {
+          listUUID: sourceListUuid,
+          paths: [filePathToMove]
+        })
+        await nextTick()
+      }
+
+      try {
+        const moveSummary = (await window.electron.ipcRenderer.invoke(
+          'moveSongsToDir',
+          [filePathToMove],
+          targetDirPath,
+          {
+            returnSummary: true,
+            curatedArtistNames: [songToMove?.artist || '']
           }
-          ignoreNextEmptyError.value = true
-          audioPlayer.value.empty()
+        )) as MoveSongsToDirSummary
+        const movedEntry = moveSummary.movedEntries.find(
+          (entry) => normalizePath(entry.sourcePath) === normalizePath(filePathToMove)
+        )
+        if (!movedEntry?.targetPath) {
+          throw new Error('moveSongsToDir incomplete')
         }
-        waveformShow.value = false
-        bpm.value = ''
-        isInternalSongChange.value = true
-        runtime.playingData.playingSong = null
-        runtime.playingData.playingSongListUUID = '' // 清空播放列表 UUID
-        runtime.playingData.playingSongListData = []
+        moveSucceeded = true
+        await copySongCueDefinitionsToTargets([
+          {
+            targetFilePath: movedEntry.targetPath,
+            sourceSong: songToMove
+          }
+        ])
+      } catch (error) {
+        if (!moveSucceeded) {
+          const sourceFileStillExists = await window.electron.ipcRenderer
+            .invoke('check-path-exists', filePathToMove)
+            .catch(() => true)
+          moveSucceeded = !sourceFileStillExists
+        }
+        if (!moveSucceeded) {
+          if (playbackAdvancedBeforeMove) {
+            if (optimisticRestoreItems.length > 0) {
+              emitter.emit('songsArea/optimistic-restore', {
+                listUUID: sourceListUuid,
+                items: optimisticRestoreItems
+              })
+            }
+            restorePlaybackAfterDeleteFailure({
+              listUUID: playingListUuidSnapshot,
+              listData: playingListSnapshot,
+              song: playingSongSnapshot
+            })
+          }
+          ignoreNextEmptyError.value = false
+          throw error
+        }
+        console.error(
+          `[usePlayerControlsLogic] 文件已移动但后续同步失败 (${filePathToMove}):`,
+          error
+        )
+      }
+
+      // 不是当前播放歌曲时保持原有行为；当前歌曲已在移动开始时切换，不能再次抢占用户之后的操作。
+      if (!playbackAdvancedBeforeMove) {
+        const currentPlayingFilePath = normalizePath(runtime.playingData.playingSong?.filePath)
+        const nextPlayingFilePath = normalizePath(nextPlayingSong?.filePath)
+        if (nextPlayingSong) {
+          if (currentPlayingFilePath && currentPlayingFilePath === nextPlayingFilePath) {
+            // 下一首就是当前正在播放的歌，只更新列表数据，不重新加载
+            runtime.playingData.playingSongListData = nextList
+          } else {
+            switchPlaybackToSong({
+              listUUID: sourceListUuid,
+              listData: nextList,
+              song: nextPlayingSong
+            })
+          }
+        } else {
+          clearPlayerStateForDelete()
+          finalizeDestroyedPlayerState()
+        }
       }
 
       // 广播源/目标歌单变化
