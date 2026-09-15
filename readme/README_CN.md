@@ -47,6 +47,8 @@ Track Studio 的核心原则很简单：界面里看到的整理结构，应该�
 - Windows 10 或更高版本（x64）
 - macOS 12 或更高版本
 
+_Intel Mac 支持计划持续至 2027 年夏季。_
+
 Track Studio 暂无 Linux 正式版。
 
 ## 功能介绍

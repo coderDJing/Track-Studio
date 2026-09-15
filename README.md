@@ -47,6 +47,8 @@ Existing installs can keep using in-app update. The updater still replaces the s
 - Windows 10 or later (x64)
 - macOS 12 or later
 
+_Intel Mac support is planned through summer 2027._
+
 Track Studio does not provide an official Linux release.
 
 ## Feature Overview
