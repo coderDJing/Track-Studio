@@ -136,230 +136,244 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div
-    v-if="visible"
-    ref="modalRef"
-    class="file-selector-modal"
-    tabindex="0"
-    @keydown="handleKeyDown"
-  >
-    <div class="file-selector-content">
-      <div class="path-navigation">
-        <div class="path-breadcrumb">
-          <button class="back-button" type="button" :disabled="!currentPath" @click="navigateUp">
-            {{ t('fileSelector.navigateUp') }}
-          </button>
-          <bubbleBoxTrigger v-if="currentPath" tag="span" class="path-current" :title="currentPath">
-            {{ currentPath }}
-          </bubbleBoxTrigger>
-          <span v-else class="path-current">{{ t('fileSelector.rootLabel') }}</span>
-        </div>
-        <div class="path-search">
-          <input
-            v-model="searchQuery"
-            type="text"
-            :placeholder="t('fileSelector.searchPlaceholder')"
-            class="search-input"
-          />
-        </div>
+  <div v-if="visible" class="dialog unselectable file-selector-dialog dialog-visible">
+    <div
+      ref="modalRef"
+      v-dialog-drag="'.dialog-title'"
+      class="inner file-selector-modal"
+      tabindex="0"
+      @keydown="handleKeyDown"
+    >
+      <div class="dialog-title dialog-header">
+        <span>{{ t('fileSelector.title') }}</span>
       </div>
-
-      <div class="main-content">
-        <div class="file-list-container">
-          <div class="file-list-header">
-            <span class="header-name">{{ t('fileSelector.name') }}</span>
-            <span class="header-size">{{ t('fileSelector.size') }}</span>
-            <span class="header-type">{{ t('fileSelector.type') }}</span>
+      <div class="file-selector-content">
+        <div class="path-navigation">
+          <div class="path-breadcrumb">
+            <button class="back-button" type="button" :disabled="!currentPath" @click="navigateUp">
+              {{ t('fileSelector.navigateUp') }}
+            </button>
+            <bubbleBoxTrigger
+              v-if="currentPath"
+              tag="span"
+              class="path-current"
+              :title="currentPath"
+            >
+              {{ currentPath }}
+            </bubbleBoxTrigger>
+            <span v-else class="path-current">{{ t('fileSelector.rootLabel') }}</span>
           </div>
-
-          <div v-if="isLoading" class="loading-state">
-            <div class="loading-spinner"></div>
-            <span>{{ t('fileSelector.loading') }}</span>
+          <div class="path-search">
+            <input
+              v-model="searchQuery"
+              type="text"
+              :placeholder="t('fileSelector.searchPlaceholder')"
+              class="search-input"
+            />
           </div>
+        </div>
 
-          <OverlayScrollbarsComponent
-            v-else
-            ref="fileScrollRef"
-            :options="scrollbarOptions"
-            element="div"
-            class="file-list"
-            defer
-            @os-initialized="attachFileViewport"
-            @os-destroyed="fileVirtual.attachViewport(null)"
-            @os-scroll="clearTooltip"
-          >
-            <div
-              class="virtual-list-space"
-              :style="{ height: `${fileVirtual.totalHeight.value}px` }"
+        <div class="main-content">
+          <div class="file-list-container">
+            <div class="file-list-header">
+              <span class="header-name">{{ t('fileSelector.name') }}</span>
+              <span class="header-size">{{ t('fileSelector.size') }}</span>
+              <span class="header-type">{{ t('fileSelector.type') }}</span>
+            </div>
+
+            <div v-if="isLoading" class="loading-state">
+              <div class="loading-spinner"></div>
+              <span>{{ t('fileSelector.loading') }}</span>
+            </div>
+
+            <OverlayScrollbarsComponent
+              v-else
+              ref="fileScrollRef"
+              :options="scrollbarOptions"
+              element="div"
+              class="file-list"
+              defer
+              @os-initialized="attachFileViewport"
+              @os-destroyed="fileVirtual.attachViewport(null)"
+              @os-scroll="clearTooltip"
             >
               <div
-                class="virtual-list-window"
-                :style="{ transform: `translateY(${fileVirtual.offsetTop.value}px)` }"
+                class="virtual-list-space"
+                :style="{ height: `${fileVirtual.totalHeight.value}px` }"
               >
                 <div
-                  v-for="entry in fileVirtual.visibleEntries.value"
-                  :key="entry.item.path"
-                  class="file-item-wrapper"
+                  class="virtual-list-window"
+                  :style="{ transform: `translateY(${fileVirtual.offsetTop.value}px)` }"
                 >
                   <div
-                    class="file-item"
-                    :class="{
-                      'is-directory': entry.item.type === 'directory',
-                      'is-file': entry.item.type === 'file',
-                      'is-selected': isItemSelected(entry.item)
-                    }"
-                    :data-index="entry.index"
-                    :data-path="entry.item.path"
-                    @click="handleItemClick(entry.item, entry.index, $event)"
-                    @dblclick="
-                      entry.item.type === 'directory'
-                        ? handleItemDoubleClick(entry.item, $event)
-                        : null
-                    "
+                    v-for="entry in fileVirtual.visibleEntries.value"
+                    :key="entry.item.path"
+                    class="file-item-wrapper"
                   >
-                    <div class="item-icon">
-                      <img :src="getItemIcon(entry.item)" alt="" />
-                    </div>
-                    <div class="item-name-wrapper">
-                      <div class="item-name" @mouseenter="setTooltip($event, entry.item.name)">
-                        {{ entry.item.name }}
+                    <div
+                      class="file-item"
+                      :class="{
+                        'is-directory': entry.item.type === 'directory',
+                        'is-file': entry.item.type === 'file',
+                        'is-selected': isItemSelected(entry.item)
+                      }"
+                      :data-index="entry.index"
+                      :data-path="entry.item.path"
+                      @click="handleItemClick(entry.item, entry.index, $event)"
+                      @dblclick="
+                        entry.item.type === 'directory'
+                          ? handleItemDoubleClick(entry.item, $event)
+                          : null
+                      "
+                    >
+                      <div class="item-icon">
+                        <img :src="getItemIcon(entry.item)" alt="" />
                       </div>
-                    </div>
-                    <div class="item-size">{{ formatItemSize(entry.item) }}</div>
-                    <div v-if="entry.item.type === 'file'" class="item-type">
-                      {{ entry.item.name.split('.').pop()?.toUpperCase() }}
-                    </div>
-                    <div v-else class="item-type">
-                      {{
-                        isSpecialItem(entry.item)
-                          ? t('fileSelector.commonFolder')
-                          : isDrive(entry.item)
-                            ? t('fileSelector.drive')
-                            : t('fileSelector.folder')
-                      }}
+                      <div class="item-name-wrapper">
+                        <div class="item-name" @mouseenter="setTooltip($event, entry.item.name)">
+                          {{ entry.item.name }}
+                        </div>
+                      </div>
+                      <div class="item-size">{{ formatItemSize(entry.item) }}</div>
+                      <div v-if="entry.item.type === 'file'" class="item-type">
+                        {{ entry.item.name.split('.').pop()?.toUpperCase() }}
+                      </div>
+                      <div v-else class="item-type">
+                        {{
+                          isSpecialItem(entry.item)
+                            ? t('fileSelector.commonFolder')
+                            : isDrive(entry.item)
+                              ? t('fileSelector.drive')
+                              : t('fileSelector.folder')
+                        }}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
+            </OverlayScrollbarsComponent>
+          </div>
+
+          <div class="selected-panel">
+            <div class="selected-header">
+              <h4 class="selected-title">
+                {{ t('fileSelector.selectedItems') }}
+                <span class="selected-count">({{ selectedCount }})</span>
+              </h4>
+              <button class="clear-btn" :disabled="selectedCount === 0" @click="clearSelection">
+                {{ t('fileSelector.clearAll') }}
+              </button>
             </div>
-          </OverlayScrollbarsComponent>
-        </div>
 
-        <div class="selected-panel">
-          <div class="selected-header">
-            <h4 class="selected-title">
-              {{ t('fileSelector.selectedItems') }}
-              <span class="selected-count">({{ selectedCount }})</span>
-            </h4>
-            <button class="clear-btn" :disabled="selectedCount === 0" @click="clearSelection">
-              {{ t('fileSelector.clearAll') }}
-            </button>
-          </div>
+            <div class="selected-stats">
+              <span v-if="selectedFilesCount > 0" class="stat-item">
+                {{ t('fileSelector.filesSelected', { count: selectedFilesCount }) }}
+              </span>
+              <span v-if="selectedFoldersCount > 0" class="stat-item">
+                {{ t('fileSelector.foldersSelected', { count: selectedFoldersCount }) }}
+              </span>
+            </div>
 
-          <div class="selected-stats">
-            <span v-if="selectedFilesCount > 0" class="stat-item">
-              {{ t('fileSelector.filesSelected', { count: selectedFilesCount }) }}
-            </span>
-            <span v-if="selectedFoldersCount > 0" class="stat-item">
-              {{ t('fileSelector.foldersSelected', { count: selectedFoldersCount }) }}
-            </span>
-          </div>
-
-          <OverlayScrollbarsComponent
-            v-if="selectedCount > 0"
-            ref="selectedScrollRef"
-            :options="scrollbarOptions"
-            element="div"
-            class="selected-list"
-            defer
-            @os-initialized="attachSelectedViewport"
-            @os-destroyed="selectedVirtual.attachViewport(null)"
-            @os-scroll="clearTooltip"
-          >
-            <div
-              class="virtual-list-space"
-              :style="{ height: `${selectedVirtual.totalHeight.value}px` }"
+            <OverlayScrollbarsComponent
+              v-if="selectedCount > 0"
+              ref="selectedScrollRef"
+              :options="scrollbarOptions"
+              element="div"
+              class="selected-list"
+              defer
+              @os-initialized="attachSelectedViewport"
+              @os-destroyed="selectedVirtual.attachViewport(null)"
+              @os-scroll="clearTooltip"
             >
               <div
-                class="virtual-list-window"
-                :style="{ transform: `translateY(${selectedVirtual.offsetTop.value}px)` }"
+                class="virtual-list-space"
+                :style="{ height: `${selectedVirtual.totalHeight.value}px` }"
               >
                 <div
-                  v-for="entry in selectedVirtual.visibleEntries.value"
-                  :key="entry.item.path"
-                  class="selected-item-wrapper"
+                  class="virtual-list-window"
+                  :style="{ transform: `translateY(${selectedVirtual.offsetTop.value}px)` }"
                 >
-                  <div class="selected-item">
-                    <div class="selected-icon">
-                      <img :src="getSelectedItemIcon(entry.item)" alt="" />
-                    </div>
-                    <div class="selected-info">
-                      <div class="selected-name" @mouseenter="setTooltip($event, entry.item.name)">
-                        {{ entry.item.name }}
+                  <div
+                    v-for="entry in selectedVirtual.visibleEntries.value"
+                    :key="entry.item.path"
+                    class="selected-item-wrapper"
+                  >
+                    <div class="selected-item">
+                      <div class="selected-icon">
+                        <img :src="getSelectedItemIcon(entry.item)" alt="" />
                       </div>
-                      <div class="selected-path" @mouseenter="setTooltip($event, entry.item.path)">
-                        {{ entry.item.path }}
+                      <div class="selected-info">
+                        <div
+                          class="selected-name"
+                          @mouseenter="setTooltip($event, entry.item.name)"
+                        >
+                          {{ entry.item.name }}
+                        </div>
+                        <div
+                          class="selected-path"
+                          @mouseenter="setTooltip($event, entry.item.path)"
+                        >
+                          {{ entry.item.path }}
+                        </div>
                       </div>
+                      <button class="remove-btn" @click="handleRemoveSelectedItem(entry.item.path)">
+                        ×
+                      </button>
                     </div>
-                    <button class="remove-btn" @click="handleRemoveSelectedItem(entry.item.path)">
-                      ×
-                    </button>
                   </div>
                 </div>
               </div>
+            </OverlayScrollbarsComponent>
+
+            <div v-else class="empty-selection">
+              {{ t('fileSelector.noSelection') }}
             </div>
-          </OverlayScrollbarsComponent>
+          </div>
+        </div>
 
-          <div v-else class="empty-selection">
-            {{ t('fileSelector.noSelection') }}
+        <div class="action-bar">
+          <div class="action-buttons import-dialog-style">
+            <div
+              class="button"
+              style="margin-right: 10px; width: 90px; text-align: center"
+              @click="confirm"
+            >
+              {{ t('common.confirm') }} (E)
+            </div>
+            <div class="button" style="width: 90px; text-align: center" @click="cancel">
+              {{ t('common.cancel') }} (Esc)
+            </div>
           </div>
         </div>
       </div>
-
-      <div class="action-bar">
-        <div class="action-buttons import-dialog-style">
-          <div
-            class="button"
-            style="margin-right: 10px; width: 90px; text-align: center"
-            @click="confirm"
-          >
-            {{ t('common.confirm') }} (E)
-          </div>
-          <div class="button" style="width: 90px; text-align: center" @click="cancel">
-            {{ t('common.cancel') }} (Esc)
-          </div>
-        </div>
-      </div>
+      <bubbleBox :dom="tooltipAnchor || undefined" :title="tooltipTitle" :max-width="320" />
     </div>
-    <bubbleBox :dom="tooltipAnchor || undefined" :title="tooltipTitle" :max-width="320" />
   </div>
 </template>
 
 <style lang="scss" scoped>
+.file-selector-dialog {
+  z-index: var(--z-dialog-raised);
+}
+
 .file-selector-modal {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
   width: 700px;
   height: 450px;
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
   display: flex;
   flex-direction: column;
-  z-index: var(--z-dialog-raised);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   user-select: none;
   -webkit-user-select: none;
-  color: var(--text); // 与导入对话框文字颜色一致
+  color: var(--text);
 }
 
 .file-selector-content {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  height: 100%;
 }
 
 /* 路径导航 */

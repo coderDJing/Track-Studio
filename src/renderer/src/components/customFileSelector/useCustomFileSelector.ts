@@ -536,9 +536,10 @@ export function useCustomFileSelector(
   }
 
   const confirm = () => {
+    const selectedPaths = selectedItems.value.map((item) => item.path)
     emit(
       'confirm',
-      selectedItems.value.map((item) => item.path)
+      selectedPaths.length > 0 || !currentPath.value ? selectedPaths : [currentPath.value]
     )
     close()
   }
