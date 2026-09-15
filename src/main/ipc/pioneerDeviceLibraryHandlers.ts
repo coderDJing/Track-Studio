@@ -31,9 +31,12 @@ export function registerPioneerDeviceLibraryHandlers() {
             ? 'image/bmp'
             : 'image/jpeg'
 
-  ipcMain.handle('pioneer-device-library:list-removable-drives', async () => {
-    return await listPioneerRemovableDrives()
-  })
+  ipcMain.handle(
+    'pioneer-device-library:list-removable-drives',
+    async (_event, options?: { forceRefresh?: unknown }) => {
+      return await listPioneerRemovableDrives(options?.forceRefresh === true)
+    }
+  )
 
   ipcMain.handle('pioneer-device-library:eject-drive', async (_event, rootPath: string) => {
     return await ejectPioneerRemovableDrive(rootPath)

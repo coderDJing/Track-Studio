@@ -72,9 +72,12 @@ export function registerRekordboxDesktopLibraryHandlers() {
             ? 'image/bmp'
             : 'image/jpeg'
 
-  ipcMain.handle('rekordbox-desktop-library:probe', async () => {
-    return await probeRekordboxDesktopLibrary(false)
-  })
+  ipcMain.handle(
+    'rekordbox-desktop-library:probe',
+    async (_event, options?: { forceRefresh?: unknown }) => {
+      return await probeRekordboxDesktopLibrary(options?.forceRefresh === true)
+    }
+  )
 
   ipcMain.handle('rekordbox-desktop-library:probe-write', async () => {
     return await probeRekordboxDesktopLibraryWriteAvailability(true)

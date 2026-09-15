@@ -60,6 +60,8 @@ import { projectSongBeatGridMapV2ToFixedGrid } from '@shared/songBeatGridMapV2'
 import { useMainPlayerMiniPlayer } from './useMainPlayerMiniPlayer'
 import { createMainPlayerGlobalShortcutHandler } from './createMainPlayerGlobalShortcutHandler'
 const placeholderLogo = logoAsset
+const PLAYER_FOREGROUND_ACTIVITY_CHANNEL = 'player:foreground-activity'
+const PLAYBACK_ACTIVITY_REFRESH_INTERVAL_MS = 5000
 type WaveformPreviewStatePayload = {
   active?: boolean
   song?: ISongInfo | null
@@ -114,6 +116,8 @@ let manualSeekActive = false
 let manualSeekResetTimer: number | null = null
 let metadataPreloadTimer: number | null = null
 let teardownPlayerEvents: (() => void) | null = null
+let activePlaybackFilePath = ''
+let lastPlaybackActivityAt = 0
 const seekSettledMetadataPreloadDelayMs = 6000
 const keyboardPercentSeek = createBrowserPlayerKeyboardPercentSeek({
   getPlayer: () => audioPlayer.value,
@@ -202,7 +206,45 @@ const bindPlayerEvents = (player: WebAudioPlayer) => {
 
   const disposers: Array<() => void> = []
 
+  const sendPlaybackActivity = (state: 'play' | 'pause', filePath: string) => {
+    if (!filePath) return
+    window.electron.ipcRenderer.send(PLAYER_FOREGROUND_ACTIVITY_CHANNEL, {
+      state,
+      source: 'main-player',
+      filePath,
+      requestId: 0
+    })
+  }
+
+  const stopPlaybackActivity = () => {
+    if (!activePlaybackFilePath) return
+    sendPlaybackActivity('pause', activePlaybackFilePath)
+    activePlaybackFilePath = ''
+    lastPlaybackActivityAt = 0
+  }
+
+  const refreshPlaybackActivity = () => {
+    const now = Date.now()
+    if (
+      !activePlaybackFilePath ||
+      now - lastPlaybackActivityAt < PLAYBACK_ACTIVITY_REFRESH_INTERVAL_MS
+    ) {
+      return
+    }
+    sendPlaybackActivity('play', activePlaybackFilePath)
+    lastPlaybackActivityAt = now
+  }
+
   const onPlay = () => {
+    const nextFilePath = runtime.playingData.playingSong?.filePath || ''
+    if (activePlaybackFilePath && activePlaybackFilePath !== nextFilePath) {
+      stopPlaybackActivity()
+    }
+    if (nextFilePath) {
+      activePlaybackFilePath = nextFilePath
+      lastPlaybackActivityAt = 0
+      refreshPlaybackActivity()
+    }
     runtime.playerReady = true
     runtime.isSwitchingSong = false
     previousTime = player.getCurrentTime()
@@ -210,7 +252,14 @@ const bindPlayerEvents = (player: WebAudioPlayer) => {
   player.on('play', onPlay)
   disposers.push(() => player.off('play', onPlay))
 
+  const onPause = () => {
+    stopPlaybackActivity()
+  }
+  player.on('pause', onPause)
+  disposers.push(() => player.off('pause', onPause))
+
   const onFinish = () => {
+    stopPlaybackActivity()
     if (runtime.setting.autoPlayNextSong) {
       playerActions.nextSong()
     }
@@ -219,6 +268,7 @@ const bindPlayerEvents = (player: WebAudioPlayer) => {
   disposers.push(() => player.off('finish', onFinish))
 
   const onTimeUpdate = (currentTime: number) => {
+    refreshPlaybackActivity()
     playerCurrentSeconds.value = Math.max(0, Number(currentTime) || 0)
     const timeEl = document.querySelector('#time')
     const durationEl = document.querySelector('#duration')
@@ -304,6 +354,7 @@ const bindPlayerEvents = (player: WebAudioPlayer) => {
   disposers.push(() => player.off('error', onError))
 
   return () => {
+    stopPlaybackActivity()
     disposers.forEach((dispose) => {
       try {
         dispose()

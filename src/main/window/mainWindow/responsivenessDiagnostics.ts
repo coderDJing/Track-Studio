@@ -18,6 +18,10 @@ type MainProcessStallIncident = {
   maxDurationMs: number
 }
 
+type MainWindowResponsivenessDiagnosticsOptions = {
+  isAuxiliaryWindowVisible?: () => boolean
+}
+
 const getRendererPid = (browserWindow: BrowserWindow): number | null => {
   try {
     return browserWindow.webContents.getOSProcessId()
@@ -46,7 +50,10 @@ const stringifyDiagnostic = (value: unknown): string => {
   }
 }
 
-const captureSnapshot = (browserWindow: BrowserWindow, options?: { sinceMs?: number }) => {
+const captureSnapshot = (
+  browserWindow: BrowserWindow,
+  options?: { sinceMs?: number; auxiliaryWindowVisible?: boolean }
+) => {
   const rendererPid = getRendererPid(browserWindow)
   let url: string | null = null
   try {
@@ -62,6 +69,7 @@ const captureSnapshot = (browserWindow: BrowserWindow, options?: { sinceMs?: num
     loading: browserWindow.webContents.isLoading(),
     focused: browserWindow.isFocused(),
     visible: browserWindow.isVisible(),
+    auxiliaryWindowVisible: options?.auxiliaryWindowVisible === true,
     // app.getAppMetrics() 是同步跨进程调用。在大型 Electron 会话中它本身能阻塞主进程数秒，
     // 不能作为每秒心跳或卡顿现场的采样方式，否则诊断器会制造它要检测的卡顿。
     playlistScans: getPlaylistScanDiagnosticSnapshot(),
@@ -76,7 +84,10 @@ const captureSnapshot = (browserWindow: BrowserWindow, options?: { sinceMs?: num
  * - 心跳延迟用于发现主进程消息循环被同步任务或原生调用阻塞的情况；
  * - 心跳只做轻量时间/CPU 采样；禁止在这里调用同步跨进程 Electron 指标 API。
  */
-export const attachMainWindowResponsivenessDiagnostics = (browserWindow: BrowserWindow) => {
+export const attachMainWindowResponsivenessDiagnostics = (
+  browserWindow: BrowserWindow,
+  options: MainWindowResponsivenessDiagnosticsOptions = {}
+) => {
   const rcDiagnosticsEnabled = isPackagedRcBuild()
   let rendererUnresponsiveAt: number | null = null
   let lastHeartbeatAt = Date.now()
@@ -84,6 +95,14 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
   let lastEventLoopUtilization = performance.eventLoopUtilization()
   let stallIncident: MainProcessStallIncident | null = null
   let backgroundStallIncident: MainProcessStallIncident | null = null
+
+  const isAuxiliaryWindowVisible = () => {
+    try {
+      return options.isAuxiliaryWindowVisible?.() === true
+    } catch {
+      return false
+    }
+  }
 
   const finishStallIncident = () => {
     if (!stallIncident) return
@@ -165,7 +184,9 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
           }
           return
         }
-        if (!browserWindow.isVisible()) {
+        const mainWindowVisible = browserWindow.isVisible()
+        const auxiliaryWindowVisible = isAuxiliaryWindowVisible()
+        if (!mainWindowVisible && !auxiliaryWindowVisible) {
           finishStallIncident()
           backgroundStallIncident = recordStall(backgroundStallIncident, now, stallDurationMs)
           return
@@ -179,7 +200,11 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
             incidentStartedAtMs: stallIncident.startedAtMs,
             stallIndex: stallIncident.count,
             stallDurationMs,
-            snapshot: captureSnapshot(browserWindow, { sinceMs: previousHeartbeatAt }),
+            interactiveSurface: mainWindowVisible ? 'main-window' : 'mini-player',
+            snapshot: captureSnapshot(browserWindow, {
+              sinceMs: previousHeartbeatAt,
+              auxiliaryWindowVisible
+            }),
             mainProcessInterval: {
               elapsedMs: Math.max(0, now - previousHeartbeatAt),
               cpuUserMs: Math.round(cpuUserMs),

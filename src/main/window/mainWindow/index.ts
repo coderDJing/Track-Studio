@@ -476,7 +476,9 @@ function createWindow() {
   })
 
   restrictExternalNavigation(mainWindow.webContents)
-  attachMainWindowResponsivenessDiagnostics(mainWindow)
+  attachMainWindowResponsivenessDiagnostics(mainWindow, {
+    isAuxiliaryWindowVisible: () => miniPlayerWindow.isVisible()
+  })
 
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if ((input.control || input.meta) && input.key.toLowerCase() === 'w') {

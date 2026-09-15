@@ -3,6 +3,7 @@ import { is } from '@electron-toolkit/utils'
 import path = require('path')
 import icon from '../../../resources/icon.png?asset'
 import { log } from '../log'
+import { isPackagedRcBuild } from '../services/rcDiagnostics'
 import store from '../store'
 import { mergeLayoutConfig, persistLayoutConfig } from '../layoutConfig'
 import { restrictExternalNavigation } from './externalNavigation'
@@ -27,6 +28,7 @@ import {
   type MiniPlayerCommand,
   type MiniPlayerHostState,
   type MiniPlayerPlayhead,
+  type MiniPlayerPlayheadGapDiagnostic,
   type MiniPlayerSession
 } from '../../shared/miniPlayerWindow'
 import type { MiniPlayerTaskProgress } from '../../shared/miniPlayerTaskProgress'
@@ -243,6 +245,8 @@ const applyKeyboardFocus = (target: BrowserWindow) => {
 
 export const isOpen = () => isUsableWindow(miniPlayerWindow)
 
+export const isVisible = () => isUsableWindow(miniPlayerWindow) && miniPlayerWindow.isVisible()
+
 export const focusExisting = () => {
   if (!isUsableWindow(miniPlayerWindow)) return false
   applyKeyboardFocus(miniPlayerWindow)
@@ -311,6 +315,8 @@ const createMiniPlayerWindow = () => {
     }
   })
   lockNormalHeight(target, bounds.width)
+  const rcDiagnosticsEnabled = isPackagedRcBuild()
+  let rendererUnresponsiveAt: number | null = null
   const pushWindowFocus = (focused: boolean) => {
     if (!isUsableWindow(target)) return
     try {
@@ -328,8 +334,33 @@ const createMiniPlayerWindow = () => {
     target.webContents.openDevTools()
   }
   restrictExternalNavigation(target.webContents)
+  target.webContents.on('unresponsive', () => {
+    if (!rcDiagnosticsEnabled || rendererUnresponsiveAt !== null) return
+    rendererUnresponsiveAt = Date.now()
+    log.error('[mini-player] renderer unresponsive', {
+      windowId: target.id,
+      webContentsId: target.webContents.id,
+      visible: target.isVisible(),
+      focused: target.isFocused()
+    })
+  })
+  target.webContents.on('responsive', () => {
+    if (!rcDiagnosticsEnabled || rendererUnresponsiveAt === null) return
+    const durationMs = Math.max(0, Date.now() - rendererUnresponsiveAt)
+    rendererUnresponsiveAt = null
+    log.error('[mini-player] renderer recovered', {
+      windowId: target.id,
+      webContentsId: target.webContents.id,
+      durationMs,
+      visible: target.isVisible(),
+      focused: target.isFocused()
+    })
+  })
   target.webContents.on('render-process-gone', (_event, details) => {
-    log.error('[mini-player] render-process-gone', details)
+    const unresponsiveDurationMs =
+      rendererUnresponsiveAt === null ? null : Math.max(0, Date.now() - rendererUnresponsiveAt)
+    rendererUnresponsiveAt = null
+    log.error('[mini-player] render-process-gone', { details, unresponsiveDurationMs })
   })
   target.webContents.on('did-fail-load', (_event, code, desc, url) => {
     log.error('[mini-player] did-fail-load', { code, desc, url })
@@ -469,6 +500,21 @@ const ensureIpcHandlers = () => {
   ipcMain.on(MINI_PLAYER_CHANNELS.playhead, (_event, payload: MiniPlayerPlayhead) => {
     forwardToMini(MINI_PLAYER_CHANNELS.playhead, payload)
   })
+  ipcMain.on(
+    MINI_PLAYER_CHANNELS.playheadGap,
+    (_event, payload: MiniPlayerPlayheadGapDiagnostic) => {
+      if (!isPackagedRcBuild() || !isVisible()) return
+      const delayedMs = Number(payload?.delayedMs)
+      if (!Number.isFinite(delayedMs) || delayedMs < 1500) return
+      log.error('[mini-player] playback progress delayed', {
+        delayedMs: Math.round(delayedMs),
+        currentSeconds: Math.max(0, Number(payload?.currentSeconds) || 0),
+        durationSeconds: Math.max(0, Number(payload?.durationSeconds) || 0),
+        focused: miniPlayerWindow?.isFocused() === true,
+        visible: true
+      })
+    }
+  )
   ipcMain.on(MINI_PLAYER_CHANNELS.taskProgress, (_event, payload: MiniPlayerTaskProgress) => {
     forwardToMini(MINI_PLAYER_CHANNELS.taskProgress, payload)
   })
@@ -503,6 +549,7 @@ export default {
   open,
   restoreMain,
   isOpen,
+  isVisible,
   isPinnedOpen,
   focusExisting,
   notifySession

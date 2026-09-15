@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import path from 'node:path'
 
-type PlaybackForegroundState = 'start' | 'end'
+type PlaybackForegroundState = 'start' | 'end' | 'play' | 'pause'
 
 type PlaybackForegroundPayload = {
   state?: PlaybackForegroundState
@@ -19,6 +19,7 @@ type PlaybackForegroundEntry = {
 const PLAYBACK_FOREGROUND_ACTIVITY_CHANNEL = 'player:foreground-activity'
 const PLAYBACK_FOREGROUND_STALE_MS = 8000
 const PLAYBACK_FOREGROUND_IDLE_GRACE_MS = 300
+const PLAYBACK_ACTIVE_STALE_MS = 15_000
 const BACKGROUND_IO_WAIT_INTERVAL_MS = 60
 const STANDARD_FILE_IO_MAX_CONCURRENCY = 1
 const FOREGROUND_FILE_IO_MAX_CONCURRENCY = 1
@@ -57,6 +58,7 @@ const FILE_IO_PRIORITY: Record<FileIoPriority, number> = {
 }
 
 const foregroundEntries = new Map<string, PlaybackForegroundEntry>()
+const activePlaybackEntries = new Map<string, number>()
 let foregroundGraceUntilMs = 0
 let ipcRegistered = false
 let backgroundFileIoSequence = 0
@@ -102,7 +104,20 @@ const isPlaybackForegroundBusy = (nowMs = Date.now()): boolean => {
   return foregroundEntries.size > 0 || foregroundGraceUntilMs > nowMs
 }
 
-export { isPlaybackForegroundBusy }
+const pruneExpiredActivePlaybackEntries = (nowMs = Date.now()) => {
+  for (const [key, expiresAtMs] of activePlaybackEntries) {
+    if (expiresAtMs <= nowMs) {
+      activePlaybackEntries.delete(key)
+    }
+  }
+}
+
+const isPlaybackActive = (nowMs = Date.now()): boolean => {
+  pruneExpiredActivePlaybackEntries(nowMs)
+  return activePlaybackEntries.size > 0
+}
+
+export { isPlaybackActive, isPlaybackForegroundBusy }
 
 export const getBackgroundFileIoDiagnosticSnapshot = (nowMs = Date.now()) => {
   pruneExpiredEntries(nowMs)
@@ -191,10 +206,18 @@ const releaseBackgroundFileIoSlot = (lane: FileIoLane) => {
 
 function markPlaybackForegroundActivity(payload: PlaybackForegroundPayload) {
   const state = payload.state
-  if (state !== 'start' && state !== 'end') return
+  if (state !== 'start' && state !== 'end' && state !== 'play' && state !== 'pause') return
 
   const nowMs = Date.now()
   const key = buildActivityKey(payload)
+  if (state === 'play') {
+    activePlaybackEntries.set(key, nowMs + PLAYBACK_ACTIVE_STALE_MS)
+    return
+  }
+  if (state === 'pause') {
+    activePlaybackEntries.delete(key)
+    return
+  }
   if (state === 'start') {
     foregroundEntries.set(key, {
       expiresAtMs: nowMs + PLAYBACK_FOREGROUND_STALE_MS,

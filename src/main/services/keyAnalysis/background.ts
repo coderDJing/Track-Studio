@@ -64,6 +64,8 @@ const BACKGROUND_EXCLUDED_CORE_LIBRARY_DIRS = new Set([
   'recyclebin',
   'recordinglibrary'
 ])
+const BACKGROUND_CACHE_EVALUATION_YIELD_EVERY = 24
+const BACKGROUND_IDLE_GATE_CHECK_INTERVAL_MS = 500
 
 type KeyAnalysisBackgroundDeps = {
   events: EventEmitter
@@ -107,6 +109,18 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
   let lastLibraryTreeCleanupAt = 0
   let lastCoverCleanupAt = 0
   let coverCleanupRootIndex = 0
+  let lastIdleGateCheckAt = 0
+  let lastIdleGateAllowed = false
+
+  const canContinueBackgroundScan = () => {
+    if (!backgroundEnabled || deps.hasForegroundWork()) return false
+    const now = Date.now()
+    if (now - lastIdleGateCheckAt >= BACKGROUND_IDLE_GATE_CHECK_INTERVAL_MS) {
+      lastIdleGateCheckAt = now
+      lastIdleGateAllowed = getBackgroundIdleSnapshot().allowed
+    }
+    return lastIdleGateAllowed
+  }
 
   const getBackgroundStatus = (): KeyAnalysisBackgroundStatus => {
     const pending = deps.getPendingBackgroundCount()
@@ -133,8 +147,7 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
   const isEnabled = () => backgroundEnabled
 
   const canUseAggressiveConcurrency = () => {
-    if (!backgroundEnabled) return false
-    if (deps.hasForegroundWork()) return false
+    if (!canContinueBackgroundScan()) return false
     const idleSnapshot = getBackgroundIdleSnapshot()
     return idleSnapshot.allowed && idleSnapshot.profile === 'deep-idle'
   }
@@ -355,7 +368,7 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
   }
 
   const runPeriodicMaintenanceTasks = async (now: number) => {
-    if (deps.hasForegroundWork()) return
+    if (!canContinueBackgroundScan()) return
 
     if (now - lastLibraryTreeCleanupAt >= BACKGROUND_LIBRARY_TREE_CLEANUP_INTERVAL_MS) {
       try {
@@ -367,7 +380,7 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
       } catch {}
     }
 
-    if (deps.hasForegroundWork()) return
+    if (!canContinueBackgroundScan()) return
 
     if (now - lastCoverCleanupAt >= BACKGROUND_COVER_CLEANUP_INTERVAL_MS) {
       try {
@@ -388,11 +401,11 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
     const endIndex = Math.min(startIndex + BACKGROUND_COVER_CLEANUP_BATCH_SIZE, roots.length)
 
     for (let i = startIndex; i < endIndex; i++) {
-      if (deps.hasForegroundWork()) break
+      if (!canContinueBackgroundScan()) break
       const listRoot = roots[i]
       try {
         const currentFilePaths = await collectAudioFilesInRoot(listRoot, audioExts)
-        if (deps.hasForegroundWork()) break
+        if (!canContinueBackgroundScan()) break
         await sweepSongListCovers(listRoot, currentFilePaths)
       } catch {}
     }
@@ -407,7 +420,7 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
     const filePaths: string[] = []
     const queue: string[] = [listRoot]
 
-    while (queue.length > 0 && !deps.hasForegroundWork()) {
+    while (queue.length > 0 && canContinueBackgroundScan()) {
       const dir = queue.shift()
       if (!dir) break
       try {
@@ -430,9 +443,10 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
   }
 
   const collectBackgroundCandidates = async (limit: number): Promise<string[]> => {
-    if (!backgroundEnabled) return []
+    if (!canContinueBackgroundScan()) return []
     const fromCache = await collectBackgroundCacheCandidates(limit)
     if (fromCache.length > 0) return fromCache
+    if (!canContinueBackgroundScan()) return []
     return collectBackgroundFsCandidates(limit)
   }
 
@@ -482,7 +496,8 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
       string,
       Array<{ rowId: number; filePath: string; size: number; mtimeMs: number }>
     >()
-    for (const row of rows) {
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index]
       const rowId = Number(row?.rowId)
       if (!Number.isFinite(rowId)) continue
       const evaluated: EvaluatedRow = { rowId }
@@ -517,6 +532,10 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
         if (checks) checks.push(check)
         else waveformChecksByRoot.set(listRoot, [check])
       }
+      if ((index + 1) % BACKGROUND_CACHE_EVALUATION_YIELD_EVERY === 0) {
+        await new Promise<void>((resolve) => setImmediate(resolve))
+        if (!canContinueBackgroundScan()) return results
+      }
     }
 
     const waveformAvailableByRowId = new Map<number, boolean>()
@@ -528,7 +547,7 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
       // A library may contain many small playlists. Let timers and foreground IPC run between
       // playlist groups instead of draining every synchronous SQLite batch in one turn.
       await new Promise<void>((resolve) => setImmediate(resolve))
-      if (deps.hasForegroundWork()) return results
+      if (!canContinueBackgroundScan()) return results
     }
 
     let processedAll = true
@@ -557,7 +576,7 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
 
   const collectBackgroundFsCandidates = async (limit: number): Promise<string[]> => {
     const results: string[] = []
-    if (limit <= 0 || !store.databaseDir || deps.hasForegroundWork()) return results
+    if (limit <= 0 || !store.databaseDir || !canContinueBackgroundScan()) return results
     const roots = await refreshBackgroundRoots()
     if (roots.length === 0) return results
     const audioExts = getAudioExtensions()
@@ -565,7 +584,7 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
 
     let dirsProcessed = 0
     while (results.length < limit && dirsProcessed < BACKGROUND_FS_DIR_LIMIT) {
-      if (deps.hasForegroundWork()) break
+      if (!canContinueBackgroundScan()) break
       if (backgroundDirQueue.length === 0) {
         const nextRoot = roots[backgroundRootIndex % roots.length]
         backgroundRootIndex = (backgroundRootIndex + 1) % roots.length
@@ -585,7 +604,7 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
       try {
         for await (const entry of dirHandle) {
           if (entryCount >= BACKGROUND_FS_ENTRY_LIMIT) break
-          if (deps.hasForegroundWork()) break
+          if (!canContinueBackgroundScan()) break
           entryCount += 1
           if (entry.isDirectory()) {
             if (entry.name.startsWith('.') || entry.name === '.frkb_covers') continue
@@ -633,7 +652,7 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
 
   const cleanupMissingCacheEntries = async (limit: number): Promise<number> => {
     if (limit <= 0) return 0
-    if (deps.hasForegroundWork()) return 0
+    if (!canContinueBackgroundScan()) return 0
     const db = getLibraryDb()
     if (!db) return 0
     let rows: Array<{ rowId: number; list_root: string; file_path: string }> = []
@@ -655,7 +674,7 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
     let lastRowId = backgroundCleanCursor
     const listRootExistsCache = new Map<string, boolean>()
     for (const row of rows) {
-      if (deps.hasForegroundWork()) break
+      if (!canContinueBackgroundScan()) break
       const rowId = Number(row?.rowId)
       if (!Number.isFinite(rowId)) continue
       lastRowId = rowId
@@ -704,7 +723,7 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
   const runBackgroundScan = async () => {
     if (!backgroundEnabled) return
     if (backgroundScanInProgress) return
-    if (!deps.isIdle()) return
+    if (!deps.isIdle() || !canContinueBackgroundScan()) return
     const now = Date.now()
     if (now - lastForegroundAt < BACKGROUND_IDLE_DELAY_MS) {
       scheduleBackgroundScan()
@@ -719,7 +738,7 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
     emitBackgroundStatus()
     try {
       const candidates = await collectBackgroundCandidates(BACKGROUND_BATCH_SIZE)
-      if (backgroundEnabled) {
+      if (canContinueBackgroundScan()) {
         if (candidates.length > 0) {
           deps.enqueueList(candidates, 'background', {
             source: 'background',
@@ -727,7 +746,7 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
           })
         } else {
           const cleaned = await cleanupMissingCacheEntries(BACKGROUND_CLEAN_BATCH_SIZE)
-          if (cleaned === 0 && !deps.hasForegroundWork()) {
+          if (cleaned === 0 && canContinueBackgroundScan()) {
             await runPeriodicMaintenanceTasks(now)
           }
         }

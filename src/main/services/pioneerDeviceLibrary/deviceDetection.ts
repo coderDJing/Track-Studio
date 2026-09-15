@@ -43,7 +43,7 @@ const DRIVE_EJECT_WAIT_MS = 6000
 const DRIVE_EJECT_POLL_MS = 400
 const WINDOWS_SHELL_EJECT_WAIT_MS = 1600
 const WINDOWS_DRIVE_LIST_TIMEOUT_MS = 10_000
-const REMOVABLE_DRIVE_CACHE_TTL_MS = 5_000
+const REMOVABLE_DRIVE_CACHE_TTL_MS = 60_000
 
 let removableDriveCache: {
   value: PioneerRemovableDriveInfo[]
@@ -761,8 +761,10 @@ async function ejectLinuxRemovableDrive(rootPath: string): Promise<PioneerDriveE
   return createDriveEjectSuccess(normalizedRoot)
 }
 
-export async function listPioneerRemovableDrives(): Promise<PioneerRemovableDriveInfo[]> {
-  if (removableDriveCache && removableDriveCache.expiresAt > Date.now()) {
+export async function listPioneerRemovableDrives(
+  forceRefresh = false
+): Promise<PioneerRemovableDriveInfo[]> {
+  if (!forceRefresh && removableDriveCache && removableDriveCache.expiresAt > Date.now()) {
     return removableDriveCache.value
   }
   if (removableDriveInflight) return await removableDriveInflight

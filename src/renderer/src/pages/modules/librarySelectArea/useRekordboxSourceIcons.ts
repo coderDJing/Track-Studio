@@ -97,7 +97,7 @@ type UseRekordboxSourceIconsOptions = {
   emitLibrarySelectedChange: (payload: { name: string }) => void
 }
 
-const SOURCE_ICON_AUTO_REFRESH_INTERVAL_MS = 8_000
+const SOURCE_ICON_AUTO_REFRESH_INTERVAL_MS = 60_000
 
 export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions) {
   const {
@@ -401,17 +401,21 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
         return
       }
     } finally {
-      if (!isCurrentSelectedSource(sourceKind, sourceKey, libraryType)) return
-      if (requestToken !== sourceTreeRequestToken) return
-      runtime.pioneerDeviceLibrary.loading = false
+      if (
+        isCurrentSelectedSource(sourceKind, sourceKey, libraryType) &&
+        requestToken === sourceTreeRequestToken
+      ) {
+        runtime.pioneerDeviceLibrary.loading = false
+      }
     }
   }
 
-  const refreshPioneerDriveIcons = async () => {
+  const refreshPioneerDriveIcons = async (options: { force?: boolean } = {}) => {
     try {
       const previousIcons = [...pioneerDriveIcons.value]
       const result = await window.electron.ipcRenderer.invoke(
-        buildRekordboxSourceChannel('usb', 'list-removable-drives')
+        buildRekordboxSourceChannel('usb', 'list-removable-drives'),
+        { forceRefresh: options.force === true }
       )
       const drives = Array.isArray(result) ? (result as PioneerDriveEntry[]) : []
       const nextIcons = drives
@@ -465,11 +469,12 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
     }
   }
 
-  const refreshDesktopLibraryIcon = async () => {
+  const refreshDesktopLibraryIcon = async (options: { force?: boolean } = {}) => {
     try {
       const previousIcon = desktopLibraryIcon.value
       const probe = await window.electron.ipcRenderer.invoke(
-        buildRekordboxSourceChannel('desktop', 'probe')
+        buildRekordboxSourceChannel('desktop', 'probe'),
+        { forceRefresh: options.force === true }
       )
       if (!probe?.available || !probe?.sourceRootPath) {
         clearRekordboxSourceCachesByKind('desktop')
@@ -514,6 +519,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
   }
 
   const shouldAutoRefreshSources = () => {
+    if (runtime.isProgressing) return false
     if (typeof document === 'undefined') return true
     if (document.visibilityState !== 'visible') return false
     try {
@@ -525,6 +531,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
   }
 
   const refreshRekordboxSourceIcons = async (options: { force?: boolean } = {}) => {
+    if (runtime.isProgressing) return
     if (!options.force && !shouldAutoRefreshSources()) return
     if (refreshInFlight) {
       await refreshInFlight
@@ -532,7 +539,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
     }
 
     const task = (async () => {
-      await Promise.all([refreshPioneerDriveIcons(), refreshDesktopLibraryIcon()])
+      await Promise.all([refreshPioneerDriveIcons(options), refreshDesktopLibraryIcon(options)])
     })()
     refreshInFlight = task
     try {
@@ -766,7 +773,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
       }
       clearRekordboxSourceCache(resolvePioneerDriveSourceCacheKey(item))
       pioneerDriveIcons.value = pioneerDriveIcons.value.filter((icon) => icon.key !== item.key)
-      await refreshPioneerDriveIcons()
+      await refreshPioneerDriveIcons({ force: true })
     } catch (error) {
       if (suspendedSelection) {
         restoreSelection(suspendedSelection)

@@ -88,7 +88,10 @@ import { registerDevSongListTraceHandlers } from './ipc/devSongListTraceHandlers
 import { registerHotCueHandlers } from './ipc/hotCueHandlers'
 import { registerMemoryCueHandlers } from './ipc/memoryCueHandlers'
 import { maybeShowWhatsNew, registerWhatsNewHandlers } from './services/whatsNew'
-import { registerPlaybackForegroundActivityHandlers } from './services/playbackForegroundActivity'
+import {
+  isPlaybackActive,
+  registerPlaybackForegroundActivityHandlers
+} from './services/playbackForegroundActivity'
 import { registerLibraryMergeHandlers } from './ipc/libraryMergeHandlers'
 import { registerLibraryRelocateHandlers } from './ipc/libraryRelocateHandlers'
 import { registerLibrarySetupHandlers } from './ipc/librarySetupHandlers'
@@ -116,6 +119,7 @@ import {
 } from './services/backgroundOrchestrator'
 import globalSongSearchEngine from './services/globalSongSearch'
 import { registerBackgroundForegroundBusyProvider } from './services/backgroundIdleGate'
+import { isImportSongsBusy } from './services/libraryMerge/operationActivity'
 import { acquireDevSingleInstanceLock, configureDevRuntime } from './devInstance'
 import {
   startDevExternalOpenHandoffWatcher,
@@ -540,6 +544,8 @@ keyAnalysisEvents.on('background-status', sendKeyAnalysisBackgroundStatus)
 registerBackgroundForegroundBusyProvider('key-analysis-foreground', () =>
   isKeyAnalysisForegroundBusy()
 )
+registerBackgroundForegroundBusyProvider('import-songs', () => isImportSongsBusy())
+registerBackgroundForegroundBusyProvider('playback-active', () => isPlaybackActive())
 registerBackgroundForegroundBusyProvider(
   'mixtape-prewarm',
   () => isMixtapeStemQueueBusy() || isMixtapeWaveformQueueBusy() || isMixtapeRawWaveformQueueBusy()

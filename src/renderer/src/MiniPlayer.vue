@@ -12,6 +12,7 @@ import bubbleBox from '@renderer/components/bubbleBox.vue'
 import { useCover } from '@renderer/pages/modules/songPlayer/useCover'
 import { usePlayerHotkeys } from '@renderer/pages/modules/songPlayer/usePlayerHotkeys'
 import { useMiniPlayerRemoteWaveform } from '@renderer/composables/miniPlayer/useMiniPlayerRemoteWaveform'
+import { useMiniPlayerPlayheadDiagnostics } from '@renderer/composables/miniPlayer/useMiniPlayerPlayheadDiagnostics'
 import { cloneMiniPlayerHostState } from '@renderer/composables/miniPlayer/miniPlayerStateClone'
 import {
   cloneMiniPlayerTaskProgress,
@@ -45,6 +46,7 @@ const pinRef = useTemplateRef<HTMLDivElement>('pinRef')
 const closeRef = useTemplateRef<HTMLDivElement>('closeRef')
 const coverAnchorRef = useTemplateRef<HTMLDivElement>('coverAnchorRef')
 const hostState = ref<MiniPlayerHostState | null>(null)
+const { notePlaybackUpdate } = useMiniPlayerPlayheadDiagnostics(hostState)
 const overlayBusy = ref(false)
 const overlayOpen = ref(false)
 const windowFocused = ref(false)
@@ -202,12 +204,14 @@ const showOverlay = async (
 const applyHostState = (payload: MiniPlayerHostState | null) => {
   if (!payload) {
     hostState.value = null
+    notePlaybackUpdate({ currentSeconds: 0, durationSeconds: 0, isPlaying: false })
     runtime.playingData.playingSong = null
     runtime.playingData.playingSongListUUID = ''
     return
   }
   const next = cloneMiniPlayerHostState(payload)
   hostState.value = next
+  notePlaybackUpdate(next)
   runtime.playingData.playingSong = next.song
   runtime.playingData.playingSongListUUID = next.playingSongListUUID
 }
@@ -225,6 +229,7 @@ const handlePlayhead = (_event: unknown, payload: MiniPlayerPlayhead) => {
     isPlaying: !!payload?.isPlaying,
     volume: Number(payload?.volume) || 0
   }
+  notePlaybackUpdate(hostState.value)
 }
 
 const handleTaskProgress = (_event: unknown, payload: MiniPlayerTaskProgress) => {

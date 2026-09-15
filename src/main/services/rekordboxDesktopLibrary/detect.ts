@@ -9,7 +9,7 @@ import type {
   RekordboxDesktopWriteAvailabilityStatus
 } from '../../../shared/rekordboxDesktopPlaylist'
 
-const PROBE_CACHE_TTL_MS = 15_000
+const PROBE_CACHE_TTL_MS = 60_000
 
 let probeCache: {
   value: RekordboxDesktopLibraryProbe

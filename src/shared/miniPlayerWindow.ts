@@ -67,6 +67,12 @@ export type MiniPlayerPlayhead = {
   volume: number
 }
 
+export type MiniPlayerPlayheadGapDiagnostic = {
+  delayedMs: number
+  currentSeconds: number
+  durationSeconds: number
+}
+
 export type MiniPlayerSession = {
   open: boolean
   alwaysOnTop: boolean
@@ -209,6 +215,7 @@ export const MINI_PLAYER_CHANNELS = {
   setPopupHeight: 'mini-player:set-popup-height',
   hostState: 'mini-player:host-state',
   playhead: 'mini-player:playhead',
+  playheadGap: 'mini-player:playhead-gap',
   taskProgress: 'mini-player:task-progress',
   command: 'mini-player:command',
   rendererReady: 'mini-player:renderer-ready',
