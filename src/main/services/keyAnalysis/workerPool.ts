@@ -60,6 +60,21 @@ type KeyAnalysisWorkerPoolDeps = {
   events: EventEmitter
 }
 
+export const getDeferredStructureGridDetail = (
+  job: KeyAnalysisJob | undefined,
+  payloadResult?: WorkerPayload['result'],
+  payloadError?: string
+): string | null => {
+  if (
+    job?.needsStructure !== true ||
+    payloadError ||
+    payloadResult?.songStructureError !== 'missing v2 beat grid for v23 structure analysis'
+  ) {
+    return null
+  }
+  return 'structure: missing v2 beat grid for v23 structure analysis'
+}
+
 export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => {
   const isCurrentWorkerJob = (worker: Worker, job: KeyAnalysisJob) =>
     hasCurrentKeyAnalysisJobOwnership(job, {
@@ -176,7 +191,16 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
     job: KeyAnalysisJob | undefined,
     payloadResult?: WorkerPayload['result'],
     payloadError?: string
-  ): string[] => collectJobResultErrors(job, payloadResult, payloadError)
+  ): string[] => {
+    const deferredStructureGridDetail = getDeferredStructureGridDetail(
+      job,
+      payloadResult,
+      payloadError
+    )
+    return collectJobResultErrors(job, payloadResult, payloadError).filter(
+      (error) => error !== deferredStructureGridDetail
+    )
+  }
 
   const logCompletedJobErrors = (
     worker: Worker,
@@ -184,7 +208,7 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
     payloadResult?: WorkerPayload['result'],
     payloadError?: string
   ) => {
-    const errors = collectJobResultErrors(job, payloadResult, payloadError)
+    const errors = collectFatalJobResultErrors(job, payloadResult, payloadError)
     if (errors.length <= 0) return
     const elapsedMs = job.startTime ? Date.now() - job.startTime : job.trace?.elapsedMs
     log.error('[闲时分析] 任务完成但有错误', {
@@ -381,8 +405,10 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
 
     let terminalProgress: KeyAnalysisProgress | null = null
     let resultErrorDetail = ''
+    let deferredStructureGridDetail: string | null = null
 
     if (job) {
+      deferredStructureGridDetail = getDeferredStructureGridDetail(job, payloadResult, payloadError)
       resultErrorDetail = getJobResultErrorDetail(job, payloadResult, payloadError)
       const terminalStage = payloadError || resultErrorDetail ? 'job-error' : 'job-done'
       terminalProgress = {
@@ -483,6 +509,10 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
         deps.onJobFailure(job, 'worker-error', String(payloadError).slice(0, 300))
       } else if (resultErrorDetail || persistenceErrorDetail) {
         deps.onJobFailure(job, 'analysis-error', resultErrorDetail || persistenceErrorDetail)
+      } else if (deferredStructureGridDetail) {
+        // 节拍分析本轮只给出了 BPM，尚未给出 v2 网格锚点；保留失败记录以节流后台补算，
+        // 但不要把已成功写入的其它分析项向前端宣告成整任务失败。
+        deps.onJobFailure(job, 'analysis-error', deferredStructureGridDetail)
       } else {
         deps.onJobSuccess(job)
       }

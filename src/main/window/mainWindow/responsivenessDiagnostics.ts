@@ -10,6 +10,14 @@ const MAIN_PROCESS_STALL_THRESHOLD_MS = 3_000
 const MAIN_PROCESS_HEARTBEAT_INTERVAL_MS = 1_000
 const MAIN_PROCESS_STALL_INCIDENT_GRACE_MS = 30_000
 
+type MainProcessStallIncident = {
+  startedAtMs: number
+  lastStallAtMs: number
+  count: number
+  totalDurationMs: number
+  maxDurationMs: number
+}
+
 const getRendererPid = (browserWindow: BrowserWindow): number | null => {
   try {
     return browserWindow.webContents.getOSProcessId()
@@ -74,13 +82,8 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
   let lastHeartbeatAt = Date.now()
   let lastCpuUsage = process.cpuUsage()
   let lastEventLoopUtilization = performance.eventLoopUtilization()
-  let stallIncident: {
-    startedAtMs: number
-    lastStallAtMs: number
-    count: number
-    totalDurationMs: number
-    maxDurationMs: number
-  } | null = null
+  let stallIncident: MainProcessStallIncident | null = null
+  let backgroundStallIncident: MainProcessStallIncident | null = null
 
   const finishStallIncident = () => {
     if (!stallIncident) return
@@ -94,6 +97,41 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
       })
     }
     stallIncident = null
+  }
+
+  const finishBackgroundStallIncident = () => {
+    if (!backgroundStallIncident) return
+    // RC 诊断仅留一条聚合记录：窗口隐藏、最小化或锁屏时的调度延迟不等同于用户可感知卡顿。
+    log.info('[main-window] non-interactive main-process delay summary', {
+      startedAtMs: backgroundStallIncident.startedAtMs,
+      endedAtMs: backgroundStallIncident.lastStallAtMs,
+      stallCount: backgroundStallIncident.count,
+      totalStallDurationMs: backgroundStallIncident.totalDurationMs,
+      maxStallDurationMs: backgroundStallIncident.maxDurationMs,
+      windowVisible: false
+    })
+    backgroundStallIncident = null
+  }
+
+  const recordStall = (
+    incident: MainProcessStallIncident | null,
+    now: number,
+    stallDurationMs: number
+  ): MainProcessStallIncident => {
+    if (!incident) {
+      return {
+        startedAtMs: now,
+        lastStallAtMs: now,
+        count: 1,
+        totalDurationMs: stallDurationMs,
+        maxDurationMs: stallDurationMs
+      }
+    }
+    incident.lastStallAtMs = now
+    incident.count += 1
+    incident.totalDurationMs += stallDurationMs
+    incident.maxDurationMs = Math.max(incident.maxDurationMs, stallDurationMs)
+    return incident
   }
 
   const heartbeat = rcDiagnosticsEnabled
@@ -119,22 +157,21 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
           ) {
             finishStallIncident()
           }
+          if (
+            backgroundStallIncident &&
+            now - backgroundStallIncident.lastStallAtMs >= MAIN_PROCESS_STALL_INCIDENT_GRACE_MS
+          ) {
+            finishBackgroundStallIncident()
+          }
           return
         }
-        if (stallIncident) {
-          stallIncident.lastStallAtMs = now
-          stallIncident.count += 1
-          stallIncident.totalDurationMs += stallDurationMs
-          stallIncident.maxDurationMs = Math.max(stallIncident.maxDurationMs, stallDurationMs)
-        } else {
-          stallIncident = {
-            startedAtMs: now,
-            lastStallAtMs: now,
-            count: 1,
-            totalDurationMs: stallDurationMs,
-            maxDurationMs: stallDurationMs
-          }
+        if (!browserWindow.isVisible()) {
+          finishStallIncident()
+          backgroundStallIncident = recordStall(backgroundStallIncident, now, stallDurationMs)
+          return
         }
+        finishBackgroundStallIncident()
+        stallIncident = recordStall(stallIncident, now, stallDurationMs)
         // 每次达到阈值都保留现场，避免同一轮后续更严重的卡顿只剩汇总计数。
         log.error(
           '[main-window] main-process event loop stalled',
@@ -203,6 +240,7 @@ export const attachMainWindowResponsivenessDiagnostics = (browserWindow: Browser
 
   const dispose = () => {
     finishStallIncident()
+    finishBackgroundStallIncident()
     if (heartbeat) clearInterval(heartbeat)
   }
   browserWindow.once('closed', dispose)
