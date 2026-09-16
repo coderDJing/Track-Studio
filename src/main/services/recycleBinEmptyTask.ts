@@ -89,7 +89,9 @@ const runRecycleBinEmptyJob = async (
       isInitial: true,
       noProgress: true
     })
-    const initialScan = await scanRecycleBinOffMainThread(recycleBinPath)
+    const initialScan = await scanRecycleBinOffMainThread(recycleBinPath, {
+      priority: 'foreground'
+    })
     if (!initialScan.rootExists) {
       sendProgress({
         id: progressId,
@@ -178,7 +180,8 @@ const runRecycleBinEmptyJob = async (
           total,
           noProgress: false
         })
-      }
+      },
+      { priority: 'foreground' }
     )
     success = 0
     for (const result of ordinaryResults) {
@@ -215,8 +218,12 @@ const runRecycleBinEmptyJob = async (
       .filter((recordKey): recordKey is string => typeof recordKey === 'string')
     if (removedRecordKeys.length > 0) deleteRecycleBinRecords(removedRecordKeys)
 
-    await removeRecycleBinDirectoriesOffMainThread(initialScan.directories)
-    const remainingScan = await scanRecycleBinOffMainThread(recycleBinPath)
+    await removeRecycleBinDirectoriesOffMainThread(initialScan.directories, {
+      priority: 'foreground'
+    })
+    const remainingScan = await scanRecycleBinOffMainThread(recycleBinPath, {
+      priority: 'foreground'
+    })
     const remainingPathKeys = new Set(remainingScan.filePaths.map(normalizePathKey))
     const missingRecords = records
       .filter((record) => {

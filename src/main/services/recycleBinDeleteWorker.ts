@@ -1,6 +1,6 @@
 import { Worker } from 'node:worker_threads'
 import { resolveMainWorkerPath } from '../workerPath'
-import { runPlaybackAwareBackgroundFileIo } from './playbackForegroundActivity'
+import { runPlaybackAwareBackgroundFileIo, type FileIoPriority } from './playbackForegroundActivity'
 
 export type RecycleBinDeleteEntry = {
   filePath: string
@@ -29,6 +29,10 @@ type WorkerResponse = {
 
 const DELETE_BATCH_SIZE = 8
 const WORKER_REQUEST_TIMEOUT_MS = 120_000
+
+type RecycleBinWorkerFileIoOptions = {
+  priority?: FileIoPriority
+}
 
 const createWorker = () => new Worker(resolveMainWorkerPath(__dirname, 'recycleBinDeleteWorker.js'))
 
@@ -67,14 +71,17 @@ const requestWorker = <T>(worker: Worker, id: number, payload: object): Promise<
     worker.postMessage({ id, ...payload })
   })
 
-export async function scanRecycleBinOffMainThread(rootPath: string): Promise<ScanResult> {
+export async function scanRecycleBinOffMainThread(
+  rootPath: string,
+  options: RecycleBinWorkerFileIoOptions = {}
+): Promise<ScanResult> {
   const worker = createWorker()
   try {
     return await runPlaybackAwareBackgroundFileIo(
       'recycle-bin:scan',
       { rootPath },
       () => requestWorker<ScanResult>(worker, 1, { type: 'scan', rootPath }),
-      { priority: 'maintenance' }
+      { priority: options.priority ?? 'maintenance' }
     )
   } finally {
     worker.removeAllListeners()
@@ -85,7 +92,8 @@ export async function scanRecycleBinOffMainThread(rootPath: string): Promise<Sca
 export async function deleteRecycleBinEntriesOffMainThread(
   databaseDir: string,
   entries: RecycleBinDeleteEntry[],
-  onProgress?: (completed: number) => void
+  onProgress?: (completed: number) => void,
+  options: RecycleBinWorkerFileIoOptions = {}
 ): Promise<RecycleBinDeleteResult[]> {
   if (entries.length === 0) return []
   const worker = createWorker()
@@ -104,7 +112,7 @@ export async function deleteRecycleBinEntriesOffMainThread(
               databaseDir,
               entries: batch
             }),
-          { priority: 'maintenance' }
+          { priority: options.priority ?? 'maintenance' }
         )
         results.push(...batchResults)
       } catch (error) {
@@ -125,7 +133,8 @@ export async function deleteRecycleBinEntriesOffMainThread(
 }
 
 export async function removeRecycleBinDirectoriesOffMainThread(
-  directories: string[]
+  directories: string[],
+  options: RecycleBinWorkerFileIoOptions = {}
 ): Promise<void> {
   if (directories.length === 0) return
   const worker = createWorker()
@@ -134,7 +143,7 @@ export async function removeRecycleBinDirectoriesOffMainThread(
       'recycle-bin:remove-directories',
       { count: directories.length },
       () => requestWorker(worker, 1, { type: 'remove-directories', directories }),
-      { priority: 'maintenance' }
+      { priority: options.priority ?? 'maintenance' }
     )
   } finally {
     worker.removeAllListeners()
