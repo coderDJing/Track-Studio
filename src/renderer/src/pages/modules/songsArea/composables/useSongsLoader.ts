@@ -16,6 +16,7 @@ import {
   createSongListLoadGenerationGuard,
   type SongListLoadTicket
 } from './songListLoadGeneration'
+import { createPlaylistOptimisticRemovalGuard } from './playlistOptimisticRemovalGuard'
 
 interface UseSongsLoaderParams {
   runtime: ReturnType<typeof useRuntimeStore>
@@ -182,6 +183,24 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
     getSongInfoDiffFields,
     hasMeaningfulDiffField
   } = comparator
+  const optimisticRemovalGuard = createPlaylistOptimisticRemovalGuard(normalizeSongPath)
+  const onSongsOptimisticallyRemoved = (payload?: { listUUID?: string; paths?: string[] }) => {
+    const songListUUID = String(payload?.listUUID || songsAreaState.songListUUID)
+    const paths = Array.isArray(payload?.paths) ? payload.paths : []
+    optimisticRemovalGuard.block(songListUUID, paths)
+  }
+  const onSongsOptimisticallyRestored = (payload?: {
+    listUUID?: string
+    items?: Array<{ song?: ISongInfo }>
+  }) => {
+    const songListUUID = String(payload?.listUUID || songsAreaState.songListUUID)
+    const paths = Array.isArray(payload?.items)
+      ? payload.items.map((item) => String(item?.song?.filePath || '')).filter(Boolean)
+      : []
+    optimisticRemovalGuard.release(songListUUID, paths)
+  }
+  emitter.on('songsArea/optimistic-remove', onSongsOptimisticallyRemoved)
+  emitter.on('songsArea/optimistic-restore', onSongsOptimisticallyRestored)
 
   const normalizeMissingWaveformFilePaths = (value: unknown): string[] => {
     if (!Array.isArray(value)) return []
@@ -466,8 +485,11 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
 
   const applyViewRefreshPayload = async (payload: PlaylistViewRefreshPayload) => {
     const songListUUID = String(payload.songListUUID || '')
-    const nextItems = Array.isArray(payload.items) ? (payload.items as ISongInfo[]) : []
-    const nextMissing = normalizeMissingWaveformFilePaths(payload.missingWaveformFilePaths)
+    const rawNextItems = Array.isArray(payload.items) ? (payload.items as ISongInfo[]) : []
+    const nextItems = optimisticRemovalGuard.filterRefreshItems(songListUUID, rawNextItems)
+    const nextMissing = normalizeMissingWaveformFilePaths(payload.missingWaveformFilePaths).filter(
+      (filePath) => !optimisticRemovalGuard.isBlocked(songListUUID, filePath)
+    )
 
     // 合并期间前台可能刚落地了另一份列表，那份基线才是对的：最多重算三次。
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -645,6 +667,8 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
 
   onUnmounted(() => {
     disposeViewRefreshListener?.()
+    emitter.off('songsArea/optimistic-remove', onSongsOptimisticallyRemoved)
+    emitter.off('songsArea/optimistic-restore', onSongsOptimisticallyRestored)
     pendingViewRefresh = null
     if (distributedVerifyTimer) {
       clearTimeout(distributedVerifyTimer)

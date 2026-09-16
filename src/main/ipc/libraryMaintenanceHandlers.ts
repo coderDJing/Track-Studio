@@ -55,6 +55,7 @@ import {
 } from '../services/playlistTrackNumbers'
 import { protectSetReferencedFilesForDeletion } from './setListHandlers'
 import { assertLibraryMergeMutationAllowed } from '../services/libraryMerge/runtime'
+import { beginPlaylistViewSnapshotMutationByPaths } from '../services/playlistViewSnapshotService'
 
 export const RECYCLE_BIN_BACKGROUND_DELETE_COMPLETED_CHANNEL =
   'recycle-bin:background-delete-completed'
@@ -244,6 +245,8 @@ export function registerLibraryMaintenanceHandlers() {
     const sourceType =
       payload && !Array.isArray(payload) && payload.sourceType ? payload.sourceType : null
     const uniquePaths = Array.from(new Set(filePaths.filter(Boolean)))
+    const releasePlaylistViewSnapshotMutation =
+      beginPlaylistViewSnapshotMutationByPaths(uniquePaths)
     const releaseLibraryTreeWatcherBulk = beginLibraryTreeWatcherBulkOperation()
     try {
       const setProtection = await protectSetReferencedFilesForDeletion(uniquePaths)
@@ -363,6 +366,7 @@ export function registerLibraryMaintenanceHandlers() {
       }
     } finally {
       releaseLibraryTreeWatcherBulk()
+      releasePlaylistViewSnapshotMutation()
     }
   }
 
@@ -407,6 +411,8 @@ export function registerLibraryMaintenanceHandlers() {
         removedPaths: []
       }
     }
+    const releasePlaylistViewSnapshotMutation =
+      beginPlaylistViewSnapshotMutationByPaths(uniquePaths)
     try {
       const tasks = uniquePaths.map((item) => async () => {
         const ok = await permanentlyDeleteFile(item)
@@ -462,6 +468,8 @@ export function registerLibraryMaintenanceHandlers() {
         failed: uniquePaths.length,
         removedPaths: []
       }
+    } finally {
+      releasePlaylistViewSnapshotMutation()
     }
   }
 

@@ -94,10 +94,24 @@ const pendingTimers = new Map<string, NodeJS.Timeout>()
 const pendingRequests = new Map<string, VerificationRequest>()
 const runningUuids = new Set<string>()
 const rerunUuids = new Set<string>()
+const verificationEpochs = new Map<string, number>()
+const activeMutationCounts = new Map<string, number>()
 let idleTimer: NodeJS.Timeout | null = null
 const pendingWaveformAvailabilityByPlaylist = new Map<string, DeferredWaveformAvailabilityResult>()
 
 const normalizeUuid = (value: unknown): string => String(value || '').trim()
+
+const getVerificationEpoch = (songListUUID: string): number =>
+  verificationEpochs.get(songListUUID) || 0
+
+const bumpVerificationEpoch = (songListUUID: string): number => {
+  const next = getVerificationEpoch(songListUUID) + 1
+  verificationEpochs.set(songListUUID, next)
+  return next
+}
+
+const hasActiveSnapshotMutation = (songListUUID: string): boolean =>
+  (activeMutationCounts.get(songListUUID) || 0) > 0
 
 const sameStringList = (left: readonly string[], right: readonly string[]): boolean => {
   if (left.length !== right.length) return false
@@ -278,6 +292,11 @@ export function schedulePlaylistViewVerification(input: {
 
 async function runVerification(request: VerificationRequest): Promise<void> {
   const uuid = request.songListUUID
+  if (hasActiveSnapshotMutation(uuid)) {
+    // 删除/移动批次中的目录只是中间态。保留最新请求，等 mutation release 后只核对最终状态。
+    pendingRequests.set(uuid, request)
+    return
+  }
   if (runningUuids.has(uuid)) {
     // 正在核对时又来了事件：记一笔，本轮结束后补一次，不并发起两个 worker。
     rerunUuids.add(uuid)
@@ -304,6 +323,14 @@ async function runVerification(request: VerificationRequest): Promise<void> {
 
 async function verifyOnce(request: VerificationRequest): Promise<void> {
   const { songListUUID, listRootAbs } = request
+  const verificationEpoch = getVerificationEpoch(songListUUID)
+  const isCurrentVerification = () =>
+    !hasActiveSnapshotMutation(songListUUID) &&
+    getVerificationEpoch(songListUUID) === verificationEpoch
+  const scheduleRerun = () => {
+    pendingRequests.set(songListUUID, request)
+    rerunUuids.add(songListUUID)
+  }
   const meta = loadPlaylistViewSnapshotMeta(songListUUID)
   if (!meta) return
 
@@ -316,6 +343,10 @@ async function verifyOnce(request: VerificationRequest): Promise<void> {
   // verified_at_ms > 0：只做便宜的身份核对。对得上就纯粹更新时间戳，UI 一无所知。
   if (meta.verifiedAtMs > 0 && meta.identityDigest) {
     const digest = await computeCurrentIdentityDigest(listRootAbs)
+    if (!isCurrentVerification()) {
+      scheduleRerun()
+      return
+    }
     if (digest === null) return
     if (digest === meta.identityDigest) {
       touchPlaylistViewSnapshotVerified(songListUUID)
@@ -330,7 +361,13 @@ async function verifyOnce(request: VerificationRequest): Promise<void> {
     songListUUID,
     databaseDir: store.databaseDir
   })
+  if (!isCurrentVerification()) {
+    scheduleRerun()
+    return
+  }
   if (!Array.isArray(result?.scanData)) return
+  const resultIdentityDigest = String(result.identityDigest || '')
+  if (!resultIdentityDigest) return
 
   const nextMissing = result.missingWaveformFilePaths || []
   const merge = await planSongListMerge({
@@ -338,18 +375,30 @@ async function verifyOnce(request: VerificationRequest): Promise<void> {
     next: result.scanData,
     comparator
   })
+  // worker 扫描和大列表合并都可能跨越删除/移动操作。落盘前重新枚举一次磁盘身份；
+  // 只要扫描结果已不是当前目录状态，就丢弃并排下一轮，绝不能把旧列表写成新 revision。
+  const currentIdentityDigest = await computeCurrentIdentityDigest(listRootAbs)
+  if (!isCurrentVerification()) {
+    scheduleRerun()
+    return
+  }
+  if (currentIdentityDigest === null) return
+  if (currentIdentityDigest !== resultIdentityDigest) {
+    scheduleRerun()
+    return
+  }
   const missingChanged = !sameStringList(previous?.missingWaveformFilePaths || [], nextMissing)
 
   if (!merge.changed && !missingChanged && previous) {
     // 文件被 touch 过但内容等价：只换身份摘要，别重写几 MB 的 items_json，也别推事件。
-    touchPlaylistViewSnapshotIdentity(songListUUID, String(result.identityDigest || ''))
+    touchPlaylistViewSnapshotIdentity(songListUUID, resultIdentityDigest)
     return
   }
 
   const revision = savePlaylistViewSnapshot({
     songListUUID,
     listRoot: listRootAbs,
-    identityDigest: String(result.identityDigest || ''),
+    identityDigest: resultIdentityDigest,
     items: result.scanData,
     missingWaveformFilePaths: nextMissing
   })
@@ -399,11 +448,13 @@ function pushRefresh(payload: PlaylistViewRefreshPayload): void {
  * 文件系统事件入口：只知道改了哪些路径，得往上找到歌单根。
  * 这里**不**主动标脏，交给便宜的身份核对去判断——多余的事件只花一次枚举 + stat。
  */
-export function invalidatePlaylistViewSnapshotsByPaths(changedAbsPaths: Iterable<string>): void {
+const findAffectedPlaylistRootsByPaths = (
+  changedAbsPaths: Iterable<string>
+): Map<string, string> => {
   const databaseDir = String(store.databaseDir || '')
-  if (!databaseDir) return
+  const affected = new Map<string, string>()
+  if (!databaseDir) return affected
   const visitedDirs = new Set<string>()
-  const scheduled = new Set<string>()
 
   for (const rawPath of changedAbsPaths) {
     const abs = String(rawPath || '').trim()
@@ -413,14 +464,7 @@ export function invalidatePlaylistViewSnapshotsByPaths(changedAbsPaths: Iterable
       if (!current || visitedDirs.has(current)) break
       visitedDirs.add(current)
       for (const uuid of findPlaylistViewSnapshotUuidsByRoot(current)) {
-        if (scheduled.has(uuid)) continue
-        scheduled.add(uuid)
-        schedulePlaylistViewVerification({
-          songListUUID: uuid,
-          listRootAbs: current,
-          reason: 'content-stale',
-          delayMs: VERIFY_AFTER_WATCH_DELAY_MS
-        })
+        if (!affected.has(uuid)) affected.set(uuid, current)
       }
       const parent = path.dirname(current)
       if (parent === current) break
@@ -428,6 +472,56 @@ export function invalidatePlaylistViewSnapshotsByPaths(changedAbsPaths: Iterable
       if (current.length <= databaseDir.length) break
       current = parent
     }
+  }
+  return affected
+}
+
+/**
+ * 主进程已知的删除/移动在真正碰磁盘前调用。它会立即使正在运行的旧核对失效，
+ * 并把同一歌单的新核对压到批次结束后，避免中间目录状态进入快照。
+ */
+export function beginPlaylistViewSnapshotMutationByPaths(
+  changedAbsPaths: Iterable<string>
+): () => void {
+  const affected = findAffectedPlaylistRootsByPaths(changedAbsPaths)
+  for (const songListUUID of affected.keys()) {
+    bumpVerificationEpoch(songListUUID)
+    activeMutationCounts.set(songListUUID, (activeMutationCounts.get(songListUUID) || 0) + 1)
+  }
+
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    for (const [songListUUID, listRootAbs] of affected) {
+      const remaining = Math.max(0, (activeMutationCounts.get(songListUUID) || 0) - 1)
+      if (remaining > 0) {
+        activeMutationCounts.set(songListUUID, remaining)
+        continue
+      }
+      activeMutationCounts.delete(songListUUID)
+      bumpVerificationEpoch(songListUUID)
+      const pending = pendingRequests.get(songListUUID)
+      pendingRequests.delete(songListUUID)
+      schedulePlaylistViewVerification({
+        songListUUID,
+        listRootAbs: pending?.listRootAbs || listRootAbs,
+        reason: pending?.reason || 'content-stale',
+        delayMs: VERIFY_AFTER_WATCH_DELAY_MS
+      })
+    }
+  }
+}
+
+export function invalidatePlaylistViewSnapshotsByPaths(changedAbsPaths: Iterable<string>): void {
+  for (const [songListUUID, listRootAbs] of findAffectedPlaylistRootsByPaths(changedAbsPaths)) {
+    bumpVerificationEpoch(songListUUID)
+    schedulePlaylistViewVerification({
+      songListUUID,
+      listRootAbs,
+      reason: 'content-stale',
+      delayMs: VERIFY_AFTER_WATCH_DELAY_MS
+    })
   }
 }
 
