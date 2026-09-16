@@ -49,6 +49,7 @@ const {
 } = useLibraryTreeSortUi({
   libraryName,
   libraryRoot: libraryData,
+  isActive: () => runtime.libraryAreaSelected === libraryName.value,
   forceManual: isRecycleBin,
   reverseChildren: isRecycleBin
 })

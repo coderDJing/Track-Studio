@@ -19,6 +19,9 @@ export { ensureEnglishCoreLibraries, getCoreFsDirName } from './coreLibraries'
 export { isENOSPCError } from './nodeErrorUtils'
 export { operateHiddenFile } from './services/hiddenFileOperation'
 
+const MAIN_PROCESS_LIBRARY_VIEW_YIELD_EVERY = 256
+const yieldToMainProcess = () => new Promise<void>((resolve) => setImmediate(resolve))
+
 interface SongsAnalyseResult {
   songsAnalyseResult: md5[]
   errorSongsAnalyseResult: md5[]
@@ -164,23 +167,25 @@ export async function getSongsAnalyseResult(
   return { songsAnalyseResult, errorSongsAnalyseResult }
 }
 //获取整个库的树结构
-export async function getLibrary(options: { skipSync?: boolean } = {}) {
+export async function getLibrary(options: { skipSync?: boolean; skipPreparation?: boolean } = {}) {
   const rootDir = store.databaseDir
   if (!rootDir) {
     return { uuid: 'library_root_missing', type: 'root', dirName: 'library', children: [] }
   }
-  // 先确保核心库英文化（若失败则回退中文），同时建立英文->FS 名的映射
-  await ensureEnglishCoreLibraries(rootDir)
-  await ensureLibraryTreeBaseline(rootDir, {
-    coreDirNames: {
-      FilterLibrary: getCoreFsDirName('FilterLibrary'),
-      CuratedLibrary: getCoreFsDirName('CuratedLibrary'),
-      SetLibrary: getCoreFsDirName('SetLibrary'),
-      MixtapeLibrary: getCoreFsDirName('MixtapeLibrary'),
-      RecordingLibrary: getCoreFsDirName('RecordingLibrary'),
-      RecycleBin: getCoreFsDirName('RecycleBin')
-    }
-  })
+  if (!options.skipPreparation) {
+    // 先确保核心库英文化（若失败则回退中文），同时建立英文->FS 名的映射
+    await ensureEnglishCoreLibraries(rootDir)
+    await ensureLibraryTreeBaseline(rootDir, {
+      coreDirNames: {
+        FilterLibrary: getCoreFsDirName('FilterLibrary'),
+        CuratedLibrary: getCoreFsDirName('CuratedLibrary'),
+        SetLibrary: getCoreFsDirName('SetLibrary'),
+        MixtapeLibrary: getCoreFsDirName('MixtapeLibrary'),
+        RecordingLibrary: getCoreFsDirName('RecordingLibrary'),
+        RecycleBin: getCoreFsDirName('RecycleBin')
+      }
+    })
+  }
   if (!options.skipSync) {
     await syncLibraryTreeFromDisk(rootDir, {
       coreDirNames: {
@@ -213,7 +218,11 @@ export async function getLibrary(options: { skipSync?: boolean } = {}) {
   const nodeMap = new Map<string, IDir>()
   let rootNode: IDir | null = null
 
-  for (const row of rows) {
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    if (rowIndex > 0 && rowIndex % MAIN_PROCESS_LIBRARY_VIEW_YIELD_EVERY === 0) {
+      await yieldToMainProcess()
+    }
+    const row = rows[rowIndex]
     let dirName = row.dirName
     if (row.nodeType === 'library') {
       const mapped = fsToRenderer.get(dirName)
@@ -233,7 +242,11 @@ export async function getLibrary(options: { skipSync?: boolean } = {}) {
     nodeMap.set(row.uuid, node)
   }
 
-  for (const row of rows) {
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    if (rowIndex > 0 && rowIndex % MAIN_PROCESS_LIBRARY_VIEW_YIELD_EVERY === 0) {
+      await yieldToMainProcess()
+    }
+    const row = rows[rowIndex]
     const node = nodeMap.get(row.uuid)
     if (!node) continue
     if (row.parentUuid) {
@@ -255,17 +268,21 @@ export async function getLibrary(options: { skipSync?: boolean } = {}) {
       children: []
     }
 
-  const sortChildren = (node: IDir) => {
-    if (!node.children || node.children.length === 0) return
+  const sortQueue: IDir[] = [resolvedRoot]
+  for (let nodeIndex = 0; nodeIndex < sortQueue.length; nodeIndex += 1) {
+    if (nodeIndex > 0 && nodeIndex % MAIN_PROCESS_LIBRARY_VIEW_YIELD_EVERY === 0) {
+      await yieldToMainProcess()
+    }
+    const node = sortQueue[nodeIndex]
+    if (!node.children || node.children.length === 0) continue
     node.children.sort((a, b) => {
       if (a.order === undefined || b.order === undefined) return 0
       return a.order - b.order
     })
-    node.children.forEach(sortChildren)
+    sortQueue.push(...node.children)
   }
 
   if (!resolvedRoot.children) resolvedRoot.children = []
-  sortChildren(resolvedRoot)
   return resolvedRoot
 }
 

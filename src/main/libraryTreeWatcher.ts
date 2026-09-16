@@ -1,6 +1,6 @@
 import fs = require('fs-extra')
 import path = require('path')
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, WebContents } from 'electron'
 import store from './store'
 import { log } from './log'
 import { ensureEnglishCoreLibraries, getCoreFsDirName, getLibrary } from './utils'
@@ -18,8 +18,12 @@ let pendingContentPaths = new Set<string>()
 let contentDebounceTimer: NodeJS.Timeout | null = null
 let pendingCuratedContentChange = false
 let watchWindow: BrowserWindow | null = null
+let startupReconcileTimer: NodeJS.Timeout | null = null
+let startupReconcileRequested = false
 
 const WATCH_DEBOUNCE_MS = 400
+// 首屏树已经落地后再核对磁盘，避免启动时的递归扫描占用主窗口交互。
+const STARTUP_RECONCILE_DELAY_MS = 800
 /** 单次 flush 最多带这么多路径：狂改几千个文件时没必要逐个上报，取样即可定位到歌单。 */
 const MAX_PENDING_CONTENT_PATHS = 400
 
@@ -83,6 +87,12 @@ function clearContentDebounceTimer() {
     clearTimeout(contentDebounceTimer)
     contentDebounceTimer = null
   }
+}
+
+function clearStartupReconcileTimer() {
+  if (!startupReconcileTimer) return
+  clearTimeout(startupReconcileTimer)
+  startupReconcileTimer = null
 }
 
 function flushPendingContentPaths() {
@@ -181,6 +191,33 @@ function scheduleReconcile(window: BrowserWindow | null, fromBulk = false) {
   }, WATCH_DEBOUNCE_MS)
 }
 
+/**
+ * 首屏从 SQLite 树快照绘制完成后，补做一次磁盘核对。
+ *
+ * 只接受当前主窗口的 renderer，且每个 watcher 生命周期仅执行一次；核对结果未改变时
+ * reconcileLibraryTree 不会发送 library-tree-updated，因此不会造成首屏后的重复重绘。
+ */
+export function scheduleStartupLibraryTreeReconcile(sender?: WebContents): void {
+  const target = watchWindow
+  if (!target || target.isDestroyed() || startupReconcileRequested || reconciling) return
+  if (sender && target.webContents.id !== sender.id) return
+
+  startupReconcileRequested = true
+  const targetWebContentsId = target.webContents.id
+  startupReconcileTimer = setTimeout(() => {
+    startupReconcileTimer = null
+    const currentWindow = watchWindow
+    if (
+      !currentWindow ||
+      currentWindow.isDestroyed() ||
+      currentWindow.webContents.id !== targetWebContentsId
+    ) {
+      return
+    }
+    scheduleReconcile(currentWindow)
+  }, STARTUP_RECONCILE_DELAY_MS)
+}
+
 export function beginLibraryTreeWatcherBulkOperation(): () => void {
   bulkOperationDepth += 1
   let released = false
@@ -215,6 +252,8 @@ export function notifyLibraryFsChanged(absPath?: string): void {
 export function startLibraryTreeWatcher(window: BrowserWindow | null): void {
   watchWindow = window
   if (watcher) return
+  startupReconcileRequested = false
+  clearStartupReconcileTimer()
   const rootDir = store.databaseDir
   if (!rootDir) return
   const libraryRoot = path.join(rootDir, 'library')
@@ -237,6 +276,8 @@ export function startLibraryTreeWatcher(window: BrowserWindow | null): void {
 export function stopLibraryTreeWatcher(): void {
   clearDebounceTimer()
   clearContentDebounceTimer()
+  clearStartupReconcileTimer()
+  startupReconcileRequested = false
   pendingContentPaths = new Set<string>()
   pendingCuratedContentChange = false
   watchWindow = null

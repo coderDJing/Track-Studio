@@ -37,12 +37,16 @@ const SORT_ICON_BY_RULE: Record<LibraryTreeSortRule, string> = {
 export function useLibraryTreeSortUi(options: {
   libraryName: MaybeRefOrGetter<string>
   libraryRoot: MaybeRefOrGetter<IDir | null | undefined>
+  isActive?: MaybeRefOrGetter<boolean>
   forceManual?: MaybeRefOrGetter<boolean>
   reverseChildren?: MaybeRefOrGetter<boolean>
 }) {
   const runtime = useRuntimeStore()
   const libraryName = computed(() => String(toValue(options.libraryName) || ''))
   const libraryRoot = computed(() => toValue(options.libraryRoot) || null)
+  const isActive = computed(
+    () => options.isActive === undefined || Boolean(toValue(options.isActive))
+  )
   const forceManual = computed(() => Boolean(toValue(options.forceManual)))
   const reverseChildren = computed(() => Boolean(toValue(options.reverseChildren)))
 
@@ -78,7 +82,7 @@ export function useLibraryTreeSortUi(options: {
    */
   const isAwaitingTrackCounts = ref(false)
   const refreshTrackCountReadiness = () => {
-    if (forceManual.value || !isCountSortRule.value) {
+    if (!isActive.value || forceManual.value || !isCountSortRule.value) {
       isAwaitingTrackCounts.value = false
       return
     }
@@ -89,13 +93,14 @@ export function useLibraryTreeSortUi(options: {
     () =>
       [
         libraryName.value,
+        isActive.value,
         currentSortRule.value,
         libraryRoot.value?.children?.length,
         runtime.setting.showPlaylistTrackCount
       ] as const,
     () => {
       refreshTrackCountReadiness()
-      if (forceManual.value) return
+      if (!isActive.value || forceManual.value) return
       // 数量徽标和按数量排序都依赖这份数据，统一走一次批量预取
       if (!isCountSortRule.value && !runtime.setting.showPlaylistTrackCount) return
       const root = libraryRoot.value

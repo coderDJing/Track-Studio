@@ -650,18 +650,41 @@ const handleBeforeUnload = () => {
   stopWindowAudio()
 }
 
-const getLibrary = async () => {
+let startupLibraryTreeReconcileRequested = false
+
+const requestStartupLibraryTreeReconcile = () => {
+  if (startupLibraryTreeReconcileRequested) return
+  startupLibraryTreeReconcileRequested = true
+  // 先让快照树完成一次绘制，再开始后台核对；否则慢盘上的递归扫描会和首屏争抢资源。
+  void nextTick()
+    .then(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => resolve())
+        })
+    )
+    .then(() => {
+      window.electron.ipcRenderer.send('library-tree:startup-ready')
+    })
+}
+
+const getLibrary = async (options?: { useCachedSnapshot?: boolean }) => {
   if (runtime.librarySetupActive) return
   runtime.libraryTreeLoading = true
+  let loaded = false
   try {
-    runtime.libraryTree = await window.electron.ipcRenderer.invoke('getLibrary')
+    runtime.libraryTree = await window.electron.ipcRenderer.invoke(
+      options?.useCachedSnapshot ? 'getLibrary:cached' : 'getLibrary'
+    )
     runtime.oldLibraryTree = JSON.parse(JSON.stringify(runtime.libraryTree))
     pruneLibraryTreeTrackCounts(runtime.libraryTree)
+    loaded = true
   } finally {
     runtime.libraryTreeLoading = false
+    if (options?.useCachedSnapshot && loaded) requestStartupLibraryTreeReconcile()
   }
 }
-getLibrary()
+void getLibrary({ useCachedSnapshot: true }).catch(() => {})
 
 // IPC 监听器处理函数
 const handleOpenDialogFromTray = async (_e: unknown, key: string) => {

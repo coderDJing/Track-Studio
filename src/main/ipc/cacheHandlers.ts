@@ -10,6 +10,7 @@ import { queueMixtapeWaveforms } from '../services/mixtapeWaveformQueue'
 import { ensureMixtapeStemWaveformBundle } from '../services/mixtapeStemWaveformService'
 import { registerMixtapeRawWaveformHandlers } from './mixtapeRawWaveformHandlers'
 import mainWindow from '../window/mainWindow'
+import { scheduleStartupLibraryTreeReconcile } from '../libraryTreeWatcher'
 import { enqueueKeyAnalysisList, enqueueManualKeyAnalysisBatch } from '../services/keyAnalysisQueue'
 import { isInRecordingLibraryAbsPath } from '../recordingLibraryService'
 import { normalizeAnalysisBpmRangeId } from '../../shared/analysisBpmRange'
@@ -285,6 +286,16 @@ export function registerCacheHandlers() {
 
   ipcMain.handle('getLibrary', async () => {
     return await getLibrary()
+  })
+
+  // 主窗口首屏只读 SQLite 中已持久化的树，不能在这里递归扫描音乐库。
+  // renderer 绘制完后会通过 library-tree:startup-ready 触发一次后台磁盘核对。
+  ipcMain.handle('getLibrary:cached', async () => {
+    return await getLibrary({ skipSync: true, skipPreparation: true })
+  })
+
+  ipcMain.on('library-tree:startup-ready', (event) => {
+    scheduleStartupLibraryTreeReconcile(event.sender)
   })
 
   ipcMain.handle(

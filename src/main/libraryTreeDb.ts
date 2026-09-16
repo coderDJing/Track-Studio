@@ -27,6 +27,11 @@ const TREE_MIGRATION_DONE_KEY = 'library_tree_migration_done_v1'
 const TREE_MIGRATION_IN_PROGRESS_KEY = 'library_tree_migration_in_progress_v1'
 const TREE_ARCHIVE_DONE_KEY = 'library_tree_legacy_archive_done_v1'
 const SET_CUSTODY_DIR_NAME = '__set_custody__'
+const MAIN_PROCESS_TREE_SCAN_YIELD_EVERY = 128
+
+// 库树核对仍需在主进程协调 SQLite，但目录很多时不能连续占满事件循环；
+// 让出一个 macrotask 后，Windows 的窗口拖动和 Electron IPC 能及时被处理。
+const yieldToMainProcess = () => new Promise<void>((resolve) => setImmediate(resolve))
 
 export function isLibraryTreeMigrationDone(db: SqliteDatabase): boolean {
   return getMetaValue(db, TREE_MIGRATION_DONE_KEY) === '1'
@@ -485,6 +490,9 @@ export async function syncLibraryTreeFromDisk(
   }
 
   for (let i = 0; i < scanQueue.length; i += 1) {
+    if (i > 0 && i % MAIN_PROCESS_TREE_SCAN_YIELD_EVERY === 0) {
+      await yieldToMainProcess()
+    }
     const current = scanQueue[i]
     let entries: fs.Dirent[] = []
     try {
@@ -495,7 +503,11 @@ export async function syncLibraryTreeFromDisk(
 
     let hasSubdirs = false
     let hasAudio = false
-    for (const entry of entries) {
+    for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+      if (entryIndex > 0 && entryIndex % MAIN_PROCESS_TREE_SCAN_YIELD_EVERY === 0) {
+        await yieldToMainProcess()
+      }
+      const entry = entries[entryIndex]
       if (entry.isDirectory()) {
         if (entry.name.startsWith('.')) continue
         const childAbs = path.join(current.absPath, entry.name)
@@ -553,7 +565,11 @@ export async function syncLibraryTreeFromDisk(
 
   let orderSeed = Date.now()
 
-  for (const node of diskNodes) {
+  for (let nodeIndex = 0; nodeIndex < diskNodes.length; nodeIndex += 1) {
+    if (nodeIndex > 0 && nodeIndex % MAIN_PROCESS_TREE_SCAN_YIELD_EVERY === 0) {
+      await yieldToMainProcess()
+    }
+    const node = diskNodes[nodeIndex]
     let diskUuid = node.diskUuid ? String(node.diskUuid).trim() : null
     if (diskUuid && usedUuids.has(diskUuid)) {
       diskUuid = null
@@ -648,7 +664,11 @@ export async function syncLibraryTreeFromDisk(
   // 先写标记文件，再提交数据库事务。
   // 如果标记文件写入成功但事务失败（极端情况），磁盘上会有多余的 .frkb.uuid 文件，
   // 但下次同步会自我修正，不会导致数据丢失或损坏。
-  for (const item of markerWrites) {
+  for (let markerIndex = 0; markerIndex < markerWrites.length; markerIndex += 1) {
+    if (markerIndex > 0 && markerIndex % MAIN_PROCESS_TREE_SCAN_YIELD_EVERY === 0) {
+      await yieldToMainProcess()
+    }
+    const item = markerWrites[markerIndex]
     await writeUuidMarker(item.absPath, item.uuid)
   }
 
