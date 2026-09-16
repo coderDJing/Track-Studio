@@ -408,6 +408,9 @@ const isIgnorablePlayerEmptySourceError = (error: unknown) =>
 const {
   coverBlobUrl,
   songInfoShow,
+  handleCoverMouseEnter,
+  handleCoverMouseLeave,
+  handleSongInfoMouseEnter,
   handleSongInfoMouseLeave,
   showCoverContextMenu,
   setCoverByIPC
@@ -904,10 +907,16 @@ watch(
       <PlayerCoverSlot
         :cover-blob-url="coverBlobUrl"
         :placeholder-src="placeholderLogo"
-        @hover-cover="songInfoShow = true"
+        @hover-cover="handleCoverMouseEnter"
+        @leave-cover="handleCoverMouseLeave"
       />
       <transition name="fade">
-        <div v-if="songInfoShow" class="songInfo" @mouseleave="handleSongInfoMouseLeave">
+        <div
+          v-if="songInfoShow"
+          class="songInfo"
+          @mouseenter="handleSongInfoMouseEnter"
+          @mouseleave="handleSongInfoMouseLeave"
+        >
           <div class="cover unselectable" @contextmenu.prevent="showCoverContextMenu">
             <img
               v-if="coverBlobUrl"

@@ -49,6 +49,24 @@ export function useCover(runtime: ReturnType<typeof useRuntimeStore>) {
   const songInfoShow = ref(false)
   const isShowingContextMenu = ref(false)
   const contextMenuCoverSnapshot = ref<CoverSaveSnapshot | null>(null)
+  let songInfoHideTimer: ReturnType<typeof setTimeout> | null = null
+  let isCoverHovered = false
+  let isSongInfoHovered = false
+
+  const clearSongInfoHideTimer = () => {
+    if (!songInfoHideTimer) return
+    clearTimeout(songInfoHideTimer)
+    songInfoHideTimer = null
+  }
+
+  const scheduleSongInfoHide = () => {
+    clearSongInfoHideTimer()
+    songInfoHideTimer = setTimeout(() => {
+      songInfoHideTimer = null
+      if (isCoverHovered || isSongInfoHovered || isShowingContextMenu.value) return
+      songInfoShow.value = false
+    }, 200)
+  }
 
   const disposeCoverUrl = () => {
     if (coverBlobUrl.value && coverBlobUrl.value.startsWith('blob:')) {
@@ -133,9 +151,25 @@ export function useCover(runtime: ReturnType<typeof useRuntimeStore>) {
     }
   }
 
+  const handleCoverMouseEnter = () => {
+    isCoverHovered = true
+    clearSongInfoHideTimer()
+    songInfoShow.value = true
+  }
+
+  const handleCoverMouseLeave = () => {
+    isCoverHovered = false
+    scheduleSongInfoHide()
+  }
+
+  const handleSongInfoMouseEnter = () => {
+    isSongInfoHovered = true
+    clearSongInfoHideTimer()
+  }
+
   const handleSongInfoMouseLeave = () => {
-    if (isShowingContextMenu.value) return
-    songInfoShow.value = false
+    isSongInfoHovered = false
+    scheduleSongInfoHide()
   }
 
   const saveCoverAs = () => {
@@ -148,6 +182,7 @@ export function useCover(runtime: ReturnType<typeof useRuntimeStore>) {
 
     setTimeout(async () => {
       isShowingContextMenu.value = true
+      clearSongInfoHideTimer()
       const currentSong = runtime.playingData.playingSong
       if (currentSong && coverBlobUrl.value) {
         contextMenuCoverSnapshot.value = {
@@ -161,10 +196,12 @@ export function useCover(runtime: ReturnType<typeof useRuntimeStore>) {
       await showSaveCoverContextMenu(event, contextMenuCoverSnapshot.value)
       isShowingContextMenu.value = false
       contextMenuCoverSnapshot.value = null
+      scheduleSongInfoHide()
     }, 0)
   }
 
   onUnmounted(() => {
+    clearSongInfoHideTimer()
     disposeCoverUrl()
     emitter.off('songMetadataUpdated', handleSongMetadataUpdated)
   })
@@ -177,6 +214,9 @@ export function useCover(runtime: ReturnType<typeof useRuntimeStore>) {
     isShowingContextMenu,
     contextMenuCoverSnapshot,
     setCoverByIPC,
+    handleCoverMouseEnter,
+    handleCoverMouseLeave,
+    handleSongInfoMouseEnter,
     handleSongInfoMouseLeave,
     showCoverContextMenu,
     saveCoverAs,
