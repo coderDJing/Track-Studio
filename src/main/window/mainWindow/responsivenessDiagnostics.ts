@@ -18,6 +18,12 @@ type MainProcessStallIncident = {
   maxDurationMs: number
 }
 
+type RendererUnresponsiveIncident = {
+  startedAtMs: number
+  rendererPid: number | null
+  url: string | null
+}
+
 type MainWindowResponsivenessDiagnosticsOptions = {
   isAuxiliaryWindowVisible?: () => boolean
 }
@@ -25,6 +31,14 @@ type MainWindowResponsivenessDiagnosticsOptions = {
 const getRendererPid = (browserWindow: BrowserWindow): number | null => {
   try {
     return browserWindow.webContents.getOSProcessId()
+  } catch {
+    return null
+  }
+}
+
+const getRendererUrl = (browserWindow: BrowserWindow): string | null => {
+  try {
+    return browserWindow.webContents.getURL() || null
   } catch {
     return null
   }
@@ -55,10 +69,7 @@ const captureSnapshot = (
   options?: { sinceMs?: number; auxiliaryWindowVisible?: boolean }
 ) => {
   const rendererPid = getRendererPid(browserWindow)
-  let url: string | null = null
-  try {
-    url = browserWindow.webContents.getURL() || null
-  } catch {}
+  const url = getRendererUrl(browserWindow)
   const sinceMs = options?.sinceMs ?? Date.now() - 5_000
 
   return {
@@ -89,7 +100,7 @@ export const attachMainWindowResponsivenessDiagnostics = (
   options: MainWindowResponsivenessDiagnosticsOptions = {}
 ) => {
   const rcDiagnosticsEnabled = isPackagedRcBuild()
-  let rendererUnresponsiveAt: number | null = null
+  let rendererUnresponsiveIncident: RendererUnresponsiveIncident | null = null
   let lastHeartbeatAt = Date.now()
   let lastCpuUsage = process.cpuUsage()
   let lastEventLoopUtilization = performance.eventLoopUtilization()
@@ -194,6 +205,32 @@ export const attachMainWindowResponsivenessDiagnostics = (
         finishBackgroundStallIncident()
         stallIncident = recordStall(stallIncident, now, stallDurationMs)
         // 每次达到阈值都保留现场，避免同一轮后续更严重的卡顿只剩汇总计数。
+        const snapshot = captureSnapshot(browserWindow, {
+          sinceMs: previousHeartbeatAt,
+          auxiliaryWindowVisible
+        })
+        const elapsedMs = Math.max(0, now - previousHeartbeatAt)
+        const cpuUserMsRounded = Math.round(cpuUserMs)
+        const cpuSystemMsRounded = Math.round(cpuSystemMs)
+        const processCpuMs = Math.max(0, cpuUserMs + cpuSystemMs)
+        const processCpuRatio = elapsedMs > 0 ? processCpuMs / elapsedMs : 0
+        const overlappingActivity = snapshot.activity.longest
+        const stallClassification = overlappingActivity
+          ? {
+              kind: 'tracked-main-thread-activity-overlap',
+              activity: overlappingActivity
+            }
+          : processCpuRatio >= 0.7
+            ? {
+                kind: 'process-cpu-bound',
+                processCpuRatio: Math.round(processCpuRatio * 1000) / 1000
+              }
+            : processCpuRatio <= 0.1
+              ? {
+                  kind: 'low-process-cpu',
+                  processCpuRatio: Math.round(processCpuRatio * 1000) / 1000
+                }
+              : { kind: 'unclassified', processCpuRatio: Math.round(processCpuRatio * 1000) / 1000 }
         log.error(
           '[main-window] main-process event loop stalled',
           stringifyDiagnostic({
@@ -201,14 +238,13 @@ export const attachMainWindowResponsivenessDiagnostics = (
             stallIndex: stallIncident.count,
             stallDurationMs,
             interactiveSurface: mainWindowVisible ? 'main-window' : 'mini-player',
-            snapshot: captureSnapshot(browserWindow, {
-              sinceMs: previousHeartbeatAt,
-              auxiliaryWindowVisible
-            }),
+            stallClassification,
+            snapshot,
             mainProcessInterval: {
-              elapsedMs: Math.max(0, now - previousHeartbeatAt),
-              cpuUserMs: Math.round(cpuUserMs),
-              cpuSystemMs: Math.round(cpuSystemMs),
+              elapsedMs,
+              cpuUserMs: cpuUserMsRounded,
+              cpuSystemMs: cpuSystemMsRounded,
+              processCpuRatio: Math.round(processCpuRatio * 1000) / 1000,
               eventLoopActiveMs: Math.round(eventLoopUtilization.active),
               eventLoopIdleMs: Math.round(eventLoopUtilization.idle),
               eventLoopUtilization: Math.round(eventLoopUtilization.utilization * 1000) / 1000,
@@ -221,49 +257,88 @@ export const attachMainWindowResponsivenessDiagnostics = (
 
   browserWindow.webContents.on('unresponsive', () => {
     if (!rcDiagnosticsEnabled) return
-    if (rendererUnresponsiveAt !== null) {
+    if (rendererUnresponsiveIncident !== null) {
       return
     }
-    rendererUnresponsiveAt = Date.now()
+    rendererUnresponsiveIncident = {
+      startedAtMs: Date.now(),
+      rendererPid: getRendererPid(browserWindow),
+      url: getRendererUrl(browserWindow)
+    }
     log.error(
       '[main-window] renderer unresponsive',
-      stringifyDiagnostic({ snapshot: captureSnapshot(browserWindow) })
+      stringifyDiagnostic({
+        incident: rendererUnresponsiveIncident,
+        snapshot: captureSnapshot(browserWindow)
+      })
     )
   })
 
   browserWindow.webContents.on('responsive', () => {
     if (!rcDiagnosticsEnabled) return
-    if (rendererUnresponsiveAt === null) {
+    const incident = rendererUnresponsiveIncident
+    if (incident === null) {
       return
     }
-    const durationMs = Date.now() - rendererUnresponsiveAt
-    const sinceMs = rendererUnresponsiveAt
-    rendererUnresponsiveAt = null
+    const durationMs = Date.now() - incident.startedAtMs
+    rendererUnresponsiveIncident = null
     log.error(
       '[main-window] renderer recovered',
       stringifyDiagnostic({
         durationMs,
-        snapshot: captureSnapshot(browserWindow, { sinceMs })
+        incident,
+        rendererPidChanged:
+          incident.rendererPid !== null && incident.rendererPid !== getRendererPid(browserWindow),
+        snapshot: captureSnapshot(browserWindow, { sinceMs: incident.startedAtMs })
+      })
+    )
+  })
+
+  // Electron 某些 renderer 重载不会先发 render-process-gone；若此前已经无响应，
+  // 在 load 完成处闭合这次事件，避免日志只留下“卡住”却不知道最终走向。
+  browserWindow.webContents.on('did-finish-load', () => {
+    if (!rcDiagnosticsEnabled) return
+    const incident = rendererUnresponsiveIncident
+    if (incident === null) return
+    const durationMs = Date.now() - incident.startedAtMs
+    rendererUnresponsiveIncident = null
+    log.error(
+      '[main-window] renderer reloaded after unresponsive',
+      stringifyDiagnostic({
+        durationMs,
+        incident,
+        rendererPidChanged:
+          incident.rendererPid !== null && incident.rendererPid !== getRendererPid(browserWindow),
+        snapshot: captureSnapshot(browserWindow, { sinceMs: incident.startedAtMs })
       })
     )
   })
 
   browserWindow.webContents.on('render-process-gone', (_event, details) => {
-    const durationMs =
-      rendererUnresponsiveAt === null ? null : Math.max(0, Date.now() - rendererUnresponsiveAt)
-    const sinceMs = rendererUnresponsiveAt ?? Date.now() - 5_000
-    rendererUnresponsiveAt = null
+    const incident = rendererUnresponsiveIncident
+    const durationMs = incident === null ? null : Math.max(0, Date.now() - incident.startedAtMs)
+    const sinceMs = incident?.startedAtMs ?? Date.now() - 5_000
+    rendererUnresponsiveIncident = null
     log.error(
       '[main-window] render-process-gone',
       stringifyDiagnostic({
         details,
         unresponsiveDurationMs: durationMs,
+        incident,
         snapshot: captureSnapshot(browserWindow, { sinceMs })
       })
     )
   })
 
   const dispose = () => {
+    if (rendererUnresponsiveIncident) {
+      const incident = rendererUnresponsiveIncident
+      rendererUnresponsiveIncident = null
+      log.error('[main-window] window closed while renderer unresponsive', {
+        durationMs: Math.max(0, Date.now() - incident.startedAtMs),
+        incident
+      })
+    }
     finishStallIncident()
     finishBackgroundStallIncident()
     if (heartbeat) clearInterval(heartbeat)

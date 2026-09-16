@@ -35,6 +35,8 @@ import type { MiniPlayerTaskProgress } from '../../shared/miniPlayerTaskProgress
 
 let miniPlayerWindow: BrowserWindow | null = null
 let getMainWindow: () => BrowserWindow | null = () => null
+let lastHostPlayheadReceivedAtMs: number | null = null
+let lastHostPlayheadSenderId: number | null = null
 let ipcBound = false
 let mainListenersAttached = false
 let restoringMain = false
@@ -498,6 +500,8 @@ const ensureIpcHandlers = () => {
     forwardToMini(MINI_PLAYER_CHANNELS.hostState, payload)
   })
   ipcMain.on(MINI_PLAYER_CHANNELS.playhead, (_event, payload: MiniPlayerPlayhead) => {
+    lastHostPlayheadReceivedAtMs = Date.now()
+    lastHostPlayheadSenderId = _event.sender.id
     forwardToMini(MINI_PLAYER_CHANNELS.playhead, payload)
   })
   ipcMain.on(
@@ -506,10 +510,16 @@ const ensureIpcHandlers = () => {
       if (!isPackagedRcBuild() || !isVisible()) return
       const delayedMs = Number(payload?.delayedMs)
       if (!Number.isFinite(delayedMs) || delayedMs < 1500) return
+      const now = Date.now()
       log.error('[mini-player] playback progress delayed', {
         delayedMs: Math.round(delayedMs),
         currentSeconds: Math.max(0, Number(payload?.currentSeconds) || 0),
         durationSeconds: Math.max(0, Number(payload?.durationSeconds) || 0),
+        mainProcessReceivedGapMs:
+          lastHostPlayheadReceivedAtMs === null
+            ? null
+            : Math.max(0, now - lastHostPlayheadReceivedAtMs),
+        hostWebContentsId: lastHostPlayheadSenderId,
         focused: miniPlayerWindow?.isFocused() === true,
         visible: true
       })

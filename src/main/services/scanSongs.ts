@@ -81,8 +81,16 @@ export type ScanSongListResult = {
     cacheHits: number
     parsedCount: number
     /** 以下为定位慢开销的细分项：读缓存表、stat、跨库补分析各花了多久。 */
+    cacheLoadedFromDb: boolean
     cacheLoadMs: number
     cacheRows: number
+    /** 未命中按原因拆分；仅用于慢扫描诊断，四项之和等于 filesCount - cacheHits。 */
+    cacheMisses: {
+      noEntry: number
+      sizeMismatch: number
+      mtimeMismatch: number
+      analysisOnly: number
+    }
     cacheRootResolveMs: number
     identityDigestMs: number
     waveformAvailabilityMs: number
@@ -410,22 +418,38 @@ export async function scanSongList(
   const cachedInfos: ISongInfo[] = []
   const filesToParse: string[] = []
   const analysisOnlyByPath = new Map<string, ISongInfo>()
+  const cacheMisses = {
+    noEntry: 0,
+    sizeMismatch: 0,
+    mtimeMismatch: 0,
+    analysisOnly: 0
+  }
   const isAnalysisOnly = (info?: ISongInfo | null): boolean => Boolean(info?.analysisOnly)
   const perfCacheMatchStart = Date.now()
   for (const it of filesStatList) {
     const c = cacheMap.get(it.key)
-    if (c && c.size === it.size && Math.abs(c.mtimeMs - it.mtimeMs) < 1) {
-      if (isAnalysisOnly(c.info)) {
-        analysisOnlyByPath.set(it.key, c.info)
-        filesToParse.push(it.file)
-      } else {
-        cachedInfos.push(
-          enrichSongInfo(discardStaleAnalysisFields({ ...c.info, filePath: it.file }))
-        )
-      }
-    } else {
+    if (!c) {
+      cacheMisses.noEntry += 1
       filesToParse.push(it.file)
+      continue
     }
+    if (c.size !== it.size) {
+      cacheMisses.sizeMismatch += 1
+      filesToParse.push(it.file)
+      continue
+    }
+    if (Math.abs(c.mtimeMs - it.mtimeMs) >= 1) {
+      cacheMisses.mtimeMismatch += 1
+      filesToParse.push(it.file)
+      continue
+    }
+    if (isAnalysisOnly(c.info)) {
+      cacheMisses.analysisOnly += 1
+      analysisOnlyByPath.set(it.key, c.info)
+      filesToParse.push(it.file)
+      continue
+    }
+    cachedInfos.push(enrichSongInfo(discardStaleAnalysisFields({ ...c.info, filePath: it.file })))
   }
   const perfCacheMatchMs = Date.now() - perfCacheMatchStart
   const perfCacheCheckEnd = Date.now()
@@ -508,8 +532,10 @@ export async function scanSongList(
         failedCount,
         cacheHits: cachedInfos.length,
         parsedCount,
+        cacheLoadedFromDb: cacheFromDb,
         cacheLoadMs: perfCacheLoadMs,
         cacheRows: cacheMap.size,
+        cacheMisses,
         cacheRootResolveMs: perfCacheRootResolveMs,
         identityDigestMs: perfIdentityDigestMs,
         waveformAvailabilityMs: perfWaveformAvailabilityMs,
