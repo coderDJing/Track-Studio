@@ -214,6 +214,17 @@ export const attachMainWindowResponsivenessDiagnostics = (
         const cpuSystemMsRounded = Math.round(cpuSystemMs)
         const processCpuMs = Math.max(0, cpuUserMs + cpuSystemMs)
         const processCpuRatio = elapsedMs > 0 ? processCpuMs / elapsedMs : 0
+        const power = snapshot.power
+        const isNonInteractiveSystemDelay =
+          power.systemIdleState === 'locked' ||
+          (power.systemIdleState === 'idle' &&
+            power.systemIdleSeconds !== null &&
+            power.systemIdleSeconds >= 10 &&
+            processCpuRatio <= 0.1)
+        if (isNonInteractiveSystemDelay) {
+          finishStallIncident()
+          return
+        }
         const overlappingActivity = snapshot.activity.longest
         const stallClassification = overlappingActivity
           ? {

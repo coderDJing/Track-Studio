@@ -138,6 +138,26 @@ const extractExecErrorDetail = (error: unknown) => {
   )
 }
 
+const getExecFailureDiagnostic = (error: unknown) => {
+  const err = error as {
+    code?: unknown
+    signal?: unknown
+    killed?: unknown
+    stderr?: string | Buffer
+    message?: unknown
+  }
+  const exitCode = typeof err.code === 'number' || typeof err.code === 'string' ? err.code : null
+  const signal = typeof err.signal === 'string' ? err.signal : null
+  const message = trimOutput(err.message).split(/\r?\n/, 1)[0] || 'unknown error'
+  return {
+    exitCode,
+    signal,
+    killed: err.killed === true,
+    stderr: decodeExecOutput(err.stderr),
+    message
+  }
+}
+
 const createDriveEjectFailure = (
   rootPath: string,
   code: PioneerDriveEjectFailureCode,
@@ -324,30 +344,38 @@ async function listWindowsRemovableDrives(): Promise<BaseDriveRow[]> {
   const script = [
     "$ErrorActionPreference = 'Stop'",
     "$usbLetters = New-Object 'System.Collections.Generic.HashSet[string]'",
-    'Get-CimInstance Win32_DiskDrive | Where-Object {',
-    "  $_.InterfaceType -eq 'USB' -or ($_.PNPDeviceID -like 'USBSTOR*')",
-    '} | ForEach-Object {',
-    '  $disk = $_',
-    '  Get-CimAssociatedInstance -InputObject $disk -Association Win32_DiskDriveToDiskPartition -ErrorAction SilentlyContinue | ForEach-Object {',
-    '    $partition = $_',
-    '    Get-CimAssociatedInstance -InputObject $partition -Association Win32_LogicalDiskToPartition -ErrorAction SilentlyContinue | ForEach-Object {',
-    '      $id = [string]$_.DeviceID',
-    '      if ($id) { [void]$usbLetters.Add($id.ToUpperInvariant()) }',
-    '    }',
-    '  }',
-    '}',
-    'if (Get-Command Get-Disk -ErrorAction SilentlyContinue) {',
-    "  Get-Disk | Where-Object { $_.BusType -eq 'USB' } | ForEach-Object {",
-    '    $diskNumber = $_.Number',
-    '    Get-Partition -DiskNumber $diskNumber -ErrorAction SilentlyContinue | ForEach-Object {',
-    '      if ($_.DriveLetter) {',
-    "        [void]$usbLetters.Add((([string]$_.DriveLetter + ':').ToUpperInvariant()))",
+    'try {',
+    '  Get-CimInstance Win32_DiskDrive -ErrorAction Stop | Where-Object {',
+    "    $_.InterfaceType -eq 'USB' -or ($_.PNPDeviceID -like 'USBSTOR*')",
+    '  } | ForEach-Object {',
+    '    $disk = $_',
+    '    Get-CimAssociatedInstance -InputObject $disk -Association Win32_DiskDriveToDiskPartition -ErrorAction SilentlyContinue | ForEach-Object {',
+    '      $partition = $_',
+    '      Get-CimAssociatedInstance -InputObject $partition -Association Win32_LogicalDiskToPartition -ErrorAction SilentlyContinue | ForEach-Object {',
+    '        $id = [string]$_.DeviceID',
+    '        if ($id) { [void]$usbLetters.Add($id.ToUpperInvariant()) }',
     '      }',
     '    }',
     '  }',
+    '} catch {',
+    '  [Console]::Error.WriteLine("cim-usb-association: $($_.Exception.Message)")',
+    '}',
+    'if (Get-Command Get-Disk -ErrorAction SilentlyContinue) {',
+    '  try {',
+    "    Get-Disk -ErrorAction Stop | Where-Object { $_.BusType -eq 'USB' } | ForEach-Object {",
+    '      $diskNumber = $_.Number',
+    '      Get-Partition -DiskNumber $diskNumber -ErrorAction SilentlyContinue | ForEach-Object {',
+    '        if ($_.DriveLetter) {',
+    "          [void]$usbLetters.Add((([string]$_.DriveLetter + ':').ToUpperInvariant()))",
+    '        }',
+    '      }',
+    '    }',
+    '  } catch {',
+    '    [Console]::Error.WriteLine("storage-usb-association: $($_.Exception.Message)")',
+    '  }',
     '}',
     '$rows = @()',
-    'Get-CimInstance Win32_LogicalDisk | ForEach-Object {',
+    'Get-CimInstance Win32_LogicalDisk -ErrorAction Stop | ForEach-Object {',
     '  $id = [string]$_.DeviceID',
     '  if (-not $id) { return }',
     '  $driveType = [int]$_.DriveType',
@@ -368,7 +396,7 @@ async function listWindowsRemovableDrives(): Promise<BaseDriveRow[]> {
   ].join('\n')
 
   try {
-    const { stdout } = await execFileAsync(
+    const { stdout, stderr } = await execFileAsync(
       'powershell.exe',
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
       {
@@ -377,6 +405,12 @@ async function listWindowsRemovableDrives(): Promise<BaseDriveRow[]> {
         maxBuffer: 1024 * 1024 * 8
       }
     )
+    const partialProbeError = trimOutput(stderr)
+    if (partialProbeError) {
+      log.error('[pioneer-device-library] windows removable drive probe partially failed', {
+        stderr: partialProbeError
+      })
+    }
     const rows = normalizeJsonArray<Record<string, unknown>>(JSON.parse(String(stdout || '[]')))
     const normalizedRows: BaseDriveRow[] = []
     for (const row of rows) {
@@ -406,7 +440,10 @@ async function listWindowsRemovableDrives(): Promise<BaseDriveRow[]> {
       left.path.localeCompare(right.path, undefined, { sensitivity: 'base' })
     )
   } catch (error) {
-    log.error('[pioneer-device-library] windows removable drive detection failed', error)
+    log.error(
+      '[pioneer-device-library] windows removable drive detection failed',
+      getExecFailureDiagnostic(error)
+    )
     return []
   }
 }
