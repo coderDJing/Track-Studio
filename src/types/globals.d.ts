@@ -717,6 +717,8 @@ interface ISettingConfig {
   cloudSyncAutoEnabled?: boolean
   // 云同步定时间隔（毫秒）；勾选启用后默认 1 小时（跟资料库走）
   cloudSyncAutoIntervalMs?: number
+  // 最近一次从服务器发现文件确认可用的云同步服务地址
+  cloudSyncLastKnownBaseUrl?: string
   // 是否同步精选库（默认关闭，跟资料库走）
   curatedLibrarySyncEnabled?: boolean
   // 音频转换默认项（记住用户上次选择）

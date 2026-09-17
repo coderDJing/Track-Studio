@@ -141,6 +141,7 @@ const defaultSettings = {
   cloudSyncUserKey: is.dev ? DEV_DEFAULT_CLOUD_SYNC_USER_KEY : '',
   cloudSyncAutoEnabled: DEFAULT_CLOUD_SYNC_AUTO_ENABLED,
   cloudSyncAutoIntervalMs: DEFAULT_CLOUD_SYNC_AUTO_INTERVAL_MS,
+  cloudSyncLastKnownBaseUrl: '',
   curatedLibrarySyncEnabled: false,
   convertDefaults: defaultConvertDefaults,
   lastSeenWhatsNewVersion: '',
@@ -243,6 +244,9 @@ export function loadInitialSettings(options: LoadSettingsOptions): ISettingConfi
   finalSettings.cloudSyncAutoIntervalMs = normalizeCloudSyncAutoIntervalMs(
     finalSettings.cloudSyncAutoIntervalMs
   )
+  if (typeof finalSettings.cloudSyncLastKnownBaseUrl !== 'string') {
+    finalSettings.cloudSyncLastKnownBaseUrl = ''
+  }
   finalSettings.curatedLibrarySyncEnabled = finalSettings.curatedLibrarySyncEnabled === true
   if (is.dev) {
     finalSettings.cloudSyncUserKey = resolveDevCloudSyncUserKey(

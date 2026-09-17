@@ -8,7 +8,7 @@ type UndiciFetchInit = Parameters<typeof undiciFetch>[1]
 type ProxyFetchInit = FetchInit & { dispatcher?: ProxyAgent }
 
 let systemProxyDispatcher: ProxyAgent | undefined
-let systemProxyInitialized = false
+let systemProxyInitialization: Promise<void> | undefined
 
 const isLocalhostInput = (input: FetchInput): boolean => {
   try {
@@ -21,11 +21,23 @@ const isLocalhostInput = (input: FetchInput): boolean => {
 }
 
 async function ensureSystemProxyInitialized() {
-  if (systemProxyInitialized) return
-  systemProxyInitialized = true
-  const proxyUrl = await getSystemProxy()
-  if (proxyUrl) {
-    systemProxyDispatcher = new ProxyAgent(proxyUrl)
+  if (!systemProxyInitialization) {
+    systemProxyInitialization = getSystemProxy().then((proxyUrl) => {
+      if (proxyUrl) {
+        systemProxyDispatcher = new ProxyAgent(proxyUrl)
+      }
+    })
+  }
+
+  const initialization = systemProxyInitialization
+  try {
+    await initialization
+  } catch (error) {
+    // 初始化失败后允许下一次请求重新读取系统代理，避免永久停留在直连状态。
+    if (systemProxyInitialization === initialization) {
+      systemProxyInitialization = undefined
+    }
+    throw error
   }
 }
 
