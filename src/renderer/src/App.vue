@@ -206,8 +206,7 @@ const {
   goNextBeat: goNextUserGuideBeat,
   beginUserGuide,
   waitForIdentity: waitForUserGuideIdentity,
-  waitForIdleGuide: waitForUserGuideIdle,
-  replayCurrentModeGuide
+  waitForIdleGuide: waitForUserGuideIdle
 } = useUserGuide()
 
 type CoreLibraryName = 'FilterLibrary' | 'CuratedLibrary' | 'MixtapeLibrary' | 'RecycleBin'
@@ -490,10 +489,6 @@ const openDialog = async (item: string) => {
   }
   if (item === 'menu.whatsNew') {
     window.electron.ipcRenderer.send('showWhatsNew')
-    return
-  }
-  if (item === 'menu.userGuide') {
-    replayCurrentModeGuide()
     return
   }
   if (item === 'menu.globalSongSearch') {

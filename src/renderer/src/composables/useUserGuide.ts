@@ -325,11 +325,6 @@ export const useUserGuide = (options?: { surface?: 'main' | 'mixtape' }) => {
     requestCurrentModeGuide(runtime.mainWindowBrowseMode)
   }
 
-  const replayCurrentModeGuide = () => {
-    if (!hasChosenIdentity() || shouldSkipGuides()) return
-    requestCurrentModeGuide(runtime.mainWindowBrowseMode, { force: true })
-  }
-
   const handleImportFinished = (_event: unknown, songListUUID: unknown) => {
     const uuid = typeof songListUUID === 'string' ? songListUUID : ''
     if (!uuid || !isFilterLibrarySongList(uuid)) return
@@ -437,7 +432,6 @@ export const useUserGuide = (options?: { surface?: 'main' | 'mixtape' }) => {
     goNextBeat,
     beginUserGuide,
     waitForIdentity,
-    waitForIdleGuide,
-    replayCurrentModeGuide
+    waitForIdleGuide
   }
 }

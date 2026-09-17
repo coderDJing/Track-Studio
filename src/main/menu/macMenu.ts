@@ -292,15 +292,6 @@ const buildFullMenu = () => {
             await openLogFile()
           }
         },
-        ...(librarySetupActive
-          ? []
-          : [
-              {
-                label: tMenu('menu.userGuide'),
-                click: () =>
-                  mainWindow.instance?.webContents.send('openDialogFromTray', 'menu.userGuide')
-              }
-            ]),
         {
           label: tMenu('menu.thirdPartyNotices'),
           click: () =>

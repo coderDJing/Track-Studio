@@ -161,7 +161,6 @@ const defaultMenuConfigs = computed<MenuConfig[]>(() => {
         : []),
       { name: 'menu.openLog', action: 'open-log' },
       { name: 'menu.whatsNew' },
-      ...(librarySetupActive ? [] : [{ name: 'menu.userGuide' }]),
       { name: 'menu.thirdPartyNotices' },
       { name: 'menu.about' }
     ],
