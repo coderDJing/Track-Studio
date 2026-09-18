@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
@@ -36,7 +37,9 @@ const platformDefault = (() => {
   return process.arch === 'arm64' ? 'linux-arm64' : 'linux-x64'
 })()
 
-const runtimeRoot = path.resolve(getArgValue('--runtime-root', 'vendor/demucs'))
+const configuredDemucsRoot = String(process.env.FRKB_DEMUCS_ROOT || '').trim()
+const runtimeRootArg = getArgValue('--runtime-root', configuredDemucsRoot || 'vendor/demucs')
+const runtimeRoot = path.resolve(runtimeRootArg)
 const platformKey = getArgValue('--platform', platformDefault)
 const outputRoot = path.resolve(getArgValue('--output-root', 'dist/demucs-runtime-assets'))
 const releaseTag = getArgValue('--release-tag', 'demucs-runtime-assets')
