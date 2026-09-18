@@ -341,6 +341,22 @@ export function registerHorizontalBrowseTransportHandlers() {
   )
 
   ipcMain.handle(
+    'horizontal-browse-transport:set-audition-suspended',
+    async (_event, nowMs: number, suspended: boolean) => {
+      const snapshot = horizontalBrowseTransportBridge.setAuditionSuspended(
+        nowMs,
+        Boolean(suspended)
+      )
+      notifyPlaybackStateChange(
+        !snapshot.auditionSuspended &&
+          [snapshot.top, snapshot.bottom].some((deck) => deck.playingAudible || deck.playing)
+      )
+      broadcastHorizontalBrowseTransportSnapshot(snapshot)
+      return snapshot
+    }
+  )
+
+  ipcMain.handle(
     'horizontal-browse-transport:prepare-playhead',
     async (_event, deck: HorizontalBrowseDeckKey, nowMs: number) => {
       const before = horizontalBrowseTransportBridge.snapshot(nowMs)

@@ -23,6 +23,7 @@ type UseHorizontalBrowseRenderSyncParams = {
   nativeTransport: {
     state?: {
       stateRevision?: number
+      auditionSuspended?: boolean
     }
     snapshot: (nowMs?: number) => Promise<unknown>
     resolveLiveClockPlaybackRate?: (deck: DeckKey) => number | null
@@ -79,6 +80,11 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
   const bottomDeckRenderCurrentSeconds = ref(0)
   const topDeckPlaybackSyncRevision = ref(0)
   const bottomDeckPlaybackSyncRevision = ref(0)
+  const auditionPresentationSuspended = ref(false)
+  const auditionPresentationFrozenSec: Record<DeckKey, number> = {
+    top: 0,
+    bottom: 0
+  }
 
   const deckRenderSyncBaseSec = reactive<Record<DeckKey, number>>({
     top: 0,
@@ -113,12 +119,18 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
   let transportSnapshotInFlight = false
   let lastTransportSnapshotAt = 0
 
+  const resolveAuditionSuspended = () =>
+    auditionPresentationSuspended.value || params.nativeTransport.state?.auditionSuspended === true
+
   const lastClockPlaybackRate: Record<DeckKey, number | null> = {
     top: null,
     bottom: null
   }
 
   const estimateDeckRenderCurrentSeconds = (deck: DeckKey, nowMs = performance.now()) => {
+    if (auditionPresentationSuspended.value) {
+      return auditionPresentationFrozenSec[deck]
+    }
     const pendingHold = pendingRenderPositionHold[deck]
     if (pendingHold && nowMs - pendingHold.startedAtMs < RENDER_SYNC_POSITION_HOLD_MAX_MS) {
       return pendingHold.seconds
@@ -133,7 +145,9 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
     const baseSec = normalizeTimelineSeconds(deckRenderSyncBaseSec[deck])
     const baseAtMs = Math.max(0, Number(deckRenderSyncBaseAtMs[deck]) || 0)
     const canEstimatePlayback =
-      baseAtMs > 0 && (snapshot.playingAudible || (snapshot.playing && baseSec < 0))
+      !resolveAuditionSuspended() &&
+      baseAtMs > 0 &&
+      (snapshot.playingAudible || (snapshot.playing && baseSec < 0))
     if (canEstimatePlayback && previousClockRate != null) {
       const rebased = rebaseHorizontalBrowsePlaybackClock(
         deckRenderSyncBaseSec[deck],
@@ -196,6 +210,16 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
     forceRevision: boolean,
     preserveRevision: boolean
   ) => {
+    if (auditionPresentationSuspended.value) {
+      assignDeckRenderCurrentSeconds(
+        deck,
+        auditionPresentationFrozenSec[deck],
+        topDeckRenderCurrentSeconds,
+        bottomDeckRenderCurrentSeconds,
+        renderNowMs
+      )
+      return
+    }
     const snapshot = params.resolveTransportDeckSnapshot(deck)
     const snapshotSec = normalizeTimelineSeconds(snapshot.renderCurrentSec)
     const estimatedSec = estimateDeckRenderCurrentSeconds(deck, snapshotAtMs)
@@ -286,10 +310,13 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
       transportStateRevision > 0 &&
       previousStateRevision > 0 &&
       transportStateRevision !== previousStateRevision
-    const playbackSnapshotAuthoritative = !snapshot.playing || snapshot.playingAudible
+    const auditionSuspended = resolveAuditionSuspended()
+    const playbackSnapshotAuthoritative =
+      auditionSuspended || !snapshot.playing || snapshot.playingAudible
     const previousBaseAtMs = deckRenderSyncBaseAtMs[deck]
     const stalePlayingSnapshot =
       !force &&
+      !auditionSuspended &&
       snapshot.playing &&
       previousSignature === signature &&
       snapshotAtMs + 1 < previousBaseAtMs
@@ -323,6 +350,7 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
       driftSec >= RENDER_SYNC_FULL_SYNC_PHASE_REANCHOR_SEC
     const shouldReanchor =
       force ||
+      auditionSuspended ||
       !previousSignature ||
       !snapshot.playing ||
       signatureChanged ||
@@ -389,6 +417,26 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
     }
     syncDeckFromSnapshot('top', snapshotAtMs, nowMs, false, false, false)
     syncDeckFromSnapshot('bottom', snapshotAtMs, nowMs, false, false, false)
+  }
+
+  const setAuditionPresentationSuspended = (suspended: boolean) => {
+    if (auditionPresentationSuspended.value === suspended) return
+    const nowMs = performance.now()
+    for (const deck of ['top', 'bottom'] as const) {
+      const snapshot = params.resolveTransportDeckSnapshot(deck)
+      const frozenSec = normalizeTimelineSeconds(snapshot.renderCurrentSec)
+      auditionPresentationFrozenSec[deck] = frozenSec
+      deckRenderSyncBaseSec[deck] = frozenSec
+      deckRenderSyncBaseAtMs[deck] = nowMs
+      assignDeckRenderCurrentSeconds(
+        deck,
+        frozenSec,
+        topDeckRenderCurrentSeconds,
+        bottomDeckRenderCurrentSeconds,
+        nowMs
+      )
+    }
+    auditionPresentationSuspended.value = suspended
   }
 
   // 强制把某条 deck 的"渲染当前播放位置"立刻拉到指定秒数。
@@ -507,8 +555,10 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
     stopRenderSyncLoop()
     const tick = () => {
       const nowMs = performance.now()
-      handleDeckLoopPlaybackTick('top')
-      handleDeckLoopPlaybackTick('bottom')
+      if (!resolveAuditionSuspended()) {
+        handleDeckLoopPlaybackTick('top')
+        handleDeckLoopPlaybackTick('bottom')
+      }
       const topSeconds = estimateDeckRenderCurrentSeconds('top', nowMs)
       const bottomSeconds = estimateDeckRenderCurrentSeconds('bottom', nowMs)
       topDeckRenderCurrentSeconds.value = topSeconds
@@ -539,8 +589,10 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
     bottomDeckRenderCurrentSeconds,
     topDeckPlaybackSyncRevision,
     bottomDeckPlaybackSyncRevision,
+    auditionPresentationSuspended,
     resolveDeckRenderCurrentSeconds,
     syncDeckRenderState,
+    setAuditionPresentationSuspended,
     markTransportStateFresh,
     applyDeckRenderCurrentSeconds,
     holdDeckRenderCurrentSeconds,

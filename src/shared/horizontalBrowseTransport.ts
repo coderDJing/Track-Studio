@@ -104,6 +104,7 @@ export type HorizontalBrowseTransportSnapshot = {
   capturedAtEpochMs?: number
   snapshotSequence?: number
   stateRevision?: number
+  auditionSuspended: boolean
   leaderDeck?: string
   top: HorizontalBrowseTransportDeckSnapshot
   bottom: HorizontalBrowseTransportDeckSnapshot
@@ -178,6 +179,7 @@ export const createEmptyHorizontalBrowseTransportSnapshot =
     capturedAtEpochMs: undefined,
     snapshotSequence: 0,
     stateRevision: 0,
+    auditionSuspended: false,
     leaderDeck: undefined,
     top: createEmptyHorizontalBrowseTransportDeckSnapshot('top'),
     bottom: createEmptyHorizontalBrowseTransportDeckSnapshot('bottom'),

@@ -106,4 +106,35 @@ describe('useHorizontalBrowseRenderSync', () => {
     expect(renderSync.topDeckPlaybackSyncRevision.value).toBe(1)
     expect(renderSync.bottomDeckPlaybackSyncRevision.value).toBe(1)
   })
+
+  it('列表试听暂挂时锁存两轨 UI，忽略后续轮询快照的小幅推进', () => {
+    const { snapshot, renderSync } = createRenderSync(() => false)
+    snapshot.auditionSuspended = true
+    snapshot.top.playingAudible = false
+    snapshot.bottom.playingAudible = false
+    const frozenTopSec = snapshot.top.renderCurrentSec
+    const frozenBottomSec = snapshot.bottom.renderCurrentSec
+
+    renderSync.setAuditionPresentationSuspended(true)
+    snapshot.top.renderCurrentSec += 0.2
+    snapshot.bottom.renderCurrentSec += 0.15
+    renderSync.syncDeckRenderState({
+      nowMs: 5000,
+      snapshotAtMs: 5000
+    })
+
+    expect(renderSync.topDeckRenderCurrentSeconds.value).toBeCloseTo(frozenTopSec, 6)
+    expect(renderSync.bottomDeckRenderCurrentSeconds.value).toBeCloseTo(frozenBottomSec, 6)
+
+    snapshot.auditionSuspended = false
+    renderSync.setAuditionPresentationSuspended(false)
+    expect(renderSync.topDeckRenderCurrentSeconds.value).toBeCloseTo(
+      snapshot.top.renderCurrentSec,
+      6
+    )
+    expect(renderSync.bottomDeckRenderCurrentSeconds.value).toBeCloseTo(
+      snapshot.bottom.renderCurrentSec,
+      6
+    )
+  })
 })

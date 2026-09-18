@@ -283,7 +283,9 @@ impl HorizontalBrowseTransportEngine {
   pub(super) fn derive_state(&self, deck: DeckId, now_ms: f64) -> DeckDerivedState {
     let deck_state = self.deck(deck);
     let current_sec = Self::estimate_current_sec(deck_state, now_ms);
-    let playing_audible = deck_state.playing && self.has_loaded_segment_covering(deck, current_sec);
+    let playing_audible = !self.audition_suspended
+      && deck_state.playing
+      && self.has_loaded_segment_covering(deck, current_sec);
     if self.beat_grid_at_sec(deck, current_sec).is_none() {
       return DeckDerivedState {
         estimated_current_sec: current_sec,
@@ -811,6 +813,35 @@ impl HorizontalBrowseTransportEngine {
     }
     self.reset_and_prime_master_tempo_state(deck);
     self.refresh();
+  }
+
+  pub(super) fn set_audition_suspended(&mut self, now_ms: f64, suspended: bool) {
+    if self.audition_suspended == suspended {
+      return;
+    }
+
+    self.mark_state_changed();
+    self.last_now_ms = now_ms;
+
+    if suspended {
+      // The output callback and this mutation share the engine mutex. Once this method
+      // acquires it, both decks have completed the same output buffer. Rebase both at
+      // the same external instant, then disable wall-clock estimation while frozen.
+      for deck in [DeckId::Top, DeckId::Bottom] {
+        self.sync_deck_to_now(deck, now_ms);
+        self.deck_mut(deck).last_observed_at_ms = -1.0;
+      }
+    } else {
+      // Loaded decks are advanced by the shared audio callback. Pending/unloaded decks
+      // must remain at their requested position until audio is actually available.
+      for deck in [DeckId::Top, DeckId::Bottom] {
+        self.deck_mut(deck).last_observed_at_ms = -1.0;
+      }
+    }
+
+    // Do not refresh BeatSync, elect a leader, or reset Master Tempo here. Those are
+    // part of the frozen scene and must survive audition bit-for-bit.
+    self.audition_suspended = suspended;
   }
 
   pub(super) fn seek(&mut self, deck: DeckId, now_ms: f64, current_sec: f64) {

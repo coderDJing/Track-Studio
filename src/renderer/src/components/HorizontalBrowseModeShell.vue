@@ -47,6 +47,7 @@ import emitter from '@renderer/utils/mitt'
 import { createHorizontalBrowseDeckAssigner } from '@renderer/composables/horizontalBrowse/horizontalBrowseDeckAssignment'
 import type { HorizontalBrowseDeckAssignTransportOptions } from '@renderer/composables/horizontalBrowse/horizontalBrowseDeckAssignment'
 import { useHorizontalBrowseTransportController } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseTransportController'
+import { useHorizontalBrowseWaveformPreviewSuspension } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseWaveformPreviewSuspension'
 import { useHorizontalBrowseTransportMutations } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseTransportMutations'
 import { useHorizontalBrowseFaderControls } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseFaderControls'
 import { useHorizontalBrowseVisualizer } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseVisualizer'
@@ -169,6 +170,7 @@ const {
   deckSeekIntent,
   topDeckPlaybackRate,
   bottomDeckPlaybackRate,
+  auditionPresentationSuspended,
   topDeckRenderCurrentSeconds,
   bottomDeckRenderCurrentSeconds,
   topDeckPlaybackSyncRevision,
@@ -180,6 +182,7 @@ const {
   resolveDeckDecoding,
   resolveDeckRenderCurrentSeconds,
   syncDeckRenderState,
+  setAuditionPresentationSuspended,
   startSnapshotSync,
   stopSnapshotSync,
   startRenderSyncLoop,
@@ -192,6 +195,11 @@ const {
   linkedGridVisualPending: () =>
     waveformPresentation.state.top.visualPending === true ||
     waveformPresentation.state.bottom.visualPending === true
+})
+useHorizontalBrowseWaveformPreviewSuspension({
+  nativeTransport,
+  syncDeckRenderState,
+  setAuditionPresentationSuspended
 })
 const notifyDeckSeekPresentationIntent = (deck: DeckKey, seconds: number) => {
   waveformPresentation.markSeek(deck, seconds)
@@ -215,6 +223,8 @@ const resolveDeckWaveformPlaybackActive = (deck: DeckKey) =>
   resolveHorizontalBrowseDeckWaveformPlaybackActive({
     deck,
     snapshot: resolveTransportDeckSnapshot(deck),
+    auditionSuspended:
+      auditionPresentationSuspended.value || nativeTransport.state.auditionSuspended,
     topRenderCurrentSeconds: topDeckRenderCurrentSeconds,
     bottomRenderCurrentSeconds: bottomDeckRenderCurrentSeconds,
     negativePlaybackEpsilonSec: HORIZONTAL_BROWSE_NEGATIVE_PLAYBACK_EPSILON_SEC

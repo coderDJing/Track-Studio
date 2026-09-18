@@ -22,6 +22,7 @@ export const resolveHorizontalBrowseLightThemeActive = (themeMode: unknown) => {
 type ResolveDeckWaveformPlaybackActiveParams = {
   deck: DeckKey
   snapshot: HorizontalBrowseTransportDeckSnapshot
+  auditionSuspended?: boolean
   topRenderCurrentSeconds: Ref<number>
   bottomRenderCurrentSeconds: Ref<number>
   negativePlaybackEpsilonSec: number
@@ -30,10 +31,12 @@ type ResolveDeckWaveformPlaybackActiveParams = {
 export const resolveHorizontalBrowseDeckWaveformPlaybackActive = ({
   deck,
   snapshot,
+  auditionSuspended,
   topRenderCurrentSeconds,
   bottomRenderCurrentSeconds,
   negativePlaybackEpsilonSec
 }: ResolveDeckWaveformPlaybackActiveParams) => {
+  if (auditionSuspended === true) return false
   if (!snapshot.playing) return false
   if (snapshot.playingAudible || snapshot.playheadLoaded) return true
   const renderCurrentSec =

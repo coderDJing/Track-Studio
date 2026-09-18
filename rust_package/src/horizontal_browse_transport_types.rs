@@ -146,6 +146,7 @@ pub struct HorizontalBrowseTransportOutputSnapshot {
 pub struct HorizontalBrowseTransportSnapshot {
   pub snapshot_sequence: f64,
   pub state_revision: f64,
+  pub audition_suspended: bool,
   pub leader_deck: Option<String>,
   pub top: HorizontalBrowseTransportDeckSnapshot,
   pub bottom: HorizontalBrowseTransportDeckSnapshot,

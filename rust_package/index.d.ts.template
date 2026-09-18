@@ -162,6 +162,7 @@ export interface HorizontalBrowseTransportOutputSnapshot {
 export interface HorizontalBrowseTransportSnapshot {
   snapshotSequence: number
   stateRevision: number
+  auditionSuspended: boolean
   leaderDeck?: string
   top: HorizontalBrowseTransportDeckSnapshot
   bottom: HorizontalBrowseTransportDeckSnapshot
@@ -322,6 +323,10 @@ export declare function horizontalBrowseTransportSetPlaying(
   deck: string,
   nowMs: number,
   playing: boolean
+): HorizontalBrowseTransportSnapshot
+export declare function horizontalBrowseTransportSetAuditionSuspended(
+  nowMs: number,
+  suspended: boolean
 ): HorizontalBrowseTransportSnapshot
 export declare function horizontalBrowseTransportPreparePlayhead(
   deck: string,

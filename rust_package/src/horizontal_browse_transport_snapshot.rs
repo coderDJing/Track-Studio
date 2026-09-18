@@ -7,6 +7,7 @@ impl HorizontalBrowseTransportEngine {
     HorizontalBrowseTransportSnapshot {
       snapshot_sequence: next_snapshot_sequence(),
       state_revision: self.state_revision as f64,
+      audition_suspended: self.audition_suspended,
       leader_deck: self.leader.map(|deck| deck.as_str().to_string()),
       top,
       bottom,

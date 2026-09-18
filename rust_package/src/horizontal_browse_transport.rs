@@ -311,6 +311,7 @@ impl Default for DeckState {
 struct HorizontalBrowseTransportEngine {
   top: DeckState,
   bottom: DeckState,
+  audition_suspended: bool,
   last_now_ms: f64,
   last_native_now_ms: f64,
   state_revision: u64,
@@ -340,6 +341,7 @@ impl Default for HorizontalBrowseTransportEngine {
     Self {
       top: DeckState::default(),
       bottom: DeckState::default(),
+      audition_suspended: false,
       last_now_ms: 0.0,
       last_native_now_ms: 0.0,
       state_revision: 0,
@@ -463,6 +465,9 @@ impl HorizontalBrowseTransportEngine {
   }
 
   fn is_playing_audible_at(&self, deck: DeckId, now_ms: f64) -> bool {
+    if self.audition_suspended {
+      return false;
+    }
     let deck_state = self.deck(deck);
     if !deck_state.playing {
       return false;
@@ -483,6 +488,9 @@ impl HorizontalBrowseTransportEngine {
   fn is_sync_ready(&self, deck: DeckId, now_ms: f64) -> bool {
     if !self.is_loaded(deck) {
       return false;
+    }
+    if self.audition_suspended {
+      return true;
     }
     if !self.deck(deck).playing {
       return true;
@@ -649,6 +657,13 @@ impl HorizontalBrowseTransportEngine {
   }
 
   fn mix_output_frame(&mut self) -> (f32, f32) {
+    // Playlist waveform audition is a transport-wide time freeze. Bail out before
+    // either deck consumes a source frame so their relative phase cannot move.
+    // Recording also intentionally receives no frames while transport time is frozen.
+    if self.audition_suspended {
+      self.push_visualizer_sample(0.0);
+      return (0.0, 0.0);
+    }
     let mut playback_left = 0.0_f32;
     let mut playback_right = 0.0_f32;
     let mut record_left = 0.0_f32;
@@ -988,6 +1003,9 @@ impl HorizontalBrowseTransportEngine {
   }
 }
 
+#[cfg(test)]
+#[path = "horizontal_browse_transport_audition_tests.rs"]
+mod horizontal_browse_transport_audition_tests;
 #[cfg(test)]
 #[path = "horizontal_browse_transport_auto_gain_tests.rs"]
 mod horizontal_browse_transport_auto_gain_tests;

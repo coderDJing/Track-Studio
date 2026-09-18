@@ -4,6 +4,10 @@ import { useRuntimeStore } from '@renderer/stores/runtime'
 import { canPlayHtmlAudio } from '@renderer/pages/modules/songPlayer/webAudioPlayer'
 import emitter from '@renderer/utils/mitt'
 import {
+  resumeTransportAfterWaveformPreview,
+  suspendTransportForWaveformPreview
+} from '@renderer/utils/exclusivePlayback'
+import {
   MAIN_WINDOW_VOLUME_CHANGED_EVENT,
   MAIN_WINDOW_VOLUME_STORAGE_KEY,
   clampVolumeValue,
@@ -53,6 +57,7 @@ type PcmDecodePayload = {
 
 const AUDIO_FOLLOW_SYSTEM_ID = ''
 const FORCE_PCM_PREVIEW_EXTENSIONS = new Set(['aif', 'aiff'])
+let waveformPreviewTransportSessionSequence = 0
 
 const clamp01 = (value: number) => (Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0)
 
@@ -119,6 +124,8 @@ export function useWaveformPreviewPlayer() {
   let pendingOutputDeviceId = runtime.setting.audioOutputDeviceId || AUDIO_FOLLOW_SYSTEM_ID
   let progressRaf: number | null = null
   let stopping = false
+  let transportSuspensionSessionId = ''
+  let transportSuspensionPromise: Promise<void> | null = null
 
   let pcmContext: AudioContext | null = null
   let pcmGainNode: GainNode | null = null
@@ -322,6 +329,30 @@ export function useWaveformPreviewPlayer() {
     } satisfies PauseMainPayload)
   }
 
+  const acquireTransportSuspension = () => {
+    if (transportSuspensionPromise) return transportSuspensionPromise
+    waveformPreviewTransportSessionSequence += 1
+    transportSuspensionSessionId = `waveform-preview-${Date.now()}-${waveformPreviewTransportSessionSequence}`
+    transportSuspensionPromise = suspendTransportForWaveformPreview(transportSuspensionSessionId)
+    return transportSuspensionPromise
+  }
+
+  const releaseTransportSuspension = () => {
+    const sessionId = transportSuspensionSessionId
+    const suspensionPromise = transportSuspensionPromise
+    transportSuspensionSessionId = ''
+    transportSuspensionPromise = null
+    if (!sessionId) return
+    void (async () => {
+      try {
+        await suspensionPromise
+      } catch {}
+      try {
+        await resumeTransportAfterWaveformPreview(sessionId)
+      } catch {}
+    })()
+  }
+
   const stopWaveformPreview = (reason: PreviewStopReason, options?: { resumeMain?: boolean }) => {
     if (!previewActive.value || stopping) return
     stopping = true
@@ -332,11 +363,6 @@ export function useWaveformPreviewPlayer() {
     pendingStartPercent.value = 0
     pcmFallbackToken.value = -1
     playToken.value += 1
-    emitPreviewState(false, filePath || null)
-    previewSong.value = null
-    previewSourceLibraryName.value = ''
-    previewSourceSongListUUID.value = ''
-    previewSourcePane.value = ''
     stopProgressLoop()
 
     const audio = audioElement.value
@@ -348,6 +374,12 @@ export function useWaveformPreviewPlayer() {
       audio.muted = false
     }
     stopPcmSource(true)
+    emitPreviewState(false, filePath || null)
+    previewSong.value = null
+    previewSourceLibraryName.value = ''
+    previewSourceSongListUUID.value = ''
+    previewSourcePane.value = ''
+    releaseTransportSuspension()
 
     const shouldResume =
       resumeMainPlayer.value &&
@@ -540,32 +572,9 @@ export function useWaveformPreviewPlayer() {
     startProgressLoop()
   }
 
-  const startWaveformPreview = (payload: PreviewPlayPayload) => {
-    const filePath = typeof payload?.filePath === 'string' ? payload.filePath.trim() : ''
-    if (!filePath) return
-
-    const startPercent = clamp01(payload?.startPercent ?? 0)
-    if (!previewActive.value) {
-      pauseMainPlayerIfNeeded()
-    }
-    previewActive.value = true
-    previewMode.value = 'html'
-    previewFilePath.value = filePath
-    previewSong.value = payload?.song ? { ...payload.song } : null
-    previewSourceLibraryName.value = String(payload?.sourceLibraryName || '').trim()
-    previewSourceSongListUUID.value = String(payload?.sourceSongListUUID || '').trim()
-    previewSourcePane.value =
-      payload?.sourcePane === 'single' ||
-      payload?.sourcePane === 'left' ||
-      payload?.sourcePane === 'right'
-        ? payload.sourcePane
-        : ''
-    pendingStartPercent.value = startPercent
-    emitPreviewState(true, filePath)
-
-    const token = playToken.value + 1
-    playToken.value = token
-    pcmFallbackToken.value = -1
+  const startWaveformPreviewAudio = (filePath: string, startPercent: number, token: number) => {
+    if (playToken.value !== token) return
+    if (!previewActive.value || previewFilePath.value !== filePath) return
 
     if (shouldUsePcmPreview(filePath)) {
       stopProgressLoop()
@@ -625,6 +634,46 @@ export function useWaveformPreviewPlayer() {
     }
 
     audio.addEventListener('loadedmetadata', applySeek, { once: true })
+  }
+
+  const startWaveformPreview = (payload: PreviewPlayPayload) => {
+    const filePath = typeof payload?.filePath === 'string' ? payload.filePath.trim() : ''
+    if (!filePath) return
+
+    const startPercent = clamp01(payload?.startPercent ?? 0)
+    const wasPreviewActive = previewActive.value
+    if (!wasPreviewActive) {
+      pauseMainPlayerIfNeeded()
+    }
+    const suspensionPromise = wasPreviewActive
+      ? transportSuspensionPromise || acquireTransportSuspension()
+      : acquireTransportSuspension()
+    previewActive.value = true
+    previewMode.value = 'html'
+    previewFilePath.value = filePath
+    previewSong.value = payload?.song ? { ...payload.song } : null
+    previewSourceLibraryName.value = String(payload?.sourceLibraryName || '').trim()
+    previewSourceSongListUUID.value = String(payload?.sourceSongListUUID || '').trim()
+    previewSourcePane.value =
+      payload?.sourcePane === 'single' ||
+      payload?.sourcePane === 'left' ||
+      payload?.sourcePane === 'right'
+        ? payload.sourcePane
+        : ''
+    pendingStartPercent.value = startPercent
+    emitPreviewState(true, filePath)
+
+    const token = playToken.value + 1
+    playToken.value = token
+    pcmFallbackToken.value = -1
+
+    void suspensionPromise
+      .then(() => startWaveformPreviewAudio(filePath, startPercent, token))
+      .catch(() => {
+        if (playToken.value !== token) return
+        if (!previewActive.value || previewFilePath.value !== filePath) return
+        stopWaveformPreview('error')
+      })
   }
 
   const handlePreviewPlay = (payload: PreviewPlayPayload) => {

@@ -319,6 +319,18 @@ pub fn horizontal_browse_transport_set_playing(
 }
 
 #[napi]
+pub fn horizontal_browse_transport_set_audition_suspended(
+  now_ms: f64,
+  suspended: bool,
+) -> HorizontalBrowseTransportSnapshot {
+  let mut engine_guard = engine().lock();
+  engine_guard.observe_external_now_ms(now_ms);
+  let apply_now_ms = engine_guard.last_now_ms;
+  engine_guard.set_audition_suspended(apply_now_ms, suspended);
+  engine_guard.snapshot(engine_guard.last_now_ms)
+}
+
+#[napi]
 pub fn horizontal_browse_transport_prepare_playhead(
   deck: String,
   now_ms: f64,

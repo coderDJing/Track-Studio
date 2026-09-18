@@ -102,6 +102,10 @@ type RustHorizontalBrowseTransportBinding = {
     nowMs: number,
     playing: boolean
   ) => HorizontalBrowseTransportSnapshot
+  horizontalBrowseTransportSetAuditionSuspended?: (
+    nowMs: number,
+    suspended: boolean
+  ) => HorizontalBrowseTransportSnapshot
   horizontalBrowseTransportPreparePlayhead?: (
     deck: HorizontalBrowseDeckKey,
     nowMs: number
@@ -244,6 +248,9 @@ export const horizontalBrowseTransportBridge = {
   },
   setPlaying(deck: HorizontalBrowseDeckKey, nowMs: number, playing: boolean) {
     return requireFn('horizontalBrowseTransportSetPlaying')(deck, nowMs, playing)
+  },
+  setAuditionSuspended(nowMs: number, suspended: boolean) {
+    return requireFn('horizontalBrowseTransportSetAuditionSuspended')(nowMs, suspended)
   },
   preparePlayhead(deck: HorizontalBrowseDeckKey, nowMs: number) {
     return requireFn('horizontalBrowseTransportPreparePlayhead')(deck, nowMs)

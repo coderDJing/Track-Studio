@@ -104,6 +104,7 @@ export const createHorizontalBrowseNativeTransport = () => {
     state.capturedAtEpochMs = snapshot.capturedAtEpochMs
     state.snapshotSequence = snapshot.snapshotSequence
     state.stateRevision = snapshot.stateRevision
+    state.auditionSuspended = snapshot.auditionSuspended === true
     state.leaderDeck = snapshot.leaderDeck
     state.top = { ...preserveLiveClockDeckSnapshot('top', snapshot.top) }
     state.bottom = { ...preserveLiveClockDeckSnapshot('bottom', snapshot.bottom) }
@@ -348,6 +349,16 @@ export const createHorizontalBrowseNativeTransport = () => {
     return snapshot
   }
 
+  const setAuditionSuspended = async (suspended: boolean) => {
+    const snapshot = await invoke(
+      'horizontal-browse-transport:set-audition-suspended',
+      performance.now(),
+      Boolean(suspended)
+    )
+    applySnapshot(snapshot)
+    return snapshot
+  }
+
   const preparePlayhead = async (deck: HorizontalBrowseDeckKey) => {
     const finishTiming = startHorizontalBrowseUserTiming(`frkb:hb:native:prepare-playhead:${deck}`)
     const snapshot = await invoke(
@@ -513,6 +524,7 @@ export const createHorizontalBrowseNativeTransport = () => {
     setBandState,
     setCueMonitorEnabled,
     setPlaying,
+    setAuditionSuspended,
     preparePlayhead,
     seek,
     setScrubPreview,
