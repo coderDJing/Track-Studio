@@ -320,12 +320,10 @@ class PrepMoveTracksWorkflowTest(unittest.TestCase):
         self.assertEqual(triage.call_args.kwargs["dataset_registry"], Path("registry.json"))
         self.assertTrue(triage.call_args.kwargs["pre_review"])
 
-    def test_default_workflow_python_is_vendored_runtime(self) -> None:
+    def test_default_workflow_python_uses_configured_demucs_root(self) -> None:
         self.assertEqual(
             prep.DEFAULT_RUNTIME_PYTHON,
-            prep.REPO_ROOT
-            / "vendor"
-            / "demucs"
+            prep._resolve_demucs_root()
             / "win32-x64"
             / "runtime-cpu"
             / "python.exe",
