@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ISongInfo } from '../../types/globals'
 import { createSongBeatGridMapV2FromFixedGrid } from '../../shared/songBeatGridMapV2'
-import { preserveCachedGridAnalysisFields } from './scanSongs'
+import { prepareFullMetadataCacheInfo, preserveCachedGridAnalysisFields } from './scanSongs'
 
 const createGrid = () => {
   const grid = createSongBeatGridMapV2FromFixedGrid({
@@ -86,5 +86,25 @@ describe('preserveCachedGridAnalysisFields', () => {
 
     expect(target.timeBasisOffsetMs).toBe(0)
     expect(target.timeBasisOffsetAlgorithmVersion).toBeUndefined()
+  })
+})
+
+describe('prepareFullMetadataCacheInfo', () => {
+  it('turns an analysis-only cache entry into a regular cache hit after metadata parsing', () => {
+    const cached: ISongInfo = {
+      ...createSong(),
+      analysisOnly: true,
+      key: '8A',
+      beatGridMap: createGrid(),
+      energyScore: 74,
+      energyAlgorithmVersion: 1
+    }
+
+    const result = prepareFullMetadataCacheInfo(createSong(), cached, true)
+
+    expect(result.analysisOnly).toBe(false)
+    expect(result.key).toBe('8A')
+    expect(result.beatGridMap).toEqual(cached.beatGridMap)
+    expect(result.energyScore).toBe(74)
   })
 })

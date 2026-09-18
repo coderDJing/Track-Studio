@@ -19,5 +19,6 @@ export const startHorizontalBrowseUserTiming = (name: string) => {
     performance.measure(name, startMark, endMark)
     performance.clearMarks(startMark)
     performance.clearMarks(endMark)
+    performance.clearMeasures(name)
   }
 }

@@ -775,7 +775,11 @@ app.on('window-all-closed', async () => {
   app.quit()
 })
 
-const RC_DIAGNOSTIC_OUTPUT_LOG_SCOPES = new Set(['playlist-open-perf', 'delete-all-above-perf'])
+const RC_DIAGNOSTIC_OUTPUT_LOG_SCOPES = new Set([
+  'playlist-open-perf',
+  'delete-all-above-perf',
+  'renderer-stall-diagnostic'
+])
 
 ipcMain.on('outputLog', (_event, logMsg) => {
   if (

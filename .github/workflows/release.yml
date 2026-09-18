@@ -917,3 +917,21 @@ jobs:
               gh release create "$TAG_NAME" "${assets[@]}" --title "$TAG_NAME" --latest --verify-tag --generate-notes
             fi
           fi
+
+      - name: Remove superseded RC releases
+        if: contains(github.ref_name, '-rc.')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          base_version="${TAG_NAME%%-rc.*}"
+          mapfile -t stale_tags < <(
+            gh release list --limit 100 --json tagName,isPrerelease \
+              --jq ".[] | select(.isPrerelease and .tagName != \"${TAG_NAME}\" and (.tagName | startswith(\"${base_version}-rc.\"))) | .tagName"
+          )
+          for stale_tag in "${stale_tags[@]}"; do
+            echo "Removing superseded RC release and tag: ${stale_tag}"
+            gh release delete "${stale_tag}" --yes --cleanup-tag
+          done

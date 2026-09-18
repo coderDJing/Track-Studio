@@ -279,6 +279,27 @@ const preserveCachedAnalysisFields = (target: ISongInfo, cachedInfo?: ISongInfo 
   preserveBestAvailableSongStructure(target, cachedInfo)
 }
 
+/**
+ * A metadata scan has read the complete track record from disk. Even when its previous cache
+ * row only contained analysis results, the replacement row must become a normal cache hit on
+ * the next scan.
+ */
+export const prepareFullMetadataCacheInfo = (
+  info: ISongInfo,
+  cachedInfo?: ISongInfo | null,
+  cachedStatMatches = false
+): ISongInfo => {
+  const nextInfo: ISongInfo = { ...info, analysisOnly: false }
+  if (!cachedInfo) return nextInfo
+  preserveCachedKeyAndBpm(nextInfo, cachedInfo)
+  if (cachedStatMatches) {
+    preserveCachedGridAnalysisFields(nextInfo, cachedInfo)
+    preserveCachedEnergyAnalysisFields(nextInfo, cachedInfo)
+  }
+  preserveCachedUserListFields(nextInfo, cachedInfo)
+  return nextInfo
+}
+
 const preserveCachedUserListFields = (target: ISongInfo, cachedInfo?: ISongInfo | null) => {
   const cachedPlaylistTrackNumber = normalizePlaylistTrackNumber(cachedInfo?.playlistTrackNumber)
   if (
@@ -567,21 +588,10 @@ export async function scanSongList(
         for (const st of filesStatList) {
           const info = infoMap.get(st.key)
           if (!info) continue
-          const nextInfo = { ...info }
           const cached = cacheMap.get(st.key)
-          if (cached?.info) {
-            preserveCachedKeyAndBpm(nextInfo, cached.info)
-            const cachedStatMatches =
-              cached.size === st.size && Math.abs(cached.mtimeMs - st.mtimeMs) < 1
-            if (cachedStatMatches) {
-              preserveCachedGridAnalysisFields(nextInfo, cached.info)
-              preserveCachedEnergyAnalysisFields(nextInfo, cached.info)
-            }
-            if (nextInfo.analysisOnly === undefined && cached.info.analysisOnly) {
-              nextInfo.analysisOnly = true
-            }
-            preserveCachedUserListFields(nextInfo, cached.info)
-          }
+          const cachedStatMatches =
+            !!cached && cached.size === st.size && Math.abs(cached.mtimeMs - st.mtimeMs) < 1
+          const nextInfo = prepareFullMetadataCacheInfo(info, cached?.info, cachedStatMatches)
           newEntriesMap.set(st.file, {
             size: st.size,
             mtimeMs: st.mtimeMs,

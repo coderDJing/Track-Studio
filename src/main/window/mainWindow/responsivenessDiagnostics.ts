@@ -9,6 +9,7 @@ import { isPackagedRcBuild } from '../../services/rcDiagnostics'
 const MAIN_PROCESS_STALL_THRESHOLD_MS = 3_000
 const MAIN_PROCESS_HEARTBEAT_INTERVAL_MS = 1_000
 const MAIN_PROCESS_STALL_INCIDENT_GRACE_MS = 30_000
+const MIN_MEANINGFUL_TRACED_ACTIVITY_DURATION_MS = 50
 
 type MainProcessStallIncident = {
   startedAtMs: number
@@ -226,10 +227,16 @@ export const attachMainWindowResponsivenessDiagnostics = (
           return
         }
         const overlappingActivity = snapshot.activity.longest
-        const stallClassification = overlappingActivity
+        const meaningfulOverlappingActivity =
+          overlappingActivity &&
+          (overlappingActivity.pending ||
+            overlappingActivity.durationMs >= MIN_MEANINGFUL_TRACED_ACTIVITY_DURATION_MS)
+            ? overlappingActivity
+            : undefined
+        const stallClassification = meaningfulOverlappingActivity
           ? {
               kind: 'tracked-main-thread-activity-overlap',
-              activity: overlappingActivity
+              activity: meaningfulOverlappingActivity
             }
           : processCpuRatio >= 0.7
             ? {

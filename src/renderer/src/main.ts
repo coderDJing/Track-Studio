@@ -14,6 +14,7 @@ import {
   watchUiSettings
 } from '@renderer/utils/uiSettingsStorage'
 import { installConsoleLogBridge } from '@renderer/utils/installConsoleLogBridge'
+import { installRendererStallDiagnostics } from '@renderer/utils/rendererStallDiagnostics'
 import type { ICuratedArtistFavorite } from 'src/types/globals'
 
 declare global {
@@ -26,6 +27,7 @@ const pinia = createPinia()
 const app = createApp(App)
 
 installConsoleLogBridge('main-window')
+installRendererStallDiagnostics()
 
 app.directive('dialog-drag', dialogDrag)
 
