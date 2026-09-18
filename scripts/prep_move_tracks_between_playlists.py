@@ -21,6 +21,7 @@
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -40,8 +41,40 @@ except Exception:
     pass
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _read_project_env_value(name: str) -> str:
+    configured = str(os.environ.get(name) or "").strip()
+    if configured:
+        return configured
+    try:
+        lines = (REPO_ROOT / ".env").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return ""
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, raw_value = line.split("=", 1)
+        if key.strip() != name:
+            continue
+        value = raw_value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        return value
+    return ""
+
+
+def _resolve_demucs_root() -> Path:
+    configured = _read_project_env_value("FRKB_DEMUCS_ROOT")
+    if not configured:
+        return REPO_ROOT / "vendor" / "demucs"
+    candidate = Path(configured).expanduser()
+    return candidate if candidate.is_absolute() else REPO_ROOT / candidate
+
+
 DEFAULT_RUNTIME_PYTHON = (
-    REPO_ROOT / "vendor" / "demucs" / "win32-x64" / "runtime-cpu" / "python.exe"
+    _resolve_demucs_root() / "win32-x64" / "runtime-cpu" / "python.exe"
 )
 DEFAULT_SEALED_SCRIPT = REPO_ROOT / "scripts" / "rkb_sealed_batch.py"
 DEFAULT_TRIAGE_SCRIPT = REPO_ROOT / "scripts" / "move_rekordbox_playlist_grid_diffs.py"

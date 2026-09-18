@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
@@ -9,6 +10,14 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(scriptDir, '..')
 const require = createRequire(import.meta.url)
 const RUNNER_VERSION = 'master-tempo-ab-benchmark-v2'
+
+const resolveManagedRuntimePython = () => {
+  const configuredDemucsRoot = String(process.env.FRKB_DEMUCS_ROOT || '').trim()
+  const demucsRoot = configuredDemucsRoot
+    ? path.resolve(configuredDemucsRoot)
+    : path.join(repoRoot, 'vendor', 'demucs')
+  return path.join(demucsRoot, 'win32-x64', 'runtime-cpu', 'python.exe')
+}
 
 const parseArgs = (argv) => {
   const args = new Map()
@@ -82,10 +91,10 @@ const resolvePython = () => {
   const configured = String(process.env.FRKB_MASTER_TEMPO_BENCHMARK_PYTHON || '').trim()
   const candidate = configured
     ? path.resolve(configured)
-    : path.join(repoRoot, 'vendor', 'demucs', 'win32-x64', 'runtime-cpu', 'python.exe')
+    : resolveManagedRuntimePython()
   if (!fs.existsSync(candidate)) {
     throw new Error(
-      '找不到 benchmark Python；请设置 FRKB_MASTER_TEMPO_BENCHMARK_PYTHON 指向项目受管 Python'
+      '找不到 benchmark Python；请设置 FRKB_MASTER_TEMPO_BENCHMARK_PYTHON 或 FRKB_DEMUCS_ROOT'
     )
   }
   return candidate
