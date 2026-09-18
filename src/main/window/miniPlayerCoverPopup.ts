@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, type Rectangle } from 'electron'
+import { BrowserWindow, ipcMain, screen, type Rectangle } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import path = require('path')
 import { log } from '../log'
@@ -10,6 +10,7 @@ import {
   resolveContentBoundsForMove,
   toScreenAnchor
 } from './miniPlayerPopupLayout'
+import { isPointWithinCoverPopupHoverRegion } from './miniPlayerCoverPopupHover'
 import {
   MINI_PLAYER_CHANNELS,
   MINI_PLAYER_COVER_POPUP_CONTENT_HEIGHT,
@@ -28,6 +29,11 @@ let contentSize = {
   width: MINI_PLAYER_COVER_POPUP_CONTENT_WIDTH,
   height: MINI_PLAYER_COVER_POPUP_CONTENT_HEIGHT
 }
+const COVER_POPUP_AUTO_HIDE_POLL_MS = 100
+const COVER_POPUP_AUTO_HIDE_DELAY_MS = 350
+const COVER_POPUP_HOVER_MARGIN = 3
+let coverPopupAutoHideTimer: ReturnType<typeof setInterval> | null = null
+let pointerOutsideHoverRegionSince: number | null = null
 
 const isUsableWindow = (target: BrowserWindow | null): target is BrowserWindow =>
   !!target && !target.isDestroyed()
@@ -127,6 +133,14 @@ const sendPopupState = (payload: MiniPlayerCoverPopupPayload) => {
   } catch {}
 }
 
+const stopCoverPopupAutoHideMonitor = () => {
+  if (coverPopupAutoHideTimer) {
+    clearInterval(coverPopupAutoHideTimer)
+    coverPopupAutoHideTimer = null
+  }
+  pointerOutsideHoverRegionSince = null
+}
+
 const loadCoverPopupUrl = (target: BrowserWindow) => {
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     target.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/miniPlayerCover.html`)
@@ -175,6 +189,8 @@ const createCoverPopupWindow = () => {
   target.on('closed', () => {
     if (coverPopupWindow === target) {
       coverPopupWindow = null
+      latestPayload = null
+      stopCoverPopupAutoHideMonitor()
     }
   })
   loadCoverPopupUrl(target)
@@ -209,14 +225,58 @@ const applyPopupBounds = (
 
 export const hideCoverPopup = () => {
   latestPayload = null
+  stopCoverPopupAutoHideMonitor()
   if (!isUsableWindow(coverPopupWindow)) return
   try {
     coverPopupWindow.hide()
   } catch {}
 }
 
+const checkCoverPopupPointerPosition = () => {
+  if (!latestPayload || !isUsableWindow(coverPopupWindow) || !coverPopupWindow.isVisible()) {
+    pointerOutsideHoverRegionSince = null
+    return
+  }
+  const anchor = resolveScreenAnchor(latestPayload.anchor)
+  if (!anchor) {
+    hideCoverPopup()
+    return
+  }
+  let pointer: { x: number; y: number }
+  let popupBounds: Rectangle
+  try {
+    pointer = screen.getCursorScreenPoint()
+    popupBounds = coverPopupWindow.getBounds()
+  } catch {
+    return
+  }
+  if (isPointWithinCoverPopupHoverRegion(pointer, anchor, popupBounds, COVER_POPUP_HOVER_MARGIN)) {
+    pointerOutsideHoverRegionSince = null
+    return
+  }
+  const now = Date.now()
+  if (pointerOutsideHoverRegionSince === null) {
+    pointerOutsideHoverRegionSince = now
+    return
+  }
+  if (now - pointerOutsideHoverRegionSince >= COVER_POPUP_AUTO_HIDE_DELAY_MS) {
+    hideCoverPopup()
+  }
+}
+
+const startCoverPopupAutoHideMonitor = () => {
+  pointerOutsideHoverRegionSince = null
+  if (coverPopupAutoHideTimer) return
+  coverPopupAutoHideTimer = setInterval(
+    checkCoverPopupPointerPosition,
+    COVER_POPUP_AUTO_HIDE_POLL_MS
+  )
+  coverPopupAutoHideTimer.unref()
+}
+
 export const destroyCoverPopup = () => {
   latestPayload = null
+  stopCoverPopupAutoHideMonitor()
   contentSize = defaultContentSize()
   const target = coverPopupWindow
   coverPopupWindow = null
@@ -242,11 +302,13 @@ export const showCoverPopup = (rawPayload: unknown) => {
       if (!latestPayload || !isUsableWindow(coverPopupWindow)) return
       if (!applyPopupBounds(latestPayload)) return
       showInactive(coverPopupWindow)
+      startCoverPopupAutoHideMonitor()
     })
     return true
   }
   if (!applyPopupBounds(payload)) return false
   showInactive(coverPopupWindow)
+  startCoverPopupAutoHideMonitor()
   return true
 }
 
@@ -269,6 +331,7 @@ export const bindMiniPlayerCoverPopup = (params: {
     if (!latestPayload || !isUsableWindow(coverPopupWindow)) return
     if (!applyPopupBounds(latestPayload)) return
     showInactive(coverPopupWindow)
+    startCoverPopupAutoHideMonitor()
   })
   ipcMain.on(MINI_PLAYER_CHANNELS.coverPopupContentSize, (_event, raw: unknown) => {
     if (!isRecord(raw)) return
