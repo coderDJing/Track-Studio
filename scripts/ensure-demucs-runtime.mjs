@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -56,7 +57,8 @@ const toShortText = (value, maxLen = 400) => {
   return text.slice(0, maxLen)
 }
 
-const runtimeRootArg = getArgValue('--runtime-root', 'vendor/demucs')
+const configuredDemucsRoot = String(process.env.FRKB_DEMUCS_ROOT || '').trim()
+const runtimeRootArg = getArgValue('--runtime-root', configuredDemucsRoot || 'vendor/demucs')
 const platformArg = getArgValue('--platform', platformDefault)
 const profileArg = getArgValue('--profiles', '')
 const modelsArg = getArgValue('--models', '')
