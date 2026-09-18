@@ -30,7 +30,8 @@ describe('useHorizontalBrowseWaveformPreviewSuspension', () => {
       useHorizontalBrowseWaveformPreviewSuspension({
         nativeTransport: { state, setAuditionSuspended },
         syncDeckRenderState,
-        setAuditionPresentationSuspended
+        setAuditionPresentationSuspended,
+        playerInteractionEnabled: () => true
       })
     })
 
@@ -63,7 +64,8 @@ describe('useHorizontalBrowseWaveformPreviewSuspension', () => {
       useHorizontalBrowseWaveformPreviewSuspension({
         nativeTransport: { state, setAuditionSuspended },
         syncDeckRenderState: vi.fn(),
-        setAuditionPresentationSuspended
+        setAuditionPresentationSuspended,
+        playerInteractionEnabled: () => true
       })
     })
 
@@ -80,6 +82,33 @@ describe('useHorizontalBrowseWaveformPreviewSuspension', () => {
     expect(state.auditionSuspended).toBe(false)
     expect(setAuditionSuspended).toHaveBeenCalledTimes(2)
     expect(setAuditionPresentationSuspended).toHaveBeenLastCalledWith(false)
+    scope.stop()
+  })
+
+  it('冻结期间的双轨播放器操作会请求结束波形试听', async () => {
+    const state = reactive({ auditionSuspended: false })
+    const stopListener = vi.fn()
+    emitter.on('waveform-preview:stop', stopListener)
+    const scope = effectScope()
+    const suspension = scope.run(() =>
+      useHorizontalBrowseWaveformPreviewSuspension({
+        nativeTransport: {
+          state,
+          setAuditionSuspended: async (suspended) => {
+            state.auditionSuspended = suspended
+          }
+        },
+        syncDeckRenderState: vi.fn(),
+        setAuditionPresentationSuspended: vi.fn(),
+        playerInteractionEnabled: () => true
+      })
+    )
+
+    await emitGate(WAVEFORM_PREVIEW_TRANSPORT_SUSPEND_EVENT, 'session-player-input')
+    suspension?.handlePlayerInteraction()
+
+    expect(stopListener).toHaveBeenCalledWith({ reason: 'manual-play' })
+    emitter.off('waveform-preview:stop', stopListener)
     scope.stop()
   })
 })

@@ -196,10 +196,11 @@ const {
     waveformPresentation.state.top.visualPending === true ||
     waveformPresentation.state.bottom.visualPending === true
 })
-useHorizontalBrowseWaveformPreviewSuspension({
+const { handlePlayerInteraction } = useHorizontalBrowseWaveformPreviewSuspension({
   nativeTransport,
   syncDeckRenderState,
-  setAuditionPresentationSuspended
+  setAuditionPresentationSuspended,
+  playerInteractionEnabled: () => !isEditMode.value
 })
 const notifyDeckSeekPresentationIntent = (deck: DeckKey, seconds: number) => {
   waveformPresentation.markSeek(deck, seconds)
@@ -218,7 +219,6 @@ const resolveDeckDurationSeconds = (deck: DeckKey) =>
   )
 const topDeckUiPlaying = computed(() => resolveDeckPlaying('top'))
 const bottomDeckUiPlaying = computed(() => resolveDeckPlaying('bottom'))
-const HORIZONTAL_BROWSE_NEGATIVE_PLAYBACK_EPSILON_SEC = 0.0001
 const resolveDeckWaveformPlaybackActive = (deck: DeckKey) =>
   resolveHorizontalBrowseDeckWaveformPlaybackActive({
     deck,
@@ -227,7 +227,7 @@ const resolveDeckWaveformPlaybackActive = (deck: DeckKey) =>
       auditionPresentationSuspended.value || nativeTransport.state.auditionSuspended,
     topRenderCurrentSeconds: topDeckRenderCurrentSeconds,
     bottomRenderCurrentSeconds: bottomDeckRenderCurrentSeconds,
-    negativePlaybackEpsilonSec: HORIZONTAL_BROWSE_NEGATIVE_PLAYBACK_EPSILON_SEC
+    negativePlaybackEpsilonSec: 0.0001
   })
 const topDeckWaveformPlaybackActive = computed(() => resolveDeckWaveformPlaybackActive('top'))
 const bottomDeckWaveformPlaybackActive = computed(() => resolveDeckWaveformPlaybackActive('bottom'))
@@ -734,6 +734,7 @@ const resolveDeckToolbarState = (deck: DeckKey) => {
 
 useHorizontalBrowseModeShellHotkeys({
   runtime,
+  onPlayerInteraction: handlePlayerInteraction,
   touchDeckInteraction,
   resolveDeckSong,
   ejectDeckSong: handleDeckEjectSong,
@@ -998,6 +999,10 @@ onUnmounted(() => {
       'is-light-theme': isLightTheme,
       'is-fader-controls-expanded': faderControlsExpanded && !isEditMode
     }"
+    @pointerdown.capture="handlePlayerInteraction"
+    @wheel.capture="handlePlayerInteraction"
+    @keydown.capture="handlePlayerInteraction"
+    @drop.capture="handlePlayerInteraction"
   >
     <div class="controls" :class="{ 'controls--edit': isEditMode }">
       <HorizontalBrowseEditDeckControls

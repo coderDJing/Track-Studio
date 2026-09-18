@@ -69,3 +69,7 @@ export const suspendTransportForWaveformPreview = async (sessionId: string) => {
 export const resumeTransportAfterWaveformPreview = async (sessionId: string) => {
   await runWaveformPreviewTransportGate(WAVEFORM_PREVIEW_TRANSPORT_RESUME_EVENT, sessionId)
 }
+
+export const stopWaveformPreviewForTransportInteraction = () => {
+  emitter.emit('waveform-preview:stop', { reason: 'manual-play' })
+}

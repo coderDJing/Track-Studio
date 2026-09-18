@@ -14,6 +14,7 @@ type CrossfaderKeyboardTarget = {
 
 type UseHorizontalBrowseModeShellHotkeysParams = {
   runtime: ReturnType<typeof useRuntimeStore>
+  onPlayerInteraction?: () => void
   touchDeckInteraction: (deck: DeckKey) => void
   resolveDeckSong: (deck: DeckKey) => ISongInfo | null
   ejectDeckSong: (deck: DeckKey) => Promise<unknown>
@@ -55,6 +56,7 @@ export const useHorizontalBrowseModeShellHotkeys = (
 
   useHorizontalBrowseHotkeys({
     runtime: params.runtime,
+    onPlayerInteraction: params.onPlayerInteraction,
     onTogglePlayPause: params.onTogglePlayPause,
     onCueKeyDown: params.onCueKeyDown,
     onCueKeyUp: params.onCueKeyUp,

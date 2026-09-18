@@ -2,6 +2,7 @@ import { onScopeDispose } from 'vue'
 import emitter from '@renderer/utils/mitt'
 import type { HorizontalBrowseRenderSyncOptions } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseRenderSync'
 import {
+  stopWaveformPreviewForTransportInteraction,
   WAVEFORM_PREVIEW_TRANSPORT_RESUME_EVENT,
   WAVEFORM_PREVIEW_TRANSPORT_SUSPEND_EVENT,
   type WaveformPreviewTransportGatePayload
@@ -16,6 +17,7 @@ type UseHorizontalBrowseWaveformPreviewSuspensionParams = {
   }
   syncDeckRenderState: (input?: number | HorizontalBrowseRenderSyncOptions) => void
   setAuditionPresentationSuspended: (suspended: boolean) => void
+  playerInteractionEnabled: () => boolean
 }
 
 const isGatePayload = (payload: unknown): payload is WaveformPreviewTransportGatePayload => {
@@ -77,6 +79,11 @@ export const useHorizontalBrowseWaveformPreviewSuspension = (
   emitter.on(WAVEFORM_PREVIEW_TRANSPORT_SUSPEND_EVENT, handleSuspend)
   emitter.on(WAVEFORM_PREVIEW_TRANSPORT_RESUME_EVENT, handleResume)
 
+  const handlePlayerInteraction = () => {
+    if (!activeSessionId || !params.playerInteractionEnabled()) return
+    stopWaveformPreviewForTransportInteraction()
+  }
+
   onScopeDispose(() => {
     disposed = true
     emitter.off(WAVEFORM_PREVIEW_TRANSPORT_SUSPEND_EVENT, handleSuspend)
@@ -89,4 +96,6 @@ export const useHorizontalBrowseWaveformPreviewSuspension = (
       activeSessionId = ''
     }).catch(() => undefined)
   })
+
+  return { handlePlayerInteraction }
 }

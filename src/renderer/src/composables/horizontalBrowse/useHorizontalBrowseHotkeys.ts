@@ -13,6 +13,7 @@ type CrossfaderDirection = -1 | 0 | 1
 
 type UseHorizontalBrowseHotkeysParams = {
   runtime: ReturnType<typeof useRuntimeStore>
+  onPlayerInteraction?: () => void
   onTogglePlayPause: (deck: HorizontalBrowseDeckKey) => void
   onCueKeyDown: (deck: HorizontalBrowseDeckKey) => boolean
   onCueKeyUp: (deck: HorizontalBrowseDeckKey) => void
@@ -72,6 +73,26 @@ const resolvePercentByCode = (code: string) => {
 
 const isHorizontalBrowsePhraseJumpHotkey = (event: KeyboardEvent) =>
   event.altKey && (event.code === 'KeyA' || event.code === 'KeyD')
+
+const isHorizontalBrowsePlayerControlHotkey = (event: KeyboardEvent) => {
+  if (isHorizontalBrowsePhraseJumpHotkey(event)) return true
+  if (
+    event.code === 'Space' ||
+    event.code === 'KeyC' ||
+    event.code === 'KeyA' ||
+    event.code === 'KeyD' ||
+    event.code === 'ArrowLeft' ||
+    event.code === 'ArrowRight' ||
+    event.code === 'KeyW' ||
+    event.code === 'KeyS' ||
+    event.code === 'ArrowUp' ||
+    event.code === 'ArrowDown' ||
+    event.code === 'KeyF'
+  ) {
+    return true
+  }
+  return resolvePercentByCode(event.code) !== null
+}
 
 export const useHorizontalBrowseHotkeys = (params: UseHorizontalBrowseHotkeysParams) => {
   const activeCueDeckByCode = new Map<string, HorizontalBrowseDeckKey>()
@@ -175,9 +196,13 @@ export const useHorizontalBrowseHotkeys = (params: UseHorizontalBrowseHotkeysPar
         emitPreviewMoveRequest('CuratedLibrary')
         return
       }
-      stopKeyboardEvent(event)
-      return
+      if (!isHorizontalBrowsePlayerControlHotkey(event)) {
+        stopKeyboardEvent(event)
+        return
+      }
     }
+    const playerControlHotkey = isHorizontalBrowsePlayerControlHotkey(event)
+    if (playerControlHotkey) params.onPlayerInteraction?.()
     const deck = resolveDeckByShiftState(event)
 
     if (isHorizontalBrowsePhraseJumpHotkey(event)) {
