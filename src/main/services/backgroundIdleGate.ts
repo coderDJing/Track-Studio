@@ -1,6 +1,20 @@
 import { app, powerMonitor } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import { log } from '../log'
+
+// 本模块会被打包进 worker 也会加载的共享 chunk，@electron-toolkit/utils 在
+// ELECTRON_RUN_AS_NODE 环境下初始化即崩溃（app 为 undefined），因此 dev 判定
+// 只能依赖环境变量，不能引入该包；electron 的 app / powerMonitor 在 worker 中
+// 同样不可用，所有访问必须带防御。
+const isDevRuntime = (): boolean =>
+  process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_RENDERER_URL
+
+const isMainAppReady = (): boolean => {
+  try {
+    return !!app && typeof app.isReady === 'function' && app.isReady()
+  } catch {
+    return false
+  }
+}
 
 type SystemIdleState = 'active' | 'idle' | 'locked' | 'unknown'
 type ForegroundBusyProvider = () => boolean
@@ -26,10 +40,10 @@ const DEV_SYSTEM_DEEP_IDLE_THRESHOLD_SEC = 30
 const foregroundBusyProviderMap = new Map<string, ForegroundBusyProvider>()
 
 const resolveIdleThresholdSec = (): number =>
-  is.dev ? DEV_SYSTEM_IDLE_THRESHOLD_SEC : SYSTEM_IDLE_THRESHOLD_SEC
+  isDevRuntime() ? DEV_SYSTEM_IDLE_THRESHOLD_SEC : SYSTEM_IDLE_THRESHOLD_SEC
 
 const resolveDeepIdleThresholdSec = (): number =>
-  is.dev ? DEV_SYSTEM_DEEP_IDLE_THRESHOLD_SEC : SYSTEM_DEEP_IDLE_THRESHOLD_SEC
+  isDevRuntime() ? DEV_SYSTEM_DEEP_IDLE_THRESHOLD_SEC : SYSTEM_DEEP_IDLE_THRESHOLD_SEC
 
 const normalizeSystemIdleState = (value: unknown): SystemIdleState => {
   if (value === 'active') return 'active'
@@ -50,7 +64,7 @@ const getSystemIdleSecondsSafe = (): number => {
 }
 
 const getSystemIdleStateSafe = (thresholdSec: number): SystemIdleState => {
-  if (!app.isReady()) return 'active'
+  if (!isMainAppReady()) return 'active'
   try {
     const threshold = Math.max(1, Number(thresholdSec) || SYSTEM_IDLE_THRESHOLD_SEC)
     return normalizeSystemIdleState(powerMonitor.getSystemIdleState(threshold))
