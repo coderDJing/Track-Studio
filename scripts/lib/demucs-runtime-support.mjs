@@ -371,7 +371,9 @@ export const probeRuntimeModules = ({
       ].join('\n')
     ],
     {
-      timeout: 20_000,
+      // XPU 版 torch 首次 import 实测约 19s，机器繁忙/杀软扫描时 20s 不够用，
+      // 超时会误判运行时损坏并触发整包重下，放宽到 60s。
+      timeout: 60_000,
       env
     }
   )
@@ -640,7 +642,9 @@ export const createRemoteRuntimeAssetInstaller = ({
       }
       return false
     }
-    if (syncRemoteAssets && isRemoteAssetStateCurrent(runtimeDir, entry, normalizeRelativePath)) {
+    // 本地资产版本已与远端一致（含 python 存在性检查）时不再重复下载；
+    // 此前仅 sync 模式跳过，导致偶发 probe 失败也会整包重下。
+    if (isRemoteAssetStateCurrent(runtimeDir, entry, normalizeRelativePath)) {
       console.log(`[demucs-runtime-ensure] Runtime asset already current (${profileName})`)
       return true
     }
