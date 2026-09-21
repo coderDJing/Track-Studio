@@ -14,6 +14,7 @@ import {
 } from '@renderer/utils/uiSettingsStorage'
 import { installConsoleLogBridge } from '@renderer/utils/installConsoleLogBridge'
 import { isRuntimeLibraryTree } from '@renderer/utils/appRuntimeStateGuards'
+import { applyAccentColor } from '@renderer/utils/accentColor'
 import utils from '@renderer/utils/utils'
 
 declare global {
@@ -81,7 +82,12 @@ const initializeApp = async () => {
     } catch {}
   }
   applyThemeClass(runtime.setting.themeMode || 'system', getSystemDark())
+  applyAccentColor(runtime.setting.accentColor)
   try {
+    watch(
+      () => runtime.setting.accentColor,
+      (color) => applyAccentColor(color)
+    )
     watch(
       () => runtime.setting.themeMode,
       (mode: 'system' | 'light' | 'dark') => applyThemeClass(mode || 'system', getSystemDark())
