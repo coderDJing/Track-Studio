@@ -56,6 +56,7 @@ vendor/r3-stretch/*
 
 .codex_tmp
 .playwright-mcp/
+.workbuddy/
 __pycache__/
 
 # Local grid analysis lab
