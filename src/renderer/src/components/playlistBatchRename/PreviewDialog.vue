@@ -436,8 +436,8 @@ const handleClose = async () => {
 }
 
 .filter-tab.active {
-  border-color: rgba(0, 120, 212, 0.4);
-  background: rgba(0, 120, 212, 0.1);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
   color: var(--text);
 }
 

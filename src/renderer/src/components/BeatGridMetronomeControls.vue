@@ -129,9 +129,9 @@ const metronomeTitle = computed(() => {
 }
 
 .metronome-cycle-btn.is-active {
-  border-color: rgba(145, 205, 255, 0.95);
-  box-shadow: 0 0 0 1px rgba(145, 205, 255, 0.25) inset;
-  background: rgba(145, 205, 255, 0.12);
+  border-color: color-mix(in srgb, var(--accent) 80%, #ffffff);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent) inset;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .metronome-cycle-btn__label,

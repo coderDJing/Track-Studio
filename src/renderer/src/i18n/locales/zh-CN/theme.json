@@ -3,6 +3,9 @@
     "mode": "主题模式",
     "system": "跟随系统",
     "light": "日间模式",
-    "dark": "夜间模式"
+    "dark": "夜间模式",
+    "accentColor": "主题色",
+    "accentCustom": "自定义颜色",
+    "accentDefault": "恢复默认"
   }
 }

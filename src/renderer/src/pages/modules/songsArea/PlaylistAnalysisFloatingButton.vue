@@ -79,7 +79,7 @@ const emit = defineEmits<{
 }
 
 .playlist-analysis-floating-button:focus-visible {
-  outline: 2px solid rgba(0, 120, 212, 0.6);
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
   outline-offset: 2px;
 }
 

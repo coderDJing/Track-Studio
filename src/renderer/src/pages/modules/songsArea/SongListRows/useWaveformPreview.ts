@@ -928,6 +928,13 @@ export function useWaveformPreview(params: {
     },
     { flush: 'post' }
   )
+  watch(
+    () => runtime.setting?.accentColor,
+    () => {
+      scheduleThemeDraw()
+    },
+    { flush: 'post' }
+  )
   const unsubscribeWaveformUpdated = subscribeWaveformUpdated(handleWaveformUpdated)
   const unsubscribePioneerPreviewWaveformItem = subscribePioneerPreviewWaveformItem(
     handlePioneerPreviewWaveformItem

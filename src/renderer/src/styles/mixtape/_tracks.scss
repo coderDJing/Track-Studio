@@ -199,11 +199,11 @@
   }
 
   &.is-stem-pending {
-    border-color: rgba(155, 187, 255, 0.35);
+    border-color: color-mix(in srgb, var(--accent) 35%, #ffffff);
   }
 
   &.is-stem-running {
-    border-color: rgba(89, 168, 255, 0.5);
+    border-color: color-mix(in srgb, var(--accent) 50%, #ffffff);
   }
 
   &.is-stem-failed {
@@ -233,11 +233,11 @@
 }
 
 .lane-track.is-stem-pending:hover {
-  border-color: rgba(155, 187, 255, 0.48);
+  border-color: color-mix(in srgb, var(--accent) 48%, #ffffff);
 }
 
 .lane-track.is-stem-running:hover {
-  border-color: rgba(89, 168, 255, 0.7);
+  border-color: color-mix(in srgb, var(--accent) 70%, #ffffff);
 }
 
 .lane-track.is-stem-failed:hover {
@@ -642,7 +642,7 @@
 
 .lane-track__envelope-point:hover {
   background: var(--mixtape-point-bg);
-  border-color: rgba(64, 163, 255, 0.98);
+  border-color: color-mix(in srgb, var(--accent) 85%, #ffffff);
   transform: translate(-50%, -50%) scale(1.2);
 }
 
@@ -650,7 +650,7 @@
 .lane-track__envelope-point:active {
   cursor: grabbing;
   transform: translate(-50%, -50%) scale(1.5);
-  box-shadow: 0 0 0 4px rgba(64, 163, 255, 0.3);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .lane-track__envelope-point.is-boundary {

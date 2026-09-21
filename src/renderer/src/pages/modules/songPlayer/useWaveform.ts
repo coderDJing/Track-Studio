@@ -13,6 +13,7 @@ import {
   resolveWaveformTimelineTickThemeVariant
 } from '@renderer/components/waveformTimelineTicks'
 import { normalizeSongStructureAnalysis } from '@shared/songStructure'
+import { readCurrentAccentColor } from '@renderer/utils/accentColor'
 
 const WAVEFORM_PLAYHEAD_NEEDLE_BACKGROUND = [
   'linear-gradient(90deg,',
@@ -417,7 +418,7 @@ export function useWaveform(params: {
     }
 
     if (pioneerPreviewData) {
-      drawPioneerPreviewWaveform(width, height, pioneerPreviewData, '#0078d4', true)
+      drawPioneerPreviewWaveform(width, height, pioneerPreviewData, readCurrentAccentColor(), true)
       return
     }
 
@@ -636,6 +637,15 @@ export function useWaveform(params: {
 
   watch(
     () => runtime.setting?.themeMode,
+    () => {
+      setTimeout(() => {
+        updateWaveform()
+      }, 0)
+    }
+  )
+
+  watch(
+    () => runtime.setting?.accentColor,
     () => {
       setTimeout(() => {
         updateWaveform()

@@ -6,6 +6,7 @@ import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 import singleCheckbox from '@renderer/components/singleCheckbox.vue'
 import singleRadioGroup from '@renderer/components/singleRadioGroup.vue'
 import BaseSelect from '@renderer/components/BaseSelect.vue'
+import ColorPicker from '@renderer/components/ColorPicker.vue'
 import { t } from '@renderer/utils/translate'
 import {
   settingDialogContextKey,
@@ -33,6 +34,46 @@ import {
   type BrowserPlayerRightTrackInfoField
 } from '@shared/browserPlayerRightTrackInfo'
 import { formatSeekPercentModifierSettingValue } from '@shared/playerGlobalShortcuts'
+import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from '@renderer/utils/accentColor'
+
+const accentColorPresets = [
+  '#0078d4',
+  '#7c3aed',
+  '#c026d3',
+  '#dc2626',
+  '#ea580c',
+  '#ca8a04',
+  '#16a34a',
+  '#0d9488'
+]
+
+const currentAccentColor = computed(
+  () => normalizeAccentColor(runtime.setting.accentColor) || DEFAULT_ACCENT_COLOR
+)
+
+const isCustomAccentColor = computed(() => {
+  const color = normalizeAccentColor(runtime.setting.accentColor)
+  return !!color && !accentColorPresets.includes(color)
+})
+
+const selectAccentColor = (color: string) => {
+  runtime.setting.accentColor = color === DEFAULT_ACCENT_COLOR ? undefined : color
+  setSetting()
+}
+
+const onAccentColorPick = (value: string) => {
+  const color = normalizeAccentColor(value)
+  runtime.setting.accentColor = !color || color === DEFAULT_ACCENT_COLOR ? undefined : color
+}
+
+const onAccentColorCommit = () => {
+  setSetting()
+}
+
+const resetAccentColor = () => {
+  runtime.setting.accentColor = undefined
+  setSetting()
+}
 
 const ctx = inject<SettingDialogContext>(settingDialogContextKey)
 
@@ -273,6 +314,30 @@ const rekordboxDesktopTrackStorageDirText = computed(
                 :width="220"
                 @change="setSetting"
               />
+            </div>
+
+            <div class="setting-block">{{ t('theme.accentColor') }}：</div>
+            <div class="setting-control accent-color-control">
+              <div class="accent-swatches">
+                <button
+                  v-for="preset in accentColorPresets"
+                  :key="preset"
+                  type="button"
+                  class="accent-swatch"
+                  :class="{ 'accent-swatch--active': currentAccentColor === preset }"
+                  :style="{ backgroundColor: preset }"
+                  @click="selectAccentColor(preset)"
+                />
+                <ColorPicker
+                  :model-value="currentAccentColor"
+                  :active="isCustomAccentColor"
+                  @update:model-value="onAccentColorPick"
+                  @change="onAccentColorCommit"
+                />
+              </div>
+              <span class="accent-reset" @click="resetAccentColor">{{
+                t('theme.accentDefault')
+              }}</span>
             </div>
 
             <div class="setting-block">{{ t('common.language') }}：</div>
@@ -999,7 +1064,7 @@ const rekordboxDesktopTrackStorageDirText = computed(
   width: 4px;
   height: 14px;
   border-radius: 999px;
-  background: rgba(0, 120, 212, 0.52);
+  background: color-mix(in srgb, var(--accent) 52%, transparent);
   transform: translateY(-50%);
 }
 
@@ -1023,6 +1088,38 @@ label.setting-block {
 .setting-control {
   margin-top: 10px;
   max-width: 100%;
+}
+
+.accent-color-control {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.accent-swatches {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.accent-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.accent-swatch--active {
+  border-color: var(--text);
+}
+
+.accent-reset {
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
 }
 
 .number-row {
@@ -1078,7 +1175,7 @@ label.setting-block {
 
   &:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.25);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
   }
 }
 
@@ -1186,7 +1283,7 @@ label.setting-block {
 
 .acoustid-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.25);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .acoustid-input.invalid {

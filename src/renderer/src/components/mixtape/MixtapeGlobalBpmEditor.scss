@@ -206,7 +206,7 @@
 
 .timeline-master-bpm__point:hover {
   background: rgba(255, 255, 255, 1);
-  border-color: rgba(64, 163, 255, 0.98);
+  border-color: color-mix(in srgb, var(--accent) 85%, #ffffff);
   transform: translate(-50%, -50%) scale(1.2);
 }
 
@@ -214,7 +214,7 @@
 .timeline-master-bpm__point.is-active {
   cursor: ns-resize;
   transform: translate(-50%, -50%) scale(1.5);
-  box-shadow: 0 0 0 4px rgba(64, 163, 255, 0.3);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .timeline-master-bpm__point.is-boundary {

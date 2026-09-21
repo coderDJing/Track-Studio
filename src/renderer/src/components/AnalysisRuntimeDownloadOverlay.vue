@@ -144,7 +144,7 @@ const minimizeOverlay = () => {
 .analysis-runtime-download-progress__fill {
   height: 100%;
   width: 0;
-  background: linear-gradient(90deg, var(--accent), rgba(54, 156, 255, 0.72));
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 72%, #ffffff));
   transition: width 0.2s ease;
 }
 </style>

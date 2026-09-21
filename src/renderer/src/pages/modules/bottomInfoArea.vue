@@ -1136,8 +1136,8 @@ onBeforeUnmount(() => {
 }
 
 .bottom-info-area {
-  --task-progress-start: #3a7afe;
-  --task-progress-end: #4da3ff;
+  --task-progress-start: var(--accent);
+  --task-progress-end: color-mix(in srgb, var(--accent) 74%, #ffffff);
   --task-progress-stripe-strong: rgba(255, 255, 255, 0.12);
   --task-progress-stripe-soft: rgba(255, 255, 255, 0.04);
   --task-progress-shine: rgba(255, 255, 255, 0.25);
@@ -1157,8 +1157,8 @@ onBeforeUnmount(() => {
 }
 
 :global(.theme-light) .bottom-info-area {
-  --task-progress-start: #2b66d9;
-  --task-progress-end: #4b88ff;
+  --task-progress-start: var(--accent);
+  --task-progress-end: color-mix(in srgb, var(--accent) 74%, #ffffff);
   --task-progress-stripe-strong: rgba(255, 255, 255, 0.18);
   --task-progress-stripe-soft: rgba(255, 255, 255, 0.08);
   --task-progress-shine: rgba(255, 255, 255, 0.32);

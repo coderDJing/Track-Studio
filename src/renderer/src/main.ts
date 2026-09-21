@@ -15,6 +15,7 @@ import {
 } from '@renderer/utils/uiSettingsStorage'
 import { installConsoleLogBridge } from '@renderer/utils/installConsoleLogBridge'
 import { installRendererStallDiagnostics } from '@renderer/utils/rendererStallDiagnostics'
+import { applyAccentColor } from '@renderer/utils/accentColor'
 import type { ICuratedArtistFavorite } from 'src/types/globals'
 
 declare global {
@@ -125,6 +126,11 @@ const initializeApp = async () => {
   }
   // 首次启动按设置（默认 system）或用户选择，跟随系统由主进程广播
   applyThemeClass(runtime.setting.themeMode || 'system', getSystemDark())
+  applyAccentColor(runtime.setting.accentColor)
+  watch(
+    () => runtime.setting.accentColor,
+    (color) => applyAccentColor(color)
+  )
   // 当主进程在 system 模式下广播系统主题变更时，实时更新
   window.electron.ipcRenderer.on('theme/system-updated', (_e, payload: { isDark: boolean }) => {
     if ((runtime.setting.themeMode || 'system') === 'system') {

@@ -654,6 +654,8 @@ interface ISettingConfig {
   mainWindowBrowseMode?: 'browser' | 'horizontal' | 'edit'
   // 主题模式：system（跟随系统）/ light（浅色）/ dark（深色）
   themeMode?: 'system' | 'light' | 'dark'
+  // 自定义主题强调色（#rrggbb）；缺省/非法时回退默认蓝 #0078d4
+  accentColor?: string
   audioExt: string[]
   databaseUrl: string
   globalCallShortcut: string

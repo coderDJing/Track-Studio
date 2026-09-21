@@ -3,6 +3,9 @@
     "mode": "Theme mode",
     "system": "Follow system",
     "light": "Light",
-    "dark": "Dark"
+    "dark": "Dark",
+    "accentColor": "Accent color",
+    "accentCustom": "Custom color",
+    "accentDefault": "Reset to default"
   }
 }

@@ -232,7 +232,7 @@ onUnmounted(() => {
 .fill {
   position: relative;
   height: 100%;
-  background: linear-gradient(90deg, #3a7afe, #4da3ff);
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 74%, #ffffff));
   background-size: 200% 100%;
   animation: slideBg 2.2s linear infinite;
   transition: width 0.3s ease-in-out;

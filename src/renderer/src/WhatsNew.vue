@@ -175,7 +175,7 @@ watch(
 .window-root {
   --whats-new-code-bg: rgba(255, 255, 255, 0.08);
   --whats-new-pre-bg: rgba(255, 255, 255, 0.06);
-  --whats-new-link: #5aa6ff;
+  --whats-new-link: color-mix(in srgb, var(--accent) 65%, #ffffff);
   height: 100%;
   max-height: 100%;
   width: 100%;
@@ -188,7 +188,7 @@ watch(
 :global(.theme-light) .window-root {
   --whats-new-code-bg: rgba(15, 23, 42, 0.06);
   --whats-new-pre-bg: rgba(15, 23, 42, 0.045);
-  --whats-new-link: #2b66d9;
+  --whats-new-link: var(--accent);
 }
 
 .title-bar {

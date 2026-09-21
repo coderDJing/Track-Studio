@@ -1008,7 +1008,7 @@ const drop = async (e: DragEvent) => {
   left: 50%;
   width: 4px;
   transform: translateX(-50%);
-  background-color: #0078d4;
+  background-color: var(--accent);
   opacity: 0;
   transition: opacity 0.2s ease;
   pointer-events: none;
@@ -1112,7 +1112,7 @@ const drop = async (e: DragEvent) => {
   width: 4px;
   /* 宽度始终为 4px */
   height: 100%;
-  background-color: #0078d4;
+  background-color: var(--accent);
   /* 指示器颜色 */
   opacity: 0;
   /* 初始透明度为 0 */
@@ -1142,7 +1142,7 @@ const drop = async (e: DragEvent) => {
   left: 0;
   right: 2px;
   bottom: 0;
-  border: 1px solid #0078d4;
+  border: 1px solid var(--accent);
   pointer-events: none;
   /* 不影响鼠标事件 */
   z-index: 2;

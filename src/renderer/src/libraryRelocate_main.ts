@@ -5,6 +5,7 @@ import './styles/main.scss'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { i18n } from '@renderer/i18n'
 import { installConsoleLogBridge } from '@renderer/utils/installConsoleLogBridge'
+import { applyAccentColor } from '@renderer/utils/accentColor'
 
 const pinia = createPinia()
 const app = createApp(App)
@@ -47,6 +48,11 @@ async function initializeApp() {
     } catch {}
   }
   applyThemeClass(runtime.setting.themeMode || 'system', getSystemDark())
+  applyAccentColor(runtime.setting.accentColor)
+  watch(
+    () => runtime.setting.accentColor,
+    (color) => applyAccentColor(color)
+  )
   try {
     watch(
       () => runtime.setting.themeMode,

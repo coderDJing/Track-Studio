@@ -158,7 +158,7 @@ const resetManual = () => {
 }
 
 .bpm-tap.is-manual {
-  color: #0078d4;
+  color: var(--accent);
 }
 
 .bpm-tap__value {

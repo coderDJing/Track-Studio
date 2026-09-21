@@ -581,20 +581,20 @@ onUnmounted(() => {
   height: 24px;
   max-width: 100%;
   color: var(--text);
-  background: rgba(0, 120, 212, 0.08);
-  border-color: rgba(0, 120, 212, 0.18);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 18%, transparent);
   padding: 0 8px;
   margin: 0 2px;
   vertical-align: baseline;
   user-select: none;
-  border: 1px solid rgba(0, 120, 212, 0.18);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
   border-radius: 999px;
   box-sizing: border-box;
 }
 
 :deep(.segment-token:hover) {
-  background: rgba(0, 120, 212, 0.12);
-  border-color: rgba(0, 120, 212, 0.24);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 24%, transparent);
   color: var(--text);
 }
 

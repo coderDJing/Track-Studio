@@ -7,6 +7,7 @@ import {
   resolveWaveformTimelineTickThemeVariant
 } from '@renderer/components/waveformTimelineTicks'
 import { formatSaturatedWaveformRgb } from '@shared/waveformDisplayColor'
+import { readCurrentAccentColor } from '@renderer/utils/accentColor'
 
 const WAVEFORM_HEIGHT = 40
 const CURSOR_WIDTH = 9
@@ -199,7 +200,7 @@ export function useMiniPlayerRemoteWaveform(params: {
       ctx.save()
       ctx.globalCompositeOperation = 'source-atop'
       ctx.globalAlpha = 0.32
-      ctx.fillStyle = '#0078d4'
+      ctx.fillStyle = readCurrentAccentColor()
       ctx.fillRect(0, 0, width, height)
       ctx.restore()
     }
@@ -266,7 +267,7 @@ export function useMiniPlayerRemoteWaveform(params: {
     themeObserver = new MutationObserver(() => drawWaveform())
     ;[document.documentElement, document.body, document.getElementById('app')].forEach((target) => {
       if (target) {
-        themeObserver?.observe(target, { attributes: true, attributeFilter: ['class'] })
+        themeObserver?.observe(target, { attributes: true, attributeFilter: ['class', 'style'] })
       }
     })
     mounted = true

@@ -404,7 +404,7 @@ const {
 
 .musicbrainz-query-grid input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.25);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .musicbrainz-duration {
@@ -500,7 +500,7 @@ const {
 
 .acoustid-input-row input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.25);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .acoustid-panel-actions {
@@ -533,7 +533,7 @@ const {
 
 .musicbrainz-result.active {
   border-color: var(--accent);
-  background-color: rgba(0, 120, 212, 0.1);
+  background-color: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .result-title-row {

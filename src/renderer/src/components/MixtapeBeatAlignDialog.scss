@@ -1,5 +1,5 @@
 .dialog-body {
-  --beat-align-frame-border: rgba(124, 166, 212, 0.3);
+  --beat-align-frame-border: color-mix(in srgb, var(--accent) 30%, transparent);
   --beat-align-anchor-line: rgba(255, 233, 141, 0.7);
   --beat-align-anchor-line-active: rgba(255, 227, 122, 0.94);
   --beat-align-anchor-shadow: rgba(0, 0, 0, 0.22);
@@ -14,7 +14,7 @@
 }
 
 :global(.theme-light) .dialog-body {
-  --beat-align-frame-border: rgba(54, 101, 177, 0.24);
+  --beat-align-frame-border: color-mix(in srgb, var(--accent) 24%, transparent);
   --beat-align-anchor-line: rgba(198, 138, 16, 0.56);
   --beat-align-anchor-line-active: rgba(198, 138, 16, 0.82);
   --beat-align-anchor-shadow: rgba(255, 255, 255, 0.46);

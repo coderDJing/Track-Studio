@@ -5,6 +5,7 @@ import './styles/main.scss'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { i18n } from '@renderer/i18n'
 import { installConsoleLogBridge } from '@renderer/utils/installConsoleLogBridge'
+import { applyAccentColor } from '@renderer/utils/accentColor'
 
 const pinia = createPinia()
 const app = createApp(App)
@@ -49,6 +50,11 @@ async function initializeApp() {
   }
   // 首次启动按设置（默认 system）或用户选择
   applyThemeClass(runtime.setting.themeMode || 'system', getSystemDark())
+  applyAccentColor(runtime.setting.accentColor)
+  watch(
+    () => runtime.setting.accentColor,
+    (color) => applyAccentColor(color)
+  )
   // 监听设置变更与系统主题变更
   try {
     watch(

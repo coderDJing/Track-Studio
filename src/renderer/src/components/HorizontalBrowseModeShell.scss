@@ -7,16 +7,16 @@
   --shell-playhead-bg: rgba(255, 255, 255, 0.96);
   --shell-play: #9fd6b3;
   --shell-cue-accent: #d98921;
-  --shell-drop-hover: rgba(0, 120, 212, 0.08);
-  --shell-drop-border: rgba(0, 120, 212, 0.32);
+  --shell-drop-hover: color-mix(in srgb, var(--accent) 8%, transparent);
+  --shell-drop-border: color-mix(in srgb, var(--accent) 32%, transparent);
   --shell-active-control-text: #ffffff;
-  --shell-active-control-border: rgba(42, 144, 255, 0.95);
+  --shell-active-control-border: color-mix(in srgb, var(--accent) 80%, #ffffff);
   --shell-active-control-bg: linear-gradient(
     180deg,
-    rgba(35, 137, 255, 0.96),
-    rgba(0, 120, 212, 0.96)
+    color-mix(in srgb, var(--accent) 80%, #ffffff),
+    var(--accent)
   );
-  --shell-active-control-outline: rgba(12, 84, 156, 0.32);
+  --shell-active-control-outline: color-mix(in srgb, var(--accent) 32%, transparent);
   --shell-active-control-inset: rgba(255, 255, 255, 0.24);
   --shell-control-hover-border: rgba(255, 255, 255, 0.22);
   --shell-cue-label-text: #ffffff;
@@ -70,16 +70,16 @@
   --shell-grid-major: rgba(15, 23, 42, 0.72);
   --shell-playhead-bg: rgba(15, 23, 42, 0.96);
   --shell-play: #79b592;
-  --shell-drop-hover: rgba(0, 120, 212, 0.06);
-  --shell-drop-border: rgba(0, 120, 212, 0.22);
+  --shell-drop-hover: color-mix(in srgb, var(--accent) 6%, transparent);
+  --shell-drop-border: color-mix(in srgb, var(--accent) 22%, transparent);
   --shell-active-control-text: #ffffff;
-  --shell-active-control-border: rgba(0, 120, 212, 0.78);
+  --shell-active-control-border: color-mix(in srgb, var(--accent) 78%, transparent);
   --shell-active-control-bg: linear-gradient(
     180deg,
-    rgba(35, 137, 255, 0.92),
-    rgba(0, 120, 212, 0.92)
+    color-mix(in srgb, var(--accent) 80%, #ffffff),
+    var(--accent)
   );
-  --shell-active-control-outline: rgba(43, 102, 217, 0.16);
+  --shell-active-control-outline: color-mix(in srgb, var(--accent) 16%, transparent);
   --shell-active-control-inset: rgba(255, 255, 255, 0.36);
   --shell-control-hover-border: color-mix(in srgb, var(--accent) 42%, var(--border));
   --shell-cue-label-text: #ffffff;

@@ -309,7 +309,7 @@ const drawFocusSource = (timestamp = performance.now()) => {
   context.clearRect(0, 0, pixelWidth, pixelHeight)
   if (!windowFocused.value) return
 
-  const accent = getComputedStyle(canvas).getPropertyValue('--accent').trim() || 'rgb(0, 170, 255)'
+  const accent = getComputedStyle(canvas).getPropertyValue('--accent').trim() || '#0078d4'
   const coreLineWidth = 2 * pixelRatio
   const glowLineWidth = 5 * pixelRatio
   const inset = coreLineWidth / 2
@@ -804,12 +804,12 @@ onUnmounted(() => {
 <style lang="scss" scoped>
 .mini-player {
   --mini-player-inset: 5px;
-  --task-progress-start: #3a7afe;
-  --task-progress-end: #4da3ff;
+  --task-progress-start: var(--accent);
+  --task-progress-end: color-mix(in srgb, var(--accent) 74%, #ffffff);
   --task-progress-stripe-strong: rgba(255, 255, 255, 0.12);
   --task-progress-stripe-soft: rgba(255, 255, 255, 0.04);
   --task-progress-shine: rgba(255, 255, 255, 0.25);
-  --task-progress-track: rgba(58, 122, 254, 0.28);
+  --task-progress-track: color-mix(in srgb, var(--accent) 28%, transparent);
   width: 100%;
   height: 100%;
   display: flex;
@@ -821,12 +821,12 @@ onUnmounted(() => {
 }
 
 :global(.theme-light) .mini-player {
-  --task-progress-start: #2b66d9;
-  --task-progress-end: #4b88ff;
+  --task-progress-start: var(--accent);
+  --task-progress-end: color-mix(in srgb, var(--accent) 74%, #ffffff);
   --task-progress-stripe-strong: rgba(255, 255, 255, 0.18);
   --task-progress-stripe-soft: rgba(255, 255, 255, 0.08);
   --task-progress-shine: rgba(255, 255, 255, 0.32);
-  --task-progress-track: rgba(43, 102, 217, 0.22);
+  --task-progress-track: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .mini-player__task-progress {

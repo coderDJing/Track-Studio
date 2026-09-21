@@ -104,7 +104,7 @@ defineProps<{
   min-width: 1px;
   border: 0;
   box-shadow:
-    inset 0 0 0 1px rgba(0, 120, 212, 0.46),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 46%, transparent),
     inset 1px 0 0 rgba(255, 255, 255, 0.14),
     inset -1px 0 0 rgba(6, 9, 14, 0.2);
   background:
@@ -116,9 +116,9 @@ defineProps<{
     ),
     linear-gradient(
       180deg,
-      rgba(0, 120, 212, 0.22) 0%,
-      rgba(0, 120, 212, 0.12) 55%,
-      rgba(0, 120, 212, 0.18) 100%
+      color-mix(in srgb, var(--accent) 22%, transparent) 0%,
+      color-mix(in srgb, var(--accent) 12%, transparent) 55%,
+      color-mix(in srgb, var(--accent) 18%, transparent) 100%
     );
   overflow: hidden;
 }

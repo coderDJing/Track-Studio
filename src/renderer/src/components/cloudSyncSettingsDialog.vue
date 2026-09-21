@@ -390,7 +390,7 @@ onUnmounted(() => utils.delHotkeysScope(uuid))
   width: 4px;
   height: 14px;
   border-radius: 999px;
-  background: rgba(0, 120, 212, 0.52);
+  background: color-mix(in srgb, var(--accent) 52%, transparent);
   transform: translateY(-50%);
 }
 
@@ -441,7 +441,7 @@ label.setting-block {
 .input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.25);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .email-row {
