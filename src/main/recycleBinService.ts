@@ -52,6 +52,17 @@ type RecycleBinMoveOptions = {
   contentSha256?: string | null
   contentSize?: number | null
   deferDerivedCacheTransfer?: boolean
+  /**
+   * 推迟写入回收站记录：调用方（如成批删歌）收集 `pendingRecycleBinRecord` 后统一
+   * `upsertRecycleBinRecords`，把每首歌一次 SQLite 提交压成一次。
+   */
+  deferRecycleBinRecord?: boolean
+  /**
+   * 按目录缓存 `findSongListRoot` 的结果。成批删歌时同一目录会被解析 N 次，而每解析一次
+   * 都要沿库树做几次同步 SQLite 查询（见 cacheMaintenance.findSongListRoot）。只应在单次
+   * 批量操作内复用，跨批次缓存会在歌单被移动/改名后给出过期结果。
+   */
+  listRootByDirCache?: Map<string, string | null>
 }
 
 export type RecycleBinMoveResult = {
@@ -60,6 +71,8 @@ export type RecycleBinMoveResult = {
   destPath?: string
   destRelativePath?: string
   error?: string
+  /** 仅在 `deferRecycleBinRecord` 为真时出现，等待调用方批量落库。 */
+  pendingRecycleBinRecord?: RecycleBinRecord
 }
 
 type RecycleBinRestoreResult = {
@@ -454,6 +467,22 @@ async function moveReferencedMixtapeFileToVault(
   return { moved: true, destPath }
 }
 
+/**
+ * `findSongListRoot` 的按目录记忆化包装。仅在传入 cache 时生效，且只在该次批量操作内
+ * 复用；不传则保持原来的逐次解析行为。
+ */
+const resolveSourceListRootCached = async (
+  dir: string,
+  cache?: Map<string, string | null>
+): Promise<string | null> => {
+  if (!cache) return await findSongListRoot(dir)
+  const key = process.platform === 'win32' ? dir.toLowerCase() : dir
+  if (cache.has(key)) return cache.get(key) ?? null
+  const resolved = await findSongListRoot(dir)
+  cache.set(key, resolved)
+  return resolved
+}
+
 export async function moveFileToRecycleBin(
   srcPath: string,
   options: RecycleBinMoveOptions = {}
@@ -463,7 +492,10 @@ export async function moveFileToRecycleBin(
   if (!recycleRoot || !libraryRoot || !srcPath) {
     return { status: 'failed', srcPath, error: 'recycle bin root unavailable' }
   }
-  const sourceListRoot = await findSongListRoot(path.dirname(srcPath))
+  const sourceListRoot = await resolveSourceListRootCached(
+    path.dirname(srcPath),
+    options.listRootByDirCache
+  )
   const fromCurated = isPathInside(srcPath, getCuratedLibraryAbsRoot())
   try {
     if (!(await fs.pathExists(srcPath))) {
@@ -509,7 +541,7 @@ export async function moveFileToRecycleBin(
       ? (options.originalPlaylistPath ?? null)
       : await resolveOriginalPlaylistPathForFile(srcPath)
     const identity = findCuratedSyncFileByAbsPath(srcPath)
-    upsertRecycleBinRecord({
+    const recycleBinRecord = {
       filePath: rel,
       deletedAtMs: options.deletedAtMs ?? Date.now(),
       originalPlaylistPath: originalPlaylistPath ?? null,
@@ -518,7 +550,11 @@ export async function moveFileToRecycleBin(
       fileId: options.fileId || identity?.fileId || null,
       contentSha256: options.contentSha256 || identity?.contentSha256 || null,
       contentSize: options.contentSize ?? identity?.contentSize ?? null
-    })
+    }
+    const pendingRecycleBinRecord = options.deferRecycleBinRecord ? recycleBinRecord : undefined
+    if (!pendingRecycleBinRecord) {
+      upsertRecycleBinRecord(recycleBinRecord)
+    }
     syncMixtapeFilePathReference(srcPath, destPath)
     try {
       notifyCuratedFilePathChanged(srcPath, destPath)
@@ -531,7 +567,13 @@ export async function moveFileToRecycleBin(
     if (deferredCacheContext) {
       void enqueueRecycleBinCacheTransfer(cacheTransferParams, deferredCacheContext)
     }
-    return { status: 'moved', srcPath, destPath, destRelativePath: rel }
+    return {
+      status: 'moved',
+      srcPath,
+      destPath,
+      destRelativePath: rel,
+      pendingRecycleBinRecord
+    }
   } catch (error) {
     log.error('[recycleBin] move failed', { srcPath, error })
     return { status: 'failed', srcPath, error: getErrorMessage(error) }

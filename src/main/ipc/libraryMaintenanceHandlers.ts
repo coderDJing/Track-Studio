@@ -24,6 +24,7 @@ import {
   listRecycleBinRecords,
   deleteRecycleBinRecords,
   upsertRecycleBinRecord,
+  upsertRecycleBinRecords,
   type RecycleBinRecord
 } from '../recycleBinDb'
 import { scanSongList as svcScanSongList } from '../services/scanSongs'
@@ -35,7 +36,10 @@ import {
 import { getLibraryDb, type SqliteDatabase } from '../libraryDb'
 import { getLibraryStemCacheRootAbs } from '../services/libraryStemAssetStorage'
 import { markGlobalSongSearchDirty } from '../services/globalSongSearch'
-import { waitForPlaybackForegroundIdle } from '../services/playbackForegroundActivity'
+import {
+  runPlaybackAwareBackgroundFileIo,
+  waitForPlaybackForegroundIdle
+} from '../services/playbackForegroundActivity'
 import { beginLibraryTreeWatcherBulkOperation } from '../libraryTreeWatcher'
 import {
   scheduleCuratedLibrarySyncAfterLocalChange,
@@ -54,7 +58,11 @@ import {
   isSupportedPlaylistTrackNumberListRoot
 } from '../services/playlistTrackNumbers'
 import { protectSetReferencedFilesForDeletion } from './setListHandlers'
-import { assertLibraryMergeMutationAllowed } from '../services/libraryMerge/runtime'
+import {
+  assertLibraryMergeMutationAllowed,
+  deferLibraryMaintenanceAfterMergeLockReleased,
+  tryBeginLibraryMaintenanceMutation
+} from '../services/libraryMerge/runtime'
 import { beginPlaylistViewSnapshotMutationByPaths } from '../services/playlistViewSnapshotService'
 
 export const RECYCLE_BIN_BACKGROUND_DELETE_COMPLETED_CHANNEL =
@@ -86,6 +94,14 @@ const DIRTY_DATA_SQL_TABLES = [
 
 const DELETE_SONGS_BATCH_CONCURRENCY = 4
 const DELETE_SONGS_BATCH_YIELD_EVERY = 1
+/**
+ * 推迟落库的回收站记录攒够这么多条就先提交一次。
+ *
+ * 记录推迟到批次结束才写，好处是整批只提交一次；代价是文件已经移走、记录还没落库的窗口
+ * 从"单文件几毫秒"拉长到"整批几秒"。这期间主进程被强杀 / 掉电，回收站目录里就会留下
+ * 查不到记录的孤儿文件。按条数分批提交把这个窗口压回秒级以内，同时保留绝大部分批量收益。
+ */
+const DELETED_SONGS_RECYCLE_BIN_FLUSH_BATCH = 32
 
 type DirtyDataSqlSummary = {
   removedRows: number
@@ -214,6 +230,73 @@ function normalizeAudioExtensions(input?: string[]): Set<string> {
   return result
 }
 
+const DEL_SONGS_POST_DELETE_TASK = 'delSongs:post-delete-compact'
+
+/**
+ * 排一次删歌收尾：走后台文件 I/O 通道（先等播放让路、再排队等 I/O 槽位），IPC 只等到
+ * 文件搬完就返回。真正的互斥登记在通道里开跑之后才做，排队期间不会挡住合并。
+ */
+function scheduleDelSongsPostDeleteMaintenance(
+  removedPaths: string[],
+  sourceSongListRoot: string
+): void {
+  void runPlaybackAwareBackgroundFileIo(
+    DEL_SONGS_POST_DELETE_TASK,
+    { count: removedPaths.length, songListRoot: sourceSongListRoot },
+    () => runDelSongsPostDeleteMaintenance(removedPaths, sourceSongListRoot),
+    { priority: 'background' }
+  ).catch(() => {})
+}
+
+/**
+ * 删歌后的收尾：序号整理 → 全局搜索置脏 → 触发云库同步 → 通知录音库变更。
+ *
+ * 由 `runPlaybackAwareBackgroundFileIo` 在后台通道里调用，不再挂在 `delSongsAwaitable` 的
+ * await 上。收尾会写 song_cache 等库内缓存，必须和音乐库合并互斥，而现在它既可能跑在
+ * IPC 返回之后、也可能跑在合并开始之后，所以不能只在入口查一次锁：
+ *  - 查锁通过之后合并才拿到锁 → 收尾会与合并并发写同一份缓存；
+ *  - 查锁时合并已在跑 → 直接 return 等于把这次的序号整理 / 云同步彻底丢掉。
+ * 因此改为向 `tryBeginLibraryMaintenanceMutation()` 登记：登记成功即让合并上锁时必须先等
+ * 我们退出；登记不上则挂到合并释放锁之后的补跑队列（见 drainDeferredLibraryMaintenance）。
+ */
+async function runDelSongsPostDeleteMaintenance(
+  removedPaths: string[],
+  sourceSongListRoot: string
+): Promise<void> {
+  const releaseMaintenanceMutation = tryBeginLibraryMaintenanceMutation()
+  if (!releaseMaintenanceMutation) {
+    deferLibraryMaintenanceAfterMergeLockReleased(DEL_SONGS_POST_DELETE_TASK, () =>
+      scheduleDelSongsPostDeleteMaintenance(removedPaths, sourceSongListRoot)
+    )
+    return
+  }
+  try {
+    let compacted = false
+    if (sourceSongListRoot) {
+      if (isSupportedPlaylistTrackNumberListRoot(sourceSongListRoot)) {
+        await compactSongListTrackNumbers(sourceSongListRoot)
+        compacted = true
+      }
+    } else {
+      const compactResult = await compactSongListTrackNumbersByFilePaths(removedPaths)
+      compacted = compactResult.roots > 0
+    }
+    if (compacted) {
+      markGlobalSongSearchDirty('delSongs')
+    }
+    if (removedPaths.some((item) => isPathInside(item, getCuratedLibraryAbsRoot()))) {
+      scheduleCuratedLibrarySyncAfterLocalChange()
+    }
+    if (removedPaths.some((item) => isInRecordingLibraryAbsPath(item))) {
+      mainWindow.instance?.webContents.send(RECORDING_LIBRARY_CHANGED_EVENT, {
+        hasRecordings: await hasRecordings()
+      })
+    }
+  } finally {
+    releaseMaintenanceMutation()
+  }
+}
+
 export function registerLibraryMaintenanceHandlers() {
   const executeDelSongs = async (
     payload: { filePaths: string[]; songListPath?: string; sourceType?: string } | string[]
@@ -248,6 +331,19 @@ export function registerLibraryMaintenanceHandlers() {
     const releasePlaylistViewSnapshotMutation =
       beginPlaylistViewSnapshotMutationByPaths(uniquePaths)
     const releaseLibraryTreeWatcherBulk = beginLibraryTreeWatcherBulkOperation()
+    // 推迟到批次中分片提交的回收站记录；finally 里再兜底一次，避免中途抛错时文件已经移走、
+    // 记录却没落库（那样回收站里会出现无法还原的孤儿文件）。
+    const deferredRecycleBinRecords: RecycleBinRecord[] = []
+    const flushDeferredRecycleBinRecords = () => {
+      if (deferredRecycleBinRecords.length === 0) return
+      upsertRecycleBinRecords(deferredRecycleBinRecords.splice(0))
+    }
+    const deferRecycleBinRecord = (record: RecycleBinRecord) => {
+      deferredRecycleBinRecords.push(record)
+      if (deferredRecycleBinRecords.length >= DELETED_SONGS_RECYCLE_BIN_FLUSH_BATCH) {
+        flushDeferredRecycleBinRecords()
+      }
+    }
     try {
       const setProtection = await protectSetReferencedFilesForDeletion(uniquePaths)
       const protectedMovedPaths = setProtection.protectedFiles
@@ -258,6 +354,8 @@ export function registerLibraryMaintenanceHandlers() {
       ).length
       const protectedHandledCount = setProtection.protectedFiles.length
       const tasks: Array<() => Promise<RecycleBinMoveResult>> = []
+      // 同一次删歌里大量文件来自同一个歌单目录，按目录记忆化，省掉逐文件的库树解析。
+      const listRootByDirCache = new Map<string, string | null>()
       for (const item of setProtection.unprotectedFiles) {
         tasks.push(async () => {
           await waitForPlaybackForegroundIdle('delSongs:task-start', {
@@ -266,10 +364,16 @@ export function registerLibraryMaintenanceHandlers() {
           const result = await moveFileToRecycleBin(item, {
             originalPlaylistPath,
             sourceType,
-            deferDerivedCacheTransfer: true
+            deferDerivedCacheTransfer: true,
+            deferRecycleBinRecord: true,
+            listRootByDirCache
           })
           if (result.status === 'failed') {
             throw new Error(result.error || 'move to recycle bin failed')
+          }
+          // 文件已经落进回收站目录，记录必须跟着走；顺手按条数分片提交，别攒到批次结束。
+          if (result.pendingRecycleBinRecord) {
+            deferRecycleBinRecord(result.pendingRecycleBinRecord)
           }
           return result
         })
@@ -301,6 +405,8 @@ export function registerLibraryMaintenanceHandlers() {
         onInterrupted: async (interruptPayload) =>
           waitForUserDecision(mainWindow.instance ?? null, batchId, 'delSongs', interruptPayload)
       })
+      // 回收站记录已在每个文件搬完后分片落库（见 deferRecycleBinRecord），这里只兜底清一次尾巴。
+      flushDeferredRecycleBinRecords()
       if (hasENOSPC && mainWindow.instance) {
         mainWindow.instance.webContents.send('file-batch-summary', {
           context: 'delSongs',
@@ -325,35 +431,17 @@ export function registerLibraryMaintenanceHandlers() {
           total: uniquePaths.length
         })
       }
-      const removedPaths = results
-        .filter(
-          (item): item is RecycleBinMoveResult =>
-            !(item instanceof Error) && isRecycleBinMoveResult(item)
-        )
-        .map((item) => item.srcPath)
-        .concat(protectedMovedPaths)
+      const moveResults = results.filter(
+        (item): item is RecycleBinMoveResult =>
+          !(item instanceof Error) && isRecycleBinMoveResult(item)
+      )
+      const removedPaths = moveResults.map((item) => item.srcPath).concat(protectedMovedPaths)
+      // 序号整理要 readdir 整个歌单、全量读一次缓存、逐个 stat 幸存文件、再整表写回，
+      // 几百首的量级就是秒级主线程工作；而它在最后一个进度事件之后，白白占着 renderer 的
+      // await，进度条已经满了界面却还锁着。挪进后台 I/O 通道排队，IPC 只等到文件搬完就返回。
+      // 三件事的相对顺序（整理 → 置脏 → 触发云同步）保持不变。
       if (removedPaths.length > 0) {
-        let compacted = false
-        if (sourceSongListRoot) {
-          if (isSupportedPlaylistTrackNumberListRoot(sourceSongListRoot)) {
-            await compactSongListTrackNumbers(sourceSongListRoot)
-            compacted = true
-          }
-        } else {
-          const compactResult = await compactSongListTrackNumbersByFilePaths(removedPaths)
-          compacted = compactResult.roots > 0
-        }
-        if (compacted) {
-          markGlobalSongSearchDirty('delSongs')
-        }
-        if (removedPaths.some((item) => isPathInside(item, getCuratedLibraryAbsRoot()))) {
-          scheduleCuratedLibrarySyncAfterLocalChange()
-        }
-        if (removedPaths.some((item) => isInRecordingLibraryAbsPath(item))) {
-          mainWindow.instance?.webContents.send(RECORDING_LIBRARY_CHANGED_EVENT, {
-            hasRecordings: await hasRecordings()
-          })
-        }
+        scheduleDelSongsPostDeleteMaintenance(removedPaths, sourceSongListRoot)
       }
       return {
         total: uniquePaths.length,
@@ -365,6 +453,7 @@ export function registerLibraryMaintenanceHandlers() {
         protectedFiles: setProtection.protectedFiles
       }
     } finally {
+      flushDeferredRecycleBinRecords()
       releaseLibraryTreeWatcherBulk()
       releasePlaylistViewSnapshotMutation()
     }

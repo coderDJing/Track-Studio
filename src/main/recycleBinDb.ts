@@ -1,5 +1,6 @@
-import { getLibraryDb, isSqliteRow } from './libraryDb'
+import { getLibraryDb, isSqliteRow, type SqliteDatabase } from './libraryDb'
 import { log } from './log'
+import { runTracedSync } from './services/mainProcessActivityTraceState'
 
 export type RecycleBinRecord = {
   filePath: string
@@ -131,33 +132,19 @@ export function getRecycleBinRecordByFileId(fileId: string): RecycleBinRecord | 
   }
 }
 
-export function upsertRecycleBinRecord(record: RecycleBinRecord): boolean {
-  const db = getLibraryDb()
-  if (!db || !record?.filePath) return false
-  try {
-    const canonicalRecord: RecycleBinRecord = {
-      ...record,
-      filePath: normalizeRecycleBinStoredPath(record.filePath),
-      originalPlaylistPath: record.originalPlaylistPath
-        ? normalizeRecycleBinStoredPath(record.originalPlaylistPath)
-        : null
-    }
-    if (!canonicalRecord.filePath) return false
-    const existing = getRecycleBinRecord(canonicalRecord.filePath)
-    const existingMs = existing?.deletedAtMs ?? null
-    if (existingMs !== null && existingMs > canonicalRecord.deletedAtMs) {
-      return false
-    }
-    const write = db.transaction(() => {
-      const lookup = buildPathLookup(canonicalRecord.filePath)
-      if (lookup.params.length > 0) {
-        db.prepare(`DELETE FROM ${TABLE} WHERE ${lookup.clause}`).run(...lookup.params)
-      }
-      // DELETE 使用 Windows 不区分大小写匹配，INSERT 却受 SQLite 主键的字节比较约束。
-      // 因此路径仅大小写不同（或 legacy 路径别名）时，旧实现会漏删并触发 UNIQUE(file_path)。
-      // 此处以同一个 canonical 路径做查找和写入，再用 ON CONFLICT 作为最终原子兜底。
-      db.prepare(
-        `INSERT INTO ${TABLE} (
+const buildCanonicalRecord = (record: RecycleBinRecord): RecycleBinRecord | null => {
+  if (!record?.filePath) return null
+  const canonicalRecord: RecycleBinRecord = {
+    ...record,
+    filePath: normalizeRecycleBinStoredPath(record.filePath),
+    originalPlaylistPath: record.originalPlaylistPath
+      ? normalizeRecycleBinStoredPath(record.originalPlaylistPath)
+      : null
+  }
+  return canonicalRecord.filePath ? canonicalRecord : null
+}
+
+const INSERT_SQL = `INSERT INTO ${TABLE} (
          file_path, deleted_at_ms, original_playlist_path, original_file_name, source_type,
          file_id, content_sha256, content_size
        )
@@ -170,22 +157,94 @@ export function upsertRecycleBinRecord(record: RecycleBinRecord): boolean {
           file_id = COALESCE(excluded.file_id, ${TABLE}.file_id),
           content_sha256 = COALESCE(excluded.content_sha256, ${TABLE}.content_sha256),
           content_size = COALESCE(excluded.content_size, ${TABLE}.content_size)`
-      ).run(
-        canonicalRecord.filePath,
-        canonicalRecord.deletedAtMs,
-        canonicalRecord.originalPlaylistPath ?? null,
-        canonicalRecord.originalFileName ?? null,
-        canonicalRecord.sourceType ?? null,
-        canonicalRecord.fileId || existing?.fileId || null,
-        canonicalRecord.contentSha256 || existing?.contentSha256 || null,
-        canonicalRecord.contentSize ?? existing?.contentSize ?? null
-      )
+
+const writeRecycleBinRecord = (
+  db: SqliteDatabase,
+  canonicalRecord: RecycleBinRecord,
+  existing: RecycleBinRecord | null
+) => {
+  const lookup = buildPathLookup(canonicalRecord.filePath)
+  if (lookup.params.length > 0) {
+    db.prepare(`DELETE FROM ${TABLE} WHERE ${lookup.clause}`).run(...lookup.params)
+  }
+  // DELETE 使用 Windows 不区分大小写匹配，INSERT 却受 SQLite 主键的字节比较约束。
+  // 因此路径仅大小写不同（或 legacy 路径别名）时，旧实现会漏删并触发 UNIQUE(file_path)。
+  // 此处以同一个 canonical 路径做查找和写入，再用 ON CONFLICT 作为最终原子兜底。
+  db.prepare(INSERT_SQL).run(
+    canonicalRecord.filePath,
+    canonicalRecord.deletedAtMs,
+    canonicalRecord.originalPlaylistPath ?? null,
+    canonicalRecord.originalFileName ?? null,
+    canonicalRecord.sourceType ?? null,
+    canonicalRecord.fileId || existing?.fileId || null,
+    canonicalRecord.contentSha256 || existing?.contentSha256 || null,
+    canonicalRecord.contentSize ?? existing?.contentSize ?? null
+  )
+}
+
+export function upsertRecycleBinRecord(record: RecycleBinRecord): boolean {
+  const db = getLibraryDb()
+  if (!db) return false
+  try {
+    const canonicalRecord = buildCanonicalRecord(record)
+    if (!canonicalRecord) return false
+    const existing = getRecycleBinRecord(canonicalRecord.filePath)
+    const existingMs = existing?.deletedAtMs ?? null
+    if (existingMs !== null && existingMs > canonicalRecord.deletedAtMs) {
+      return false
+    }
+    const write = db.transaction(() => {
+      writeRecycleBinRecord(db, canonicalRecord, existing)
     })
-    write()
+    runTracedSync('sqlite:recycle-bin-record-upsert', () => write())
     return true
   } catch (error) {
     log.error('[sqlite] recycle bin upsert failed', error)
     return false
+  }
+}
+
+/**
+ * 批量写入回收站记录。
+ *
+ * `upsertRecycleBinRecord` 每条自带一个 `db.transaction()`，等于每首歌一次独立提交；而
+ * better-sqlite3 是同步驱动，成批删歌时这些逐条提交会连续占住 Electron 主进程。这里把整批
+ * 收进一个事务，只留一次提交；若整体失败则回退到逐条写入，避免一条坏记录连累整批。
+ */
+export function upsertRecycleBinRecords(records: RecycleBinRecord[]): number {
+  const db = getLibraryDb()
+  if (!db) return 0
+  const list = (Array.isArray(records) ? records : [])
+    .map((record) => buildCanonicalRecord(record))
+    .filter((record): record is RecycleBinRecord => !!record)
+  if (list.length === 0) return 0
+
+  try {
+    return runTracedSync('sqlite:recycle-bin-record-batch-upsert', () => {
+      const existingByPath = new Map<string, RecycleBinRecord | null>()
+      for (const record of list) {
+        if (!existingByPath.has(record.filePath)) {
+          existingByPath.set(record.filePath, getRecycleBinRecord(record.filePath))
+        }
+      }
+      const write = db.transaction(() => {
+        for (const record of list) {
+          const existing = existingByPath.get(record.filePath) ?? null
+          const existingMs = existing?.deletedAtMs ?? null
+          if (existingMs !== null && existingMs > record.deletedAtMs) continue
+          writeRecycleBinRecord(db, record, existing)
+        }
+      })
+      write()
+      return list.length
+    })
+  } catch (error) {
+    log.error('[sqlite] recycle bin batch upsert failed, falling back to per-record', error)
+    let written = 0
+    for (const record of list) {
+      if (upsertRecycleBinRecord(record)) written += 1
+    }
+    return written
   }
 }
 

@@ -24,6 +24,7 @@ import {
 // 显示不受影响。
 import { markPlaylistViewSnapshotContentStale } from './playlistViewSnapshot'
 import type { SqliteDatabase } from '../libraryDb'
+import { runTracedSync } from '../services/mainProcessActivityTraceState'
 
 const migratedSongRoots = new Set<string>()
 const looseSongRootCache = new Map<string, string[]>()
@@ -413,70 +414,74 @@ export async function loadSongCache(listRoot: string): Promise<Map<string, SongC
       : undefined
   try {
     await ensureSongCacheMigrated(db, listRoot)
-    const map = new Map<string, SongCacheEntry>()
-    const appendRows = (rowsToUse: SongCacheDbRow[], rootKey: string, legacyRelRoot?: string) => {
-      for (const row of rowsToUse || []) {
-        if (!row || !row.file_path || row.info_json === undefined) continue
-        let info: ISongInfo | null = null
-        try {
-          info = JSON.parse(String(row.info_json)) as ISongInfo
-        } catch {
-          info = null
-        }
-        const size = toNumber(row.size)
-        const mtimeMs = toNumber(row.mtime_ms)
-        if (!info || size === null || mtimeMs === null) continue
-        let absFilePath = resolveAbsoluteFilePath(rootKey, String(row.file_path))
-        if (legacyRelRoot) {
-          const resolvedLegacy = resolveFilePathInput(legacyRelRoot, String(row.file_path))
-          if (resolvedLegacy && resolvedLegacy.isRelativeKey) {
-            absFilePath = resolveAbsoluteFilePath(listRootKey, resolvedLegacy.key)
+    // 迁移 await 之后整段都是同步的（全表 SELECT + 逐行 JSON.parse + 路径解析）。
+    // 纳入同步活动埋点后，主进程卡顿时诊断快照的 activity.slowest 会直接点名这一条。
+    return runTracedSync('sqlite:song-cache-load', () => {
+      const map = new Map<string, SongCacheEntry>()
+      const appendRows = (rowsToUse: SongCacheDbRow[], rootKey: string, legacyRelRoot?: string) => {
+        for (const row of rowsToUse || []) {
+          if (!row || !row.file_path || row.info_json === undefined) continue
+          let info: ISongInfo | null = null
+          try {
+            info = JSON.parse(String(row.info_json)) as ISongInfo
+          } catch {
+            info = null
           }
+          const size = toNumber(row.size)
+          const mtimeMs = toNumber(row.mtime_ms)
+          if (!info || size === null || mtimeMs === null) continue
+          let absFilePath = resolveAbsoluteFilePath(rootKey, String(row.file_path))
+          if (legacyRelRoot) {
+            const resolvedLegacy = resolveFilePathInput(legacyRelRoot, String(row.file_path))
+            if (resolvedLegacy && resolvedLegacy.isRelativeKey) {
+              absFilePath = resolveAbsoluteFilePath(listRootKey, resolvedLegacy.key)
+            }
+          }
+          info.filePath = absFilePath
+          map.set(absFilePath, { size, mtimeMs, info })
         }
-        info.filePath = absFilePath
-        map.set(absFilePath, { size, mtimeMs, info })
       }
-    }
-    const rows = db
-      .prepare<SongCacheDbRow>(
-        'SELECT file_path, size, mtime_ms, info_json FROM song_cache WHERE list_root = ?'
-      )
-      .all(listRootKey)
-    const legacyRows = legacyListRoot
-      ? db
-          .prepare<SongCacheDbRow>(
-            'SELECT file_path, size, mtime_ms, info_json FROM song_cache WHERE list_root = ?'
-          )
-          .all(legacyListRoot)
-      : []
-    const looseRoots =
-      rows.length === 0 && legacyRows.length === 0
-        ? getLooseSongCacheRoots(db, [listRoot, listRootAbs, listRootKey], listRootKey).filter(
-            (root) => root !== listRootKey && root !== legacyListRoot
-          )
+      const rows = db
+        .prepare<SongCacheDbRow>(
+          'SELECT file_path, size, mtime_ms, info_json FROM song_cache WHERE list_root = ?'
+        )
+        .all(listRootKey)
+      const legacyRows = legacyListRoot
+        ? db
+            .prepare<SongCacheDbRow>(
+              'SELECT file_path, size, mtime_ms, info_json FROM song_cache WHERE list_root = ?'
+            )
+            .all(legacyListRoot)
         : []
-    if (looseRoots.length > 0) {
-      const extraStmt = db.prepare<SongCacheDbRow>(
-        'SELECT file_path, size, mtime_ms, info_json FROM song_cache WHERE list_root = ?'
-      )
-      for (const root of looseRoots) {
-        const extraRows = extraStmt.all(root)
-        if (extraRows && extraRows.length > 0) {
-          appendRows(extraRows, root, listRootAbs)
-          if (resolvedRoot.isRelativeKey && listRootAbs) {
-            migrateSongCacheRows(db, root, listRootKey, listRootAbs)
+      const looseRoots =
+        rows.length === 0 && legacyRows.length === 0
+          ? getLooseSongCacheRoots(db, [listRoot, listRootAbs, listRootKey], listRootKey).filter(
+              (root) => root !== listRootKey && root !== legacyListRoot
+            )
+          : []
+      if (looseRoots.length > 0) {
+        const extraStmt = db.prepare<SongCacheDbRow>(
+          'SELECT file_path, size, mtime_ms, info_json FROM song_cache WHERE list_root = ?'
+        )
+        for (const root of looseRoots) {
+          const extraRows = extraStmt.all(root)
+          if (extraRows && extraRows.length > 0) {
+            appendRows(extraRows, root, listRootAbs)
+            if (resolvedRoot.isRelativeKey && listRootAbs) {
+              migrateSongCacheRows(db, root, listRootKey, listRootAbs)
+            }
           }
         }
       }
-    }
-    appendRows(rows, listRootKey)
-    if (legacyRows && legacyRows.length > 0 && legacyListRoot && listRootAbs) {
-      appendRows(legacyRows, legacyListRoot, legacyListRoot)
-      if (resolvedRoot.isRelativeKey) {
-        migrateSongCacheRows(db, legacyListRoot, listRootKey, listRootAbs)
+      appendRows(rows, listRootKey)
+      if (legacyRows && legacyRows.length > 0 && legacyListRoot && listRootAbs) {
+        appendRows(legacyRows, legacyListRoot, legacyListRoot)
+        if (resolvedRoot.isRelativeKey) {
+          migrateSongCacheRows(db, legacyListRoot, listRootKey, listRootAbs)
+        }
       }
-    }
-    return map
+      return map
+    })
   } catch (error) {
     log.error('[sqlite] song cache load failed', error)
     return null
@@ -887,69 +892,73 @@ export async function replaceSongCache(
       ? resolvedRoot.legacyAbs
       : undefined
   try {
-    const incomingByPath = new Map<string, PreparedSongCacheRow>()
-    for (const [filePath, entry] of entries) {
-      const resolvedFile = resolveFilePathInput(listRootAbs, filePath)
-      if (!resolvedFile) continue
-      const absFilePath = resolveAbsoluteFilePath(listRootKey, resolvedFile.key)
-      const infoJson = normalizeInfoJsonFilePath(
-        JSON.stringify(normalizeSongCacheInfoForStorage(entry.info, absFilePath)),
-        absFilePath
+    return runTracedSync('sqlite:song-cache-replace', () => {
+      const incomingByPath = new Map<string, PreparedSongCacheRow>()
+      for (const [filePath, entry] of entries) {
+        const resolvedFile = resolveFilePathInput(listRootAbs, filePath)
+        if (!resolvedFile) continue
+        const absFilePath = resolveAbsoluteFilePath(listRootKey, resolvedFile.key)
+        const infoJson = normalizeInfoJsonFilePath(
+          JSON.stringify(normalizeSongCacheInfoForStorage(entry.info, absFilePath)),
+          absFilePath
+        )
+        incomingByPath.set(resolvedFile.key, {
+          filePath: resolvedFile.key,
+          size: entry.size,
+          mtimeMs: entry.mtimeMs,
+          infoJson
+        })
+      }
+      const existingRows = db
+        .prepare<SongCacheDbRow>(
+          'SELECT file_path, size, mtime_ms, info_json FROM song_cache WHERE list_root = ?'
+        )
+        .all(listRootKey)
+      const existingByPath = new Map(
+        existingRows
+          .filter((row): row is SongCacheDbRow & { file_path: string } => Boolean(row.file_path))
+          .map((row) => [String(row.file_path), row])
       )
-      incomingByPath.set(resolvedFile.key, {
-        filePath: resolvedFile.key,
-        size: entry.size,
-        mtimeMs: entry.mtimeMs,
-        infoJson
-      })
-    }
-    const existingRows = db
-      .prepare<SongCacheDbRow>(
-        'SELECT file_path, size, mtime_ms, info_json FROM song_cache WHERE list_root = ?'
+      const legacyRow = legacyListRoot
+        ? db
+            .prepare<SongCacheRootRow>(
+              'SELECT list_root FROM song_cache WHERE list_root = ? LIMIT 1'
+            )
+            .get(legacyListRoot)
+        : null
+      const upsert = db.prepare(
+        'INSERT INTO song_cache (list_root, file_path, size, mtime_ms, info_json) VALUES (?, ?, ?, ?, ?) ON CONFLICT(list_root, file_path) DO UPDATE SET size = excluded.size, mtime_ms = excluded.mtime_ms, info_json = excluded.info_json'
       )
-      .all(listRootKey)
-    const existingByPath = new Map(
-      existingRows
-        .filter((row): row is SongCacheDbRow & { file_path: string } => Boolean(row.file_path))
-        .map((row) => [String(row.file_path), row])
-    )
-    const legacyRow = legacyListRoot
-      ? db
-          .prepare<SongCacheRootRow>('SELECT list_root FROM song_cache WHERE list_root = ? LIMIT 1')
-          .get(legacyListRoot)
-      : null
-    const upsert = db.prepare(
-      'INSERT INTO song_cache (list_root, file_path, size, mtime_ms, info_json) VALUES (?, ?, ?, ?, ?) ON CONFLICT(list_root, file_path) DO UPDATE SET size = excluded.size, mtime_ms = excluded.mtime_ms, info_json = excluded.info_json'
-    )
-    const removeEntry = db.prepare('DELETE FROM song_cache WHERE list_root = ? AND file_path = ?')
-    const removeRoot = db.prepare('DELETE FROM song_cache WHERE list_root = ?')
-    let changed = Boolean(legacyRow)
-    const run = db.transaction(() => {
-      if (legacyListRoot) removeRoot.run(legacyListRoot)
-      for (const row of incomingByPath.values()) {
-        const existing = existingByPath.get(row.filePath)
-        if (
-          existing &&
-          toNumber(existing.size) === row.size &&
-          toNumber(existing.mtime_ms) === row.mtimeMs &&
-          String(existing.info_json) === row.infoJson
-        ) {
-          continue
+      const removeEntry = db.prepare('DELETE FROM song_cache WHERE list_root = ? AND file_path = ?')
+      const removeRoot = db.prepare('DELETE FROM song_cache WHERE list_root = ?')
+      let changed = Boolean(legacyRow)
+      const run = db.transaction(() => {
+        if (legacyListRoot) removeRoot.run(legacyListRoot)
+        for (const row of incomingByPath.values()) {
+          const existing = existingByPath.get(row.filePath)
+          if (
+            existing &&
+            toNumber(existing.size) === row.size &&
+            toNumber(existing.mtime_ms) === row.mtimeMs &&
+            String(existing.info_json) === row.infoJson
+          ) {
+            continue
+          }
+          upsert.run(listRootKey, row.filePath, row.size, row.mtimeMs, row.infoJson)
+          changed = true
         }
-        upsert.run(listRootKey, row.filePath, row.size, row.mtimeMs, row.infoJson)
-        changed = true
+        for (const filePath of existingByPath.keys()) {
+          if (incomingByPath.has(filePath)) continue
+          removeEntry.run(listRootKey, filePath)
+          changed = true
+        }
+      })
+      run()
+      if (changed && options.markSnapshotStale !== false) {
+        markPlaylistViewSnapshotContentStale(listRootKey)
       }
-      for (const filePath of existingByPath.keys()) {
-        if (incomingByPath.has(filePath)) continue
-        removeEntry.run(listRootKey, filePath)
-        changed = true
-      }
+      return true
     })
-    run()
-    if (changed && options.markSnapshotStale !== false) {
-      markPlaylistViewSnapshotContentStale(listRootKey)
-    }
-    return true
   } catch (error) {
     log.error('[sqlite] song cache replace failed', error)
     return false

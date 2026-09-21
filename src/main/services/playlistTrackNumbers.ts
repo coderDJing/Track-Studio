@@ -145,23 +145,59 @@ const uniqueExistingFiles = async (listRoot: string) => {
   return [...normalizedByPath.values()]
 }
 
+type PlaylistOrderKey = {
+  filePath: string
+  trackNumber: number | undefined
+  relativePath: string
+  baseName: string
+}
+
+const buildPlaylistOrderKey = (
+  filePath: string,
+  cacheMapByNormalizedPath: Map<string, SongCacheEntry>,
+  listRoot: string
+): PlaylistOrderKey => ({
+  filePath,
+  trackNumber: normalizePlaylistTrackNumber(
+    cacheMapByNormalizedPath.get(normalizePath(filePath))?.info?.playlistTrackNumber
+  ),
+  relativePath: path.relative(listRoot, filePath).replace(/\\/g, '/'),
+  baseName: path.basename(filePath)
+})
+
+/** 与 `compareStableFilePath` 同序，只是吃预计算好的键。 */
+const comparePlaylistOrderKey = (left: PlaylistOrderKey, right: PlaylistOrderKey) => {
+  const leftNumber = left.trackNumber
+  const rightNumber = right.trackNumber
+  if (leftNumber !== undefined && rightNumber !== undefined && leftNumber !== rightNumber) {
+    return leftNumber - rightNumber
+  }
+  if (leftNumber !== undefined && rightNumber === undefined) return -1
+  if (leftNumber === undefined && rightNumber !== undefined) return 1
+  const relativeCompare = collator.compare(left.relativePath, right.relativePath)
+  if (relativeCompare !== 0) return relativeCompare
+  const nameCompare = collator.compare(left.baseName, right.baseName)
+  if (nameCompare !== 0) return nameCompare
+  return collator.compare(left.filePath, right.filePath)
+}
+
+/**
+ * 排序键先算一遍再排。
+ *
+ * 原来的比较器在每次比较里现算 `normalizePath`（path.resolve + 小写）和
+ * `compareStableFilePath`（path.relative + 正则 + Intl.Collator）。n log n 次比较下，
+ * 同一个路径的这些字符串操作会被重复上千次，而它们的值只由路径本身决定。整理几百首的
+ * 歌单时这段是秒级收尾里实打实的一块。
+ */
 const resolveExistingOrder = (
   currentFiles: string[],
   cacheMapByNormalizedPath: Map<string, SongCacheEntry>,
   listRoot: string
 ) =>
-  [...currentFiles].sort((leftPath, rightPath) => {
-    const leftInfo = cacheMapByNormalizedPath.get(normalizePath(leftPath))?.info
-    const rightInfo = cacheMapByNormalizedPath.get(normalizePath(rightPath))?.info
-    const leftNumber = normalizePlaylistTrackNumber(leftInfo?.playlistTrackNumber)
-    const rightNumber = normalizePlaylistTrackNumber(rightInfo?.playlistTrackNumber)
-    if (leftNumber !== undefined && rightNumber !== undefined && leftNumber !== rightNumber) {
-      return leftNumber - rightNumber
-    }
-    if (leftNumber !== undefined && rightNumber === undefined) return -1
-    if (leftNumber === undefined && rightNumber !== undefined) return 1
-    return compareStableFilePath(listRoot, leftPath, rightPath)
-  })
+  currentFiles
+    .map((filePath) => buildPlaylistOrderKey(filePath, cacheMapByNormalizedPath, listRoot))
+    .sort(comparePlaylistOrderKey)
+    .map((key) => key.filePath)
 
 const buildEntryForFile = async (
   filePath: string,
@@ -188,15 +224,31 @@ const buildEntryForFile = async (
   }
 }
 
-const persistSongListTrackNumberOrder = async (listRoot: string, finalOrder: string[]) => {
+const toNormalizedCacheMap = (cacheMap: Map<string, SongCacheEntry>) =>
+  new Map(
+    [...cacheMap.entries()].map(([filePath, entry]) => [normalizePath(filePath), entry] as const)
+  )
+
+/**
+ * 写入真实序号。
+ *
+ * `preloadedCacheMap` 用于复用调用方刚加载过的歌单缓存：`loadSongCache` 是全量同步 SQLite 读 +
+ * 逐行 JSON.parse，一次序号整理里重复读两遍会在主进程上白等一份全表加载。调用方若在加载后、
+ * 落盘前改过缓存，必须重新传 undefined。
+ */
+const persistSongListTrackNumberOrder = async (
+  listRoot: string,
+  finalOrder: string[],
+  preloadedCacheMap?: Map<string, SongCacheEntry>
+) => {
   if (!isSupportedPlaylistTrackNumberListRoot(listRoot)) {
     return { updated: false, total: 0 }
   }
   const cacheMap =
-    (await LibraryCacheDb.loadSongCache(listRoot)) || new Map<string, SongCacheEntry>()
-  const cacheMapByNormalizedPath = new Map(
-    [...cacheMap.entries()].map(([filePath, entry]) => [normalizePath(filePath), entry] as const)
-  )
+    preloadedCacheMap ||
+    (await LibraryCacheDb.loadSongCache(listRoot)) ||
+    new Map<string, SongCacheEntry>()
+  const cacheMapByNormalizedPath = toNormalizedCacheMap(cacheMap)
   const nextEntries = new Map<string, SongCacheEntry>()
   for (let index = 0; index < finalOrder.length; index += 1) {
     const filePath = finalOrder[index]
@@ -236,20 +288,14 @@ export const setSongListTrackNumbersByOrder = async (params: {
   }
   const cacheMap =
     (await LibraryCacheDb.loadSongCache(listRoot)) || new Map<string, SongCacheEntry>()
-  const cacheMapByNormalizedPath = new Map(
-    [...cacheMap.entries()].map(([filePath, entry]) => [normalizePath(filePath), entry] as const)
-  )
+  const cacheMapByNormalizedPath = toNormalizedCacheMap(cacheMap)
   const existingOrder = resolveExistingOrder(currentFiles, cacheMapByNormalizedPath, listRoot)
   const remaining = existingOrder.filter((filePath) => !seen.has(normalizePath(filePath)))
   const finalOrder = [...orderedUnique, ...remaining]
-  const persisted = await persistSongListTrackNumberOrder(listRoot, finalOrder)
+  const persisted = await persistSongListTrackNumberOrder(listRoot, finalOrder, cacheMap)
   const persistedCache =
     (await LibraryCacheDb.loadSongCache(listRoot)) || new Map<string, SongCacheEntry>()
-  const persistedCacheByNormalizedPath = new Map(
-    [...persistedCache.entries()].map(
-      ([filePath, entry]) => [normalizePath(filePath), entry] as const
-    )
-  )
+  const persistedCacheByNormalizedPath = toNormalizedCacheMap(persistedCache)
   const persistedSample = finalOrder.slice(0, 5).map((filePath, index) => {
     const entry = persistedCacheByNormalizedPath.get(normalizePath(filePath))
     return {
@@ -289,15 +335,17 @@ export const appendSongListTrackNumbers = async (params: {
   }
   const cacheMap =
     (await LibraryCacheDb.loadSongCache(listRoot)) || new Map<string, SongCacheEntry>()
-  const cacheMapByNormalizedPath = new Map(
-    [...cacheMap.entries()].map(([filePath, entry]) => [normalizePath(filePath), entry] as const)
-  )
+  const cacheMapByNormalizedPath = toNormalizedCacheMap(cacheMap)
   const remainingExisting = resolveExistingOrder(
     currentFiles.filter((filePath) => !appendedSet.has(normalizePath(filePath))),
     cacheMapByNormalizedPath,
     listRoot
   )
-  return await persistSongListTrackNumberOrder(listRoot, [...remainingExisting, ...appendedUnique])
+  return await persistSongListTrackNumberOrder(
+    listRoot,
+    [...remainingExisting, ...appendedUnique],
+    cacheMap
+  )
 }
 
 export const compactSongListTrackNumbers = async (listRoot: string) => {
@@ -307,19 +355,26 @@ export const compactSongListTrackNumbers = async (listRoot: string) => {
   const currentFiles = await uniqueExistingFiles(listRoot)
   const cacheMap =
     (await LibraryCacheDb.loadSongCache(listRoot)) || new Map<string, SongCacheEntry>()
-  const cacheMapByNormalizedPath = new Map(
-    [...cacheMap.entries()].map(([filePath, entry]) => [normalizePath(filePath), entry] as const)
-  )
+  const cacheMapByNormalizedPath = toNormalizedCacheMap(cacheMap)
   const existingOrder = resolveExistingOrder(currentFiles, cacheMapByNormalizedPath, listRoot)
-  return await persistSongListTrackNumberOrder(listRoot, existingOrder)
+  return await persistSongListTrackNumberOrder(listRoot, existingOrder, cacheMap)
 }
 
 export const compactSongListTrackNumbersByFilePaths = async (filePaths: string[]) => {
   const roots = new Map<string, string>()
+  // 一批被删文件通常同属一个歌单目录，而 findSongListRootByPath 每调一次都要沿库树做
+  // 若干次同步 SQLite 查询。这里按目录在单次调用内去重，避免对每个文件重复解析。
+  const rootByDir = new Map<string, string | null>()
   for (const rawPath of Array.isArray(filePaths) ? filePaths : []) {
     const filePath = String(rawPath || '').trim()
     if (!filePath) continue
-    const songListRoot = await findSongListRootByPath(path.dirname(filePath))
+    const dir = path.dirname(filePath)
+    const dirKey = normalizePath(dir)
+    let songListRoot = rootByDir.get(dirKey)
+    if (songListRoot === undefined) {
+      songListRoot = await findSongListRootByPath(dir)
+      rootByDir.set(dirKey, songListRoot)
+    }
     if (!songListRoot || !isSupportedPlaylistTrackNumberListRoot(songListRoot)) continue
     roots.set(normalizePath(songListRoot), songListRoot)
   }

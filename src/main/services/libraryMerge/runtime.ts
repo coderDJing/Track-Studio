@@ -40,10 +40,18 @@ import {
   type LibraryMergeBusyReason,
   type LibraryMergeScope
 } from './types'
-import { isLibraryMergeMutationLocked, setLibraryMergeMutationLocked } from './mutationGate'
+import {
+  acquireLibraryMergeLockAfterMaintenanceIdle,
+  drainDeferredLibraryMaintenance,
+  isLibraryMergeMutationLocked
+} from './mutationGate'
 import { waitForAllRecycleBinCacheTransfers } from '../recycleBinCacheTransferQueue'
 
-export { isLibraryMergeMutationLocked } from './mutationGate'
+export {
+  deferLibraryMaintenanceAfterMergeLockReleased,
+  isLibraryMergeMutationLocked,
+  tryBeginLibraryMaintenanceMutation
+} from './mutationGate'
 
 /**
  * Finer busy policy (risk-tiered):
@@ -254,20 +262,36 @@ export const acquireLibraryMergeMutationLock = async (
         )
       }
     }
-  } catch (error) {
-    resumeBackgroundTasks()
-    startLibraryTreeWatcher(mainWindow)
-    throw error
-  }
 
-  setLibraryMergeMutationLocked(true)
-  let released = false
-  return () => {
-    if (released) return
-    released = true
-    setLibraryMergeMutationLocked(false)
-    resumeBackgroundTasks()
-    startLibraryTreeWatcher(mainWindow)
+    // 库写收尾任务（如删歌后的序号整理 + 缓存整表写回）不占合并锁，但会和合并写同一份
+    // 缓存。它们只能登记到 mutationGate 的互斥名额上，所以合并必须等它们退出；不能只在
+    // 长任务的入口查一次锁——那时合并还没开始，查了也没用。
+    //
+    // 这一步可能因为「已有合并」而被拒（并发发起的第二个请求），所以必须留在 try 内：
+    // 获取失败时同样要把暂停的后台任务与树监听恢复回去，否则一次失败的获取会把库树
+    // 更新与后台维护永久停掉。
+    const releaseLibraryMergeLock = await acquireLibraryMergeLockAfterMaintenanceIdle()
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      releaseLibraryMergeLock()
+      resumeBackgroundTasks()
+      startLibraryTreeWatcher(mainWindow)
+      // 锁已释放：把合并期间被挡下的收尾补跑掉，而不是让它们永久丢失。
+      drainDeferredLibraryMaintenance()
+    }
+  } catch (error) {
+    // 「已有合并在跑」时**不能**恢复：暂停的后台执行与「已停止的树监听」是持锁那次获取
+    // 维持的静默状态，由它自己的 release 恢复。这里恢复会把状态提前解除，让后台任务和
+    // 库树核对在合并期间重新抢库——正是停它们要防的事。
+    const heldByAnotherMerge =
+      error instanceof LibraryMergeError && error.code === 'MERGE_ALREADY_ACTIVE'
+    if (!heldByAnotherMerge) {
+      resumeBackgroundTasks()
+      startLibraryTreeWatcher(mainWindow)
+    }
+    throw error
   }
 }
 
