@@ -59,6 +59,8 @@
     "playlistTrackNumbersInitializedHint": "Real track numbers have been initialized for this playlist.",
     "playlistTrackNumbersAlreadyMatchHint": "The current order already matches the real track numbers.",
     "playlistTrackNumbersRenumberedHint": "Renumbered real track numbers for {count} tracks.",
+    "playlistTrackNumbersMissingPath": "The target playlist path does not exist.",
+    "playlistTrackNumbersWriteFailed": "Failed to write the real track numbers.",
     "curatedArtistCountBadge": "{count}",
     "curatedArtistCountBadgeTitle": "\"{artist}\" has been added to Curated {count} times",
     "curatedArtistMultiCountBadge": "{count}",

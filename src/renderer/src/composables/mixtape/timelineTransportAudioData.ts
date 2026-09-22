@@ -1,5 +1,6 @@
 import type { Ref } from 'vue'
 import { canPlayHtmlAudio, toPreviewUrl } from '@renderer/pages/modules/songPlayer/webAudioPlayer'
+import { t } from '@renderer/utils/translate'
 import { createTrackTimeMapFromSnapshotPayload } from '@renderer/composables/mixtape/trackTimeMapFactory'
 import {
   normalizeBeatOffset as normalizeBeatOffsetByGrid,
@@ -529,9 +530,9 @@ export const createTimelineTransportAudioDataModule = (ctx: TimelineTransportAud
   const decodeBrowser = async (filePath: string): Promise<AudioBuffer> => {
     const url = toPreviewUrl(filePath)
     const response = await fetch(url)
-    if (!response.ok) throw new Error(`fetch 失败: ${response.status}`)
+    if (!response.ok) throw new Error(t('mixtape.transportFetchFailed', { status: response.status }))
     const arrayBuffer = await response.arrayBuffer()
-    if (!arrayBuffer.byteLength) throw new Error('fetch 返回空数据')
+    if (!arrayBuffer.byteLength) throw new Error(t('mixtape.transportFetchEmpty'))
     const audioCtx = ctx.ensureTransportAudioContext()
     return await audioCtx.decodeAudioData(arrayBuffer)
   }
@@ -549,7 +550,7 @@ export const createTimelineTransportAudioDataModule = (ctx: TimelineTransportAud
       totalFrames > 0
         ? Math.min(totalFrames, Math.floor(pcmData.length / channels))
         : Math.floor(pcmData.length / channels)
-    if (frameCount <= 0 || !pcmData.length) throw new Error('解码结果为空')
+    if (frameCount <= 0 || !pcmData.length) throw new Error(t('mixtape.transportDecodeEmpty'))
     const audioCtx = ctx.ensureTransportAudioContext(sampleRate)
     const buffer = audioCtx.createBuffer(channels, frameCount, sampleRate)
     fillAudioBufferFromInterleavedPcm(buffer, pcmData, channels, frameCount)

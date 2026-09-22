@@ -186,8 +186,27 @@ function hideImmediately() {
   visible.value = false
 }
 
+const isInside = (target: EventTarget | null, element: HTMLElement | null) =>
+  target instanceof Node && !!element?.contains(target)
+
+function onWindowPointerMove(event: PointerEvent) {
+  if (!visible.value) return
+  // 锚点被重建或窗口边界切换时，浏览器不一定会补发 mouseleave。
+  // 用下一次指针事件校正状态，避免气泡脱离锚点后永久残留。
+  if (props.dom?.matches(':hover') || isInside(event.target, bubbleEl.value)) return
+  hideImmediately()
+}
+
+function onWindowBlur() {
+  hideImmediately()
+}
+
+function onDocumentVisibilityChange() {
+  if (document.visibilityState !== 'visible') hideImmediately()
+}
+
 function onWindowPointerDown(event: PointerEvent) {
-  if (bubbleEl.value && event.target instanceof Node && bubbleEl.value.contains(event.target)) {
+  if (isInside(event.target, bubbleEl.value)) {
     return
   }
   hideImmediately()
@@ -305,6 +324,7 @@ function removeAnchorListeners(anchor: HTMLElement | null) {
 watch(
   () => props.dom,
   (newEl, oldEl) => {
+    if (newEl !== oldEl) hideImmediately()
     removeAnchorListeners(oldEl as HTMLElement | null)
     addAnchorListeners(newEl as HTMLElement | null)
   },
@@ -314,11 +334,17 @@ watch(
 const bindDragHideListeners = () => {
   window.addEventListener('dragstart', hideImmediately, true)
   window.addEventListener('pointerdown', onWindowPointerDown, true)
+  window.addEventListener('pointermove', onWindowPointerMove, true)
+  window.addEventListener('blur', onWindowBlur)
+  document.addEventListener('visibilitychange', onDocumentVisibilityChange)
 }
 
 const unbindDragHideListeners = () => {
   window.removeEventListener('dragstart', hideImmediately, true)
   window.removeEventListener('pointerdown', onWindowPointerDown, true)
+  window.removeEventListener('pointermove', onWindowPointerMove, true)
+  window.removeEventListener('blur', onWindowBlur)
+  document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
 }
 
 watch(visible, (isVisible) => {

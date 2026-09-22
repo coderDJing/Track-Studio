@@ -54,8 +54,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  max-width: 100%;
+  padding: 0 12px;
   color: var(--text-weak);
   font-size: 12px;
+  text-align: center;
+  overflow-wrap: anywhere;
   pointer-events: none;
 }
 

@@ -59,6 +59,8 @@
     "playlistTrackNumbersInitializedHint": "已为当前歌单建立真实序号，后续可按序号拖拽或自动重排。",
     "playlistTrackNumbersAlreadyMatchHint": "当前顺序和真实序号一致，无需重排。",
     "playlistTrackNumbersRenumberedHint": "已按当前顺序重排 {count} 首曲目的真实序号。",
+    "playlistTrackNumbersMissingPath": "目标歌单路径不存在",
+    "playlistTrackNumbersWriteFailed": "真实序号写入失败",
     "curatedArtistCountBadge": "{count}",
     "curatedArtistCountBadgeTitle": "“{artist}”已被加入精选 {count} 次",
     "curatedArtistMultiCountBadge": "{count}",

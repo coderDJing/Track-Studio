@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
+import { t } from '@renderer/utils/translate'
 
 type BeatStep = 4 | 8 | 16 | 32 | 128
 
@@ -30,7 +31,7 @@ const handleBeatStepChange = (event: Event) => {
 </script>
 
 <template>
-  <div class="edit-deck-controls" aria-label="编辑模式控制">
+  <div class="edit-deck-controls" :aria-label="t('horizontalBrowse.editModeControls')">
     <div class="edit-deck-controls__pair">
       <bubbleBoxTrigger
         tag="button"
@@ -39,15 +40,19 @@ const handleBeatStepChange = (event: Event) => {
         class="edit-deck-controls__button"
         :title="
           disabled
-            ? '保存中，暂时不能切换歌曲'
+            ? t('horizontalBrowse.saveBlockingSongSwitch')
             : canPreviousSong
-              ? '载入上一首'
-              : '没有可载入的上一首'
+              ? t('horizontalBrowse.loadPreviousSong')
+              : t('horizontalBrowse.noPreviousSong')
         "
         shortcut="W"
         type="button"
         :disabled="disabled || !canPreviousSong"
-        :aria-label="canPreviousSong ? '载入上一首' : '没有可载入的上一首'"
+        :aria-label="
+          canPreviousSong
+            ? t('horizontalBrowse.loadPreviousSong')
+            : t('horizontalBrowse.noPreviousSong')
+        "
         @click="emit('previous-song')"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -61,12 +66,16 @@ const handleBeatStepChange = (event: Event) => {
         wrapper-class="edit-deck-controls__anchor"
         class="edit-deck-controls__button"
         :title="
-          disabled ? '保存中，暂时不能切换歌曲' : canNextSong ? '载入下一首' : '没有可载入的下一首'
+          disabled
+            ? t('horizontalBrowse.saveBlockingSongSwitch')
+            : canNextSong
+              ? t('horizontalBrowse.loadNextSong')
+              : t('horizontalBrowse.noNextSong')
         "
         shortcut="S"
         type="button"
         :disabled="disabled || !canNextSong"
-        :aria-label="canNextSong ? '载入下一首' : '没有可载入的下一首'"
+        :aria-label="canNextSong ? t('horizontalBrowse.loadNextSong') : t('horizontalBrowse.noNextSong')"
         @click="emit('next-song')"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -82,10 +91,14 @@ const handleBeatStepChange = (event: Event) => {
         wrapper-tag="span"
         wrapper-class="edit-deck-controls__anchor"
         class="edit-deck-controls__button"
-        :title="disabled ? '保存中，暂时不能跳转' : `后退 ${beatStep} beats`"
+        :title="
+          disabled
+            ? t('horizontalBrowse.saveBlockingSeek')
+            : t('horizontalBrowse.jumpBackward', { beats: beatStep })
+        "
         type="button"
         :disabled="disabled || !songPresent"
-        :aria-label="`后退 ${beatStep} beats`"
+        :aria-label="t('horizontalBrowse.jumpBackward', { beats: beatStep })"
         @click="emit('jump-beats', -1)"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -99,10 +112,14 @@ const handleBeatStepChange = (event: Event) => {
         wrapper-tag="span"
         wrapper-class="edit-deck-controls__anchor"
         class="edit-deck-controls__button"
-        :title="disabled ? '保存中，暂时不能跳转' : `前进 ${beatStep} beats`"
+        :title="
+          disabled
+            ? t('horizontalBrowse.saveBlockingSeek')
+            : t('horizontalBrowse.jumpForward', { beats: beatStep })
+        "
         type="button"
         :disabled="disabled || !songPresent"
-        :aria-label="`前进 ${beatStep} beats`"
+        :aria-label="t('horizontalBrowse.jumpForward', { beats: beatStep })"
         @click="emit('jump-beats', 1)"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -116,13 +133,17 @@ const handleBeatStepChange = (event: Event) => {
     <bubbleBoxTrigger
       tag="div"
       class="edit-deck-controls__select-wrap"
-      :title="disabled ? '保存中，暂时不能调整' : `跳转步长：${beatStep} beats`"
+      :title="
+        disabled
+          ? t('horizontalBrowse.saveBlockingAdjust')
+          : t('horizontalBrowse.jumpStep', { beats: beatStep })
+      "
     >
       <select
         class="edit-deck-controls__select"
         :value="beatStep"
         :disabled="disabled || !songPresent"
-        aria-label="切换 beat 跳转步长"
+        :aria-label="t('horizontalBrowse.changeJumpStep')"
         @change="handleBeatStepChange"
       >
         <option v-for="option in beatStepOptions" :key="option" :value="option">

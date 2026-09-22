@@ -3,6 +3,7 @@ import type { HorizontalBrowseDeckKey } from '@renderer/composables/horizontalBr
 import type { HorizontalBrowseBandKey } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseFaderControls'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 import { useHorizontalBrowseAutoGain } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseAutoGain'
+import { t } from '@renderer/utils/translate'
 
 type HorizontalBrowseBandState = Record<HorizontalBrowseBandKey, boolean>
 
@@ -58,7 +59,11 @@ const { autoGainEnabled, autoGainStatus, autoGainTitle, toggleAutoGain } =
       :class="[`deck-band-controls__button--${band}`, { 'is-active': props.bands[band] }]"
       type="button"
       :aria-pressed="props.bands[band]"
-      :aria-label="`${bandLabels[band]} ${props.bands[band] ? '已激活' : '已削减'}`"
+      :aria-label="
+        t(props.bands[band] ? 'horizontalBrowse.bandActive' : 'horizontalBrowse.bandCut', {
+          band: bandLabels[band]
+        })
+      "
       @click.stop="emit('toggle-band', props.deck, band)"
     >
       {{ bandLabels[band] }}
@@ -71,9 +76,11 @@ const { autoGainEnabled, autoGainStatus, autoGainTitle, toggleAutoGain } =
       :class="{ 'is-active': props.cueMonitorEnabled }"
       type="button"
       :disabled="props.cueMonitorDisabled"
-      title="监听该轨"
+      :title="t('horizontalBrowse.cueMonitorTitle')"
       :aria-pressed="props.cueMonitorEnabled"
-      :aria-label="props.cueMonitorEnabled ? '关闭该轨监听' : '开启该轨监听'"
+      :aria-label="
+        t(props.cueMonitorEnabled ? 'horizontalBrowse.cueMonitorOn' : 'horizontalBrowse.cueMonitorOff')
+      "
       @click.stop="emit('toggle-cue-monitor', props.deck)"
     >
       CUE

@@ -732,7 +732,7 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
         transportSequencerWorkletReady = true
       } catch (error) {
         console.error('[mixtape-transport] sequencer worklet unavailable', error)
-        transportError.value = 'Loop 连续播放引擎不可用'
+        transportError.value = t('mixtape.transportSequencerUnavailable')
         playheadVisible.value = false
         transportPlaying.value = false
         return
@@ -787,7 +787,7 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
     } catch (error) {
       for (const prepared of preparedNodes) prepared.node.dispose()
       console.error('[mixtape-transport] R3 playback initialisation failed', error)
-      transportError.value = 'R3 主速度引擎初始化失败'
+      transportError.value = t('mixtape.transportPlaybackInitializeFailed')
       playheadVisible.value = false
       transportPlaying.value = false
       return
@@ -806,7 +806,7 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
     } catch (error) {
       for (const prepared of preparedNodes) prepared.node.dispose()
       console.error('[mixtape-transport] R3 playback scheduling failed', error)
-      transportError.value = 'R3 主速度引擎启动失败'
+      transportError.value = t('mixtape.transportPlaybackStartFailed')
       transportPlaying.value = false
       playheadVisible.value = false
       return

@@ -149,6 +149,7 @@ const lockNormalHeight = (target: BrowserWindow, width: number) => {
 }
 
 const hideMainWindow = () => {
+  hideMiniPlayerTooltip()
   const main = getMainWindow()
   if (!isUsableWindow(main) || !main.isVisible()) return
   try {
@@ -404,6 +405,9 @@ const createMiniPlayerWindow = () => {
     pushWindowFocus(true)
   })
   target.on('blur', () => {
+    // 小窗失焦时锚点可能不会收到 mouseleave（例如切到主窗口或其他应用），
+    // 不能让独立 tooltip 窗口继续悬挂在屏幕上。
+    hideMiniPlayerTooltip()
     pushWindowFocus(false)
   })
   target.on('ready-to-show', () => {

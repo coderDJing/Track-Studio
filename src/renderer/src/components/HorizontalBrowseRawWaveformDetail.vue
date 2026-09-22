@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { t } from '@renderer/utils/translate'
 import { normalizeSongBeatGridMapV2 } from '@shared/songBeatGridMapV2'
 import type { MixxxWaveformData } from '@renderer/pages/modules/songPlayer/webAudioPlayer'
 import type { RawWaveformData } from '@renderer/composables/mixtape/types'
@@ -1212,7 +1213,7 @@ defineExpose(
       </div>
     </div>
     <div v-if="externalDetailWaveformUnavailable" class="raw-detail-waveform__unavailable">
-      Rekordbox 未提供细节波形
+      {{ t('horizontalBrowse.waveformUnavailable') }}
     </div>
     <div ref="overlaySurfaceRef" class="raw-detail-waveform__overlay-surface">
       <div ref="overlayTempoScalerRef" class="raw-detail-waveform__tempo-scaler">

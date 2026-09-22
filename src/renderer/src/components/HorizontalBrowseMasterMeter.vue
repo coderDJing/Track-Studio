@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
+import { t } from '@renderer/utils/translate'
 
 const props = defineProps<{
   preLimiterPeakLeftDb: number
@@ -30,12 +31,17 @@ const meterStyle = computed(() => ({
 }))
 const meterHint = computed(() => {
   const formatPeak = (value: number) =>
-    value <= METER_FLOOR_DB ? '无节目音频' : `${value.toFixed(1)} dBFS`
+    value <= METER_FLOOR_DB
+      ? t('horizontalBrowse.masterMeterNoProgramAudio')
+      : `${value.toFixed(1)} dBFS`
   const peakText = `L ${formatPeak(peakDb.value[0])} · R ${formatPeak(peakDb.value[1])}`
   if (!limiterActive.value) {
-    return `主输出峰值 ${peakText}；尚未触发 LIMIT。黄线是 -1 dBFS 预警，最右端是 -0.3 dBFS 上限。`
+    return t('horizontalBrowse.masterMeterIdle', { peaks: peakText })
   }
-  return `主输出峰值 ${peakText}；LIMIT 正在压低 ${gainReductionDb.value.toFixed(1)} dB。请自行降低通道音量、EQ 或交叉推子叠加量。`
+  return t('horizontalBrowse.masterMeterActive', {
+    peaks: peakText,
+    reduction: gainReductionDb.value.toFixed(1)
+  })
 })
 
 const animate = () => {
@@ -65,7 +71,7 @@ onBeforeUnmount(() => {
   <bubbleBoxTrigger tag="span" class="master-meter-anchor" :title="meterHint" :max-width="300">
     <span class="master-meter" :style="meterStyle">
       <span class="master-meter__label">LIMIT</span>
-      <span class="master-meter__tracks" aria-label="主输出左右声道限幅表">
+      <span class="master-meter__tracks" :aria-label="t('horizontalBrowse.masterMeterTracks')">
         <span class="master-meter__track master-meter__track--left">
           <span class="master-meter__fill"></span>
           <span class="master-meter__warning"></span>

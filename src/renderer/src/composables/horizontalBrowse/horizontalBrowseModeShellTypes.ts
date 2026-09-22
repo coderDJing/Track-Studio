@@ -44,9 +44,9 @@ export type HorizontalBrowseDeckDetailLaneExpose = {
   clearGridHistory?: () => void
 }
 
-export const EDIT_MODE_BPM_INPUT_TITLE = '网格 BPM：修改分析结果和网格线，不改变播放速度'
-export const DUAL_MODE_BPM_INPUT_TITLE = '目标 BPM：临时改变播放速度，不修改网格线'
-export const EDIT_MODE_TAP_BPM_TITLE = 'Tap：按节拍连续点击，实时修改网格 BPM，不改变播放速度'
+export const EDIT_MODE_BPM_INPUT_TITLE = 'horizontalBrowse.editModeBpmInputTitle'
+export const DUAL_MODE_BPM_INPUT_TITLE = 'horizontalBrowse.dualModeBpmInputTitle'
+export const EDIT_MODE_TAP_BPM_TITLE = 'horizontalBrowse.editModeTapBpmTitle'
 
 export const createDefaultSharedDetailZoomState = (value: number): SharedDetailZoomState => ({
   value,

@@ -1,0 +1,15 @@
+{
+  "devTrace": {
+    "title": "Trace recording",
+    "startFailed": "Failed to start Trace recording: {error}",
+    "stopFailed": "Failed to stop Trace recording: {error}",
+    "exported": "Trace exported.",
+    "file": "File: {filePath}",
+    "duration": "Recording duration: {durationMs} ms",
+    "startedPlaylist": "Starting playlist: {playlistName}",
+    "endedPlaylist": "Ending playlist: {playlistName}",
+    "recordingFailed": "Trace recording failed.",
+    "stage": "Stage: {stage}",
+    "unknownError": "Unknown error"
+  }
+}

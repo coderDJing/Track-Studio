@@ -11,6 +11,7 @@
     "copyToMixtapeFailed": "复制到混音库失败。",
     "copyTracksFailed": "复制曲目失败。",
     "deviceLibraryLabel": "Device Library",
+    "desktopLibraryName": "Rekordbox 本机库",
     "oneLibraryLabel": "OneLibrary",
     "cleanMissingFiles": "清理找不到文件的曲目",
     "cleanMissingFilesConfirmTitle": "确认清理失效记录",

@@ -4,6 +4,7 @@ import {
   type HorizontalBrowseDeckKey
 } from '@renderer/composables/horizontalBrowse/horizontalBrowseNativeTransport'
 import type { HorizontalBrowseTransportDeckSnapshot } from '@shared/horizontalBrowseTransport'
+import { t } from '@renderer/utils/translate'
 
 const autoGainTransport = createHorizontalBrowseNativeTransport()
 let subscriberCount = 0
@@ -28,13 +29,17 @@ const resolveDeckSnapshot = (
   deck === 'top' ? autoGainTransport.state.top : autoGainTransport.state.bottom
 
 const resolveAutoGainTitle = (snapshot: HorizontalBrowseTransportDeckSnapshot) => {
-  if (!snapshot.autoGainEnabled || snapshot.autoGainStatus === 'off') return '自动增益已关闭'
-  if (snapshot.autoGainStatus === 'master') return '自动增益已开启：当前轨道是 Master'
-  if (snapshot.autoGainStatus === 'pending') {
-    return snapshot.loaded ? '正在分析响度并对齐 Master' : '自动增益已开启：等待加载音频'
+  if (!snapshot.autoGainEnabled || snapshot.autoGainStatus === 'off') {
+    return t('horizontalBrowse.autoGainOff')
   }
-  if (snapshot.autoGainStatus === 'unavailable') return '自动增益暂不可用'
-  return '自动增益已开启：已对齐当前 Master'
+  if (snapshot.autoGainStatus === 'master') return t('horizontalBrowse.autoGainMaster')
+  if (snapshot.autoGainStatus === 'pending') {
+    return snapshot.loaded
+      ? t('horizontalBrowse.autoGainPendingLoaded')
+      : t('horizontalBrowse.autoGainPendingUnloaded')
+  }
+  if (snapshot.autoGainStatus === 'unavailable') return t('horizontalBrowse.autoGainUnavailable')
+  return t('horizontalBrowse.autoGainAligned')
 }
 
 export const useHorizontalBrowseAutoGain = (deck: HorizontalBrowseDeckKey) => {

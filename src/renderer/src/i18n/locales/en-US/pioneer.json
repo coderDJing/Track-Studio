@@ -11,6 +11,7 @@
     "copyToMixtapeFailed": "Failed to copy tracks into the Mixtape vault.",
     "copyTracksFailed": "Failed to copy tracks.",
     "deviceLibraryLabel": "Device Library",
+    "desktopLibraryName": "Rekordbox Desktop Library",
     "oneLibraryLabel": "OneLibrary",
     "cleanMissingFiles": "Clean Tracks with Missing Files",
     "cleanMissingFilesConfirmTitle": "Clean Unavailable Track Records",
