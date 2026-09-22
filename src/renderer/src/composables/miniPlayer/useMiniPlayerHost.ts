@@ -63,6 +63,7 @@ export function useMiniPlayerHost(params: {
 }) {
   const session = computed(() => params.runtime.miniPlayerSession)
   const isMiniPlayerOpen = computed(() => session.value.open)
+  let playheadSequence = 0
 
   const resolveIsPlaying = () => params.audioPlayer.value?.isPlaying() ?? params.isPlaying.value
 
@@ -120,7 +121,9 @@ export function useMiniPlayerHost(params: {
       currentSeconds: params.playerCurrentSeconds.value,
       durationSeconds: params.playerWaveformDurationSec.value,
       isPlaying: resolveIsPlaying(),
-      volume: params.actions.getVolume()
+      volume: params.actions.getVolume(),
+      sequence: ++playheadSequence,
+      publishedAtMs: Date.now()
     }
     window.electron.ipcRenderer.send(MINI_PLAYER_CHANNELS.playhead, payload)
   }

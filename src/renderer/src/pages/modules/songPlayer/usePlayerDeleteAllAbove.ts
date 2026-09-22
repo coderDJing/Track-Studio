@@ -263,10 +263,14 @@ export const createDelAllAbove = (params: {
           const songListPath = libraryUtils.findDirPathByUuid(currentSongListUUID)
           const payload =
             currentSongListUUID === EXTERNAL_PLAYLIST_UUID
-              ? { filePaths: [...delPaths], sourceType: 'external' }
+              ? {
+                  filePaths: [...delPaths],
+                  sourceType: 'external',
+                  diagnosticContext: 'delete-all-above'
+                }
               : songListPath
-                ? { filePaths: [...delPaths], songListPath }
-                : [...delPaths]
+                ? { filePaths: [...delPaths], songListPath, diagnosticContext: 'delete-all-above' }
+                : { filePaths: [...delPaths], diagnosticContext: 'delete-all-above' }
           const summary = await window.electron.ipcRenderer.invoke('delSongsAwaitable', payload)
           deleteSummary = toDeleteSummary(summary)
         }

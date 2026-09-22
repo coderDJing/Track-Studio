@@ -65,12 +65,19 @@ export type MiniPlayerPlayhead = {
   durationSeconds: number
   isPlaying: boolean
   volume: number
+  sequence?: number
+  publishedAtMs?: number
 }
 
 export type MiniPlayerPlayheadGapDiagnostic = {
   delayedMs: number
   currentSeconds: number
   durationSeconds: number
+  detectedAtMs?: number
+  lastUpdateSource?: 'playhead' | 'host-state'
+  lastUpdateSequence?: number | null
+  lastUpdatePublishedAtMs?: number | null
+  lastUpdateReceivedAtMs?: number | null
 }
 
 export type MiniPlayerSession = {

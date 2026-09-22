@@ -37,6 +37,8 @@ let miniPlayerWindow: BrowserWindow | null = null
 let getMainWindow: () => BrowserWindow | null = () => null
 let lastHostPlayheadReceivedAtMs: number | null = null
 let lastHostPlayheadSenderId: number | null = null
+let lastHostPlayheadSequence: number | null = null
+let lastHostPlayheadPublishedAtMs: number | null = null
 let ipcBound = false
 let mainListenersAttached = false
 let restoringMain = false
@@ -44,6 +46,11 @@ let allowDestroy = false
 let persistTimer: ReturnType<typeof setTimeout> | null = null
 
 const clampNumber = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+
+const toNullableFiniteNumber = (value: unknown): number | null => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
 
 const isUsableWindow = (target: BrowserWindow | null): target is BrowserWindow =>
   !!target && !target.isDestroyed()
@@ -187,6 +194,10 @@ const destroyMiniWindow = (restoreMainWindow: boolean) => {
   destroyMiniPlayerOverlay()
   const target = miniPlayerWindow
   miniPlayerWindow = null
+  lastHostPlayheadReceivedAtMs = null
+  lastHostPlayheadSenderId = null
+  lastHostPlayheadSequence = null
+  lastHostPlayheadPublishedAtMs = null
   // 在主窗口恢复可见前先解除其快捷键禁用状态，避免首个按键被忽略。
   notifySession()
   if (restoreMainWindow) {
@@ -500,8 +511,11 @@ const ensureIpcHandlers = () => {
     forwardToMini(MINI_PLAYER_CHANNELS.hostState, payload)
   })
   ipcMain.on(MINI_PLAYER_CHANNELS.playhead, (_event, payload: MiniPlayerPlayhead) => {
-    lastHostPlayheadReceivedAtMs = Date.now()
+    const receivedAtMs = Date.now()
+    lastHostPlayheadReceivedAtMs = receivedAtMs
     lastHostPlayheadSenderId = _event.sender.id
+    lastHostPlayheadSequence = toNullableFiniteNumber(payload?.sequence)
+    lastHostPlayheadPublishedAtMs = toNullableFiniteNumber(payload?.publishedAtMs)
     forwardToMini(MINI_PLAYER_CHANNELS.playhead, payload)
   })
   ipcMain.on(
@@ -511,14 +525,25 @@ const ensureIpcHandlers = () => {
       const delayedMs = Number(payload?.delayedMs)
       if (!Number.isFinite(delayedMs) || delayedMs < 1500) return
       const now = Date.now()
+      const lastUpdateReceivedAtMs = toNullableFiniteNumber(payload?.lastUpdateReceivedAtMs)
       log.error('[mini-player] playback progress delayed', {
         delayedMs: Math.round(delayedMs),
         currentSeconds: Math.max(0, Number(payload?.currentSeconds) || 0),
         durationSeconds: Math.max(0, Number(payload?.durationSeconds) || 0),
+        detectedAtMs: toNullableFiniteNumber(payload?.detectedAtMs) ?? now,
+        lastUpdateSource: payload?.lastUpdateSource || null,
+        lastUpdateSequence: toNullableFiniteNumber(payload?.lastUpdateSequence),
+        lastUpdatePublishedAtMs: toNullableFiniteNumber(payload?.lastUpdatePublishedAtMs),
+        lastUpdateReceivedAtMs,
+        lastUpdateAgeMs:
+          lastUpdateReceivedAtMs === null ? null : Math.max(0, now - lastUpdateReceivedAtMs),
         mainProcessReceivedGapMs:
           lastHostPlayheadReceivedAtMs === null
             ? null
             : Math.max(0, now - lastHostPlayheadReceivedAtMs),
+        mainLastPlayheadReceivedAtMs: lastHostPlayheadReceivedAtMs,
+        mainLastPlayheadSequence: lastHostPlayheadSequence,
+        mainLastPlayheadPublishedAtMs: lastHostPlayheadPublishedAtMs,
         hostWebContentsId: lastHostPlayheadSenderId,
         focused: miniPlayerWindow?.isFocused() === true,
         visible: true

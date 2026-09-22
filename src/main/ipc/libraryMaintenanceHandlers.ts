@@ -1,7 +1,9 @@
 import { app, ipcMain } from 'electron'
 import path = require('path')
 import fs = require('fs-extra')
+import { performance } from 'node:perf_hooks'
 import store from '../store'
+import { log } from '../log'
 import mainWindow from '../window/mainWindow'
 import {
   getCoreFsDirName,
@@ -37,9 +39,11 @@ import { getLibraryDb, type SqliteDatabase } from '../libraryDb'
 import { getLibraryStemCacheRootAbs } from '../services/libraryStemAssetStorage'
 import { markGlobalSongSearchDirty } from '../services/globalSongSearch'
 import {
+  getBackgroundFileIoDiagnosticSnapshot,
   runPlaybackAwareBackgroundFileIo,
   waitForPlaybackForegroundIdle
 } from '../services/playbackForegroundActivity'
+import { isPackagedRcBuild } from '../services/rcDiagnostics'
 import { beginLibraryTreeWatcherBulkOperation } from '../libraryTreeWatcher'
 import {
   scheduleCuratedLibrarySyncAfterLocalChange,
@@ -94,6 +98,7 @@ const DIRTY_DATA_SQL_TABLES = [
 
 const DELETE_SONGS_BATCH_CONCURRENCY = 4
 const DELETE_SONGS_BATCH_YIELD_EVERY = 1
+const DELETE_ALL_ABOVE_RC_DIAGNOSTIC_THRESHOLD_MS = 1_000
 /**
  * 推迟落库的回收站记录攒够这么多条就先提交一次。
  *
@@ -102,6 +107,26 @@ const DELETE_SONGS_BATCH_YIELD_EVERY = 1
  * 查不到记录的孤儿文件。按条数分批提交把这个窗口压回秒级以内，同时保留绝大部分批量收益。
  */
 const DELETED_SONGS_RECYCLE_BIN_FLUSH_BATCH = 32
+
+type DeleteSongsPayload = {
+  filePaths: string[]
+  songListPath?: string
+  sourceType?: string
+  diagnosticContext?: string
+}
+
+type FileIoDiagnosticSnapshot = ReturnType<typeof getBackgroundFileIoDiagnosticSnapshot>
+
+const summarizeFileIoDiagnostic = (snapshot: FileIoDiagnosticSnapshot) => ({
+  concurrencyLimit: snapshot.concurrencyLimit,
+  laneLimits: snapshot.laneLimits,
+  inFlight: snapshot.inFlight,
+  inFlightByLane: snapshot.inFlightByLane,
+  handoffScheduled: snapshot.handoffScheduled,
+  foregroundActivityCount: snapshot.foregroundActivityCount,
+  foregroundGraceRemainingMs: snapshot.foregroundGraceRemainingMs,
+  queuedByPriority: snapshot.queuedByPriority
+})
 
 type DirtyDataSqlSummary = {
   removedRows: number
@@ -298,9 +323,7 @@ async function runDelSongsPostDeleteMaintenance(
 }
 
 export function registerLibraryMaintenanceHandlers() {
-  const executeDelSongs = async (
-    payload: { filePaths: string[]; songListPath?: string; sourceType?: string } | string[]
-  ) => {
+  const executeDelSongs = async (payload: DeleteSongsPayload | string[]) => {
     assertLibraryMergeMutationAllowed()
     const filePaths = Array.isArray(payload)
       ? payload
@@ -327,6 +350,11 @@ export function registerLibraryMaintenanceHandlers() {
         : ''
     const sourceType =
       payload && !Array.isArray(payload) && payload.sourceType ? payload.sourceType : null
+    const diagnosticContext =
+      payload && !Array.isArray(payload) && typeof payload.diagnosticContext === 'string'
+        ? payload.diagnosticContext.trim()
+        : ''
+    const diagnosticsEnabled = isPackagedRcBuild() && diagnosticContext === 'delete-all-above'
     const uniquePaths = Array.from(new Set(filePaths.filter(Boolean)))
     const releasePlaylistViewSnapshotMutation =
       beginPlaylistViewSnapshotMutationByPaths(uniquePaths)
@@ -334,9 +362,33 @@ export function registerLibraryMaintenanceHandlers() {
     // 推迟到批次中分片提交的回收站记录；finally 里再兜底一次，避免中途抛错时文件已经移走、
     // 记录却没落库（那样回收站里会出现无法还原的孤儿文件）。
     const deferredRecycleBinRecords: RecycleBinRecord[] = []
+    const operationStartedAtMs = performance.now()
+    const fileIoBefore = diagnosticsEnabled
+      ? summarizeFileIoDiagnostic(getBackgroundFileIoDiagnosticSnapshot())
+      : null
+    let protectionMs = 0
+    let moveBatchMs = 0
+    let moveTaskTotalMs = 0
+    let moveTaskMaxMs = 0
+    let moveTaskCount = 0
+    let recycleBinRecordFlushMs = 0
+    let protectedHandledCount = 0
+    let protectedFailedCount = 0
+    let unprotectedFileCount = 0
+    let completedSuccess = 0
+    let completedFailed = 0
+    let completedSkipped = 0
+    let completedHasENOSPC = false
+    let postDeleteMaintenanceScheduled = false
+    let diagnosticOutcome: 'completed' | 'threw' = 'threw'
     const flushDeferredRecycleBinRecords = () => {
       if (deferredRecycleBinRecords.length === 0) return
-      upsertRecycleBinRecords(deferredRecycleBinRecords.splice(0))
+      const startedAtMs = performance.now()
+      try {
+        upsertRecycleBinRecords(deferredRecycleBinRecords.splice(0))
+      } finally {
+        recycleBinRecordFlushMs += performance.now() - startedAtMs
+      }
     }
     const deferRecycleBinRecord = (record: RecycleBinRecord) => {
       deferredRecycleBinRecords.push(record)
@@ -345,37 +397,46 @@ export function registerLibraryMaintenanceHandlers() {
       }
     }
     try {
+      const protectionStartedAtMs = performance.now()
       const setProtection = await protectSetReferencedFilesForDeletion(uniquePaths)
+      protectionMs = performance.now() - protectionStartedAtMs
       const protectedMovedPaths = setProtection.protectedFiles
         .filter((item) => item.success)
         .map((item) => item.filePath)
-      const protectedFailedCount = setProtection.protectedFiles.filter(
-        (item) => !item.success
-      ).length
-      const protectedHandledCount = setProtection.protectedFiles.length
+      protectedFailedCount = setProtection.protectedFiles.filter((item) => !item.success).length
+      protectedHandledCount = setProtection.protectedFiles.length
+      unprotectedFileCount = setProtection.unprotectedFiles.length
       const tasks: Array<() => Promise<RecycleBinMoveResult>> = []
       // 同一次删歌里大量文件来自同一个歌单目录，按目录记忆化，省掉逐文件的库树解析。
       const listRootByDirCache = new Map<string, string | null>()
       for (const item of setProtection.unprotectedFiles) {
         tasks.push(async () => {
-          await waitForPlaybackForegroundIdle('delSongs:task-start', {
-            filePath: item
-          })
-          const result = await moveFileToRecycleBin(item, {
-            originalPlaylistPath,
-            sourceType,
-            deferDerivedCacheTransfer: true,
-            deferRecycleBinRecord: true,
-            listRootByDirCache
-          })
-          if (result.status === 'failed') {
-            throw new Error(result.error || 'move to recycle bin failed')
+          const taskStartedAtMs = performance.now()
+          try {
+            await waitForPlaybackForegroundIdle('delSongs:task-start', {
+              filePath: item
+            })
+            const result = await moveFileToRecycleBin(item, {
+              originalPlaylistPath,
+              sourceType,
+              deferDerivedCacheTransfer: true,
+              deferRecycleBinRecord: true,
+              listRootByDirCache
+            })
+            if (result.status === 'failed') {
+              throw new Error(result.error || 'move to recycle bin failed')
+            }
+            // 文件已经落进回收站目录，记录必须跟着走；顺手按条数分片提交，别攒到批次结束。
+            if (result.pendingRecycleBinRecord) {
+              deferRecycleBinRecord(result.pendingRecycleBinRecord)
+            }
+            return result
+          } finally {
+            const elapsedMs = performance.now() - taskStartedAtMs
+            moveTaskCount += 1
+            moveTaskTotalMs += elapsedMs
+            moveTaskMaxMs = Math.max(moveTaskMaxMs, elapsedMs)
           }
-          // 文件已经落进回收站目录，记录必须跟着走；顺手按条数分片提交，别攒到批次结束。
-          if (result.pendingRecycleBinRecord) {
-            deferRecycleBinRecord(result.pendingRecycleBinRecord)
-          }
-          return result
         })
       }
       const batchId = `delSongs_${Date.now()}`
@@ -388,6 +449,7 @@ export function registerLibraryMaintenanceHandlers() {
           isInitial: true
         })
       }
+      const moveBatchStartedAtMs = performance.now()
       const { success, failed, hasENOSPC, skipped, results } = await runWithConcurrency(tasks, {
         concurrency: DELETE_SONGS_BATCH_CONCURRENCY,
         yieldEvery: DELETE_SONGS_BATCH_YIELD_EVERY,
@@ -405,14 +467,19 @@ export function registerLibraryMaintenanceHandlers() {
         onInterrupted: async (interruptPayload) =>
           waitForUserDecision(mainWindow.instance ?? null, batchId, 'delSongs', interruptPayload)
       })
+      moveBatchMs = performance.now() - moveBatchStartedAtMs
+      completedSuccess = success + protectedMovedPaths.length
+      completedFailed = failed + protectedFailedCount
+      completedSkipped = skipped
+      completedHasENOSPC = hasENOSPC
       // 回收站记录已在每个文件搬完后分片落库（见 deferRecycleBinRecord），这里只兜底清一次尾巴。
       flushDeferredRecycleBinRecords()
       if (hasENOSPC && mainWindow.instance) {
         mainWindow.instance.webContents.send('file-batch-summary', {
           context: 'delSongs',
           total: uniquePaths.length,
-          success: success + protectedMovedPaths.length,
-          failed: failed + protectedFailedCount,
+          success: completedSuccess,
+          failed: completedFailed,
           hasENOSPC,
           skipped,
           errorSamples: results
@@ -441,14 +508,16 @@ export function registerLibraryMaintenanceHandlers() {
       // await，进度条已经满了界面却还锁着。挪进后台 I/O 通道排队，IPC 只等到文件搬完就返回。
       // 三件事的相对顺序（整理 → 置脏 → 触发云同步）保持不变。
       if (removedPaths.length > 0) {
+        postDeleteMaintenanceScheduled = true
         scheduleDelSongsPostDeleteMaintenance(removedPaths, sourceSongListRoot)
       }
+      diagnosticOutcome = 'completed'
       return {
         total: uniquePaths.length,
-        success: success + protectedMovedPaths.length,
-        failed: failed + protectedFailedCount,
-        skipped,
-        hasENOSPC,
+        success: completedSuccess,
+        failed: completedFailed,
+        skipped: completedSkipped,
+        hasENOSPC: completedHasENOSPC,
         removedPaths,
         protectedFiles: setProtection.protectedFiles
       }
@@ -456,37 +525,49 @@ export function registerLibraryMaintenanceHandlers() {
       flushDeferredRecycleBinRecords()
       releaseLibraryTreeWatcherBulk()
       releasePlaylistViewSnapshotMutation()
+      const totalMs = performance.now() - operationStartedAtMs
+      if (diagnosticsEnabled && totalMs >= DELETE_ALL_ABOVE_RC_DIAGNOSTIC_THRESHOLD_MS) {
+        log.info('[delete-all-above] slow backend delete', {
+          totalMs: Math.round(totalMs),
+          itemCount: uniquePaths.length,
+          outcome: diagnosticOutcome,
+          protectionMs: Math.round(protectionMs),
+          moveBatchMs: Math.round(moveBatchMs),
+          moveTaskCount,
+          moveTaskTotalMs: Math.round(moveTaskTotalMs),
+          moveTaskMaxMs: Math.round(moveTaskMaxMs),
+          recycleBinRecordFlushMs: Math.round(recycleBinRecordFlushMs),
+          protectedHandledCount,
+          protectedFailedCount,
+          unprotectedFileCount,
+          success: diagnosticOutcome === 'completed' ? completedSuccess : 0,
+          failed: diagnosticOutcome === 'completed' ? completedFailed : uniquePaths.length,
+          skipped: completedSkipped,
+          hasENOSPC: completedHasENOSPC,
+          postDeleteMaintenanceScheduled,
+          fileIoBefore,
+          fileIoAfter: summarizeFileIoDiagnostic(getBackgroundFileIoDiagnosticSnapshot())
+        })
+      }
     }
   }
 
-  ipcMain.on(
-    'delSongs',
-    async (
-      _e,
-      payload: { filePaths: string[]; songListPath?: string; sourceType?: string } | string[]
-    ) => {
-      await executeDelSongs(payload)
-    }
-  )
+  ipcMain.on('delSongs', async (_e, payload: DeleteSongsPayload | string[]) => {
+    await executeDelSongs(payload)
+  })
 
-  ipcMain.handle(
-    'delSongsAwaitable',
-    async (
-      _e,
-      payload: { filePaths: string[]; songListPath?: string; sourceType?: string } | string[]
-    ) => {
-      try {
-        return await executeDelSongs(payload)
-      } catch {
-        return {
-          total: 0,
-          success: 0,
-          failed: 0,
-          removedPaths: []
-        }
+  ipcMain.handle('delSongsAwaitable', async (_e, payload: DeleteSongsPayload | string[]) => {
+    try {
+      return await executeDelSongs(payload)
+    } catch {
+      return {
+        total: 0,
+        success: 0,
+        failed: 0,
+        removedPaths: []
       }
     }
-  )
+  })
 
   const executePermanentlyDelSongs = async (songFilePaths: string[]) => {
     const uniquePaths = Array.isArray(songFilePaths)

@@ -229,7 +229,13 @@ const handlePlayhead = (_event: unknown, payload: MiniPlayerPlayhead) => {
     isPlaying: !!payload?.isPlaying,
     volume: Number(payload?.volume) || 0
   }
-  notePlaybackUpdate(hostState.value)
+  notePlaybackUpdate(hostState.value, {
+    source: 'playhead',
+    sequence: Number.isFinite(Number(payload?.sequence)) ? Number(payload.sequence) : null,
+    publishedAtMs: Number.isFinite(Number(payload?.publishedAtMs))
+      ? Number(payload.publishedAtMs)
+      : null
+  })
 }
 
 const handleTaskProgress = (_event: unknown, payload: MiniPlayerTaskProgress) => {
