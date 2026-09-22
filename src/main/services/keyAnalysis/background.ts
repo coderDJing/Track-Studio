@@ -20,6 +20,7 @@ import {
   hasRequiredSongStructureAnalysis
 } from '../../../shared/songAnalysisCompleteness'
 import { hasUsableSongEnergyAnalysis } from '../../../shared/songEnergy'
+import type { SongEnergyAnalysisV5 } from '../../../shared/songEnergy'
 import type { KeyAnalysisPersistence } from './persistence'
 import {
   BACKGROUND_BATCH_SIZE,
@@ -55,6 +56,8 @@ type CachedAnalysisInfo = {
   beatGridStatus?: unknown
   beatGridMap?: unknown
   energyScore?: unknown
+  energyAlgorithmVersion?: unknown
+  energyAnalysis?: SongEnergyAnalysisV5
   songStructure?: unknown
 }
 

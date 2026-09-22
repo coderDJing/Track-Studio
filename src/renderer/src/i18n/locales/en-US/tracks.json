@@ -82,6 +82,7 @@
     "analysisDialogSummary": "{count} track(s) need analysis. Choose what to analyze.",
     "analysisStart": "Start",
     "analysisGridLockedHint": "Structure depends on the beat grid. Selecting structure locks the beat grid and analyzes it too. Uncheck structure to change the beat grid.",
+    "analysisEnergyGridLockedHint": "Energy analysis depends on the beat grid. Selecting energy locks the beat grid and analyzes it too. Uncheck energy and structure to change the beat grid.",
     "analysisGridWithoutStructureHint": "Analyzing the beat grid invalidates the existing structure. Check structure too if you want it rebuilt.",
     "reanalysisDialogTitle": "Re-analyze tracks",
     "reanalysisDialogSummary": "Re-analyze {count} track(s). Choose what to analyze.",

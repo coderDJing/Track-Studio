@@ -120,6 +120,7 @@ export function usePlayerControlsLogic({
       originalBpm: projectSongBeatGridMapV2ToFixedGrid(song?.beatGridMap)?.bpm,
       energyScore: song?.energyScore,
       energyAlgorithmVersion: song?.energyAlgorithmVersion,
+      energyAnalysis: song?.energyAnalysis,
       hotCues: Array.isArray(song?.hotCues) ? song.hotCues.map((cue) => ({ ...cue })) : [],
       memoryCues: Array.isArray(song?.memoryCues) ? song.memoryCues.map((cue) => ({ ...cue })) : []
     }
@@ -129,6 +130,7 @@ export function usePlayerControlsLogic({
     keyAnalysisAlgorithmVersion: song.keyAnalysisAlgorithmVersion,
     energyScore: song.energyScore,
     energyAlgorithmVersion: song.energyAlgorithmVersion,
+    energyAnalysis: song.energyAnalysis,
     hotCues: Array.isArray(song.hotCues) ? song.hotCues.map((cue) => ({ ...cue })) : [],
     memoryCues: Array.isArray(song.memoryCues) ? song.memoryCues.map((cue) => ({ ...cue })) : []
   })

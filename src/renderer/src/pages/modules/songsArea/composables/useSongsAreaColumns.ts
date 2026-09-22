@@ -15,6 +15,8 @@ import {
 import { matchTimestampByDateFilter } from '@shared/songAddedAt'
 import { matchComparableByFilter } from '@shared/filterCompare'
 import libraryUtils from '@renderer/utils/libraryUtils'
+import { getSongListFieldRawValue } from '@renderer/utils/songListFieldDisplay'
+import pkg from '../../../../../../../package.json'
 
 interface UseSongsAreaColumnsParams {
   runtime: ReturnType<typeof useRuntimeStore>
@@ -26,6 +28,7 @@ interface UseSongsAreaColumnsParams {
 export type SongsAreaColumnMode = 'default' | 'recycle' | 'recording' | 'mixtape'
 
 const INIT_EXTRA_WIDTH = 40
+const IS_RC_BUILD = /-rc(?:\.|$)/i.test(String(pkg.version || '').trim())
 const SONGS_AREA_DEFAULT_STORAGE_KEY = 'songColumnData'
 const SONGS_AREA_RECYCLE_STORAGE_KEY = 'recycleBinColumnData'
 const SONGS_AREA_RECORDING_STORAGE_KEY = 'recordingLibraryColumnData'
@@ -141,6 +144,66 @@ const buildSongsAreaBaseColumns = (
       filterType: isMixtape ? undefined : 'number'
     },
     {
+      columnName: 'columns.dancefloorEnergy',
+      key: 'dancefloorScore',
+      show: true,
+      filterType: isMixtape ? undefined : 'number'
+    },
+    {
+      columnName: 'columns.danceability',
+      key: 'danceabilityScore',
+      show: true,
+      filterType: isMixtape ? undefined : 'number'
+    },
+    {
+      columnName: 'columns.rhythmicEnergy',
+      key: 'rhythmicScore',
+      show: true,
+      filterType: isMixtape ? undefined : 'number'
+    },
+    {
+      columnName: 'columns.dropImpact',
+      key: 'dropScore',
+      show: false,
+      filterType: isMixtape ? undefined : 'number'
+    },
+    {
+      columnName: 'columns.breakdownContrast',
+      key: 'breakdownScore',
+      show: false,
+      filterType: isMixtape ? undefined : 'number'
+    },
+    {
+      columnName: 'columns.drivingScore',
+      key: 'drivingScore',
+      show: false,
+      filterType: isMixtape ? undefined : 'number'
+    },
+    {
+      columnName: 'columns.mainSectionScore',
+      key: 'mainSectionScore',
+      show: false,
+      filterType: isMixtape ? undefined : 'number'
+    },
+    {
+      columnName: 'columns.highEnergyCoverageScore',
+      key: 'highEnergyCoverageScore',
+      show: false,
+      filterType: isMixtape ? undefined : 'number'
+    },
+    {
+      columnName: 'columns.peakEnergy',
+      key: 'peakScore',
+      show: false,
+      filterType: isMixtape ? undefined : 'number'
+    },
+    {
+      columnName: 'columns.energyRange',
+      key: 'rangeScore',
+      show: false,
+      filterType: isMixtape ? undefined : 'number'
+    },
+    {
       columnName: 'columns.key',
       key: 'key',
       show: true,
@@ -184,6 +247,14 @@ const buildSongsAreaBaseColumns = (
       filterType: isMixtape ? undefined : 'text'
     }
   )
+  if (IS_RC_BUILD) {
+    columns.push({
+      columnName: 'columns.energyConfidence',
+      key: 'confidence',
+      show: true,
+      filterType: isMixtape ? undefined : 'number'
+    })
+  }
   if (!isRecycleBin) {
     columns.push({
       columnName: 'columns.addedAt',
@@ -195,7 +266,24 @@ const buildSongsAreaBaseColumns = (
   return columns
 }
 
-const defaultNoExtraWidthKeys = new Set(['index', 'duration', 'bpm', 'energyScore', 'key'])
+const defaultNoExtraWidthKeys = new Set([
+  'index',
+  'duration',
+  'bpm',
+  'energyScore',
+  'dancefloorScore',
+  'danceabilityScore',
+  'rhythmicScore',
+  'drivingScore',
+  'mainSectionScore',
+  'highEnergyCoverageScore',
+  'dropScore',
+  'breakdownScore',
+  'peakScore',
+  'rangeScore',
+  'confidence',
+  'key'
+])
 
 export const getSongsAreaMinWidthByKey = (key: string, mode: SongsAreaColumnMode) => {
   const base = MIN_WIDTH_BY_KEY[key] ?? 0
@@ -215,9 +303,8 @@ export const buildSongsAreaDefaultColumns = (mode: SongsAreaColumnMode): ISongsA
 export function useSongsAreaColumns(params: UseSongsAreaColumnsParams) {
   const { runtime, songsAreaState, originalSongInfoArr, shouldPersistToLocalStorage } = params
 
-  const getSongField = (song: ISongInfo, key: string): unknown => {
-    return song[key as keyof ISongInfo]
-  }
+  const getSongField = (song: ISongInfo, key: string): unknown =>
+    getSongListFieldRawValue(song, key)
 
   const isRecycleBinView = computed(() => songsAreaState.songListUUID === RECYCLE_BIN_UUID)
   const isRecordingLibraryView = computed(
@@ -318,10 +405,21 @@ export function useSongsAreaColumns(params: UseSongsAreaColumnsParams) {
           })
           .filter((col) => col !== null) as ISongsAreaColumn[]
 
-        defaultColumns.forEach((defaultCol) => {
-          if (!finalColumns.some((fc) => fc.key === defaultCol.key)) {
-            finalColumns.push(JSON.parse(JSON.stringify(defaultCol)))
+        defaultColumns.forEach((defaultCol, defaultIndex) => {
+          if (finalColumns.some((fc) => fc.key === defaultCol.key)) return
+          const precedingKeys = defaultColumns.slice(0, defaultIndex).map((item) => item.key)
+          let insertionIndex = -1
+          for (let index = finalColumns.length - 1; index >= 0; index -= 1) {
+            if (precedingKeys.includes(finalColumns[index].key)) {
+              insertionIndex = index + 1
+              break
+            }
           }
+          finalColumns.splice(
+            insertionIndex === -1 ? finalColumns.length : insertionIndex,
+            0,
+            JSON.parse(JSON.stringify(defaultCol))
+          )
         })
 
         finalColumns = finalColumns.filter((fc) => defaultColumnsMap.has(fc.key))
@@ -618,10 +716,10 @@ export function useSongsAreaColumns(params: UseSongsAreaColumnsParams) {
           if (!validB) return -1
           return sortedCol.order === 'asc' ? valueA - valueB : valueB - valueA
         })
-      } else if (sortedCol.key === 'energyScore') {
+      } else if (sortedCol.filterType === 'number') {
         filtered = [...filtered].sort((a, b) => {
-          const valueA = Number(a.energyScore)
-          const valueB = Number(b.energyScore)
+          const valueA = Number(getSongField(a, sortedCol.key))
+          const valueB = Number(getSongField(b, sortedCol.key))
           const validA = Number.isFinite(valueA)
           const validB = Number.isFinite(valueB)
           if (!validA && !validB) return 0
@@ -686,11 +784,15 @@ export function useSongsAreaColumns(params: UseSongsAreaColumnsParams) {
         if (col.key === 'index') return fieldSet.has('playlistTrackNumber')
         if (col.key === 'key') return fieldSet.has('key')
         if (col.key === 'bpm') return fieldSet.has('bpm') || fieldSet.has('beatGridMap')
-        return fieldSet.has(String(col.key || ''))
+        if (fieldSet.has(String(col.key || ''))) return true
+        return fieldSet.has('energyAnalysis') && col.key !== 'energyScore'
       }
       if (!col.filterActive) return false
       if (col.filterType === 'bpm') return fieldSet.has('bpm') || fieldSet.has('beatGridMap')
-      if (col.filterType === 'number') return fieldSet.has(String(col.key || ''))
+      if (col.filterType === 'number') {
+        if (fieldSet.has(String(col.key || ''))) return true
+        return fieldSet.has('energyAnalysis') && col.key !== 'energyScore'
+      }
       if (col.filterType === 'date') return fieldSet.has('addedAtMs')
       if (col.filterType === 'text' && col.key === 'key') return fieldSet.has('key')
       return false

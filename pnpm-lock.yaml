@@ -7,7 +7,7 @@ settings:
 overrides:
   '@electron/rebuild>node-abi': ^4.33.0
 
-packageExtensionsChecksum: 794d22400da8ed5bdf9358e750feb7bf
+packageExtensionsChecksum: sha256-AC+WK/02n661peDx1a/ZpSobb77KyG1pEs+GeahwgX0=
 
 importers:
 
@@ -58,6 +58,9 @@ importers:
       music-metadata:
         specifier: ^11.14.0
         version: 11.14.0
+      onnxruntime-node:
+        specifier: 1.20.1
+        version: 1.20.1
       overlayscrollbars:
         specifier: ^2.16.0
         version: 2.16.0
@@ -3368,6 +3371,13 @@ packages:
 
   oniguruma-to-es@3.1.1:
     resolution: {integrity: sha512-bUH8SDvPkH3ho3dvwJwfonjlQ4R80vjyvrU8YpxuROddv55vAEJrTuCuCVUhhsHbtlD9tGGbaNApGQckXhS8iQ==}
+
+  onnxruntime-common@1.20.1:
+    resolution: {integrity: sha512-YiU0s0IzYYC+gWvqD1HzLc46Du1sXpSiwzKb63PACIJr6LfL27VsXSXQvt68EzD3V0D5Bc0vyJTjmMxp0ylQiw==}
+
+  onnxruntime-node@1.20.1:
+    resolution: {integrity: sha512-di/I4HDXRw+FLgq+TyHmQEDd3cEp9iFFZm0r4uJ1Wd7b/WE1VXtKWo8yemex347c6GNF/3Pv86ZfPhIWxORr0w==}
+    os: [win32, darwin, linux]
 
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
@@ -7587,6 +7597,13 @@ snapshots:
       emoji-regex-xs: 1.0.0
       regex: 6.1.0
       regex-recursion: 6.0.2
+
+  onnxruntime-common@1.20.1: {}
+
+  onnxruntime-node@1.20.1:
+    dependencies:
+      onnxruntime-common: 1.20.1
+      tar: 7.5.15
 
   optionator@0.9.4:
     dependencies:

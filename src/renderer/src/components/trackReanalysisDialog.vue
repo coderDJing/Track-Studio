@@ -70,6 +70,9 @@ const dialogSummary = computed(() =>
 )
 const startButtonText = computed(() => t('tracks.analysisStart'))
 const dependencyHintText = computed(() => {
+  if (beatGridLocked.value && selection.value.energy && !selection.value.structure) {
+    return t('tracks.analysisEnergyGridLockedHint')
+  }
   if (beatGridLocked.value) return t('tracks.analysisGridLockedHint')
   if (warnGridWithoutStructure.value) return t('tracks.analysisGridWithoutStructureHint')
   if (props.canSelectStructureAlone) return t('tracks.reanalysisStructureAloneHint')
@@ -100,7 +103,7 @@ const cancel = () => {
 }
 
 watch(
-  () => selection.value.structure,
+  () => [selection.value.structure, selection.value.energy],
   () => {
     applySelection(selection.value)
   }
@@ -132,7 +135,7 @@ onUnmounted(() => {
         </div>
 
         <div class="track-reanalysis-dialog__options">
-          <singleCheckbox v-model="selection.key" id="reanalysis-option-key">
+          <singleCheckbox id="reanalysis-option-key" v-model="selection.key">
             {{ t('tracks.reanalysisOptionKey') }}
           </singleCheckbox>
           <div class="track-reanalysis-dialog__grid-row">
@@ -142,8 +145,8 @@ onUnmounted(() => {
               :title="beatGridLocked ? dependencyHintText : ''"
             >
               <singleCheckbox
-                v-model="selection.beatGrid"
                 id="reanalysis-option-beat-grid"
+                v-model="selection.beatGrid"
                 :disabled="beatGridLocked"
               >
                 {{ t('tracks.reanalysisOptionBeatGrid') }}
@@ -167,13 +170,13 @@ onUnmounted(() => {
               />
             </bubbleBoxTrigger>
           </div>
-          <singleCheckbox v-model="selection.waveform" id="reanalysis-option-waveform">
+          <singleCheckbox id="reanalysis-option-waveform" v-model="selection.waveform">
             {{ t('tracks.reanalysisOptionWaveform') }}
           </singleCheckbox>
-          <singleCheckbox v-model="selection.energy" id="reanalysis-option-energy">
+          <singleCheckbox id="reanalysis-option-energy" v-model="selection.energy">
             {{ t('tracks.reanalysisOptionEnergy') }}
           </singleCheckbox>
-          <singleCheckbox v-model="selection.structure" id="reanalysis-option-structure">
+          <singleCheckbox id="reanalysis-option-structure" v-model="selection.structure">
             {{ t('tracks.reanalysisOptionStructure') }}
           </singleCheckbox>
         </div>

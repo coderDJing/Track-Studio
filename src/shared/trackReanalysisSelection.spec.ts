@@ -94,6 +94,24 @@ describe('trackReanalysisSelection', () => {
     ).toBe(false)
   })
 
+  it('勾选能量会始终关联并锁定网格分析', () => {
+    const selection = {
+      key: false,
+      beatGrid: false,
+      waveform: false,
+      energy: true,
+      structure: false
+    }
+    expect(applyTrackReanalysisSelectionDependencies(selection, true)).toMatchObject({
+      beatGrid: true,
+      energy: true
+    })
+    expect(isTrackReanalysisBeatGridLocked(selection, true)).toBe(true)
+    expect(
+      resolveTrackReanalysisPlan(applyTrackReanalysisSelectionDependencies(selection, true))
+    ).toMatchObject({ beatGrid: true, energy: true })
+  })
+
   it('只勾波形不会连带网格或段落', () => {
     expect(
       applyTrackReanalysisSelectionDependencies(

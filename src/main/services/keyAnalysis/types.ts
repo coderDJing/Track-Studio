@@ -6,6 +6,7 @@ import type { BeatGridStatus } from '../../../types/globals'
 import type { SongStructureAnalysis } from '../../../shared/songStructure'
 import type { SongBeatGridMapV2 } from '../../../shared/songBeatGridMapV2'
 import type { AnalysisBpmRange } from '../../../shared/analysisBpmRange'
+import type { SongEnergyAnalysisV5 } from '../../../shared/songEnergy'
 
 export type KeyAnalysisPriority = 'high' | 'medium' | 'low' | 'background'
 export type KeyAnalysisSource = 'foreground' | 'background'
@@ -179,6 +180,7 @@ export type DoneEntry = {
   beatGridMap?: SongBeatGridMapV2
   energyScore?: number
   energyAlgorithmVersion?: number
+  energyAnalysis?: SongEnergyAnalysisV5
   songStructure?: SongStructureAnalysis
   hasWaveform?: boolean
 }
@@ -200,8 +202,10 @@ type KeyAnalysisWorkerPartialResult = {
   timeBasisOffsetMs?: number
   bpmError?: string
   songStructureError?: string
+  energyError?: string
   energyScore?: number
   energyAlgorithmVersion?: number
+  energyAnalysis?: SongEnergyAnalysisV5
   songStructure?: SongStructureAnalysis
 }
 

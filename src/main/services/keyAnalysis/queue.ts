@@ -876,7 +876,8 @@ export class KeyAnalysisQueue {
     this.events.emit('energy-updated', {
       filePath: job.filePath,
       energyScore: cached.energyScore,
-      energyAlgorithmVersion: cached.energyAlgorithmVersion
+      energyAlgorithmVersion: cached.energyAlgorithmVersion,
+      energyAnalysis: cached.energyAnalysis
     })
   }
 

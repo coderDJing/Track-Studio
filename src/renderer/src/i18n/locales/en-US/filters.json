@@ -6,7 +6,15 @@
     "filterByDate": "Filter by date added",
     "filterByNumber": "Filter by number",
     "filterBy": {
-      "energyScore": "Filter by energy"
+      "energyScore": "Filter by overall energy",
+      "dancefloorScore": "Filter by dancefloor energy",
+      "danceabilityScore": "Filter by danceability",
+      "rhythmicScore": "Filter by rhythm",
+      "dropScore": "Filter by drop impact",
+      "breakdownScore": "Filter by breakdown contrast",
+      "peakScore": "Filter by peak energy",
+      "rangeScore": "Filter by dynamic range",
+      "confidence": "Filter by energy confidence"
     },
     "equals": "Equals",
     "greaterOrEqual": "Greater or equal",
@@ -54,7 +62,15 @@
     "bpmPlaceholder": "e.g. 128 or 128.5",
     "numberPlaceholder": "Enter a number",
     "placeholder": {
-      "energyScore": "e.g. 70"
+      "energyScore": "e.g. 70",
+      "dancefloorScore": "e.g. 70",
+      "danceabilityScore": "e.g. 80",
+      "rhythmicScore": "e.g. 75",
+      "dropScore": "e.g. 60",
+      "breakdownScore": "e.g. 50",
+      "peakScore": "e.g. 85",
+      "rangeScore": "e.g. 40",
+      "confidence": "e.g. 70"
     },
     "noResults": "No results for current filters",
     "noResultsHint": "Try widening conditions or clear filters.",

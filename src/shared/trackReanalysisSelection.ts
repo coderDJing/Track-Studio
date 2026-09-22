@@ -80,7 +80,7 @@ export const isFullTrackReanalysisPlan = (plan: TrackReanalysisPlan) =>
 export const isTrackReanalysisBeatGridLocked = (
   selection: TrackReanalysisUserSelection,
   canSelectStructureAlone = false
-) => selection.structure === true && canSelectStructureAlone !== true
+) => selection.energy === true || (selection.structure === true && canSelectStructureAlone !== true)
 
 export const applyTrackReanalysisSelectionDependencies = (
   selection: TrackReanalysisUserSelection,
@@ -93,8 +93,11 @@ export const applyTrackReanalysisSelectionDependencies = (
     energy: selection.energy === true,
     structure: selection.structure === true
   }
-  // 段落依赖网格：勾选段落后锁定网格。没有已有网格时必须一起分析网格。
-  if (next.structure && !canSelectStructureAlone) {
+  // 能量的结构增强正式依赖网格，勾选能量就必须一起分析网格。
+  if (next.energy) {
+    next.beatGrid = true
+  } else if (next.structure && !canSelectStructureAlone) {
+    // 段落依赖网格：没有已有网格时必须一起分析网格。
     next.beatGrid = true
   }
   return next

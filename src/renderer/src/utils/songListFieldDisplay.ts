@@ -7,6 +7,7 @@ import {
   getOriginalPlaylistDisplay
 } from '@renderer/utils/recycleBinDisplay'
 import { t } from '@renderer/utils/translate'
+import { getSongEnergyAnalysisScore } from '@shared/songEnergy'
 
 export type SongListFieldDisplayOptions = {
   keyDisplayStyle: 'Classic' | 'Camelot'
@@ -17,6 +18,9 @@ export const resolveSongListKeyDisplayStyle = (value: unknown): 'Classic' | 'Cam
   value === 'Camelot' ? 'Camelot' : 'Classic'
 
 const EMPTY_PLACEHOLDER = '-'
+
+export const getSongListFieldRawValue = (song: ISongInfo, colKey: string): unknown =>
+  getSongEnergyAnalysisScore(song.energyAnalysis, colKey) ?? song[colKey as keyof ISongInfo]
 
 const formatKeyText = (value: unknown, style: 'Classic' | 'Camelot'): string => {
   const text = typeof value === 'string' ? value.trim() : ''
@@ -47,7 +51,7 @@ export const getSongListFieldDisplayValue = (
   if (colKey === 'originalPlaylistPath') {
     return getOriginalPlaylistDisplay(song)
   }
-  const raw = song[colKey as keyof ISongInfo]
+  const raw = getSongListFieldRawValue(song, colKey)
   if (colKey === 'bpm') {
     const bpmSummary = summarizeSongBeatGridV2Bpm(song.beatGridMap, song.bpm)
     if (bpmSummary.displayText) {
@@ -58,7 +62,10 @@ export const getSongListFieldDisplayValue = (
     }
     return options.isDesktopRekordboxSong ? t('rekordboxDesktop.analysisRequired') : ''
   }
-  if (colKey === 'energyScore') {
+  if (
+    colKey === 'energyScore' ||
+    getSongEnergyAnalysisScore(song.energyAnalysis, colKey) !== undefined
+  ) {
     const energyScore = Number(raw)
     if (Number.isFinite(energyScore)) {
       return Math.max(0, Math.min(100, Math.round(energyScore)))

@@ -853,6 +853,7 @@ export function stripSongCoreAnalysisFields(
   if (shouldClear('energy')) {
     delete next.energyScore
     delete next.energyAlgorithmVersion
+    delete next.energyAnalysis
   }
   if (shouldClear('structure')) {
     delete next.songStructure

@@ -82,6 +82,7 @@
     "analysisDialogSummary": "发现 {count} 首曲目需要分析。请勾选要分析的内容。",
     "analysisStart": "开始分析",
     "analysisGridLockedHint": "段落依赖网格。勾选段落后网格会锁定，将一起分析网格。取消段落后才能改网格。",
+    "analysisEnergyGridLockedHint": "能量分析依赖网格。勾选能量后网格会锁定，将一起分析网格。取消能量和段落后才能改网格。",
     "analysisGridWithoutStructureHint": "只分析网格时，旧段落会因网格变化而失效。需要新段落请同时勾选。",
     "reanalysisDialogTitle": "重新分析曲目",
     "reanalysisDialogSummary": "将重新分析 {count} 首曲目。请勾选要分析的内容。",

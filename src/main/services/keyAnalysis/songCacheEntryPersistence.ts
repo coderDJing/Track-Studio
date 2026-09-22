@@ -4,7 +4,10 @@ import { stripBeatThisDebugInfo } from '../../libraryCacheDb/pathResolvers'
 import { applyLiteDefaults, buildLiteSongInfo } from '../songInfoLite'
 import type { ISongInfo } from '../../../types/globals'
 import type { SongBeatGridMapV2 } from '../../../shared/songBeatGridMapV2'
-import { CURRENT_SONG_ENERGY_ALGORITHM_VERSION } from '../../../shared/songEnergy'
+import {
+  CURRENT_SONG_ENERGY_ALGORITHM_VERSION,
+  type SongEnergyAnalysisV5
+} from '../../../shared/songEnergy'
 import {
   normalizeSongStructureAnalysis,
   type SongStructureAnalysis
@@ -18,6 +21,7 @@ export type EnsureSongCacheEntryPayload = {
   beatGridMap?: SongBeatGridMapV2 | null
   energyScore?: number
   energyAlgorithmVersion?: number
+  energyAnalysis?: SongEnergyAnalysisV5
   songStructure?: SongStructureAnalysis | null
 }
 
@@ -88,6 +92,7 @@ export const ensureSongCacheEntry = async (
     info.energyScore = payload.energyScore
     info.energyAlgorithmVersion =
       payload.energyAlgorithmVersion ?? CURRENT_SONG_ENERGY_ALGORITHM_VERSION
+    info.energyAnalysis = payload.energyAnalysis
   }
   if (Object.prototype.hasOwnProperty.call(payload, 'songStructure')) {
     const songStructure = normalizeSongStructureAnalysis(payload.songStructure)

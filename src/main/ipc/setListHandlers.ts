@@ -112,6 +112,7 @@ function mergeSetAnalysisFields(target: ISongInfo, source: Partial<ISongInfo> | 
     if (hasPositiveInteger(source.energyAlgorithmVersion)) {
       next.energyAlgorithmVersion = source.energyAlgorithmVersion
     }
+    next.energyAnalysis = source.energyAnalysis
   }
   const sourceStructure = normalizeSongStructureAnalysis(source.songStructure)
   if (

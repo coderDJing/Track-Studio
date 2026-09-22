@@ -121,7 +121,7 @@ type CachedGridInfo = Pick<
 > & {
   beatThisWindowCount?: unknown
 }
-type CachedEnergyInfo = Pick<ISongInfo, 'energyScore' | 'energyAlgorithmVersion'>
+type CachedEnergyInfo = Pick<ISongInfo, 'energyScore' | 'energyAlgorithmVersion' | 'energyAnalysis'>
 const hasCurrentKeyAnalysis = (info: CachedKeyInfo | null | undefined) =>
   hasUsableKeyAnalysis(info) && shouldAcceptKeyAnalysisCacheVersion(info)
 const hasCompleteGrid = (info: CachedGridInfo | null | undefined) =>
@@ -165,6 +165,7 @@ const discardStaleAnalysisFields = (info: ISongInfo): ISongInfo => {
   if (!hasUsableSongEnergyAnalysis(next)) {
     delete next.energyScore
     delete next.energyAlgorithmVersion
+    delete next.energyAnalysis
   }
   if (grid.kind !== 'grid') discardIncompatibleSongStructure(next)
   return next
@@ -270,6 +271,7 @@ const preserveCachedEnergyAnalysisFields = (
   }
   target.energyScore = cachedInfo.energyScore
   target.energyAlgorithmVersion = cachedInfo.energyAlgorithmVersion
+  target.energyAnalysis = cachedInfo.energyAnalysis
 }
 
 const preserveCachedAnalysisFields = (target: ISongInfo, cachedInfo?: ISongInfo | null) => {

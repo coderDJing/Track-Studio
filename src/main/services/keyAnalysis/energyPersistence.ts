@@ -8,7 +8,8 @@ import { buildLiteSongInfo } from '../songInfoLite'
 import { log } from '../../log'
 import {
   CURRENT_SONG_ENERGY_ALGORITHM_VERSION,
-  normalizeSongEnergyScore
+  normalizeSongEnergyScore,
+  type SongEnergyAnalysisV5
 } from '../../../shared/songEnergy'
 import { normalizePath, type DoneEntry } from './types'
 
@@ -18,6 +19,7 @@ type EnsureEnergySongCacheEntry = (
   payload: {
     energyScore?: number
     energyAlgorithmVersion?: number
+    energyAnalysis?: SongEnergyAnalysisV5
   },
   stat?: { size: number; mtimeMs: number }
 ) => Promise<void>
@@ -40,7 +42,8 @@ export const createPersistEnergy = (params: CreateEnergyPersistenceParams) => {
   return async (
     filePath: string,
     energyScore: number,
-    energyAlgorithmVersion = CURRENT_SONG_ENERGY_ALGORITHM_VERSION
+    energyAlgorithmVersion = CURRENT_SONG_ENERGY_ALGORITHM_VERSION,
+    energyAnalysis?: SongEnergyAnalysisV5
   ) => {
     const normalizedPath = normalizePath(filePath)
     const normalizedEnergyScore = normalizeSongEnergyScore(energyScore)
@@ -63,6 +66,7 @@ export const createPersistEnergy = (params: CreateEnergyPersistenceParams) => {
         beatGridMap: existing?.beatGridMap,
         energyScore: normalizedEnergyScore,
         energyAlgorithmVersion: normalizedEnergyAlgorithmVersion,
+        energyAnalysis,
         songStructure: existing?.songStructure,
         hasWaveform: existing?.hasWaveform
       })
@@ -74,7 +78,8 @@ export const createPersistEnergy = (params: CreateEnergyPersistenceParams) => {
           filePath,
           {
             energyScore: normalizedEnergyScore,
-            energyAlgorithmVersion: normalizedEnergyAlgorithmVersion
+            energyAlgorithmVersion: normalizedEnergyAlgorithmVersion,
+            energyAnalysis
           },
           { size: stat.size, mtimeMs: stat.mtimeMs }
         )
@@ -93,6 +98,7 @@ export const createPersistEnergy = (params: CreateEnergyPersistenceParams) => {
               filePath,
               energyScore: normalizedEnergyScore,
               energyAlgorithmVersion: normalizedEnergyAlgorithmVersion,
+              energyAnalysis,
               analysisOnly: true
             })
           )
@@ -102,7 +108,8 @@ export const createPersistEnergy = (params: CreateEnergyPersistenceParams) => {
       params.events.emit('energy-updated', {
         filePath,
         energyScore: normalizedEnergyScore,
-        energyAlgorithmVersion: normalizedEnergyAlgorithmVersion
+        energyAlgorithmVersion: normalizedEnergyAlgorithmVersion,
+        energyAnalysis
       })
     } catch (error) {
       if (params.isMissingFileError(error)) {
@@ -120,13 +127,15 @@ export const createPersistEnergy = (params: CreateEnergyPersistenceParams) => {
         beatGridMap: existing?.beatGridMap,
         energyScore: normalizedEnergyScore,
         energyAlgorithmVersion: normalizedEnergyAlgorithmVersion,
+        energyAnalysis,
         songStructure: existing?.songStructure,
         hasWaveform: existing?.hasWaveform
       })
       params.events.emit('energy-updated', {
         filePath,
         energyScore: normalizedEnergyScore,
-        energyAlgorithmVersion: normalizedEnergyAlgorithmVersion
+        energyAlgorithmVersion: normalizedEnergyAlgorithmVersion,
+        energyAnalysis
       })
       log.error('[闲时分析] persistEnergy 失败，已写入内存兜底', {
         filePath,

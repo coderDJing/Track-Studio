@@ -9,6 +9,7 @@ import type { PlaybackRangeMode, PlaybackRangeSectionMatchMode } from '../shared
 import type { AnalysisBpmRangePresetId } from '../shared/analysisBpmRange'
 import type { TrackReanalysisUserSelection } from '../shared/trackReanalysisSelection'
 import type { BrowserPlayerRightTrackInfoField } from '../shared/browserPlayerRightTrackInfo'
+import type { SongEnergyAnalysisV5 } from '../shared/songEnergy'
 
 interface IDir {
   uuid: string
@@ -59,6 +60,7 @@ interface ISongInfo {
   rekordboxGridEntries?: IRekordboxBeatGridEntry[]
   energyScore?: number
   energyAlgorithmVersion?: number
+  energyAnalysis?: SongEnergyAnalysisV5
   songStructure?: SongStructureAnalysis
   playlistTrackNumber?: number
   addedAtMs?: number

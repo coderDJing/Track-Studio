@@ -330,6 +330,7 @@ const toSongInfo = (rawInfo: Partial<ISongInfo> | null, filePath: string): ISong
   const energyScore = normalizeSongEnergyScore(rawInfo?.energyScore)
   const energyAlgorithmVersion =
     energyScore !== undefined ? rawInfo?.energyAlgorithmVersion : undefined
+  const energyAnalysis = energyScore !== undefined ? rawInfo?.energyAnalysis : undefined
   const songStructure = hasUsableSongStructureAnalysis(rawInfo)
     ? normalizeSongStructureAnalysis(rawInfo?.songStructure)
     : undefined
@@ -360,6 +361,7 @@ const toSongInfo = (rawInfo: Partial<ISongInfo> | null, filePath: string): ISong
     beatGridMap,
     energyScore,
     energyAlgorithmVersion,
+    energyAnalysis,
     songStructure,
     playlistTrackNumber,
     addedAtMs: normalizeAddedAtMs(rawInfo?.addedAtMs),

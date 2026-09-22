@@ -28,6 +28,7 @@ export const IGNORED_SONG_LIST_REFRESH_DIFF_FIELDS: ReadonlySet<string> = new Se
   'beatGridStatus',
   'energyScore',
   'energyAlgorithmVersion',
+  'energyAnalysis',
   'songStructure'
 ])
 
@@ -126,6 +127,8 @@ export function createSongListItemComparator(
     normalizeComparableNumber(left.energyScore) === normalizeComparableNumber(right.energyScore) &&
     normalizeComparableNumber(left.energyAlgorithmVersion) ===
       normalizeComparableNumber(right.energyAlgorithmVersion) &&
+    normalizeComparableJson(left.energyAnalysis) ===
+      normalizeComparableJson(right.energyAnalysis) &&
     normalizeComparableSongStructure(left.songStructure) ===
       normalizeComparableSongStructure(right.songStructure) &&
     normalizeComparableNumber(left.timeBasisOffsetMs) ===
@@ -230,6 +233,11 @@ export function createSongListItemComparator(
     pushIfTextDiff('beatGridStatus')
     pushIfNumberDiff('energyScore')
     pushIfNumberDiff('energyAlgorithmVersion')
+    if (
+      normalizeComparableJson(left.energyAnalysis) !== normalizeComparableJson(right.energyAnalysis)
+    ) {
+      fields.push('energyAnalysis')
+    }
     if (
       normalizeComparableSongStructure(left.songStructure) !==
       normalizeComparableSongStructure(right.songStructure)

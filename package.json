@@ -105,9 +105,15 @@
       "!rust_package/native/ffmpeg/darwin-arm64{,/**/*}",
       "!rust_package/native/ffmpeg/darwin-x64{,/**/*}",
       "!rust_package/target{,/**/*}",
-      "!node_modules/rust_package/target{,/**/*}"
+      "!node_modules/rust_package/target{,/**/*}",
+      "!node_modules/onnxruntime-node/bin/napi-v3/linux{,/**/*}",
+      "!node_modules/onnxruntime-node/bin/napi-v3/win32/arm64{,/**/*}"
     ],
     "asarUnpack": [
+      "node_modules/onnxruntime-common/**",
+      "node_modules/onnxruntime-node/bin/napi-v3/win32/x64/**",
+      "node_modules/onnxruntime-node/bin/napi-v3/darwin/x64/**",
+      "node_modules/onnxruntime-node/bin/napi-v3/darwin/arm64/**",
       "resources/**"
     ],
     "fileAssociations": [
@@ -220,7 +226,7 @@
     "inspect:song-structure": "tsx scripts/inspect_song_structure.ts",
     "song-structure:truth:add": "tsx scripts/add_song_structure_truth_sample.ts",
     "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
-    "test:key-analysis": "vitest run src/main/libraryCacheDb/songCacheAnalysisFields.spec.ts src/main/services/keyAnalysis/analysisTargets.spec.ts src/main/services/keyAnalysis/jobOwnership.spec.ts src/main/services/keyAnalysis/queueActiveFollowUp.spec.ts src/main/services/keyAnalysis/structurePersistence.spec.ts src/main/services/keyAnalysis/workerDispatch.spec.ts src/main/services/songStructureCachePolicy.spec.ts src/main/services/sharedSongGridCachePolicy.spec.ts src/main/services/sharedSongGrid.spec.ts src/renderer/src/composables/horizontalBrowse/useHorizontalBrowseDeckSongSync.spec.ts src/renderer/src/utils/manualKeyAnalysis.spec.ts src/shared/analysisBpmRange.spec.ts src/shared/trackReanalysisSelection.spec.ts",
+    "test:key-analysis": "vitest run src/main/libraryCacheDb/songCacheAnalysisFields.spec.ts src/main/services/keyAnalysis/analysisTargets.spec.ts src/main/services/keyAnalysis/jobOwnership.spec.ts src/main/services/keyAnalysis/queueActiveFollowUp.spec.ts src/main/services/keyAnalysis/structurePersistence.spec.ts src/main/services/keyAnalysis/workerDispatch.spec.ts src/main/services/songStructureCachePolicy.spec.ts src/main/services/sharedSongGridCachePolicy.spec.ts src/main/services/sharedSongGrid.spec.ts src/main/workers/songEnergyModel.spec.ts src/renderer/src/composables/horizontalBrowse/useHorizontalBrowseDeckSongSync.spec.ts src/renderer/src/utils/manualKeyAnalysis.spec.ts src/shared/analysisBpmRange.spec.ts src/shared/trackReanalysisSelection.spec.ts",
     "grid:check-active-v2": "node scripts/check-active-grid-v2.mjs",
     "test:song-structure": "vitest run src/main/workers/songAnalysisAudioDecoder.spec.ts src/shared/songAnalysisCompleteness.spec.ts src/shared/songStructureDirectionalBoundaries.spec.ts src/shared/songStructureFeatureData.spec.ts src/shared/songStructureSemanticBoundaryAlignment.spec.ts src/shared/songStructureSemanticFoundationLanding.spec.ts src/shared/songStructureSemanticMacroActivity.spec.ts src/shared/songStructureSemanticOutro.spec.ts src/shared/songStructureSemanticRefinement.spec.ts src/shared/songStructureSemanticStability.spec.ts src/shared/songStructureSemanticStateGuards.spec.ts src/shared/songStructureSpectral.spec.ts src/shared/songStructureStale.spec.ts src/shared/songStructureStructuralEvidence.spec.ts src/shared/songStructureTimeBasis.spec.ts src/shared/songStructureV23.spec.ts",
     "start": "electron-vite preview",
@@ -278,6 +284,7 @@
     "mitt": "^3.0.1",
     "ml-matrix": "^6.13.0",
     "music-metadata": "^11.14.0",
+    "onnxruntime-node": "1.20.1",
     "overlayscrollbars": "^2.16.0",
     "overlayscrollbars-vue": "^0.5.10",
     "pinia": "^3.0.4",
@@ -318,6 +325,7 @@
       "better-sqlite3-multiple-ciphers",
       "electron",
       "esbuild",
+      "onnxruntime-node",
       "vue-demi"
     ],
     "overrides": {

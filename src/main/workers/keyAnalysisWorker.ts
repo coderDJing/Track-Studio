@@ -12,9 +12,11 @@ import {
   type UnifiedDisplayWaveformDetailData
 } from '../../shared/unifiedDisplayWaveform'
 import {
-  calculateSongEnergyScoreFromPcm,
-  calculateSongEnergyScoreFromUnifiedDisplay
-} from '../../shared/songEnergy'
+  analyzeSongEnergyWithModel,
+  normalizeSongEnergyBeatGrid,
+  SONG_ENERGY_MODEL_CHANNELS,
+  SONG_ENERGY_MODEL_SAMPLE_RATE
+} from './songEnergyModel'
 import { analyzeBeatGridWithBeatThisSlidingWindowsFromPcm } from './beatThisAnalyzer'
 import { getBeatThisRuntimeAvailabilitySnapshot } from './beatThisRuntime'
 import { computeRawWaveform } from './rawWaveformBuilder'
@@ -25,11 +27,13 @@ import {
 import {
   createSongBeatGridMapV2FromFixedGrid,
   normalizeSongBeatGridMapV2,
+  projectSongBeatGridMapV2ToFixedGrid,
   type SongBeatGridMapV2
 } from '../../shared/songBeatGridMapV2'
 import { buildSongStructureAnalysisV23 } from '../../shared/songStructureV23'
 import type { SongStructureAnalysisV23 } from '../../shared/songStructureV23Common'
 import type { AnalysisBpmRange } from '../../shared/analysisBpmRange'
+import type { SongEnergyAnalysisV5 } from '../../shared/songEnergy'
 
 type KeyJob = {
   jobId: number
@@ -56,10 +60,12 @@ type KeyResultPayload = {
   timeBasisOffsetMs?: number
   bpmError?: string
   songStructureError?: string
+  energyError?: string
   songStructure?: SongStructureAnalysisV23
   structureBeatGridMap?: SongBeatGridMapV2
   energyScore?: number
   energyAlgorithmVersion?: number
+  energyAnalysis?: SongEnergyAnalysisV5
   mixxxWaveformData?: MixxxWaveformData | null
   unifiedDisplayWaveformData?: UnifiedDisplayWaveformDetailData | null
 }
@@ -265,6 +271,14 @@ const decodeBeatGridPcmForFile = async (filePath: string): Promise<DecodedBeatGr
   })
 }
 
+const decodeSongEnergyPcmForFile = async (filePath: string): Promise<DecodedBeatGridPcm> => {
+  return decodePcmWithNative(filePath, {
+    sampleRate: SONG_ENERGY_MODEL_SAMPLE_RATE,
+    channels: SONG_ENERGY_MODEL_CHANNELS,
+    decoderBackend: 'native-libav-song-energy'
+  })
+}
+
 const analyzeKeyForFile = (
   filePath: string,
   options: {
@@ -309,23 +323,21 @@ const analyzeKeyForFileInternal = async (
   const needsWaveform = Boolean(options.needsWaveform)
   const needsEnergy = Boolean(options.needsEnergy)
   const needsStructure = Boolean(options.needsStructure)
-  const cachedUnifiedDisplayWaveformData =
-    needsEnergy || needsStructure
-      ? resolveCachedUnifiedDisplayWaveformData(options.cachedUnifiedDisplayWaveformData)
-      : null
+  const cachedUnifiedDisplayWaveformData = needsStructure
+    ? resolveCachedUnifiedDisplayWaveformData(options.cachedUnifiedDisplayWaveformData)
+    : null
   let structureWaveformData = cachedUnifiedDisplayWaveformData
-  const needsPcmEnergy = needsEnergy && !cachedUnifiedDisplayWaveformData
   const useNativeLibavWaveformDecode =
-    (needsWaveform || needsPcmEnergy || (needsStructure && !structureWaveformData)) &&
+    (needsWaveform || (needsStructure && !structureWaveformData)) &&
     shouldUseNativeLibavSongAnalysisDecode(filePath)
-  const useNativeLibavPrimaryDecode = (needsKey || needsPcmEnergy) && useNativeLibavWaveformDecode
+  const useNativeLibavPrimaryDecode = needsKey && useNativeLibavWaveformDecode
   const needsRustDecode =
     (needsKey && !useNativeLibavPrimaryDecode) ||
-    ((needsWaveform || needsPcmEnergy || (needsStructure && !structureWaveformData)) &&
-      !useNativeLibavWaveformDecode)
+    ((needsWaveform || (needsStructure && !structureWaveformData)) && !useNativeLibavWaveformDecode)
   let rust: RustBinding | null = null
   let decoded: DecodedAudioPcm | null = null
   let beatGridDecoded: DecodedBeatGridPcm | null = null
+  let energyDecoded: DecodedBeatGridPcm | null = null
   let reusableNativeLibavWaveformDecoded: DecodedAudioPcm | null = null
   const resolveRustBinding = () => {
     if (!rust) {
@@ -333,7 +345,7 @@ const analyzeKeyForFileInternal = async (
     }
     return rust
   }
-  if (needsRustDecode || useNativeLibavPrimaryDecode || needsBpm) {
+  if (needsRustDecode || useNativeLibavPrimaryDecode || needsBpm || needsEnergy) {
     reportProgress({
       stage: 'decode-start',
       needsKey,
@@ -352,11 +364,14 @@ const analyzeKeyForFileInternal = async (
         throw new Error(rustDecoded.error)
       }
       decoded = rustDecoded
-    } else {
+    } else if (needsBpm) {
       beatGridDecoded = await decodeBeatGridPcmForFile(filePath)
     }
+    if (needsEnergy) {
+      energyDecoded = await decodeSongEnergyPcmForFile(filePath)
+    }
     const decodeMs = Date.now() - decodeStartAt
-    const decodedMeta = decoded || beatGridDecoded
+    const decodedMeta = decoded || energyDecoded || beatGridDecoded
     const framesToProcess = decodedMeta
       ? estimateFramesToProcess(
           decodedMeta.totalFrames,
@@ -481,16 +496,38 @@ const analyzeKeyForFileInternal = async (
     })
   }
 
-  if (needsEnergy && decoded) {
-    const energy = calculateSongEnergyScoreFromPcm({
-      pcmData: decoded.pcmData,
-      sampleRate: decoded.sampleRate,
-      channels: decoded.channels,
-      bpm: result.bpm ?? options.cachedBpm
-    })
-    if (energy) {
+  if (needsEnergy) {
+    try {
+      if (!energyDecoded) throw new Error('missing 16 kHz mono PCM for song energy model')
+      const cachedGridProjection = projectSongBeatGridMapV2ToFixedGrid(options.cachedBeatGridMap)
+      const analyzedEnergyGrid = normalizeSongEnergyBeatGrid(result.bpm, result.firstBeatMs)
+      const cachedEnergyGrid = normalizeSongEnergyBeatGrid(
+        cachedGridProjection?.bpm ?? options.cachedBpm,
+        cachedGridProjection?.firstBeatMs
+      )
+      const energyGrid = analyzedEnergyGrid ?? cachedEnergyGrid
+      const hasValidBpm = [result.bpm, cachedGridProjection?.bpm, options.cachedBpm].some(
+        (value) => Number.isFinite(Number(value)) && Number(value) > 0
+      )
+      if (!hasValidBpm) {
+        throw new Error('song energy requires a valid beat-grid BPM')
+      }
+      if (!energyGrid) {
+        throw new Error('song energy requires a valid beat-grid first beat')
+      }
+      const energy = await analyzeSongEnergyWithModel({
+        pcmData: energyDecoded.pcmData,
+        sampleRate: energyDecoded.sampleRate,
+        channels: energyDecoded.channels,
+        bpm: energyGrid.bpm,
+        firstBeatMs: energyGrid.firstBeatMs
+      })
+      if (!energy) throw new Error('audio is silent or shorter than the model input window')
       result.energyScore = energy.energyScore
       result.energyAlgorithmVersion = energy.energyAlgorithmVersion
+      result.energyAnalysis = energy.analysis
+    } catch (error) {
+      result.energyError = error instanceof Error ? error.message : String(error)
     }
   }
 
@@ -502,17 +539,6 @@ const analyzeKeyForFileInternal = async (
       detail: 'structure-cache'
     })
     const waveformStartAt = Date.now()
-    const energy =
-      needsEnergy && result.energyScore === undefined
-        ? calculateSongEnergyScoreFromUnifiedDisplay(
-            cachedUnifiedDisplayWaveformData,
-            result.bpm ?? options.cachedBpm
-          )
-        : null
-    if (energy && needsEnergy) {
-      result.energyScore = energy.energyScore
-      result.energyAlgorithmVersion = energy.energyAlgorithmVersion
-    }
     reportProgress({
       stage: 'waveform-done',
       waveformMs: Date.now() - waveformStartAt,
@@ -574,17 +600,6 @@ const analyzeKeyForFileInternal = async (
       if (needsWaveform) {
         result.mixxxWaveformData = mixxxWaveformData
         result.unifiedDisplayWaveformData = unifiedDisplayWaveformData
-      }
-      const energy =
-        needsEnergy && result.energyScore === undefined
-          ? calculateSongEnergyScoreFromUnifiedDisplay(
-              unifiedDisplayWaveformData,
-              result.bpm ?? options.cachedBpm
-            )
-          : null
-      if (energy && needsEnergy) {
-        result.energyScore = energy.energyScore
-        result.energyAlgorithmVersion = energy.energyAlgorithmVersion
       }
       reportProgress({
         stage: 'waveform-done',

@@ -45,6 +45,7 @@ const buildMixtapeSongSnapshot = (
     originalBpm: song?.bpm,
     energyScore: song?.energyScore,
     energyAlgorithmVersion: song?.energyAlgorithmVersion,
+    energyAnalysis: song?.energyAnalysis,
     hotCues: Array.isArray(song?.hotCues) ? song.hotCues.map((cue) => ({ ...cue })) : [],
     memoryCues: Array.isArray(song?.memoryCues) ? song.memoryCues.map((cue) => ({ ...cue })) : []
   }

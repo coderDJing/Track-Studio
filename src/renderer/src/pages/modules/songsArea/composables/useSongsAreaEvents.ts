@@ -683,6 +683,7 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
       filePath?: string
       energyScore?: number
       energyAlgorithmVersion?: number
+      energyAnalysis?: ISongInfo['energyAnalysis']
     }
   ) => {
     const filePath = typeof payload?.filePath === 'string' ? payload.filePath : ''
@@ -696,25 +697,29 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
       rawEnergyAlgorithmVersion > 0
         ? Math.floor(rawEnergyAlgorithmVersion)
         : undefined
+    const energyAnalysis = payload?.energyAnalysis
 
     const applyEnergyPatch = (song: ISongInfo): ISongInfo => {
       if (
         song.energyScore === energyScore &&
         (energyAlgorithmVersion === undefined ||
-          song.energyAlgorithmVersion === energyAlgorithmVersion)
+          song.energyAlgorithmVersion === energyAlgorithmVersion) &&
+        JSON.stringify(song.energyAnalysis || null) === JSON.stringify(energyAnalysis || null)
       ) {
         return song
       }
       return {
         ...song,
         energyScore,
-        energyAlgorithmVersion: energyAlgorithmVersion ?? song.energyAlgorithmVersion
+        energyAlgorithmVersion: energyAlgorithmVersion ?? song.energyAlgorithmVersion,
+        energyAnalysis
       }
     }
 
     const changedFields = [
       'energyScore',
-      energyAlgorithmVersion !== undefined ? 'energyAlgorithmVersion' : ''
+      energyAlgorithmVersion !== undefined ? 'energyAlgorithmVersion' : '',
+      energyAnalysis !== undefined ? 'energyAnalysis' : ''
     ].filter(Boolean)
 
     if (patchOriginalSongByPath(normalizedTargetPath, applyEnergyPatch)) {

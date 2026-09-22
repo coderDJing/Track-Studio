@@ -29,7 +29,8 @@ const ANALYSIS_FIELD_KEYS = [
   'key',
   'keyAnalysisAlgorithmVersion',
   'energyScore',
-  'energyAlgorithmVersion'
+  'energyAlgorithmVersion',
+  'energyAnalysis'
 ] as const
 
 type SongAnalysisFieldKey = (typeof ANALYSIS_FIELD_KEYS)[number]

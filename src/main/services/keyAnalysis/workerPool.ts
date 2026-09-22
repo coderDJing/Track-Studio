@@ -174,7 +174,7 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
       errors.push(`bpm: ${payloadResult.bpmError}`)
     }
     if (job?.needsEnergy === true && payloadResult?.energyScore === undefined) {
-      errors.push('energy: missing energy score from analyzer')
+      errors.push(`energy: ${payloadResult?.energyError || 'missing energy score from analyzer'}`)
     }
     if (job?.needsStructure === true) {
       if (payloadResult?.songStructureError) {
@@ -457,7 +457,8 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
         await deps.persistence.persistEnergy(
           job.filePath,
           payloadResult.energyScore,
-          payloadResult.energyAlgorithmVersion
+          payloadResult.energyAlgorithmVersion,
+          payloadResult.energyAnalysis
         )
       }
 

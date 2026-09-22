@@ -6,7 +6,15 @@
     "filterByDate": "按加入时间筛选",
     "filterByNumber": "按数值筛选",
     "filterBy": {
-      "energyScore": "按能量筛选"
+      "energyScore": "按综合能量筛选",
+      "dancefloorScore": "按舞池能量筛选",
+      "danceabilityScore": "按舞蹈性筛选",
+      "rhythmicScore": "按律动筛选",
+      "dropScore": "按 Drop 冲击筛选",
+      "breakdownScore": "按 Breakdown 对比筛选",
+      "peakScore": "按峰值能量筛选",
+      "rangeScore": "按动态范围筛选",
+      "confidence": "按能量置信度筛选"
     },
     "equals": "等于",
     "greaterOrEqual": "大于等于",
@@ -54,7 +62,15 @@
     "bpmPlaceholder": "例如 128 或 128.5",
     "numberPlaceholder": "请输入数值",
     "placeholder": {
-      "energyScore": "例如 70"
+      "energyScore": "例如 70",
+      "dancefloorScore": "例如 70",
+      "danceabilityScore": "例如 80",
+      "rhythmicScore": "例如 75",
+      "dropScore": "例如 60",
+      "breakdownScore": "例如 50",
+      "peakScore": "例如 85",
+      "rangeScore": "例如 40",
+      "confidence": "例如 70"
     },
     "noResults": "未找到符合筛选条件的曲目",
     "noResultsHint": "可尝试放宽条件或清空筛选。",

@@ -13,7 +13,7 @@ describe('key analysis reanalysis targets', () => {
     })
     expect(needs).toMatchObject({
       needsKey: true,
-      needsBpm: false,
+      needsBpm: true,
       needsWaveform: false,
       needsEnergy: true,
       needsStructure: false,

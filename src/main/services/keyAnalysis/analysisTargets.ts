@@ -43,11 +43,13 @@ export const normalizeKeyAnalysisTargets = (
   targets?: KeyAnalysisTargets | null
 ): KeyAnalysisTargets | undefined => {
   if (!hasAnyKeyAnalysisTarget(targets)) return undefined
+  const energy = targets?.energy === true
   return {
     key: targets?.key === true,
-    bpm: targets?.bpm === true,
+    // v11 energy analysis uses the beat grid as a formal prerequisite.
+    bpm: targets?.bpm === true || energy,
     waveform: targets?.waveform === true,
-    energy: targets?.energy === true,
+    energy,
     structure: targets?.structure === true
   }
 }

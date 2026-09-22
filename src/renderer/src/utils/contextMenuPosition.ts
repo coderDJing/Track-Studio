@@ -75,13 +75,15 @@ export const resolveContextMenuPoint = (
   input: ContextMenuPointInput,
   options: ContextMenuPointOptions = {}
 ) => {
-  const width = Math.max(0, toFinite(options.windowWidth, window.innerWidth))
-  const height = Math.max(0, toFinite(options.windowHeight, window.innerHeight))
+  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0
+  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0
+  const width = Math.max(0, toFinite(options.windowWidth, viewportWidth))
+  const height = Math.max(0, toFinite(options.windowHeight, viewportHeight))
   const menuWidth = Math.max(0, toFinite(input.menuWidth, 0))
   const menuHeight = Math.max(0, toFinite(input.menuHeight, 0))
   const clickX = toFinite(input.clickX, 0)
   const clickY = toFinite(input.clickY, 0)
-  const padding = Math.max(0, toFinite(options.padding, 0))
+  const padding = Math.max(0, toFinite(options.padding, 8))
   const topInset = Math.max(0, toFinite(options.topInset, resolveTopDragSafeInset()))
 
   const minX = padding

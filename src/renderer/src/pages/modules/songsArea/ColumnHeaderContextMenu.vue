@@ -28,7 +28,6 @@ watchEffect(() => {
 
 const handleMenuItemClick = (column: ISongsAreaColumn) => {
   emit('toggle-column-visibility', column.key)
-  emit('update:modelValue', false) // Close the menu
 }
 
 const onMenuVModelUpdate = (value: boolean) => {

@@ -7,7 +7,12 @@ import { stripBeatThisDebugInfo } from '../../libraryCacheDb/pathResolvers'
 import { applyLiteDefaults, buildLiteSongInfo } from '../songInfoLite'
 import { log } from '../../log'
 import type { ISongInfo } from '../../../types/globals'
-import { hasUsableSongEnergyAnalysis, normalizeSongEnergyScore } from '../../../shared/songEnergy'
+import {
+  hasUsableSongEnergyAnalysis,
+  normalizeSongEnergyAnalysis,
+  normalizeSongEnergyScore,
+  type SongEnergyAnalysisV5
+} from '../../../shared/songEnergy'
 import {
   hasUsableKeyAnalysis,
   resolveCanonicalSongBeatGridV2
@@ -130,6 +135,7 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
         beatGridMap: existing?.beatGridMap,
         energyScore: existing?.energyScore,
         energyAlgorithmVersion: existing?.energyAlgorithmVersion,
+        energyAnalysis: existing?.energyAnalysis,
         songStructure: existing?.songStructure,
         hasWaveform: existing?.hasWaveform
       })
@@ -192,6 +198,7 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
         beatGridMap: existing?.beatGridMap,
         energyScore: existing?.energyScore,
         energyAlgorithmVersion: existing?.energyAlgorithmVersion,
+        energyAnalysis: existing?.energyAnalysis,
         songStructure: existing?.songStructure,
         hasWaveform: existing?.hasWaveform
       })
@@ -286,6 +293,7 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
           beatGridMap: existingBeatGridMap ?? existing?.beatGridMap,
           energyScore: existing?.energyScore,
           energyAlgorithmVersion: existing?.energyAlgorithmVersion,
+          energyAnalysis: existing?.energyAnalysis,
           songStructure: existing?.songStructure,
           hasWaveform: existing?.hasWaveform
         }
@@ -329,6 +337,7 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
         beatGridMap,
         energyScore: existing?.energyScore,
         energyAlgorithmVersion: existing?.energyAlgorithmVersion,
+        energyAnalysis: existing?.energyAnalysis,
         songStructure: existing?.songStructure,
         hasWaveform: existing?.hasWaveform
       }
@@ -398,6 +407,7 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
         beatGridAlgorithmVersion: normalizedBeatGridAlgorithmVersion,
         energyScore: existing?.energyScore,
         energyAlgorithmVersion: existing?.energyAlgorithmVersion,
+        energyAnalysis: existing?.energyAnalysis,
         songStructure: undefined,
         hasWaveform: existing?.hasWaveform
       })
@@ -487,6 +497,7 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
         beatGridStatus: BEAT_GRID_STATUS_NO_BPM,
         energyScore: existing?.energyScore,
         energyAlgorithmVersion: existing?.energyAlgorithmVersion,
+        energyAnalysis: existing?.energyAnalysis,
         songStructure: existing?.songStructure,
         hasWaveform: existing?.hasWaveform
       })
@@ -511,6 +522,7 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
         beatGridStatus: BEAT_GRID_STATUS_NO_BPM,
         energyScore: existing?.energyScore,
         energyAlgorithmVersion: existing?.energyAlgorithmVersion,
+        energyAnalysis: existing?.energyAnalysis,
         songStructure: undefined,
         hasWaveform: existing?.hasWaveform
       })
@@ -610,7 +622,14 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
       Object.assign(job, { needsKey, needsBpm, needsWaveform, needsEnergy, needsStructure })
     }
     const resolveUsableEnergy = (
-      info: { energyScore?: unknown; energyAlgorithmVersion?: unknown } | null | undefined
+      info:
+        | {
+            energyScore?: unknown
+            energyAlgorithmVersion?: unknown
+            energyAnalysis?: SongEnergyAnalysisV5
+          }
+        | null
+        | undefined
     ) => {
       if (!hasUsableSongEnergyAnalysis(info)) return null
       const energyScore = normalizeSongEnergyScore(info?.energyScore)
@@ -619,7 +638,8 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
       return {
         energyScore,
         energyAlgorithmVersion:
-          Number.isFinite(version) && version > 0 ? Math.floor(version) : undefined
+          Number.isFinite(version) && version > 0 ? Math.floor(version) : undefined,
+        energyAnalysis: info?.energyAnalysis
       }
     }
     try {
@@ -722,6 +742,7 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
             beatGridMap: hasCompleteGrid ? cachedGrid.beatGridMap : undefined,
             energyScore: cachedEnergy?.energyScore,
             energyAlgorithmVersion: cachedEnergy?.energyAlgorithmVersion,
+            energyAnalysis: cachedEnergy?.energyAnalysis,
             songStructure: cached.info?.songStructure,
             hasWaveform: false
           })
@@ -769,6 +790,7 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
             beatGridMap: existingDone?.beatGridMap,
             energyScore: existingDone?.energyScore,
             energyAlgorithmVersion: existingDone?.energyAlgorithmVersion,
+            energyAnalysis: existingDone?.energyAnalysis,
             songStructure: existingDone?.songStructure,
             hasWaveform: true
           })
@@ -829,6 +851,7 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
               beatGridMap: hasCompleteGrid ? cachedGrid.beatGridMap : undefined,
               energyScore: cachedEnergy?.energyScore,
               energyAlgorithmVersion: cachedEnergy?.energyAlgorithmVersion,
+              energyAnalysis: cachedEnergy?.energyAnalysis,
               songStructure: cached.info?.songStructure,
               hasWaveform: cached.hasWaveform
             })

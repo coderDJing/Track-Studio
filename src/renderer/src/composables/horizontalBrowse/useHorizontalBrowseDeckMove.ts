@@ -63,6 +63,7 @@ const buildSongSnapshot = (filePath: string, song?: ISongInfo | null): ISongInfo
     key: song?.key,
     energyScore: song?.energyScore,
     energyAlgorithmVersion: song?.energyAlgorithmVersion,
+    energyAnalysis: song?.energyAnalysis,
     hotCues: Array.isArray(song?.hotCues) ? song.hotCues.map((cue) => ({ ...cue })) : [],
     memoryCues: Array.isArray(song?.memoryCues) ? song.memoryCues.map((cue) => ({ ...cue })) : [],
     mixOrder: song?.mixOrder,

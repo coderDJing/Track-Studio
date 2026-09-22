@@ -80,7 +80,7 @@ describe('useHorizontalBrowseDeckSongSync', () => {
     expect(updated.songStructure).toEqual(songStructure)
   })
 
-  it('网格更新只替换 v2 map，不把投影根字段写回歌曲副本', () => {
+  it('网格更新同步明确支持的 BPM，但不把其他投影根字段写回歌曲副本', () => {
     const song = createSong(createStructure('groove'))
     const beatGridMap = createSongBeatGridMapV2FromFixedGrid({
       bpm: 130,
@@ -101,7 +101,7 @@ describe('useHorizontalBrowseDeckSongSync', () => {
     const updated = mergeHorizontalBrowseSongWithSharedGrid(song, legacyShapedPayload)
 
     expect(updated.beatGridMap?.signature).toBe(beatGridMap.signature)
-    expect(updated.bpm).toBe(128)
+    expect(updated.bpm).toBe(130)
     expect(updated.firstBeatMs).toBe(0)
     expect(updated.downbeatBeatOffset).toBeUndefined()
     expect(updated.beatGridSource).toBeUndefined()

@@ -27,6 +27,7 @@ export function buildSetAnalysisSnapshot(
     if (hasPositiveInteger(source.energyAlgorithmVersion)) {
       snapshot.energyAlgorithmVersion = source.energyAlgorithmVersion
     }
+    if (source.energyAnalysis) snapshot.energyAnalysis = source.energyAnalysis
   }
   if (hasUsableSongStructureAnalysis(source)) {
     snapshot.songStructure = normalizeSongStructureAnalysis(source.songStructure)

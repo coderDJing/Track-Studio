@@ -3,6 +3,7 @@ import { normalizeBpmDisplayScaled } from '@renderer/utils/bpm'
 import { getKeyDisplayText, getKeySortText } from '@shared/keyDisplay'
 import { normalizeAddedAtMs, matchTimestampByDateFilter } from '@shared/songAddedAt'
 import { matchComparableByFilter } from '@shared/filterCompare'
+import { getSongListFieldRawValue } from '@renderer/utils/songListFieldDisplay'
 import type { RekordboxSourceKind } from '@shared/rekordboxSources'
 import type {
   IPioneerPlaylistTrack,
@@ -31,6 +32,7 @@ export type PioneerSongSnapshot = {
   originalBpm: number | undefined
   energyScore: number | undefined
   energyAlgorithmVersion: number | undefined
+  energyAnalysis: ISongInfo['energyAnalysis']
   hotCues: ISongHotCue[]
   memoryCues: ISongMemoryCue[]
 }
@@ -49,7 +51,7 @@ type UsePioneerSongsProjectionParams = {
   emitPioneerSongsAreaLog: (event: string, payload?: Record<string, unknown>) => void
 }
 
-const getSongField = (song: ISongInfo, key: string): unknown => song[key as keyof ISongInfo]
+const getSongField = (song: ISongInfo, key: string): unknown => getSongListFieldRawValue(song, key)
 
 const normalizePath = (value: string) =>
   String(value || '')
@@ -204,6 +206,7 @@ export const usePioneerSongsProjection = (params: UsePioneerSongsProjectionParam
       originalBpm: song.bpm,
       energyScore: song.energyScore,
       energyAlgorithmVersion: song.energyAlgorithmVersion,
+      energyAnalysis: song.energyAnalysis,
       hotCues: Array.isArray(song.hotCues) ? song.hotCues.map((cue) => ({ ...cue })) : [],
       memoryCues: Array.isArray(song.memoryCues) ? song.memoryCues.map((cue) => ({ ...cue })) : []
     }
@@ -316,6 +319,17 @@ export const usePioneerSongsProjection = (params: UsePioneerSongsProjectionParam
         filtered = [...filtered].sort((a, b) => {
           const valueA = Number(a.addedAtMs)
           const valueB = Number(b.addedAtMs)
+          const validA = Number.isFinite(valueA)
+          const validB = Number.isFinite(valueB)
+          if (!validA && !validB) return 0
+          if (!validA) return 1
+          if (!validB) return -1
+          return sortedCol.order === 'asc' ? valueA - valueB : valueB - valueA
+        })
+      } else if (sortedCol.filterType === 'number') {
+        filtered = [...filtered].sort((a, b) => {
+          const valueA = Number(getSongField(a, sortedCol.key))
+          const valueB = Number(getSongField(b, sortedCol.key))
           const validA = Number.isFinite(valueA)
           const validB = Number.isFinite(valueB)
           if (!validA && !validB) return 0

@@ -48,6 +48,7 @@ export const createPersistWaveform = (params: CreateWaveformPersistenceParams) =
         beatGridMap: existing?.beatGridMap,
         energyScore: existing?.energyScore,
         energyAlgorithmVersion: existing?.energyAlgorithmVersion,
+        energyAnalysis: existing?.energyAnalysis,
         songStructure: existing?.songStructure,
         hasWaveform: listRoot ? Boolean(surfaceData) : true
       })
@@ -120,6 +121,7 @@ export const createPersistWaveform = (params: CreateWaveformPersistenceParams) =
         beatGridMap: existing?.beatGridMap,
         energyScore: existing?.energyScore,
         energyAlgorithmVersion: existing?.energyAlgorithmVersion,
+        energyAnalysis: existing?.energyAnalysis,
         songStructure: existing?.songStructure,
         hasWaveform: true
       })

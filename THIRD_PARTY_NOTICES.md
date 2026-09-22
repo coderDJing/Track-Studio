@@ -99,6 +99,25 @@ component licenses below.
 - Dependency package metadata and license files are retained in the lockfiles,
   package metadata, Cargo metadata, and installed dependency folders.
 
+## Essentia MusiCNN and DEAM Model Weights
+
+- Repository path: `resources/models/song-energy`
+- Source: https://essentia.upf.edu/models.html
+- Copyright: Universitat Pompeu Fabra 2019-2020
+- License: Creative Commons Attribution-NonCommercial-ShareAlike 4.0
+- Current use: local MusiCNN embedding extraction followed by DEAM and emoMusic
+  arousal regressors, plus beat-aware local acoustic features for the v6
+  dancefloor score.
+- The complete upstream license is retained at
+  `resources/models/song-energy/ESSENTIA_MODELS_LICENSE.txt`.
+
+## ONNX Runtime
+
+- Project: ONNX Runtime (`onnxruntime-node`)
+- Source: https://github.com/microsoft/onnxruntime
+- License: MIT
+- Current use: local CPU inference for the bundled song-energy models.
+
 ## MSAF Spectral Clustering Derived Logic
 
 - Project: Music Structure Analysis Framework (`urinieto/msaf`)
