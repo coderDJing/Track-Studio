@@ -1,8 +1,9 @@
 import confirm from '@renderer/components/confirmDialog'
+import { t } from '@renderer/utils/translate'
 
 const showDevSongListTraceDialog = async (content: string[]) => {
   await confirm({
-    title: 'Trace 录制',
+    title: t('devTrace.title'),
     content,
     confirmShow: false,
     canCopyText: true,
@@ -43,7 +44,7 @@ const startDevSongListTrace = async () => {
       error: error instanceof Error ? error.message : String(error)
     })
     await showDevSongListTraceDialog([
-      `开始 Trace 录制失败：${error instanceof Error ? error.message : String(error)}`
+      t('devTrace.startFailed', { error: error instanceof Error ? error.message : String(error) })
     ])
   }
 }
@@ -66,7 +67,7 @@ const stopDevSongListTrace = async () => {
       error: error instanceof Error ? error.message : String(error)
     })
     await showDevSongListTraceDialog([
-      `结束 Trace 录制失败：${error instanceof Error ? error.message : String(error)}`
+      t('devTrace.stopFailed', { error: error instanceof Error ? error.message : String(error) })
     ])
   }
 }
@@ -123,11 +124,11 @@ const handleDevSongListTraceExported = async (
   const startedPlaylistName = String(payload?.startedPlaylistName || '').trim()
   const endedPlaylistName = String(payload?.endedPlaylistName || '').trim()
   const lines = [
-    'Trace 已导出。',
-    filePath ? `文件：${filePath}` : '',
-    durationMs > 0 ? `录制时长：${durationMs} ms` : '',
-    startedPlaylistName ? `开始歌单：${startedPlaylistName}` : '',
-    endedPlaylistName ? `结束歌单：${endedPlaylistName}` : ''
+    t('devTrace.exported'),
+    filePath ? t('devTrace.file', { filePath }) : '',
+    durationMs > 0 ? t('devTrace.duration', { durationMs }) : '',
+    startedPlaylistName ? t('devTrace.startedPlaylist', { playlistName: startedPlaylistName }) : '',
+    endedPlaylistName ? t('devTrace.endedPlaylist', { playlistName: endedPlaylistName }) : ''
   ].filter(Boolean)
   logDevSongListTraceInfo('歌单 trace 已导出，现在可以关闭窗口了', {
     filePath,
@@ -149,7 +150,11 @@ const handleDevSongListTraceError = async (
     message
   })
   await showDevSongListTraceDialog(
-    ['Trace 录制失败。', stage ? `阶段：${stage}` : '', message || '未知错误'].filter(Boolean)
+    [
+      t('devTrace.recordingFailed'),
+      stage ? t('devTrace.stage', { stage }) : '',
+      message || t('devTrace.unknownError')
+    ].filter(Boolean)
   )
 }
 

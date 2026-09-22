@@ -171,7 +171,7 @@ export const usePlaylistTrackNumbers = (params: UsePlaylistTrackNumbersParams) =
       ? ''
       : libraryUtils.findDirPathByUuid(songsAreaState.songListUUID)
     if (!isSetPlaylistTrackNumberList.value && !songListPath) {
-      throw new Error('目标歌单路径不存在')
+      throw new Error(t('tracks.playlistTrackNumbersMissingPath'))
     }
     const isNoop = isSameOrderAsCurrentTrackNumbers(orderedIds)
     if (isNoop) {
@@ -200,7 +200,7 @@ export const usePlaylistTrackNumbers = (params: UsePlaylistTrackNumbersParams) =
           ? result !== true
           : !result?.updated || Number(result?.total || 0) <= 0
       ) {
-        throw new Error('真实序号写入失败')
+        throw new Error(t('tracks.playlistTrackNumbersWriteFailed'))
       }
       try {
         emitter.emit('playlistContentChanged', { uuids: [songsAreaState.songListUUID] })

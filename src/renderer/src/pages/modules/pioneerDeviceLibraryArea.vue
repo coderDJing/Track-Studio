@@ -64,7 +64,7 @@ const title = computed(() => {
   if (runtime.pioneerDeviceLibrary.selectedSourceName) {
     return runtime.pioneerDeviceLibrary.selectedSourceName
   }
-  return isDesktopSource.value ? 'Rekordbox 本机库' : 'Pioneer USB'
+  return isDesktopSource.value ? t('pioneer.desktopLibraryName') : 'Pioneer USB'
 })
 const originalTreeNodes = computed(() => runtime.pioneerDeviceLibrary.treeNodes || [])
 

@@ -3,6 +3,7 @@ import BeatGridMetronomeControls from '@renderer/components/BeatGridMetronomeCon
 import MixtapeBeatAlignGridAdjustToolbar from '@renderer/components/mixtapeBeatAlignGridAdjustToolbar.vue'
 import HorizontalBrowseDeckMoveButton from '@renderer/components/HorizontalBrowseDeckMoveButton.vue'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
+import { t } from '@renderer/utils/translate'
 import type { HorizontalBrowseDeckMoveTargetLibrary } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseDeckMove'
 import type { LibraryTransferActionMode } from '@renderer/utils/libraryTransfer'
 import type { HorizontalBrowseTempoNudgeDirection } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseDeckTempoNudge'
@@ -157,8 +158,8 @@ const handleTempoNudgeKeyUp = (direction: HorizontalBrowseTempoNudgeDirection) =
             type="button"
             class="overview__loop-arrow"
             :disabled="props.loopDisabled"
-            title="Loop 缩短"
-            aria-label="Loop 缩短"
+            :title="t('horizontalBrowse.loopShorten')"
+            :aria-label="t('horizontalBrowse.loopShorten')"
             @click="emit('loop-step-down')"
           >
             <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -184,8 +185,8 @@ const handleTempoNudgeKeyUp = (direction: HorizontalBrowseTempoNudgeDirection) =
             type="button"
             class="overview__loop-arrow"
             :disabled="props.loopDisabled"
-            title="Loop 加长"
-            aria-label="Loop 加长"
+            :title="t('horizontalBrowse.loopLengthen')"
+            :aria-label="t('horizontalBrowse.loopLengthen')"
             @click="emit('loop-step-up')"
           >
             <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -205,7 +206,7 @@ const handleTempoNudgeKeyUp = (direction: HorizontalBrowseTempoNudgeDirection) =
           v-if="props.showTempoNudge !== false"
           class="overview__toolbar-group overview__tempo-nudge-control"
           role="group"
-          aria-label="临时速度调整"
+          :aria-label="t('horizontalBrowse.tempoNudgeGroup')"
         >
           <bubbleBoxTrigger
             wrapper-tag="span"
@@ -214,8 +215,8 @@ const handleTempoNudgeKeyUp = (direction: HorizontalBrowseTempoNudgeDirection) =
             class="overview__tempo-nudge-btn"
             :class="{ 'is-active': props.tempoNudgeActiveDirection === 'fast' }"
             :disabled="!props.songPresent"
-            title="按住临时加速"
-            aria-label="按住临时加速"
+            :title="t('horizontalBrowse.tempoNudgeFaster')"
+            :aria-label="t('horizontalBrowse.tempoNudgeFaster')"
             @pointerdown="handleTempoNudgePointerDown('fast', $event)"
             @pointerup="handleTempoNudgePointerEnd('fast', $event)"
             @pointercancel="handleTempoNudgePointerEnd('fast', $event)"
@@ -237,8 +238,8 @@ const handleTempoNudgeKeyUp = (direction: HorizontalBrowseTempoNudgeDirection) =
             class="overview__tempo-nudge-btn"
             :class="{ 'is-active': props.tempoNudgeActiveDirection === 'slow' }"
             :disabled="!props.songPresent"
-            title="按住临时减速"
-            aria-label="按住临时减速"
+            :title="t('horizontalBrowse.tempoNudgeSlower')"
+            :aria-label="t('horizontalBrowse.tempoNudgeSlower')"
             @pointerdown="handleTempoNudgePointerDown('slow', $event)"
             @pointerup="handleTempoNudgePointerEnd('slow', $event)"
             @pointercancel="handleTempoNudgePointerEnd('slow', $event)"

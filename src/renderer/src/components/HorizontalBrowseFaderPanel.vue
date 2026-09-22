@@ -2,6 +2,7 @@
 import { computed, toRef } from 'vue'
 import type { CSSProperties } from 'vue'
 import { useHorizontalBrowseOutput } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseOutput'
+import { t } from '@renderer/utils/translate'
 
 type HorizontalBrowseOutputTransport = {
   state: {
@@ -106,7 +107,9 @@ defineExpose({
       class="fader-panel__toggle"
       type="button"
       :aria-expanded="props.expanded"
-      :aria-label="props.expanded ? '收起双轨控制面板' : '展开双轨控制面板'"
+      :aria-label="
+        t(props.expanded ? 'horizontalBrowse.collapseFaderPanel' : 'horizontalBrowse.expandFaderPanel')
+      "
       @click.stop="togglePanelExpanded"
     >
       <svg viewBox="0 0 16 16" aria-hidden="true" :class="{ 'is-flipped': props.expanded }">
@@ -132,7 +135,13 @@ defineExpose({
         type="button"
         :disabled="props.transportSyncDisabled"
         :aria-pressed="props.transportSyncEnabled"
-        :aria-label="props.transportSyncEnabled ? '关闭双轨连接同步' : '开启双轨连接同步'"
+        :aria-label="
+          t(
+            props.transportSyncEnabled
+              ? 'horizontalBrowse.transportSyncOn'
+              : 'horizontalBrowse.transportSyncOff'
+          )
+        "
         @click.stop="emit('toggle-transport-sync')"
       >
         <svg

@@ -84,6 +84,7 @@ import {
 } from '@renderer/composables/horizontalBrowse/horizontalBrowseModeShellPresentationResolvers'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
 import { resolveInitialPlaybackRangeStartSec } from '@shared/playbackRange'
+import { t } from '@renderer/utils/translate'
 
 type DeckKey = HorizontalBrowseDeckKey
 const props = withDefaults(defineProps<{ viewMode?: HorizontalBrowseViewMode }>(), {
@@ -707,10 +708,12 @@ const resolveDeckToolbarState = (deck: DeckKey) => {
       loopBeatLabel: resolveDeckLoopBeatLabel(deck),
       loopActive: isDeckLoopActive(deck),
       loopDisabled: resolveDeckLoopDisabled(deck),
-      bpmInputTitle: isEditMode.value ? EDIT_MODE_BPM_INPUT_TITLE : DUAL_MODE_BPM_INPUT_TITLE,
+      bpmInputTitle: t(
+        isEditMode.value ? EDIT_MODE_BPM_INPUT_TITLE : DUAL_MODE_BPM_INPUT_TITLE
+      ),
       bpmInputFirst: isEditMode.value,
       showTapButton: isEditMode.value,
-      tapBpmTitle: isEditMode.value ? EDIT_MODE_TAP_BPM_TITLE : ''
+      tapBpmTitle: isEditMode.value ? t(EDIT_MODE_TAP_BPM_TITLE) : ''
     }
   )
   const editSaving = isEditMode.value && deck === 'top' && audioEdit.saving.value

@@ -113,7 +113,7 @@ const selectedSourceName = computed(() => {
   if (runtime.pioneerDeviceLibrary.selectedSourceName) {
     return runtime.pioneerDeviceLibrary.selectedSourceName
   }
-  return isDesktopSource.value ? 'Rekordbox 本机库' : 'Pioneer USB'
+  return isDesktopSource.value ? t('pioneer.desktopLibraryName') : 'Pioneer USB'
 })
 const selectedPlaylistId = computed(() => runtime.pioneerDeviceLibrary.selectedPlaylistId || 0)
 const selectedSourceRootPath = computed(

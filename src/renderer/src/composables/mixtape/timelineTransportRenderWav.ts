@@ -1,4 +1,5 @@
 import { applyTimelineTransportSync } from '@renderer/composables/mixtape/timelineTransportSync'
+import { t } from '@renderer/utils/translate'
 import {
   createTransportBufferSource,
   type TransportPlayableAudioContext,
@@ -604,7 +605,7 @@ export const createTimelineTransportRenderWavModule = (ctx: TimelineTransportRen
     } catch (error) {
       disposeOutputTrackNodes(nodes)
       console.error('[mixtape-output] R3 initialisation failed, export aborted', error)
-      throw new Error('R3 主速度引擎初始化失败')
+      throw new Error(t('mixtape.transportPlaybackInitializeFailed'))
     }
 
     emitProgress({
