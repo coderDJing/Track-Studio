@@ -7,7 +7,7 @@ settings:
 overrides:
   '@electron/rebuild>node-abi': ^4.33.0
 
-packageExtensionsChecksum: sha256-AC+WK/02n661peDx1a/ZpSobb77KyG1pEs+GeahwgX0=
+packageExtensionsChecksum: 794d22400da8ed5bdf9358e750feb7bf
 
 importers:
 
