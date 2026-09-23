@@ -520,10 +520,10 @@ const loadWaveform = async () => {
 }
 
 watch(
-  () => [
-    props.song?.filePath ?? '',
-    props.song?.externalAnalyzePath ?? props.song?.pioneerAnalyzePath ?? '',
-    props.song?.externalWaveformRootPath ?? props.song?.pioneerDeviceRootPath ?? ''
+  [
+    () => props.song?.filePath ?? '',
+    () => props.song?.externalAnalyzePath ?? props.song?.pioneerAnalyzePath ?? '',
+    () => props.song?.externalWaveformRootPath ?? props.song?.pioneerDeviceRootPath ?? ''
   ],
   () => {
     void loadWaveform()
