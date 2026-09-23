@@ -1,6 +1,7 @@
 import path = require('path')
 import fs = require('fs-extra')
 import { operateHiddenFile, resolveLibraryPath } from '../utils'
+import { log } from '../log'
 import * as LibraryCacheDb from '../libraryCacheDb'
 import {
   extractCoverOffMainThread,
@@ -8,10 +9,13 @@ import {
   type CoverExtractionTiming
 } from './coverExtractionWorker'
 import { runPlaybackAwareBackgroundFileIo, type FileIoPriority } from './playbackForegroundActivity'
+import { isPackagedRcBuild } from './rcDiagnostics'
 
 const DISPLAY_CACHE_MARKER = '.display-v1'
 const COVER_THUMB_MAX_CONCURRENCY = 3
 const COVER_CACHE_DIRECTORY_TIMEOUT_MS = 8_000
+// RC 诊断：定位封面目录准备阶段的偶发长停顿；确认根因并稳定后移除。
+const COVER_CACHE_DIRECTORY_SLOW_LOG_THRESHOLD_MS = 2_000
 const RECENT_COVER_DIAGNOSTIC_TTL_MS = 60_000
 const MAX_RECENT_COVER_DIAGNOSTICS = 8
 const MAX_ACTIVE_COVER_DIAGNOSTICS = 12
@@ -63,24 +67,66 @@ type CoverDiagnosticOperation = {
 const activeCoverDiagnostics = new Map<number, CoverDiagnosticOperation>()
 const recentCoverDiagnostics: CoverDiagnosticOperation[] = []
 
-const prepareCoverCacheDirectory = async (coversDir: string): Promise<void> => {
+const prepareCoverCacheDirectory = async (
+  coversDir: string,
+  diagnostic?: CoverDiagnosticOperation
+): Promise<void> => {
+  const diagnosticEnabled = isPackagedRcBuild()
+  const startedAtMs = Date.now()
+  const stageDurationsMs: Record<string, number> = {}
+  let stage = 'ensuring-directory'
+  let stageStartedAtMs = startedAtMs
+  let timeoutDelayMs: number | null = null
+  let failure: unknown = null
+  const markStage = (nextStage: string) => {
+    if (!diagnosticEnabled) return
+    const nowMs = Date.now()
+    stageDurationsMs[stage] = (stageDurationsMs[stage] || 0) + nowMs - stageStartedAtMs
+    stage = nextStage
+    stageStartedAtMs = nowMs
+  }
   let timeout: NodeJS.Timeout | null = null
   try {
     await Promise.race([
       (async () => {
         await fs.ensureDir(coversDir)
-        await operateHiddenFile(coversDir, async () => {})
+        await operateHiddenFile(
+          coversDir,
+          async () => {},
+          (step) => markStage(`hidden:${step}`)
+        )
       })(),
       new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(
-          () => reject(new Error('cover cache directory preparation timed out')),
-          COVER_CACHE_DIRECTORY_TIMEOUT_MS
-        )
+        timeout = setTimeout(() => {
+          timeoutDelayMs = Math.max(0, Date.now() - startedAtMs - COVER_CACHE_DIRECTORY_TIMEOUT_MS)
+          reject(new Error('cover cache directory preparation timed out'))
+        }, COVER_CACHE_DIRECTORY_TIMEOUT_MS)
         timeout.unref?.()
       })
     ])
+  } catch (error) {
+    failure = error
+    throw error
   } finally {
     if (timeout) clearTimeout(timeout)
+    if (diagnosticEnabled) {
+      markStage('completed')
+      const elapsedMs = Date.now() - startedAtMs
+      if (failure || elapsedMs >= COVER_CACHE_DIRECTORY_SLOW_LOG_THRESHOLD_MS) {
+        const details = {
+          operationId: diagnostic?.id,
+          kind: diagnostic?.kind,
+          fileName: diagnostic?.fileName,
+          elapsedMs,
+          stageDurationsMs,
+          timeoutDelayMs,
+          outcome: timeoutDelayMs !== null ? 'timeout' : failure ? 'error' : 'success',
+          error: failure instanceof Error ? failure.message : failure ? String(failure) : undefined
+        }
+        if (failure) log.error('[cover-cache] directory preparation failed', details)
+        else log.warn('[cover-cache] slow directory preparation', details)
+      }
+    }
   }
 }
 
@@ -344,7 +390,7 @@ async function loadSongCoverThumb(
     }
     if (useDiskCache && coversDir) {
       if (diagnostic) markCoverDiagnosticPhase(diagnostic, 'preparing-cache-directory')
-      await prepareCoverCacheDirectory(coversDir)
+      await prepareCoverCacheDirectory(coversDir, diagnostic)
     }
 
     // 命中索引则直接返回
@@ -486,7 +532,7 @@ async function persistSongCoverDisplayCacheNow(params: {
     if (!(await fs.pathExists(resolvedRoot)) || context?.shouldAbort?.()) return false
     const coversDir = path.join(resolvedRoot, '.frkb_covers')
     if (diagnostic) markCoverDiagnosticPhase(diagnostic, 'preparing-cache-directory')
-    await prepareCoverCacheDirectory(coversDir)
+    await prepareCoverCacheDirectory(coversDir, diagnostic)
     const ext = displayCacheExtFromFormat(format)
     const targetPath = path.join(coversDir, `${imageHash}${ext}`)
     if (diagnostic) markCoverDiagnosticPhase(diagnostic, 'preparing-persist-data')
