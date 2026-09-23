@@ -20,6 +20,8 @@ import { copyPioneerNodeToLibrary } from '@renderer/composables/rekordboxDesktop
 import { copyPioneerPlaylistToMixtape } from '@renderer/composables/rekordboxDesktop/usePioneerCopyToMixtape'
 import { importCuratedArtistsFromPioneerSource } from '@renderer/composables/rekordboxDesktop/useImportCuratedArtists'
 import { usePioneerDeviceTreeDrag } from '@renderer/composables/rekordboxDesktop/usePioneerDeviceTreeDrag'
+import { filterPlaylistTreeByName } from '@renderer/composables/rekordboxDesktop/filterPlaylistTree'
+import { useExternalPlaylistActions } from '@renderer/composables/externalLibrary/useExternalPlaylistActions'
 import { openSetDurationForRekordboxPlaylist } from '@renderer/utils/rekordboxPlaylistSetDuration'
 import {
   collectRekordboxSimilarTracksSeeds,
@@ -32,15 +34,15 @@ import {
   normalizeKeyword,
   sanitizeNodeName
 } from '@renderer/composables/rekordboxDesktop/useRekordboxTreeUtils'
-import type { IPioneerPlaylistTreeNode, IPioneerPlaylistTrack } from '../../../../types/globals'
+import type { IPioneerPlaylistTreeNode } from '../../../../types/globals'
 import type { RekordboxSourceKind, RekordboxSourceLibraryType } from '@shared/rekordboxSources'
 import type {
   RekordboxDesktopCreateEmptyPlaylistResponse,
   RekordboxDesktopCreateFolderResponse,
   RekordboxDesktopDeletePlaylistResponse,
-  RekordboxDesktopRemovePlaylistTracksResponse,
   RekordboxDesktopRenamePlaylistResponse
 } from '@shared/rekordboxDesktopPlaylist'
+import { useCleanMissingFiles } from '@renderer/composables/rekordboxDesktop/useCleanMissingFiles'
 
 const runtime = useRuntimeStore()
 const collapseButtonRef = useTemplateRef<HTMLDivElement>('collapseButtonRef')
@@ -51,6 +53,18 @@ const localLibraryCopying = ref(false)
 const isDesktopSource = computed(
   () => runtime.pioneerDeviceLibrary.selectedSourceKind === 'desktop'
 )
+const isExternalSource = computed(
+  () =>
+    Boolean(runtime.externalDjLibrary.selectedKind) &&
+    runtime.externalDjLibrary.selectedSourceKey === runtime.pioneerDeviceLibrary.selectedSourceKey
+)
+const isEditableSource = computed(
+  () =>
+    isDesktopSource.value ||
+    (isExternalSource.value && runtime.externalDjLibrary.selectedKind === 'serato')
+)
+const sourceText = (rekordboxKey: string, seratoKey: string, values?: Record<string, unknown>) =>
+  t(isExternalSource.value ? seratoKey : rekordboxKey, values)
 const isCopyableSource = computed(
   () =>
     runtime.pioneerDeviceLibrary.selectedSourceKind === 'desktop' ||
@@ -90,6 +104,11 @@ const syncRuntimeDesktopTree = (nodes: IPioneerPlaylistTreeNode[], preferredPlay
   const sourceKey = String(runtime.pioneerDeviceLibrary.selectedSourceKey || '').trim()
   const rootPath = String(runtime.pioneerDeviceLibrary.selectedSourceRootPath || '').trim()
   if (!sourceKey || !rootPath) return
+  if (isExternalSource.value) {
+    runtime.pioneerDeviceLibrary.treeNodes = nodes
+    runtime.pioneerDeviceLibrary.selectedPlaylistId = preferredPlaylistId
+    return
+  }
 
   const sourceCacheKey = buildRekordboxSourceCacheKey({
     sourceKind: 'desktop',
@@ -106,6 +125,30 @@ const syncRuntimeDesktopTree = (nodes: IPioneerPlaylistTreeNode[], preferredPlay
 }
 
 const refreshDesktopTree = async (preferredPlaylistId = 0) => {
+  if (isExternalSource.value) {
+    const kind = runtime.externalDjLibrary.selectedKind
+    const sourcePath = runtime.externalDjLibrary.selectedSourcePath
+    if (!kind || !sourcePath) return
+    const result = (await window.electron.ipcRenderer.invoke('external-library:load-tree', {
+      kind,
+      path: sourcePath
+    })) as { treeNodes?: IPioneerPlaylistTreeNode[] }
+    const treeNodes = Array.isArray(result?.treeNodes) ? result.treeNodes : []
+    const preferredNode =
+      preferredPlaylistId > 0 ? findNodeById(treeNodes, preferredPlaylistId) : null
+    const currentSelectedNode =
+      Number(runtime.pioneerDeviceLibrary.selectedPlaylistId) > 0
+        ? findNodeById(treeNodes, Number(runtime.pioneerDeviceLibrary.selectedPlaylistId))
+        : null
+    const nextSelectedId =
+      preferredPlaylistId > 0 && isPlayablePlaylistNode(preferredNode)
+        ? preferredPlaylistId
+        : isPlayablePlaylistNode(currentSelectedNode)
+          ? Number(runtime.pioneerDeviceLibrary.selectedPlaylistId) || 0
+          : 0
+    syncRuntimeDesktopTree(treeNodes, nextSelectedId)
+    return
+  }
   const result = (await window.electron.ipcRenderer.invoke(
     buildRekordboxSourceChannel('desktop', 'load-tree')
   )) as {
@@ -128,12 +171,18 @@ const refreshDesktopTree = async (preferredPlaylistId = 0) => {
 }
 
 const showFailureDialog = async (message: string, logPath?: string) => {
-  const content = [t('rekordboxDesktop.failedReason', { message })]
+  const content = [
+    sourceText('rekordboxDesktop.failedReason', 'library.externalLibraryFailedReason', { message })
+  ]
   if (logPath) {
-    content.push(t('rekordboxDesktop.failureLogHint', { path: logPath }))
+    content.push(
+      sourceText('rekordboxDesktop.failureLogHint', 'library.externalLibraryFailureLogHint', {
+        path: logPath
+      })
+    )
   }
   await confirm({
-    title: t('rekordboxDesktop.failureTitle'),
+    title: sourceText('rekordboxDesktop.failureTitle', 'library.externalLibraryFailureTitle'),
     content,
     confirmShow: false,
     innerWidth: 620,
@@ -151,41 +200,20 @@ const getDialogErrorMessage = (error: unknown, fallback: string) => {
   return String(error || fallback)
 }
 
-const filterTreeByPlaylistName = (
-  nodes: IPioneerPlaylistTreeNode[],
-  keyword: string
-): IPioneerPlaylistTreeNode[] => {
-  const normalizedKeyword = keyword.trim().toLowerCase()
-  if (!normalizedKeyword) return nodes
-
-  const walk = (items: IPioneerPlaylistTreeNode[]): IPioneerPlaylistTreeNode[] => {
-    const result: IPioneerPlaylistTreeNode[] = []
-    for (const item of items) {
-      const children = Array.isArray(item.children) ? walk(item.children) : []
-      if (item.isFolder) {
-        if (children.length > 0) {
-          result.push({
-            ...item,
-            children
-          })
-        }
-        continue
-      }
-      if (item.name.toLowerCase().includes(normalizedKeyword)) {
-        result.push({
-          ...item,
-          children: []
-        })
-      }
-    }
-    return result
-  }
-
-  return walk(nodes)
-}
+const externalPlaylistActions = useExternalPlaylistActions({
+  runtime,
+  originalTreeNodes,
+  playlistSearch,
+  isExternalSource,
+  isEditableSource,
+  dialogWriting,
+  runWithDialogWriting,
+  refreshTree: refreshDesktopTree,
+  showFailureDialog
+})
 
 const visibleTreeNodes = computed(() =>
-  filterTreeByPlaylistName(originalTreeNodes.value, String(playlistSearch.value || ''))
+  filterPlaylistTreeByName(originalTreeNodes.value, String(playlistSearch.value || ''))
 )
 
 const showHint = computed(
@@ -197,6 +225,7 @@ const showHint = computed(
 
 const statusText = computed(() => {
   if (runtime.pioneerDeviceLibrary.loading) {
+    if (isExternalSource.value) return t('library.externalLibraryLoadingTree')
     return isDesktopSource.value
       ? t('rekordboxDesktop.loadingPlaylistTree')
       : t('pioneer.loadingPlaylistTree')
@@ -204,13 +233,16 @@ const statusText = computed(() => {
   if (String(playlistSearch.value || '').trim() && !visibleTreeNodes.value.length) {
     return t('pioneer.noMatchingPlaylists')
   }
+  if (isExternalSource.value) return t('library.externalLibraryEmptyTree')
   return isDesktopSource.value
     ? t('rekordboxDesktop.emptyPlaylistTree')
     : t('pioneer.emptyPlaylistTree')
 })
 
 const createEmptyPlaylist = async (playlistName: string, parentId = 0) => {
-  if (!isDesktopSource.value || dialogWriting.value) return false
+  if (!isEditableSource.value || dialogWriting.value) return false
+  if (isExternalSource.value)
+    return await externalPlaylistActions.create('create-playlist', playlistName, parentId)
   return await runWithDialogWriting(async () => {
     if (!(await ensureRekordboxDesktopWriteAvailable('create'))) return false
     const response = (await window.electron.ipcRenderer.invoke(
@@ -234,7 +266,9 @@ const createEmptyPlaylist = async (playlistName: string, parentId = 0) => {
 }
 
 const createFolder = async (folderName: string, parentId = 0) => {
-  if (!isDesktopSource.value || dialogWriting.value) return false
+  if (!isEditableSource.value || dialogWriting.value) return false
+  if (isExternalSource.value)
+    return await externalPlaylistActions.create('create-folder', folderName, parentId)
   return await runWithDialogWriting(async () => {
     if (!(await ensureRekordboxDesktopWriteAvailable('create'))) return false
     const response = (await window.electron.ipcRenderer.invoke(
@@ -262,12 +296,13 @@ const createFolder = async (folderName: string, parentId = 0) => {
 }
 
 const renameNode = async (node: IPioneerPlaylistTreeNode, nextName: string) => {
-  if (!isDesktopSource.value || dialogWriting.value) return false
+  if (!isEditableSource.value || dialogWriting.value) return false
   const playlistId = Number(node.id) || 0
   const name = sanitizeNodeName(nextName)
   if (playlistId <= 0 || !name) return false
   if (name === sanitizeNodeName(node.name)) return true
 
+  if (isExternalSource.value) return await externalPlaylistActions.rename(node, name)
   return await runWithDialogWriting(async () => {
     if (!(await ensureRekordboxDesktopWriteAvailable('edit'))) return false
     const response = (await window.electron.ipcRenderer.invoke(
@@ -290,10 +325,11 @@ const renameNode = async (node: IPioneerPlaylistTreeNode, nextName: string) => {
 }
 
 const deleteNode = async (node: IPioneerPlaylistTreeNode) => {
-  if (!isDesktopSource.value || dialogWriting.value) return false
+  if (!isEditableSource.value || dialogWriting.value) return false
   const playlistId = Number(node.id) || 0
   if (playlistId <= 0) return false
 
+  if (isExternalSource.value) return await externalPlaylistActions.remove(node)
   return await runWithDialogWriting(async () => {
     if (!(await ensureRekordboxDesktopWriteAvailable('edit'))) return false
     const response = (await window.electron.ipcRenderer.invoke(
@@ -317,10 +353,16 @@ const deleteNode = async (node: IPioneerPlaylistTreeNode) => {
 }
 
 const openCreatePlaylistDialog = async (parentId = 0, defaultValue = '') => {
-  if (!isDesktopSource.value || dialogWriting.value) return
+  if (!isEditableSource.value || dialogWriting.value) return
   await openRekordboxDesktopCreateNodeDialog({
-    dialogTitle: t('rekordboxDesktop.createPlaylistDialogTitle'),
-    placeholder: t('rekordboxDesktop.playlistNamePlaceholder'),
+    dialogTitle: sourceText(
+      'rekordboxDesktop.createPlaylistDialogTitle',
+      'library.createSeratoPlaylistDialogTitle'
+    ),
+    placeholder: sourceText(
+      'rekordboxDesktop.playlistNamePlaceholder',
+      'library.seratoPlaylistNamePlaceholder'
+    ),
     defaultValue,
     confirmText: t('common.confirm'),
     confirmCallback: async (value) => {
@@ -331,10 +373,16 @@ const openCreatePlaylistDialog = async (parentId = 0, defaultValue = '') => {
 }
 
 const openCreateFolderDialog = async (parentId = 0) => {
-  if (!isDesktopSource.value || dialogWriting.value) return
+  if (!isEditableSource.value || dialogWriting.value) return
   await openRekordboxDesktopCreateNodeDialog({
-    dialogTitle: t('rekordboxDesktop.createFolderTitle'),
-    placeholder: t('rekordboxDesktop.folderNamePlaceholder'),
+    dialogTitle: sourceText(
+      'rekordboxDesktop.createFolderTitle',
+      'library.createSeratoFolderTitle'
+    ),
+    placeholder: sourceText(
+      'rekordboxDesktop.folderNamePlaceholder',
+      'library.seratoFolderNamePlaceholder'
+    ),
     confirmText: t('common.confirm'),
     confirmCallback: async (value) => {
       if (!value) return false
@@ -344,14 +392,17 @@ const openCreateFolderDialog = async (parentId = 0) => {
 }
 
 const openRenameNodeDialog = async (node: IPioneerPlaylistTreeNode) => {
-  if (!isDesktopSource.value || dialogWriting.value || node.isSmartPlaylist) return
+  if (!isEditableSource.value || dialogWriting.value || node.isSmartPlaylist) return
   await openRekordboxDesktopCreateNodeDialog({
     dialogTitle: node.isFolder
-      ? t('rekordboxDesktop.renameFolderTitle')
-      : t('rekordboxDesktop.renamePlaylistTitle'),
+      ? sourceText('rekordboxDesktop.renameFolderTitle', 'library.renameSeratoFolderTitle')
+      : sourceText('rekordboxDesktop.renamePlaylistTitle', 'library.renameSeratoPlaylistTitle'),
     placeholder: node.isFolder
-      ? t('rekordboxDesktop.folderNamePlaceholder')
-      : t('rekordboxDesktop.playlistNamePlaceholder'),
+      ? sourceText('rekordboxDesktop.folderNamePlaceholder', 'library.seratoFolderNamePlaceholder')
+      : sourceText(
+          'rekordboxDesktop.playlistNamePlaceholder',
+          'library.seratoPlaylistNamePlaceholder'
+        ),
     defaultValue: String(node.name || '').trim(),
     confirmText: t('common.confirm'),
     confirmCallback: async (value) => {
@@ -362,34 +413,52 @@ const openRenameNodeDialog = async (node: IPioneerPlaylistTreeNode) => {
 }
 
 const confirmDeleteNode = async (node: IPioneerPlaylistTreeNode) => {
-  if (!isDesktopSource.value || dialogWriting.value || node.isSmartPlaylist) return
+  if (!isEditableSource.value || dialogWriting.value || node.isSmartPlaylist) return
 
   const lines = node.isFolder
     ? (() => {
         const descendants = countNodeDescendants(node)
         const content = [
-          t('rekordboxDesktop.deleteFolderConfirmLine1', { name: node.name }),
-          t('rekordboxDesktop.deleteFolderConfirmLine2')
+          sourceText(
+            'rekordboxDesktop.deleteFolderConfirmLine1',
+            'library.deleteSeratoFolderConfirmLine1',
+            { name: node.name }
+          ),
+          sourceText(
+            'rekordboxDesktop.deleteFolderConfirmLine2',
+            'library.deleteSeratoFolderConfirmLine2'
+          )
         ]
         if (descendants.folderCount > 0 || descendants.playlistCount > 0) {
           content.push(
-            t('rekordboxDesktop.deleteFolderDescendants', {
-              folderCount: descendants.folderCount,
-              playlistCount: descendants.playlistCount
-            })
+            sourceText(
+              'rekordboxDesktop.deleteFolderDescendants',
+              'library.deleteSeratoFolderDescendants',
+              {
+                folderCount: descendants.folderCount,
+                playlistCount: descendants.playlistCount
+              }
+            )
           )
         }
         return content
       })()
     : [
-        t('rekordboxDesktop.deletePlaylistConfirmLine1', { name: node.name }),
-        t('rekordboxDesktop.deletePlaylistConfirmLine2')
+        sourceText(
+          'rekordboxDesktop.deletePlaylistConfirmLine1',
+          'library.deleteSeratoPlaylistConfirmLine1',
+          { name: node.name }
+        ),
+        sourceText(
+          'rekordboxDesktop.deletePlaylistConfirmLine2',
+          'library.deleteSeratoPlaylistConfirmLine2'
+        )
       ]
 
   const result = await confirm({
     title: node.isFolder
-      ? t('rekordboxDesktop.deleteFolderTitle')
-      : t('rekordboxDesktop.deletePlaylistTitle'),
+      ? sourceText('rekordboxDesktop.deleteFolderTitle', 'library.deleteSeratoFolderTitle')
+      : sourceText('rekordboxDesktop.deletePlaylistTitle', 'library.deleteSeratoPlaylistTitle'),
     content: lines,
     innerWidth: 620,
     innerHeight: 0,
@@ -422,7 +491,13 @@ const {
   refreshDesktopTree,
   showFailureDialog,
   runWithDialogWriting,
-  () => Number(runtime.pioneerDeviceLibrary.selectedPlaylistId) || 0
+  () => Number(runtime.pioneerDeviceLibrary.selectedPlaylistId) || 0,
+  {
+    enabled: computed(
+      () => isExternalSource.value && runtime.externalDjLibrary.selectedKind === 'serato'
+    ),
+    sourcePath: computed(() => runtime.externalDjLibrary.selectedSourcePath || '')
+  }
 )
 
 const toggleFolder = (node: IPioneerPlaylistTreeNode) => {
@@ -450,7 +525,7 @@ const collapseAllHandleClick = async () => {
 
 const contextmenuEvent = async (event: MouseEvent) => {
   if (dialogWriting.value || localLibraryCopying.value) return
-  if (!isDesktopSource.value) return
+  if (!isEditableSource.value) return
 
   const result = await rightClickMenu({
     menuArr: [[{ menuName: 'library.createPlaylist' }, { menuName: 'library.createFolder' }]],
@@ -598,7 +673,8 @@ const handleCopyOnlyContextMenu = async (event: MouseEvent, node: IPioneerPlayli
 
 const handleNodeContextmenu = async (event: MouseEvent, node: IPioneerPlaylistTreeNode) => {
   if (dialogWriting.value || localLibraryCopying.value || node.isSmartPlaylist) return
-  if (!isDesktopSource.value) {
+  if (isExternalSource.value && !node.externalId) return
+  if (!isDesktopSource.value && !isExternalSource.value) {
     if (!isCopyableSource.value) return
     await handleCopyOnlyContextMenu(event, node)
     return
@@ -607,9 +683,13 @@ const handleNodeContextmenu = async (event: MouseEvent, node: IPioneerPlaylistTr
   if (node.isFolder) {
     const menuArr = [
       [{ menuName: 'library.createPlaylist' }, { menuName: 'library.createFolder' }],
-      [{ menuName: 'pioneer.copyToFilter' }, { menuName: 'pioneer.copyToCurated' }],
-      [{ menuName: 'pioneer.importArtistsToCurated' }],
-      [{ menuName: 'similarTracks.menu' }],
+      ...(isCopyableSource.value
+        ? [
+            [{ menuName: 'pioneer.copyToFilter' }, { menuName: 'pioneer.copyToCurated' }],
+            [{ menuName: 'pioneer.importArtistsToCurated' }],
+            [{ menuName: 'similarTracks.menu' }]
+          ]
+        : []),
       [{ menuName: renameMenuKey }, { menuName: deleteFolderMenuKey }]
     ]
     const result = await rightClickMenu({ menuArr, clickEvent: event })
@@ -649,13 +729,17 @@ const handleNodeContextmenu = async (event: MouseEvent, node: IPioneerPlaylistTr
   }
 
   const menuArr = [
-    [{ menuName: 'pioneer.copyToFilter' }, { menuName: 'pioneer.copyToCurated' }],
-    [{ menuName: 'pioneer.importArtistsToCurated' }],
-    [{ menuName: 'similarTracks.menu' }],
-    [{ menuName: 'playlist.calculateSetDuration' }],
-    [{ menuName: 'library.addToMixtapeByCopy' }],
+    ...(isCopyableSource.value
+      ? [
+          [{ menuName: 'pioneer.copyToFilter' }, { menuName: 'pioneer.copyToCurated' }],
+          [{ menuName: 'pioneer.importArtistsToCurated' }],
+          [{ menuName: 'similarTracks.menu' }],
+          [{ menuName: 'playlist.calculateSetDuration' }],
+          [{ menuName: 'library.addToMixtapeByCopy' }]
+        ]
+      : []),
     [{ menuName: renameMenuKey }, { menuName: deletePlaylistMenuKey }],
-    [{ menuName: 'pioneer.cleanMissingFiles' }]
+    ...(isDesktopSource.value ? [[{ menuName: 'pioneer.cleanMissingFiles' }]] : [])
   ]
   const result = await rightClickMenu({ menuArr, clickEvent: event })
   if (result === 'cancel') return
@@ -696,66 +780,13 @@ const handleNodeContextmenu = async (event: MouseEvent, node: IPioneerPlaylistTr
   }
 }
 
-const cleanMissingFilesFromPlaylist = async (node: IPioneerPlaylistTreeNode) => {
-  if (!isDesktopSource.value || dialogWriting.value) return
-  const playlistId = Number(node.id) || 0
-  if (playlistId <= 0) return
-
-  await runWithDialogWriting(async () => {
-    try {
-      const loadResult = (await window.electron.ipcRenderer.invoke(
-        buildRekordboxSourceChannel('desktop', 'load-playlist-tracks'),
-        playlistId
-      )) as { tracks?: IPioneerPlaylistTrack[] }
-
-      const tracks = Array.isArray(loadResult?.tracks) ? loadResult.tracks : []
-      const missingTracks = tracks.filter((t) => t.fileMissing)
-
-      if (!missingTracks.length) {
-        await confirm({
-          title: t('pioneer.cleanMissingFilesFinished'),
-          content: [t('pioneer.cleanMissingFilesNone')],
-          confirmShow: false
-        })
-        return
-      }
-
-      const confirmResult = await confirm({
-        title: t('pioneer.cleanMissingFilesConfirmTitle'),
-        content: [t('pioneer.cleanMissingFilesConfirm', { count: missingTracks.length })]
-      })
-      if (confirmResult !== 'confirm') return
-      if (!(await ensureRekordboxDesktopWriteAvailable('edit'))) return
-
-      const rowKeys = missingTracks.map((t) => String(t.rowKey || '').trim()).filter(Boolean)
-
-      const response = (await window.electron.ipcRenderer.invoke(
-        buildRekordboxSourceChannel('desktop', 'remove-playlist-tracks'),
-        { playlistId, rowKeys }
-      )) as RekordboxDesktopRemovePlaylistTracksResponse
-
-      if (!response.ok) {
-        await showFailureDialog(response.summary.errorMessage, response.summary.logPath)
-        return
-      }
-
-      clearRekordboxSourceCachesByKind('desktop')
-      await refreshDesktopTree(playlistId)
-
-      await confirm({
-        title: t('pioneer.cleanMissingFilesFinished'),
-        content: [t('pioneer.cleanMissingFilesRemovedCount', { count: rowKeys.length })],
-        confirmShow: false
-      })
-    } catch (error: unknown) {
-      await confirm({
-        title: t('common.error'),
-        content: [error instanceof Error ? error.message : String(error)],
-        confirmShow: false
-      })
-    }
-  })
-}
+const { cleanMissingFilesFromPlaylist } = useCleanMissingFiles({
+  isDesktopSource,
+  dialogWriting,
+  runWithDialogWriting,
+  refreshTree: refreshDesktopTree,
+  showFailureDialog
+})
 
 const lastTreeSignature = ref('')
 const buildTreeSignature = (nodes: IPioneerPlaylistTreeNode[]) =>
@@ -896,9 +927,9 @@ watch(
               :expanded-ids="expandedFolderIds"
               :filter-text="playlistSearch"
               :interaction-disabled="dialogWriting"
-              :draggable-nodes="isDesktopSource && !normalizeKeyword(playlistSearch)"
+              :draggable-nodes="isEditableSource && !normalizeKeyword(playlistSearch)"
               :contextmenu-enabled="
-                isCopyableSource && !localLibraryCopying && !normalizeKeyword(playlistSearch)
+                isEditableSource && !localLibraryCopying && !normalizeKeyword(playlistSearch)
               "
               :drag-target-node-id="dragTarget?.nodeId || undefined"
               :drag-target-approach="dragTarget?.approach || ''"
@@ -928,7 +959,12 @@ watch(
               "
               class="libraryStatusText"
             >
-              {{ statusText }}
+              <span
+                v-if="runtime.pioneerDeviceLibrary.loading"
+                class="libraryStatusSpinner"
+                aria-hidden="true"
+              ></span>
+              <span>{{ statusText }}</span>
             </span>
           </div>
         </div>
@@ -939,175 +975,4 @@ watch(
   </div>
 </template>
 
-<style lang="scss" scoped>
-.content {
-  position: relative;
-}
-
-.libraryArea {
-  flex: 1 1 auto;
-  min-height: 0;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.libraryTreeDropSurface {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.libraryDropSpace {
-  flex: 1 1 auto;
-  min-height: 30px;
-  box-sizing: border-box;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.libraryDropSpace--active {
-  box-shadow: inset 0 1px 0 0 var(--accent);
-}
-
-.libraryStatusText {
-  font-size: 12px;
-  color: var(--text-weak);
-  position: absolute;
-  bottom: 50vh;
-}
-
-.content {
-  height: 100%;
-  width: 100%;
-  display: flex;
-  flex-grow: 1;
-  min-height: 0;
-  background-color: var(--bg);
-  overflow: hidden;
-  flex-direction: column;
-
-  .libraryTitle {
-    height: 35px;
-    line-height: 35px;
-    padding: 0 18px 0 20px;
-    font-size: 12px;
-    font-weight: bold;
-    display: flex;
-    justify-content: space-between;
-  }
-
-  .libraryTitleText {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .collapseButton {
-    color: var(--text);
-    width: 20px;
-    height: 20px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    border-radius: 5px;
-
-    &:hover {
-      background-color: var(--hover);
-    }
-  }
-}
-
-.disabledAction {
-  pointer-events: none;
-  opacity: 0.6;
-}
-
-.librarySearchWrapper {
-  flex-shrink: 0;
-  padding: 6px 5px 6px 5px;
-  background-color: var(--bg);
-}
-
-.searchInput {
-  width: 100%;
-  height: 22px;
-  line-height: 22px;
-  background-color: var(--bg-elev);
-  border: 1px solid var(--border);
-  outline: none;
-  color: var(--text);
-  border-radius: 2px;
-  padding: 0 8px;
-  box-sizing: border-box;
-  font-size: 12px;
-  font-weight: normal;
-
-  &:hover {
-    background-color: var(--hover);
-    border-color: var(--accent);
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: default;
-  }
-}
-
-.searchInputWrapper:hover .searchInput {
-  background-color: var(--hover);
-  border-color: var(--accent);
-}
-
-.searchRow {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  width: 100%;
-}
-
-.searchRow .searchInput {
-  flex: 1 1 auto;
-  width: auto;
-  min-width: 0;
-}
-
-.searchInputWrapper {
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.searchInputWrapper .searchInput {
-  width: 100%;
-  padding-right: 24px;
-}
-
-.clearBtn {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border-radius: 50%;
-  color: var(--text-weak);
-  cursor: pointer;
-
-  &:hover {
-    color: var(--text);
-    background-color: var(--hover);
-  }
-}
-
-.clearBtnDisabled {
-  pointer-events: none;
-  opacity: 0.45;
-}
-</style>
+<style lang="scss" scoped src="./pioneerDeviceLibraryArea.scss"></style>

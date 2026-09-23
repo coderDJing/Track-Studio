@@ -3,6 +3,7 @@ import {
   drawSongListTimelineTicks,
   drawSongListMixxxWaveform,
   drawSongListPioneerPreviewWaveform,
+  drawSongListSeratoOverview,
   type SongListWaveformRgbMetricsCacheEntry
 } from './songListWaveformPreview.shared'
 import type {
@@ -90,6 +91,11 @@ const renderWaveform = (payload: RenderPayload) => {
       progressColor: payload.progressColor,
       playedPercent
     })
+    return
+  }
+
+  if (data.kind === 'serato') {
+    drawSongListSeratoOverview(ctx, width, height, data.data, playedPercent, payload.progressColor)
     return
   }
 

@@ -153,6 +153,8 @@ export function createSongListItemComparator(
       normalizeComparableText(right.waveformPreviewListRoot) &&
     normalizeComparableText(left.externalSourceKind) ===
       normalizeComparableText(right.externalSourceKind) &&
+    normalizeComparableText(left.externalLibraryKind) ===
+      normalizeComparableText(right.externalLibraryKind) &&
     normalizeComparableText(left.pioneerCoverPath) ===
       normalizeComparableText(right.pioneerCoverPath) &&
     normalizeComparableText(left.pioneerAnalyzePath) ===
@@ -271,6 +273,7 @@ export function createSongListItemComparator(
     pushIfTextDiff('externalWaveformRootPath')
     pushIfTextDiff('waveformPreviewListRoot')
     pushIfTextDiff('externalSourceKind')
+    pushIfTextDiff('externalLibraryKind')
     pushIfTextDiff('pioneerCoverPath')
     pushIfTextDiff('pioneerAnalyzePath')
     pushIfTextDiff('pioneerDeviceRootPath')

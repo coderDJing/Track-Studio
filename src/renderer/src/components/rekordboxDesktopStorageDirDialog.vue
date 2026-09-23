@@ -10,6 +10,7 @@ import utils from '../utils/utils'
 const uuid = uuidV4()
 const props = defineProps<{
   initialPath?: string
+  storageKind?: 'rekordbox' | 'serato'
   confirmCallback: (path: string) => void
   cancelCallback: () => void
 }>()
@@ -21,6 +22,12 @@ const flashPath = ref(false)
 const pathText = computed(
   () => selectedPath.value || t('rekordboxDesktop.storageDirSetupPathPlaceholder')
 )
+const textKey = (
+  suffix: 'title' | 'intro' | 'why' | 'settingHint' | 'pathLabel' | 'confirmButton'
+) =>
+  props.storageKind === 'serato'
+    ? t(`library.seratoStorageDirSetup${suffix[0].toUpperCase()}${suffix.slice(1)}`)
+    : t(`rekordboxDesktop.storageDirSetup${suffix[0].toUpperCase()}${suffix.slice(1)}`)
 
 const triggerFlash = () => {
   flashPath.value = true
@@ -70,16 +77,16 @@ onUnmounted(() => {
   <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
     <div v-dialog-drag="'.dialog-title'" class="inner">
       <div class="dialog-title dialog-header">
-        {{ t('rekordboxDesktop.storageDirSetupTitle') }}
+        {{ textKey('title') }}
       </div>
       <div class="content">
         <div class="description">
-          <p>{{ t('rekordboxDesktop.storageDirSetupIntro') }}</p>
-          <p>{{ t('rekordboxDesktop.storageDirSetupWhy') }}</p>
-          <p>{{ t('rekordboxDesktop.storageDirSetupSettingHint') }}</p>
+          <p>{{ textKey('intro') }}</p>
+          <p>{{ textKey('why') }}</p>
+          <p>{{ textKey('settingHint') }}</p>
         </div>
         <div class="path-section">
-          <div class="path-label">{{ t('rekordboxDesktop.storageDirSetupPathLabel') }}</div>
+          <div class="path-label">{{ textKey('pathLabel') }}</div>
           <bubbleBoxTrigger
             tag="div"
             class="chooseDirDiv flashing-border"
@@ -92,9 +99,7 @@ onUnmounted(() => {
         </div>
       </div>
       <div class="dialog-footer">
-        <div class="button dialog-button" @click="confirm">
-          {{ t('rekordboxDesktop.storageDirSetupConfirmButton') }} (E)
-        </div>
+        <div class="button dialog-button" @click="confirm">{{ textKey('confirmButton') }} (E)</div>
         <div class="button dialog-button" @click="cancel">{{ t('common.cancel') }} (Esc)</div>
       </div>
     </div>

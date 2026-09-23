@@ -63,6 +63,12 @@
       "chooseButton": "Choose directory",
       "notConfigured": "Not configured"
     },
+    "seratoTrackStorageDir": {
+      "title": "Serato track storage directory",
+      "hint": "When writing to Serato, tracks are copied here before the Serato playlist is updated.",
+      "chooseButton": "Choose directory",
+      "notConfigured": "Not configured"
+    },
     "currentLibraryPath": "Current music library path",
     "currentLibraryPathHint": "Shows the music library root currently in use for quick confirmation and troubleshooting.",
     "openCurrentLibraryInExplorer": "Open in File Explorer",

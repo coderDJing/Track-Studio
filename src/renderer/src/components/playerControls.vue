@@ -26,6 +26,7 @@ import {
 import { invokeMetadataAutoFill } from '@renderer/utils/metadataAutoFill'
 import { hasEffectiveAcoustIdKey } from '@renderer/utils/acoustid'
 import { openRekordboxDesktopPlaylistForSelectedTracks } from '@renderer/utils/rekordboxDesktopPlaylist'
+import { openExternalLibraryPlaylistForSelectedTracks } from '@renderer/utils/externalLibraryPlaylist'
 import { openRekordboxXmlExportForSelectedTracks } from '@renderer/utils/rekordboxXmlExport'
 import { startAudioConvertFromFiles } from '@renderer/utils/audioConvertActions'
 import { promptAndStartTrackReanalysis } from '@renderer/utils/trackReanalysis'
@@ -493,6 +494,26 @@ const handleRekordboxDesktopPlaylist = async () => {
   }
 }
 
+const handleSeratoPlaylist = async () => {
+  const song = runtime.playingData.playingSong
+  if (!song) return
+  if (runtime.isProgressing) {
+    await confirm({
+      title: t('dialog.hint'),
+      content: [t('import.waitForTask')],
+      confirmShow: false
+    })
+    return
+  }
+  closeMoreMenu()
+  runtime.isProgressing = true
+  try {
+    await openExternalLibraryPlaylistForSelectedTracks({ tracks: [song] })
+  } finally {
+    runtime.isProgressing = false
+  }
+}
+
 const resolvePlaybackSourceLibraryName = ():
   | 'FilterLibrary'
   | 'CuratedLibrary'
@@ -759,14 +780,18 @@ onUnmounted(() => {
             <span>{{ exportTrackLabel }}</span>
           </div>
         </div>
-        <div
-          v-if="!isReadOnlyPlaybackSource"
-          style="padding: 5px 5px; border-bottom: 1px solid var(--border)"
-        >
+        <div style="padding: 5px 5px; border-bottom: 1px solid var(--border)">
           <div class="menuButton" @click="handleRekordboxDesktopPlaylist()">
             <span>{{ t('rekordboxDesktop.menuCreatePlaylistFromSelectedTracks') }}</span>
           </div>
-          <div class="menuButton" @click="handleRekordboxXmlExport()">
+          <div class="menuButton" @click="handleSeratoPlaylist()">
+            <span>{{ t('library.writeToSeratoPlaylist') }}</span>
+          </div>
+          <div
+            v-if="!isReadOnlyPlaybackSource"
+            class="menuButton"
+            @click="handleRekordboxXmlExport()"
+          >
             <span>{{ t('rekordboxXmlExport.menuExportSelectedTracks') }}</span>
           </div>
         </div>

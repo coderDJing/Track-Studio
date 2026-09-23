@@ -4,6 +4,7 @@ import exportDialog from '@renderer/components/exportDialog'
 import confirm from '@renderer/components/confirmDialog'
 import { analyzeFingerprintsForPaths } from '@renderer/utils/fingerprintActions'
 import { openRekordboxDesktopPlaylistForSelectedTracks } from '@renderer/utils/rekordboxDesktopPlaylist'
+import { openExternalLibraryPlaylistForSelectedTracks } from '@renderer/utils/externalLibraryPlaylist'
 import {
   createMusicSearchMenuItems,
   getMusicSearchOpenFailedMessageKey,
@@ -42,7 +43,10 @@ const buildPioneerSongMenuGroups = (canRemoveTracksFromDesktopPlaylist: boolean)
     groups.push([{ menuName: 'rekordboxDesktop.removeTracksFromPlaylistAction' }])
   }
   groups.push([{ menuName: 'tracks.exportTracksCopyOnly' }])
-  groups.push([{ menuName: 'rekordboxDesktop.menuCreatePlaylistFromSelectedTracks' }])
+  groups.push([
+    { menuName: 'rekordboxDesktop.menuCreatePlaylistFromSelectedTracks' },
+    { menuName: 'library.writeToSeratoPlaylist' }
+  ])
   groups.push([
     { menuName: 'library.copyToFilter' },
     { menuName: 'library.copyToCurated' },
@@ -171,6 +175,7 @@ export const usePioneerSongContextMenu = (params: UsePioneerSongContextMenuParam
         return
       }
       case 'rekordboxDesktop.menuCreatePlaylistFromSelectedTracks':
+      case 'library.writeToSeratoPlaylist':
         if (params.runtime.isProgressing) {
           await confirmTaskBusy()
           return
@@ -181,11 +186,15 @@ export const usePioneerSongContextMenu = (params: UsePioneerSongContextMenuParam
         }
         params.runtime.isProgressing = true
         try {
-          await openRekordboxDesktopPlaylistForSelectedTracks({
-            tracks: existingTracks,
-            songListUUID: params.currentPlaybackListKey.value,
-            forceKeepSourceTracks: true
-          })
+          if (result.menuName === 'library.writeToSeratoPlaylist') {
+            await openExternalLibraryPlaylistForSelectedTracks({ tracks: existingTracks })
+          } else {
+            await openRekordboxDesktopPlaylistForSelectedTracks({
+              tracks: existingTracks,
+              songListUUID: params.currentPlaybackListKey.value,
+              forceKeepSourceTracks: true
+            })
+          }
         } finally {
           params.runtime.isProgressing = false
         }

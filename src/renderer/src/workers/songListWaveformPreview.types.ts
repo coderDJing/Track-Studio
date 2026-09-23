@@ -1,6 +1,7 @@
 import type { IPioneerPreviewWaveformData } from 'src/types/globals'
 import type { MixxxWaveformData } from '@renderer/pages/modules/songPlayer/webAudioPlayer'
 import type { WaveformListPreviewData } from '@shared/waveformSurfaceCache'
+import type { SeratoWaveformOverviewData } from '@shared/seratoWaveformOverview'
 
 export type SongListWaveformWorkerData =
   | {
@@ -14,6 +15,10 @@ export type SongListWaveformWorkerData =
   | {
       kind: 'compactVisual'
       data: WaveformListPreviewData
+    }
+  | {
+      kind: 'serato'
+      data: SeratoWaveformOverviewData
     }
   | null
 

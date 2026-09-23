@@ -25,6 +25,7 @@ type RefreshTreeFn = (preferredPlaylistId?: number) => Promise<void>
 type ShowFailureFn = (message: string, logPath?: string) => Promise<void>
 type RunWritingFn = <T>(task: () => Promise<T>) => Promise<T>
 type GetPreferredPlaylistIdFn = () => number
+type ExternalTreeWriteContext = { enabled: BoolRef; sourcePath: StringRef }
 
 export function usePioneerDeviceTreeDrag(
   originalTreeNodes: TreeRef,
@@ -35,8 +36,10 @@ export function usePioneerDeviceTreeDrag(
   refreshDesktopTree: RefreshTreeFn,
   showFailureDialog: ShowFailureFn,
   runWithDialogWriting: RunWritingFn,
-  getPreferredPlaylistId: GetPreferredPlaylistIdFn
+  getPreferredPlaylistId: GetPreferredPlaylistIdFn,
+  externalTreeWrite?: ExternalTreeWriteContext
 ) {
+  const canWriteTree = () => isDesktopSource.value || Boolean(externalTreeWrite?.enabled.value)
   const dragSourceId = ref<number | null>(null)
   const dragTarget = ref<{
     nodeId: number | null
@@ -63,7 +66,7 @@ export function usePioneerDeviceTreeDrag(
 
   const handleDragStartNode = (event: DragEvent, node: IPioneerPlaylistTreeNode) => {
     if (
-      !isDesktopSource.value ||
+      !canWriteTree() ||
       dialogWriting.value ||
       !isMovableTreeNode(node) ||
       normalizeKeyword(playlistSearch.value)
@@ -81,7 +84,7 @@ export function usePioneerDeviceTreeDrag(
   }
 
   const updateDragTarget = (event: DragEvent, node: IPioneerPlaylistTreeNode) => {
-    if (!isDesktopSource.value || dialogWriting.value) {
+    if (!canWriteTree() || dialogWriting.value) {
       setUnavailableDrop(event)
       return
     }
@@ -111,7 +114,7 @@ export function usePioneerDeviceTreeDrag(
   }
 
   const updateRootEndDragTarget = (event: DragEvent) => {
-    if (!isDesktopSource.value || dialogWriting.value) {
+    if (!canWriteTree() || dialogWriting.value) {
       setUnavailableDrop(event)
       return
     }
@@ -135,6 +138,26 @@ export function usePioneerDeviceTreeDrag(
     syncRuntimeDesktopTree(moved.nodes, preferredPlaylistId)
 
     await runWithDialogWriting(async () => {
+      if (externalTreeWrite?.enabled.value) {
+        const movedNode = findNodeById(moved.nodes, moved.playlistId)
+        const parentNode = moved.parentId > 0 ? findNodeById(moved.nodes, moved.parentId) : null
+        const response = (await window.electron.ipcRenderer.invoke('external-library:mutate', {
+          kind: 'serato',
+          path: externalTreeWrite.sourcePath.value,
+          operation: 'move',
+          externalId: movedNode?.externalId,
+          parentExternalId: parentNode?.externalId,
+          name: movedNode?.name,
+          seq: moved.seq
+        })) as { ok: boolean; summary: { errorMessage?: string } }
+        if (!response.ok) {
+          syncRuntimeDesktopTree(previousTree, preferredPlaylistId)
+          await showFailureDialog(response.summary.errorMessage || 'Serato 歌单移动失败。')
+          return
+        }
+        await refreshDesktopTree(preferredPlaylistId)
+        return
+      }
       if (!(await ensureRekordboxDesktopWriteAvailable('move'))) {
         syncRuntimeDesktopTree(previousTree, preferredPlaylistId)
         return
@@ -197,7 +220,7 @@ export function usePioneerDeviceTreeDrag(
   }
 
   const handleDropNode = async (_event: DragEvent, node: IPioneerPlaylistTreeNode) => {
-    if (!isDesktopSource.value || dialogWriting.value) {
+    if (!canWriteTree() || dialogWriting.value) {
       suppressClickAfterDrag()
       resetDragState()
       return
@@ -221,7 +244,7 @@ export function usePioneerDeviceTreeDrag(
   }
 
   const handleDropRootEnd = async () => {
-    if (!isDesktopSource.value || dialogWriting.value) {
+    if (!canWriteTree() || dialogWriting.value) {
       suppressClickAfterDrag()
       resetDragState()
       return

@@ -9,6 +9,7 @@ import type {
 type UsePioneerSongsPlaceholderParams = {
   loading: Ref<boolean>
   isDesktopSource: ComputedRef<boolean>
+  isExternalSource: ComputedRef<boolean>
   selectedPlaylistId: ComputedRef<number>
   originalTracks: ShallowRef<IPioneerPlaylistTrack[]>
   visibleSongs: Ref<ISongInfo[]>
@@ -20,16 +21,19 @@ export const usePioneerSongsPlaceholder = (params: UsePioneerSongsPlaceholderPar
   const lastLoggedSnapshot = ref('')
   const placeholderText = computed(() => {
     if (params.loading.value) {
+      if (params.isExternalSource.value) return t('library.externalLibraryLoadingTracks')
       return params.isDesktopSource.value
         ? t('rekordboxDesktop.loadingPlaylistTracks')
         : t('pioneer.loadingPlaylistTracks')
     }
     if (!params.selectedPlaylistId.value) {
+      if (params.isExternalSource.value) return t('library.externalLibrarySelectPlaylist')
       return params.isDesktopSource.value
         ? t('rekordboxDesktop.selectPlaylistPrompt')
         : t('pioneer.selectPlaylistPrompt')
     }
     if (!params.visibleSongs.value.length) {
+      if (params.isExternalSource.value) return t('library.externalLibraryEmptyPlaylist')
       return params.isDesktopSource.value
         ? t('rekordboxDesktop.emptyPlaylist')
         : t('pioneer.emptyPlaylist')

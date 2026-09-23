@@ -5,6 +5,7 @@ import { normalizeAddedAtMs, matchTimestampByDateFilter } from '@shared/songAdde
 import { matchComparableByFilter } from '@shared/filterCompare'
 import { getSongListFieldRawValue } from '@renderer/utils/songListFieldDisplay'
 import type { RekordboxSourceKind } from '@shared/rekordboxSources'
+import type { ExternalLibraryKind } from '@shared/externalLibrary'
 import type {
   IPioneerPlaylistTrack,
   IRekordboxSourceKind,
@@ -44,6 +45,8 @@ type UsePioneerSongsProjectionParams = {
   selectedRowKeys: Ref<string[]>
   selectedSourceRootPath: ComputedRef<string>
   selectedSourceKind: ComputedRef<IRekordboxSourceKind | ''>
+  selectedExternalKind: ComputedRef<ExternalLibraryKind | null>
+  isExternalSource: ComputedRef<boolean>
   getKeyDisplayStyle: () => string
   getCurrentPlaybackListKey: () => string
   getPlayingSongListUUID: () => string
@@ -146,21 +149,28 @@ export const usePioneerSongsProjection = (params: UsePioneerSongsProjectionParam
     bpm: track.bpm,
     beatGridMap: track.beatGridMap,
     rekordboxGridEntries: track.rekordboxGridEntries?.map((entry) => ({ ...entry })),
-    beatGridSource: track.beatGridMap ? 'rekordbox' : undefined,
+    beatGridSource: track.beatGridMap?.source,
     timeBasisOffsetMs: track.timeBasisOffsetMs,
     hotCues: Array.isArray(track.hotCues) ? track.hotCues.map((cue) => ({ ...cue })) : [],
     memoryCues: Array.isArray(track.memoryCues) ? track.memoryCues.map((cue) => ({ ...cue })) : [],
-    mixOrder: track.entryIndex,
-    externalAnalyzePath: track.analyzePath || null,
-    externalWaveformRootPath: params.selectedSourceRootPath.value || null,
-    externalSourceKind: (params.selectedSourceKind.value || 'usb') as RekordboxSourceKind,
-    pioneerCoverPath: track.coverPath || null,
-    pioneerAnalyzePath:
-      params.selectedSourceKind.value === 'usb' ? track.analyzePath || null : null,
-    pioneerDeviceRootPath:
-      params.selectedSourceKind.value === 'usb'
-        ? params.selectedSourceRootPath.value || null
-        : null,
+    // External playlist entries do not receive Rekordbox's runtime track number.
+    // Keep the display number one-based so the first entry does not collide with
+    // the second entry's zero-based `entryIndex`.
+    mixOrder: params.isExternalSource.value ? track.entryIndex + 1 : track.entryIndex,
+    ...(params.isExternalSource.value
+      ? { externalLibraryKind: params.selectedExternalKind.value || null }
+      : {
+          externalAnalyzePath: track.analyzePath || null,
+          externalWaveformRootPath: params.selectedSourceRootPath.value || null,
+          externalSourceKind: (params.selectedSourceKind.value || 'usb') as RekordboxSourceKind,
+          pioneerCoverPath: track.coverPath || null,
+          pioneerAnalyzePath:
+            params.selectedSourceKind.value === 'usb' ? track.analyzePath || null : null,
+          pioneerDeviceRootPath:
+            params.selectedSourceKind.value === 'usb'
+              ? params.selectedSourceRootPath.value || null
+              : null
+        }),
     mixtapeItemId: track.rowKey,
     addedAtMs: normalizeAddedAtMs(track.dateAdded),
     fileMissing: track.fileMissing ?? false

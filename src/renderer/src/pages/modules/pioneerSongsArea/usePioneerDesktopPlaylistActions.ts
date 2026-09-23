@@ -5,15 +5,18 @@ import { ensureRekordboxDesktopWriteAvailable } from '@renderer/utils/rekordboxD
 import { t } from '@renderer/utils/translate'
 import { buildRekordboxSourceChannel } from '@shared/rekordboxSources'
 import type { useRuntimeStore } from '@renderer/stores/runtime'
-import type { ISongInfo } from '../../../../../types/globals'
+import type { IPioneerPlaylistTreeNode, ISongInfo } from '../../../../../types/globals'
 import type {
   RekordboxDesktopRemovePlaylistTracksResponse,
   RekordboxDesktopReorderPlaylistTracksResponse
 } from '@shared/rekordboxDesktopPlaylist'
+import type { ExternalLibraryMutationResponse, ExternalLibraryKind } from '@shared/externalLibrary'
 
 export const usePioneerDesktopPlaylistActions = (params: {
   runtime: ReturnType<typeof useRuntimeStore>
   selectedPlaylistId: Ref<number>
+  selectedExternalKind: Ref<ExternalLibraryKind | null>
+  selectedSourceRootPath: Ref<string>
   selectedSourceCacheKey: Ref<string>
   currentPlaybackListKey: Ref<string>
   visibleSongs: Ref<ISongInfo[]>
@@ -23,12 +26,41 @@ export const usePioneerDesktopPlaylistActions = (params: {
   const {
     runtime,
     selectedPlaylistId,
+    selectedExternalKind,
+    selectedSourceRootPath,
     selectedSourceCacheKey,
     currentPlaybackListKey,
     visibleSongs,
     selectedRowKeys,
     loadPlaylistTracks
   } = params
+
+  const isExternalSerato = () => selectedExternalKind.value === 'serato'
+  const sourceText = (rekordboxKey: string, seratoKey: string, values?: Record<string, unknown>) =>
+    t(isExternalSerato() ? seratoKey : rekordboxKey, values)
+
+  const resolveSelectedExternalPlaylistId = () => {
+    const selectedId = selectedPlaylistId.value
+    const walk = (nodes: IPioneerPlaylistTreeNode[]): string | undefined => {
+      for (const node of nodes) {
+        if (node.id === selectedId) return node.externalId
+        if (node.children?.length) {
+          const match = walk(node.children)
+          if (match) return match
+        }
+      }
+      return undefined
+    }
+    return walk(runtime.pioneerDeviceLibrary.treeNodes || [])
+  }
+
+  const invokeExternalMutation = async (payload: Record<string, unknown>) =>
+    (await window.electron.ipcRenderer.invoke('external-library:mutate', {
+      kind: selectedExternalKind.value,
+      path: selectedSourceRootPath.value,
+      externalId: resolveSelectedExternalPlaylistId(),
+      ...payload
+    })) as ExternalLibraryMutationResponse
 
   const playlistMutationPending = ref(false)
 
@@ -43,13 +75,19 @@ export const usePioneerDesktopPlaylistActions = (params: {
 
   const showRekordboxFailureDialog = async (message: string, logPath?: string) => {
     const content = [
-      t('rekordboxDesktop.failedReason', { message: message || t('common.unknownError') })
+      sourceText('rekordboxDesktop.failedReason', 'library.externalLibraryFailedReason', {
+        message: message || t('common.unknownError')
+      })
     ]
     if (logPath) {
-      content.push(t('rekordboxDesktop.failureLogHint', { path: logPath }))
+      content.push(
+        sourceText('rekordboxDesktop.failureLogHint', 'library.externalLibraryFailureLogHint', {
+          path: logPath
+        })
+      )
     }
     await confirm({
-      title: t('rekordboxDesktop.failureTitle'),
+      title: sourceText('rekordboxDesktop.failureTitle', 'library.externalLibraryFailureTitle'),
       content,
       confirmShow: false,
       innerWidth: 620,
@@ -92,17 +130,34 @@ export const usePioneerDesktopPlaylistActions = (params: {
     const confirmContent =
       rowKeys.length === 1
         ? [
-            t('rekordboxDesktop.removeTrackFromPlaylistConfirmLine1', {
-              name: selectedTracks[0]?.title || t('tracks.unknownTrack')
-            }),
-            t('rekordboxDesktop.removeTracksFromPlaylistConfirmLine2')
+            sourceText(
+              'rekordboxDesktop.removeTrackFromPlaylistConfirmLine1',
+              'library.removeTrackFromSeratoPlaylistConfirmLine1',
+              {
+                name: selectedTracks[0]?.title || t('tracks.unknownTrack')
+              }
+            ),
+            sourceText(
+              'rekordboxDesktop.removeTracksFromPlaylistConfirmLine2',
+              'library.removeTracksFromSeratoPlaylistConfirmLine2'
+            )
           ]
         : [
-            t('rekordboxDesktop.removeTracksFromPlaylistConfirmCount', { count: rowKeys.length }),
-            t('rekordboxDesktop.removeTracksFromPlaylistConfirmLine2')
+            sourceText(
+              'rekordboxDesktop.removeTracksFromPlaylistConfirmCount',
+              'library.removeTracksFromSeratoPlaylistConfirmCount',
+              { count: rowKeys.length }
+            ),
+            sourceText(
+              'rekordboxDesktop.removeTracksFromPlaylistConfirmLine2',
+              'library.removeTracksFromSeratoPlaylistConfirmLine2'
+            )
           ]
     const confirmResult = await confirm({
-      title: t('rekordboxDesktop.removeTracksFromPlaylistTitle'),
+      title: sourceText(
+        'rekordboxDesktop.removeTracksFromPlaylistTitle',
+        'library.removeTracksFromSeratoPlaylistTitle'
+      ),
       content: confirmContent,
       innerWidth: 620,
       innerHeight: 0,
@@ -112,16 +167,22 @@ export const usePioneerDesktopPlaylistActions = (params: {
 
     await runWithPlaylistMutationPending(async () => {
       try {
-        if (!(await ensureRekordboxDesktopWriteAvailable('edit'))) return
-        const response = (await window.electron.ipcRenderer.invoke(
-          buildRekordboxSourceChannel('desktop', 'remove-playlist-tracks'),
-          {
-            playlistId,
-            rowKeys
-          }
-        )) as RekordboxDesktopRemovePlaylistTracksResponse
+        let response:
+          | ExternalLibraryMutationResponse
+          | RekordboxDesktopRemovePlaylistTracksResponse
+          | null
+        if (isExternalSerato()) {
+          response = await invokeExternalMutation({ operation: 'remove-tracks', rowKeys })
+        } else {
+          if (!(await ensureRekordboxDesktopWriteAvailable('edit'))) return
+          response = (await window.electron.ipcRenderer.invoke(
+            buildRekordboxSourceChannel('desktop', 'remove-playlist-tracks'),
+            { playlistId, rowKeys }
+          )) as RekordboxDesktopRemovePlaylistTracksResponse
+        }
 
-        if (!response.ok) {
+        if (!response || !response.ok) {
+          if (!response) return
           await showRekordboxFailureDialog(response.summary.errorMessage, response.summary.logPath)
           return
         }
@@ -162,17 +223,26 @@ export const usePioneerDesktopPlaylistActions = (params: {
 
     await runWithPlaylistMutationPending(async () => {
       try {
-        if (!(await ensureRekordboxDesktopWriteAvailable('edit'))) return
-        const response = (await window.electron.ipcRenderer.invoke(
-          buildRekordboxSourceChannel('desktop', 'reorder-playlist-tracks'),
-          {
-            playlistId,
+        let response:
+          | ExternalLibraryMutationResponse
+          | RekordboxDesktopReorderPlaylistTracksResponse
+          | null
+        if (isExternalSerato()) {
+          response = await invokeExternalMutation({
+            operation: 'reorder-tracks',
             rowKeys,
             targetIndex
-          }
-        )) as RekordboxDesktopReorderPlaylistTracksResponse
+          })
+        } else {
+          if (!(await ensureRekordboxDesktopWriteAvailable('edit'))) return
+          response = (await window.electron.ipcRenderer.invoke(
+            buildRekordboxSourceChannel('desktop', 'reorder-playlist-tracks'),
+            { playlistId, rowKeys, targetIndex }
+          )) as RekordboxDesktopReorderPlaylistTracksResponse
+        }
 
-        if (!response.ok) {
+        if (!response || !response.ok) {
+          if (!response) return
           await showRekordboxFailureDialog(response.summary.errorMessage, response.summary.logPath)
           return
         }
@@ -202,17 +272,26 @@ export const usePioneerDesktopPlaylistActions = (params: {
 
     await runWithPlaylistMutationPending(async () => {
       try {
-        if (!(await ensureRekordboxDesktopWriteAvailable('edit'))) return
-        const response = (await window.electron.ipcRenderer.invoke(
-          buildRekordboxSourceChannel('desktop', 'reorder-playlist-tracks'),
-          {
-            playlistId,
+        let response:
+          | ExternalLibraryMutationResponse
+          | RekordboxDesktopReorderPlaylistTracksResponse
+          | null
+        if (isExternalSerato()) {
+          response = await invokeExternalMutation({
+            operation: 'reorder-tracks',
             rowKeys,
             targetIndex: 0
-          }
-        )) as RekordboxDesktopReorderPlaylistTracksResponse
+          })
+        } else {
+          if (!(await ensureRekordboxDesktopWriteAvailable('edit'))) return
+          response = (await window.electron.ipcRenderer.invoke(
+            buildRekordboxSourceChannel('desktop', 'reorder-playlist-tracks'),
+            { playlistId, rowKeys, targetIndex: 0 }
+          )) as RekordboxDesktopReorderPlaylistTracksResponse
+        }
 
-        if (!response.ok) {
+        if (!response || !response.ok) {
+          if (!response) return
           await showRekordboxFailureDialog(response.summary.errorMessage, response.summary.logPath)
           return
         }

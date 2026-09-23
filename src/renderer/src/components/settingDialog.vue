@@ -543,6 +543,15 @@ const chooseRekordboxDesktopTrackStorageDir = async () => {
   await setSetting()
 }
 
+const chooseSeratoTrackStorageDir = async () => {
+  const folderPath = (await window.electron.ipcRenderer.invoke('select-folder', false)) as
+    | string[]
+    | null
+  if (!Array.isArray(folderPath) || !folderPath[0]) return
+  runtime.setting.seratoTrackStorageDir = String(folderPath[0] || '').trim()
+  await setSetting()
+}
+
 const reSelectLibrary = async () => {
   if (runtime.isProgressing) {
     await confirm({
@@ -903,6 +912,7 @@ const settingDialogContext: SettingDialogContext = {
   playerGlobalShortcutHandle,
   reSelectLibrary,
   chooseRekordboxDesktopTrackStorageDir,
+  chooseSeratoTrackStorageDir,
   hintIcon,
   fpModeHintRefs,
   setFpModeHintRef,

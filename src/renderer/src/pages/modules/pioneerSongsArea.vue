@@ -108,6 +108,12 @@ const selectedSourceKey = computed(() => runtime.pioneerDeviceLibrary.selectedSo
 const selectedSourceKind = computed<IRekordboxSourceKind | ''>(
   () => runtime.pioneerDeviceLibrary.selectedSourceKind || ''
 )
+const selectedExternalKind = computed(() => runtime.externalDjLibrary.selectedKind)
+const isExternalSource = computed(
+  () =>
+    Boolean(selectedExternalKind.value) &&
+    runtime.externalDjLibrary.selectedSourceKey === selectedSourceKey.value
+)
 const isDesktopSource = computed(() => selectedSourceKind.value === 'desktop')
 const selectedSourceName = computed(() => {
   if (runtime.pioneerDeviceLibrary.selectedSourceName) {
@@ -141,17 +147,20 @@ const selectedPlaylistNode = computed(() => {
 const currentPlaybackListKey = computed(() => {
   if (!selectedPlaylistId.value) return ''
   const sourceKey = selectedSourceKey.value || selectedSourceRootPath.value || 'rekordbox'
-  const sourceKind = selectedSourceKind.value || 'usb'
+  const sourceKind = selectedExternalKind.value || selectedSourceKind.value || 'usb'
   return `${sourceKind}:${sourceKey}:${selectedPlaylistId.value}`
 })
-const selectedSourceCacheKey = computed(() =>
-  buildRekordboxSourceCacheKey({
+const selectedSourceCacheKey = computed(() => {
+  if (selectedExternalKind.value && selectedSourceKey.value) {
+    return `external-library::${selectedExternalKind.value}::${selectedSourceKey.value}`
+  }
+  return buildRekordboxSourceCacheKey({
     sourceKind: selectedSourceKind.value,
     sourceKey: selectedSourceKey.value,
     rootPath: selectedSourceRootPath.value,
     libraryType: selectedLibraryType.value
   })
-)
+})
 
 const visibleColumns = computed(() => columnData.value.filter((item) => item.show))
 const totalWidth = computed(() =>
@@ -215,6 +224,8 @@ const {
   selectedRowKeys,
   selectedSourceRootPath,
   selectedSourceKind,
+  selectedExternalKind,
+  isExternalSource,
   getKeyDisplayStyle: () => runtime.setting.keyDisplayStyle || '',
   getCurrentPlaybackListKey: () => currentPlaybackListKey.value,
   getPlayingSongListUUID: () => runtime.playingData.playingSongListUUID,
@@ -264,6 +275,7 @@ emitter.on('songsArea/focus-song', handleFocusSongRequest)
 const { placeholderText } = usePioneerSongsPlaceholder({
   loading,
   isDesktopSource,
+  isExternalSource,
   selectedPlaylistId,
   originalTracks,
   visibleSongs,
@@ -273,7 +285,7 @@ const { placeholderText } = usePioneerSongsPlaceholder({
 
 const canRemoveTracksFromDesktopPlaylist = computed(
   () =>
-    isDesktopSource.value &&
+    (isDesktopSource.value || selectedExternalKind.value === 'serato') &&
     Boolean(selectedPlaylistNode.value) &&
     !selectedPlaylistNode.value?.isFolder &&
     !selectedPlaylistNode.value?.isSmartPlaylist
@@ -423,6 +435,7 @@ const { loadPlaylistTracks } = usePioneerPlaylistTracks({
   selectedSourceCacheKey,
   selectedPlaylistId,
   selectedSourceKind,
+  selectedExternalKind,
   selectedSourceRootPath,
   selectedLibraryType,
   originalTracks,
@@ -442,6 +455,8 @@ const {
 } = usePioneerDesktopPlaylistActions({
   runtime,
   selectedPlaylistId,
+  selectedExternalKind,
+  selectedSourceRootPath,
   selectedSourceCacheKey,
   currentPlaybackListKey,
   visibleSongs,
@@ -464,7 +479,13 @@ const { handleSongContextMenu } = usePioneerSongContextMenu({
 })
 
 watch(
-  () => [selectedSourceRootPath.value, selectedPlaylistId.value, selectedSourceKind.value] as const,
+  () =>
+    [
+      selectedSourceRootPath.value,
+      selectedPlaylistId.value,
+      selectedSourceKind.value,
+      selectedExternalKind.value
+    ] as const,
   () => {
     emitPioneerSongsAreaLog('source-or-playlist-changed')
     try {
@@ -714,7 +735,8 @@ onUnmounted(() => {
         :total-width="totalWidth"
         source-library-name="PioneerDeviceLibrary"
         :source-song-list-u-u-i-d="
-          currentPlaybackListKey || `${selectedSourceKind || 'usb'}:${selectedPlaylistId}`
+          currentPlaybackListKey ||
+          `${selectedExternalKind || selectedSourceKind || 'usb'}:${selectedPlaylistId}`
         "
         :scroll-host-element="songsAreaRef?.osInstance()?.elements().viewport"
         :external-scroll-top="externalScrollTop"

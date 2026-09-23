@@ -46,7 +46,8 @@ export const createDefaultMenuArr = (songListUUID: string): IMenu[][] => [
   [{ menuName: 'tracks.exportTracks' }],
   [
     { menuName: 'rekordboxDesktop.menuCreatePlaylistFromSelectedTracks' },
-    { menuName: 'rekordboxXmlExport.menuExportSelectedTracks' }
+    { menuName: 'rekordboxXmlExport.menuExportSelectedTracks' },
+    { menuName: 'library.writeToSeratoPlaylist' }
   ],
   [
     ...createFilterCuratedTransferMenus(resolveLibraryTransferActionModeForSongList(songListUUID)),

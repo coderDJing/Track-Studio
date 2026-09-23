@@ -14,12 +14,14 @@ import {
 import { t } from '@renderer/utils/translate'
 import type { MixxxWaveformData } from '@renderer/pages/modules/songPlayer/webAudioPlayer'
 import type { WaveformListPreviewData } from '@shared/waveformSurfaceCache'
+import type { SeratoWaveformOverviewData } from '@shared/seratoWaveformOverview'
 import type { RekordboxSourceKind } from '@shared/rekordboxSources'
 import { createSongListWaveformPreviewWorker } from '@renderer/workers/songListWaveformPreview.workerClient'
 import {
   drawSongListCompactVisualWaveform,
   drawSongListMixxxWaveform,
   drawSongListPioneerPreviewWaveform,
+  drawSongListSeratoOverview,
   drawSongListTimelineTicks,
   type SongListWaveformRgbMetricsCacheEntry
 } from '@renderer/workers/songListWaveformPreview.shared'
@@ -51,6 +53,10 @@ type WaveformCacheEntry =
   | {
       kind: 'compactVisual'
       data: WaveformListPreviewData
+    }
+  | {
+      kind: 'serato'
+      data: SeratoWaveformOverviewData
     }
   | null
 const PIONEER_WAVEFORM_EAGER_COUNT = 8
@@ -153,6 +159,12 @@ export function useWaveformPreview(params: {
     if (data.kind === 'compactVisual') {
       return {
         kind: 'compactVisual',
+        data: data.data
+      }
+    }
+    if (data.kind === 'serato') {
+      return {
+        kind: 'serato',
         data: data.data
       }
     }
@@ -509,6 +521,10 @@ export function useWaveformPreview(params: {
         })
         continue
       }
+      if (data.kind === 'serato') {
+        drawSongListSeratoOverview(ctx, width, height, data.data, playedPercent, progressColor)
+        continue
+      }
       drawSongListMixxxWaveform(ctx, width, height, filePath, data.data, {
         isHalf: useHalfWaveform(),
         playedPercent,
@@ -677,6 +693,52 @@ export function useWaveformPreview(params: {
     }
     scheduleDrawForFilePaths(filePaths)
   }
+  const fetchSeratoWaveformBatch = async (filePaths: string[]) => {
+    if (!filePaths.length) return
+    const sourcePath = resolveExternalRootPath()
+    if (!sourcePath) return
+    const requestVersions = new Map(
+      filePaths.map((filePath) => [filePath, getWaveformDataVersion(filePath)])
+    )
+    for (const filePath of filePaths) {
+      inflight.add(filePath)
+      setWaveformPlaceholderLoading(filePath)
+    }
+    let response: {
+      items?: Array<{ filePath: string; data: SeratoWaveformOverviewData | null }>
+    } | null = null
+    try {
+      response = await window.electron.ipcRenderer.invoke(
+        'external-library:load-waveform-overviews',
+        { kind: 'serato', path: sourcePath, filePaths }
+      )
+    } catch (error) {
+      console.error('[serato-waveform-overview] load failed', error)
+      response = null
+    }
+    const itemMap = new Map(
+      (Array.isArray(response?.items) ? response.items : []).map((item) => [
+        normalizePath(item.filePath),
+        item.data ?? null
+      ])
+    )
+    for (const filePath of filePaths) {
+      if (getWaveformDataVersion(filePath) !== (requestVersions.get(filePath) ?? 0)) {
+        inflight.delete(filePath)
+        continue
+      }
+      const data = itemMap.get(normalizePath(filePath)) ?? null
+      inflight.delete(filePath)
+      if (data) {
+        storeWaveformData(filePath, { kind: 'serato', data })
+        setWaveformPlaceholderReady(filePath)
+      } else {
+        storeWaveformData(filePath, null)
+        setWaveformPlaceholderUnavailable(filePath, 'missing Serato Overview')
+      }
+    }
+    scheduleDrawForFilePaths(filePaths)
+  }
   const fetchExternalWaveformStream = async (
     requests: Array<{
       filePath: string
@@ -735,9 +797,18 @@ export function useWaveformPreview(params: {
       sourceKind: RekordboxSourceKind
     }> = []
     const libraryFilePaths: string[] = []
+    const seratoFilePaths: string[] = []
     const fallbackSourceKind = runtime.pioneerDeviceLibrary.selectedSourceKind || undefined
     for (const filePath of pending) {
       const song = resolveVisibleSongByFilePath(filePath)
+      if (song?.externalLibraryKind === 'serato') {
+        seratoFilePaths.push(filePath)
+        continue
+      }
+      if (song?.externalLibraryKind === 'traktor') {
+        libraryFilePaths.push(filePath)
+        continue
+      }
       const source = resolveSongExternalWaveformSource(song, {
         rootPath: resolveExternalRootPath(),
         sourceKind: fallbackSourceKind
@@ -757,6 +828,9 @@ export function useWaveformPreview(params: {
     }
     if (libraryFilePaths.length) {
       await fetchWaveformBatch(libraryFilePaths)
+    }
+    if (seratoFilePaths.length) {
+      await fetchSeratoWaveformBatch(seratoFilePaths)
     }
     if (externalRequests.length) {
       await fetchExternalWaveformStream(externalRequests)

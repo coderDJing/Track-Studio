@@ -63,6 +63,12 @@
       "chooseButton": "选择目录",
       "notConfigured": "未配置"
     },
+    "seratoTrackStorageDir": {
+      "title": "Serato 歌曲存放目录",
+      "hint": "使用“写入 Serato”功能时，会先把歌曲复制到这里，再写入 Serato 播放列表。",
+      "chooseButton": "选择目录",
+      "notConfigured": "未配置"
+    },
     "currentLibraryPath": "当前音乐库所在路径",
     "currentLibraryPathHint": "这里显示当前正在使用的音乐库根目录，方便确认和排查。",
     "openCurrentLibraryInExplorer": "在资源浏览器中打开",

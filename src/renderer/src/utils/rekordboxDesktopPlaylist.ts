@@ -1,6 +1,5 @@
 import choiceDialog from '@renderer/components/choiceDialog'
 import confirm from '@renderer/components/confirmDialog'
-import rekordboxDesktopStorageDirDialog from '@renderer/components/rekordboxDesktopStorageDirDialog'
 import rekordboxDesktopTargetDialog from '@renderer/components/rekordboxDesktopTargetDialog'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { ensureRekordboxDesktopWriteAvailable } from '@renderer/utils/rekordboxDesktopWriteAvailability'
@@ -15,7 +14,6 @@ import { normalizePlaylistTrackNumber, sortByPlaylistTrackNumber } from '@shared
 import type { IPioneerPlaylistTreeNode, ISongInfo } from '../../../types/globals'
 import type {
   RekordboxDesktopCleanupCopiedTracksRequest,
-  RekordboxDesktopCopyTracksToStorageResponse,
   RekordboxDesktopPlaylistRequest,
   RekordboxDesktopPlaylistResponse,
   RekordboxDesktopPlaylistSuccessSummary,
@@ -23,6 +21,10 @@ import type {
   RekordboxDesktopPlaylistWriteTarget
 } from '@shared/rekordboxDesktopPlaylist'
 import { delSongsViaSend } from '@renderer/utils/recycleBinActions'
+import {
+  copyTracksToStorage,
+  ensureRekordboxDesktopStorageDirConfigured
+} from '@renderer/utils/rekordboxTrackStorage'
 
 type RekordboxDesktopDeletePayload = {
   songListPath?: string
@@ -155,24 +157,6 @@ const showFailureSummary = async (params: { errorMessage: string; logPath?: stri
   })
 }
 
-const ensureStorageDirConfigured = async () => {
-  const runtime = useRuntimeStore()
-  const current = String(runtime.setting.rekordboxDesktopTrackStorageDir || '').trim()
-  if (current) return current
-
-  const result = await rekordboxDesktopStorageDirDialog()
-  if (result === 'cancel') return ''
-  const nextDir = String(result || '').trim()
-  if (!nextDir) return ''
-
-  runtime.setting.rekordboxDesktopTrackStorageDir = nextDir
-  await window.electron.ipcRenderer.invoke(
-    'setSetting',
-    JSON.parse(JSON.stringify(runtime.setting))
-  )
-  return nextDir
-}
-
 const chooseSourceRetentionMode = async (params: {
   target: RekordboxDesktopPlaylistWriteTarget
   trackCount?: number
@@ -217,19 +201,6 @@ const collectPlaylistTrackInputs = async (params: {
   } | null
   const scanData = Array.isArray(result?.scanData) ? result.scanData : []
   return sortByPlaylistTrackNumber(scanData).map((item) => buildTrackInput(item))
-}
-
-const copyTracksToStorage = async (params: {
-  targetRootDir: string
-  tracks: RekordboxDesktopPlaylistTrackInput[]
-}) => {
-  return (await window.electron.ipcRenderer.invoke(
-    buildRekordboxSourceChannel('desktop', 'copy-tracks-to-storage'),
-    {
-      targetRootDir: params.targetRootDir,
-      tracks: params.tracks
-    }
-  )) as RekordboxDesktopCopyTracksToStorageResponse
 }
 
 const cleanupCopiedTracks = async (filePaths: string[]) => {
@@ -352,7 +323,7 @@ export const openRekordboxDesktopPlaylistForSelectedTracks = async (params: {
   })
   if (!target) return null
 
-  const storageDir = await ensureStorageDirConfigured()
+  const storageDir = await ensureRekordboxDesktopStorageDirConfigured()
   if (!storageDir) return null
 
   const retentionChoice = params.forceKeepSourceTracks
@@ -430,7 +401,7 @@ export const openRekordboxDesktopPlaylistForPlaylist = async (params: {
   })
   if (!target) return null
 
-  const storageDir = await ensureStorageDirConfigured()
+  const storageDir = await ensureRekordboxDesktopStorageDirConfigured()
   if (!storageDir) return null
 
   const originalTracks = await collectPlaylistTrackInputs({

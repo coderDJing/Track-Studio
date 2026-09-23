@@ -10,6 +10,7 @@ import {
 } from './songItemContextMenuSummaries'
 import exportDialog from '@renderer/components/exportDialog'
 import { openRekordboxDesktopPlaylistForSelectedTracks } from '@renderer/utils/rekordboxDesktopPlaylist'
+import { openExternalLibraryPlaylistForSelectedTracks } from '@renderer/utils/externalLibraryPlaylist'
 import { openRekordboxXmlExportForSelectedTracks } from '@renderer/utils/rekordboxXmlExport'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import emitter from '@renderer/utils/mitt'
@@ -243,10 +244,10 @@ export function useSongItemContextMenu(
         : isSetView()
           ? createSetMenuArr(songsAreaState.songListUUID)
           : createDefaultMenuArr(songsAreaState.songListUUID)
-    menuArr.value = buildSongItemMenuArr(
-      isRecordingLibraryView ? withoutRecordingAnalysisMenus(baseMenuArr) : baseMenuArr,
-      matchedCuratedArtists
-    )
+    const menuWithSourceLabel = isRecordingLibraryView
+      ? withoutRecordingAnalysisMenus(baseMenuArr)
+      : baseMenuArr
+    menuArr.value = buildSongItemMenuArr(menuWithSourceLabel, matchedCuratedArtists)
     const result = await rightClickMenu({
       menuArr: menuArr.value,
       clickEvent: event
@@ -959,7 +960,8 @@ export function useSongItemContextMenu(
         }
         break
       }
-      case 'rekordboxDesktop.menuCreatePlaylistFromSelectedTracks': {
+      case 'rekordboxDesktop.menuCreatePlaylistFromSelectedTracks':
+      case 'library.writeToSeratoPlaylist': {
         if (runtime.isProgressing) {
           await confirmTaskBusy()
           return null
@@ -975,16 +977,19 @@ export function useSongItemContextMenu(
         }
         runtime.isProgressing = true
         try {
-          const summary = await openRekordboxDesktopPlaylistForSelectedTracks({
-            tracks: selectedSongs,
-            songListUUID: songsAreaState.songListUUID,
-            deletePayload: {
-              songListPath: isExternalView
-                ? undefined
-                : libraryUtils.findDirPathByUuid(songsAreaState.songListUUID),
-              sourceType: isExternalView ? 'external' : undefined
-            }
-          })
+          const summary =
+            result.menuName === 'library.writeToSeratoPlaylist'
+              ? await openExternalLibraryPlaylistForSelectedTracks({ tracks: selectedSongs })
+              : await openRekordboxDesktopPlaylistForSelectedTracks({
+                  tracks: selectedSongs,
+                  songListUUID: songsAreaState.songListUUID,
+                  deletePayload: {
+                    songListPath: isExternalView
+                      ? undefined
+                      : libraryUtils.findDirPathByUuid(songsAreaState.songListUUID),
+                    sourceType: isExternalView ? 'external' : undefined
+                  }
+                })
           if (summary?.removedSetItemIds?.length) {
             const removedSetItemIds = summary.removedSetItemIds
             songsAreaState.selectedSongFilePath = songsAreaState.selectedSongFilePath.filter(

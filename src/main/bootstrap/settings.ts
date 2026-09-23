@@ -133,6 +133,7 @@ const defaultSettings = {
   enableExplorerContextMenu: platform === 'win32',
   showPlaylistTrackCount: true,
   rekordboxDesktopTrackStorageDir: '',
+  seratoTrackStorageDir: '',
   nextCheckUpdateTime: '',
   enableErrorReport: true,
   errorReportUsageMsSinceLastSuccess: 0,

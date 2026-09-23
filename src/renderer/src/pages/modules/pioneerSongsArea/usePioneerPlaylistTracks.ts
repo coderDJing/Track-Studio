@@ -2,6 +2,7 @@ import type { ComputedRef, Ref, ShallowRef } from 'vue'
 import { buildRekordboxSourceChannel } from '@shared/rekordboxSources'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import emitter from '@renderer/utils/mitt'
+import type { ExternalLibraryKind } from '@shared/externalLibrary'
 import type {
   IPioneerPlaylistTrack,
   IRekordboxSourceKind,
@@ -12,6 +13,7 @@ type UsePioneerPlaylistTracksParams = {
   selectedSourceCacheKey: ComputedRef<string>
   selectedPlaylistId: ComputedRef<number>
   selectedSourceKind: ComputedRef<IRekordboxSourceKind | ''>
+  selectedExternalKind: ComputedRef<ExternalLibraryKind | null>
   selectedSourceRootPath: ComputedRef<string>
   selectedLibraryType: ComputedRef<string>
   originalTracks: ShallowRef<IPioneerPlaylistTrack[]>
@@ -27,6 +29,7 @@ type FetchPlaylistTracksParams = {
   sourceCacheKey: string
   playlistId: number
   sourceKind: IRekordboxSourceKind
+  externalKind: ExternalLibraryKind | null
   rootPath: string
   libraryType: string
 }
@@ -181,7 +184,8 @@ export const usePioneerPlaylistTracks = (params: UsePioneerPlaylistTracksParams)
 
   const fetchPlaylistTracks = async (fetchParams: FetchPlaylistTracksParams) => {
     const requestToken = ++playlistTracksRequestToken
-    const { sourceCacheKey, playlistId, sourceKind, rootPath, libraryType } = fetchParams
+    const { sourceCacheKey, playlistId, sourceKind, externalKind, rootPath, libraryType } =
+      fetchParams
 
     try {
       params.emitPioneerSongsAreaLog('fetch-playlist-tracks-start', {
@@ -189,17 +193,23 @@ export const usePioneerPlaylistTracks = (params: UsePioneerPlaylistTracksParams)
         sourceCacheKey
       })
       const result = (
-        sourceKind === 'desktop'
-          ? await window.electron.ipcRenderer.invoke(
-              buildRekordboxSourceChannel('desktop', 'load-playlist-tracks-meta'),
+        externalKind
+          ? await window.electron.ipcRenderer.invoke('external-library:load-playlist-tracks', {
+              kind: externalKind,
+              path: rootPath,
               playlistId
-            )
-          : await window.electron.ipcRenderer.invoke(
-              buildRekordboxSourceChannel('usb', 'load-playlist-tracks-meta'),
-              rootPath,
-              playlistId,
-              libraryType
-            )
+            })
+          : sourceKind === 'desktop'
+            ? await window.electron.ipcRenderer.invoke(
+                buildRekordboxSourceChannel('desktop', 'load-playlist-tracks-meta'),
+                playlistId
+              )
+            : await window.electron.ipcRenderer.invoke(
+                buildRekordboxSourceChannel('usb', 'load-playlist-tracks-meta'),
+                rootPath,
+                playlistId,
+                libraryType
+              )
       ) as { tracks?: IPioneerPlaylistTrack[] }
       const tracks = Array.isArray(result?.tracks) ? result.tracks : []
       params.emitPioneerSongsAreaLog('fetch-playlist-tracks-success', {
@@ -219,7 +229,7 @@ export const usePioneerPlaylistTracks = (params: UsePioneerPlaylistTracksParams)
       params.applyFiltersAndSorting('fetch-playlist-tracks-success')
       params.loading.value = false
 
-      if (!tracks.length) return
+      if (!tracks.length || externalKind) return
 
       try {
         const runtimeResult = (
@@ -279,6 +289,7 @@ export const usePioneerPlaylistTracks = (params: UsePioneerPlaylistTracksParams)
     const sourceCacheKey = params.selectedSourceCacheKey.value
     const playlistId = params.selectedPlaylistId.value
     const sourceKind = params.selectedSourceKind.value || 'usb'
+    const externalKind = params.selectedExternalKind.value
     const rootPath = params.selectedSourceRootPath.value
     const libraryType = params.selectedLibraryType.value
 
@@ -308,6 +319,7 @@ export const usePioneerPlaylistTracks = (params: UsePioneerPlaylistTracksParams)
       sourceCacheKey,
       playlistId,
       sourceKind,
+      externalKind,
       rootPath,
       libraryType
     })

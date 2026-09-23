@@ -8,6 +8,11 @@
 - `rust_package/` Rust N-API module, with tests in `rust_package/__test__/`.
 - `resources/` app assets, `build/` packaging assets, `vendor/` bundled ffmpeg/chromaprint binaries, `out/` build output, `docs/` VitePress documentation site.
 
+## Electron IPC 通道一致性
+- 新增或修改 `ipcMain.handle`、`ipcMain.on`、`ipcMain.handleOnce` 等主进程 IPC 通道时，必须同步检查 `src/preload/index.ts` 的安全白名单：`exactInvokeChannels`、`exactSendChannels`、`exactOnChannels` 以及对应的前缀白名单。Renderer 只能调用已明确放行的通道。
+- 不允许只注册主进程 handler 而遗漏 preload 白名单；这种遗漏会让 renderer 调用被安全层拦截，并且在未捕获 rejection 时表现为“点击没有反应”。
+- 每次新增 IPC 通道后，交付前至少运行 `npx vue-tsc --noEmit` 和 `pnpm run build`，并用 `rg` 对照主进程注册名、preload 白名单名和 renderer 调用名；如果通道是动态拼接的，必须验证实际展开后的完整通道名仍被白名单覆盖。
+
 ## Build, Test, and Development Commands
 - `pnpm install` installs root dependencies.
 - `pnpm run dev` starts the Electron + Vite dev workflow.

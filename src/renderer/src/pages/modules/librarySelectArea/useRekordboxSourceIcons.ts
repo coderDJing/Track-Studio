@@ -20,6 +20,7 @@ import {
 import { analyzeFingerprintsForPaths } from '@renderer/utils/fingerprintActions'
 import { buildRekordboxSourceChannel } from '@shared/rekordboxSources'
 import { importCuratedArtistsFromPioneerSource } from '@renderer/composables/rekordboxDesktop/useImportCuratedArtists'
+import { groupPioneerDriveIcons } from './groupPioneerDriveIcons'
 import type {
   IMenu,
   IPioneerDeviceLibraryKind,
@@ -117,34 +118,9 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
   let sourceTreeRequestToken = 0
   let refreshInFlight: Promise<void> | null = null
 
-  const pioneerDriveTypeOrder: Record<IPioneerDeviceLibraryKind, number> = {
-    deviceLibrary: 0,
-    oneLibrary: 1
-  }
-
-  const pioneerDriveGroups = computed<PioneerDriveGroup[]>(() => {
-    const groupMap = new Map<string, PioneerDriveGroup>()
-    for (const icon of pioneerDriveIcons.value) {
-      const groupKey = `pioneer-group:${icon.path || icon.key}`
-      const existing = groupMap.get(groupKey)
-      if (existing) {
-        existing.icons.push(icon)
-        continue
-      }
-      groupMap.set(groupKey, {
-        key: groupKey,
-        path: icon.path,
-        icons: [icon]
-      })
-    }
-    return Array.from(groupMap.values()).map((group) => ({
-      ...group,
-      icons: [...group.icons].sort(
-        (left, right) =>
-          pioneerDriveTypeOrder[left.libraryType] - pioneerDriveTypeOrder[right.libraryType]
-      )
-    }))
-  })
+  const pioneerDriveGroups = computed<PioneerDriveGroup[]>(() =>
+    groupPioneerDriveIcons(pioneerDriveIcons.value)
+  )
 
   const getPioneerLibraryTypeLabel = (libraryType: IPioneerDeviceLibraryKind) =>
     libraryType === 'oneLibrary' ? t('pioneer.oneLibraryLabel') : t('pioneer.deviceLibraryLabel')
@@ -551,8 +527,15 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
     }
   }
 
+  const clearExternalDjSelection = () => {
+    runtime.externalDjLibrary.selectedKind = null
+    runtime.externalDjLibrary.selectedSourceKey = ''
+    runtime.externalDjLibrary.selectedSourcePath = ''
+  }
+
   const clickPioneerDriveIcon = async (item: PioneerDriveIcon) => {
     if (!item.path) return
+    clearExternalDjSelection()
     const sourceCacheKey = resolvePioneerDriveSourceCacheKey(item)
     const cachedTree = getCachedRekordboxSourceTree(sourceCacheKey)
     const preferredPlaylistId =
@@ -609,6 +592,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
   const clickDesktopLibraryIcon = async () => {
     const icon = desktopLibraryIcon.value
     if (!icon?.rootPath) return
+    clearExternalDjSelection()
     const sourceCacheKey = resolveDesktopLibrarySourceCacheKey(icon)
     const cachedTree = getCachedRekordboxSourceTree(sourceCacheKey)
     const preferredPlaylistId =

@@ -82,6 +82,7 @@ import { registerSpotifySearchHandlers } from './ipc/spotifySearchHandlers'
 import { markGlobalSongSearchDirty } from './services/globalSongSearch'
 import { registerPioneerDeviceLibraryHandlers } from './ipc/pioneerDeviceLibraryHandlers'
 import { registerRekordboxDesktopLibraryHandlers } from './ipc/rekordboxDesktopLibraryHandlers'
+import { registerExternalLibraryHandlers } from './ipc/externalLibraryHandlers'
 import { registerRekordboxXmlExportHandlers } from './ipc/rekordboxXmlExportHandlers'
 import { registerHorizontalBrowseTransportHandlers } from './ipc/horizontalBrowseTransportHandlers'
 import { stopHorizontalBrowseTransportSnapshotBroadcaster } from './ipc/horizontalBrowseTransportSnapshotBroadcaster'
@@ -366,6 +367,7 @@ registerSongSearchHandlers()
 registerSpotifySearchHandlers()
 registerPioneerDeviceLibraryHandlers()
 registerRekordboxDesktopLibraryHandlers()
+registerExternalLibraryHandlers()
 registerRekordboxXmlExportHandlers()
 registerHorizontalBrowseTransportHandlers()
 registerHotCueHandlers()

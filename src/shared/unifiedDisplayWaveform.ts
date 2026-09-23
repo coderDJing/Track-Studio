@@ -42,6 +42,14 @@ type UnifiedDisplayWaveformBuildSource = {
   }
 }
 
+type PersistedMixxxWaveformBuildSource = UnifiedDisplayWaveformBuildSource & {
+  bands: UnifiedDisplayWaveformBuildSource['bands'] & {
+    low: UnifiedDisplayWaveformBuildSourceBand
+    mid: UnifiedDisplayWaveformBuildSourceBand
+    high: UnifiedDisplayWaveformBuildSourceBand
+  }
+}
+
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 const toByte = (value: number) => clamp(Math.round(value), 0, 255)
 
@@ -169,4 +177,59 @@ export const buildUnifiedDisplayWaveformDetailFromMixxx = (
     body,
     overviewHeight
   }
+}
+
+/**
+ * Rehydrates the unified detail waveform from the persisted Mixxx RGB bands.
+ * External-library analysis intentionally stores the compact Mixxx waveform in
+ * SQLite; this recreates the display payload without decoding the audio again.
+ */
+export const buildUnifiedDisplayWaveformDetailFromPersistedMixxx = (
+  source: PersistedMixxxWaveformBuildSource
+): UnifiedDisplayWaveformDetailData | null => {
+  const empty = new Float32Array(0)
+  const detail = buildUnifiedDisplayWaveformDetailFromMixxx(source, {
+    rate: 1,
+    frames: 0,
+    loadedFrames: 0,
+    minLeft: empty,
+    maxLeft: empty,
+    minRight: empty,
+    maxRight: empty
+  })
+  if (!detail) return null
+
+  const sourceFrames = Math.min(
+    source.bands.low.left.length,
+    source.bands.low.right.length,
+    source.bands.mid.left.length,
+    source.bands.mid.right.length,
+    source.bands.high.left.length,
+    source.bands.high.right.length
+  )
+  if (!sourceFrames) return detail
+
+  const readBandPeak = (band: UnifiedDisplayWaveformBuildSourceBand, frame: number) =>
+    Math.max(resolveBandPeak(band, frame, 'left'), resolveBandPeak(band, frame, 'right'))
+
+  for (let index = 0; index < detail.height.length; index += 1) {
+    const sourceFrame = resolveFrame(sourceFrames, index, detail.height.length)
+    const low = readBandPeak(source.bands.low, sourceFrame)
+    const mid = readBandPeak(source.bands.mid, sourceFrame)
+    const high = readBandPeak(source.bands.high, sourceFrame)
+    const peak = Math.max(low, mid, high)
+    if (peak <= 0) continue
+    const lowRatio = low / peak
+    const midRatio = mid / peak
+    const highRatio = high / peak
+    detail.colorIndex[index] = low >= mid && low >= high ? 0 : mid >= high ? 1 : 2
+    detail.colorLow[index] = toByte(lowRatio * 255)
+    detail.colorMid[index] = toByte(midRatio * 255)
+    detail.colorHigh[index] = toByte(highRatio * 255)
+    detail.colorRed[index] = toByte(lowRatio * 255 * 0.95)
+    detail.colorGreen[index] = toByte(midRatio * 255 * 0.95)
+    detail.colorBlue[index] = toByte(highRatio * 255 * 0.95)
+  }
+
+  return detail
 }

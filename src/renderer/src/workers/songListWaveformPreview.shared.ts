@@ -4,6 +4,7 @@ import type {
   RGBWaveformBandKey
 } from '@renderer/pages/modules/songPlayer/webAudioPlayer'
 import type { WaveformListPreviewData } from '@shared/waveformSurfaceCache'
+import type { SeratoWaveformOverviewData } from '@shared/seratoWaveformOverview'
 import {
   formatSaturatedWaveformRgb,
   resolveSaturatedWaveformColor
@@ -230,6 +231,50 @@ export const drawSongListPioneerPreviewWaveform = (
   ctx.save()
   ctx.globalCompositeOperation = 'source-atop'
   ctx.globalAlpha = 0.32
+  ctx.fillStyle = progressColor
+  ctx.fillRect(0, 0, width * clampedPlayed, height)
+  ctx.restore()
+}
+
+export const drawSongListSeratoOverview = (
+  ctx: SongListWaveformCanvasContext,
+  width: number,
+  height: number,
+  waveformData: SeratoWaveformOverviewData,
+  playedPercent: number,
+  progressColor: string
+) => {
+  const sourceColumns = Math.max(0, Number(waveformData?.columnCount) || 0)
+  const sourceRows = Math.max(0, Number(waveformData?.rowCount) || 0)
+  const pixels = waveformData?.pixels
+  if (!sourceColumns || sourceRows !== 16 || !(pixels instanceof Uint8Array)) return
+  if (pixels.length < sourceColumns * sourceRows || width <= 0 || height <= 0) return
+
+  const targetColumns = Math.max(1, Math.floor(width))
+  const columnWidth = width / targetColumns
+  const rowHeight = height / sourceRows
+  for (let x = 0; x < targetColumns; x++) {
+    const sourceX = Math.min(sourceColumns - 1, Math.floor((x / targetColumns) * sourceColumns))
+    const offset = sourceX * sourceRows
+    let lowValueCount = 0
+    for (let row = 0; row < sourceRows; row++) {
+      if (pixels[offset + row] < 0x80) lowValueCount += 1
+    }
+    const hue = ((lowValueCount / sourceRows) * 1.5 * 360) % 360
+    for (let row = 0; row < sourceRows; row++) {
+      const value = pixels[offset + row]
+      if (value <= 1) continue
+      const luminance = 12 + Math.sqrt(value / 255) * 70
+      ctx.fillStyle = `hsl(${hue} 58% ${luminance}%)`
+      ctx.fillRect(x * columnWidth, row * rowHeight, Math.max(1, columnWidth), rowHeight + 0.5)
+    }
+  }
+
+  const clampedPlayed = clamp01(playedPercent)
+  if (clampedPlayed <= 0) return
+  ctx.save()
+  ctx.globalCompositeOperation = 'source-atop'
+  ctx.globalAlpha = 0.3
   ctx.fillStyle = progressColor
   ctx.fillRect(0, 0, width * clampedPlayed, height)
   ctx.restore()

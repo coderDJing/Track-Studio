@@ -62,10 +62,10 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
     libraryUtils.getLibraryTreeByUUID(state.songListUUID)?.type === 'mixtapeList'
   const isSetViewForState = (state: ISongsAreaPaneRuntimeState) =>
     libraryUtils.getLibraryTreeByUUID(state.songListUUID)?.type === 'setList'
-  const isPioneerSourceState = (state: ISongsAreaPaneRuntimeState) =>
-    /^(desktop|usb):/.test(String(state.songListUUID || '').trim())
+  const isPlaylistEntryIdentityState = (state: ISongsAreaPaneRuntimeState) =>
+    /^(desktop|usb|serato|traktor):/.test(String(state.songListUUID || '').trim())
   const getRowKeyForState = (state: ISongsAreaPaneRuntimeState, song: ISongInfo) =>
-    (isMixtapeViewForState(state) || isPioneerSourceState(state)) && song.mixtapeItemId
+    (isMixtapeViewForState(state) || isPlaylistEntryIdentityState(state)) && song.mixtapeItemId
       ? song.mixtapeItemId
       : isSetViewForState(state) && song.setItemId
         ? song.setItemId
@@ -84,7 +84,7 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
     const selectedKeys = keys ?? state.selectedSongFilePath
     if (
       !isMixtapeViewForState(state) &&
-      !isPioneerSourceState(state) &&
+      !isPlaylistEntryIdentityState(state) &&
       !isSetViewForState(state)
     ) {
       return selectedKeys

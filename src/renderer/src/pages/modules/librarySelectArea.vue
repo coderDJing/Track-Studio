@@ -5,8 +5,9 @@ import trashIconAsset from '@renderer/assets/trash.svg?asset'
 import mixtapeIconAsset from '@renderer/assets/mixtape.svg?asset'
 import setListIconAsset from '@renderer/assets/setList.svg?asset'
 import recordIconAsset from '@renderer/assets/record.svg?asset'
-import usbDriveIconAsset from '@renderer/assets/usbDrive.svg?asset'
-import rekordboxDesktopIconAsset from '@renderer/assets/rekordboxDesktop.svg?asset'
+import rekordboxIconAsset from '@renderer/assets/rekordbox.svg?asset'
+import rekordboxUsbIconAsset from '@renderer/assets/rekordboxUsb.svg?asset'
+import seratoIconAsset from '@renderer/assets/serato.svg?asset'
 import {
   computed,
   ref,
@@ -31,6 +32,7 @@ import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { RECORDING_LIBRARY_CHANGED_EVENT, RECORDING_LIBRARY_UUID } from '@shared/recordingLibrary'
 import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
 import { useRekordboxSourceIcons } from './librarySelectArea/useRekordboxSourceIcons'
+import { useExternalDjSourceIcons } from './librarySelectArea/useExternalDjSourceIcons'
 import { useLibraryBatchActions } from './librarySelectArea/useLibraryBatchActions'
 import { resolveActivePlaybackSongListUUIDs } from '@renderer/utils/playbackSongListSources'
 const emit = defineEmits(['librarySelectedChange'])
@@ -125,13 +127,6 @@ const coreIconArr = computed(() => iconArr.value.filter((item) => coreIconNameSe
 const dynamicIconArr = computed(() =>
   iconArr.value.filter((item) => !coreIconNameSet.has(item.name))
 )
-const hasDynamicEntries = computed(
-  () =>
-    dynamicIconArr.value.length > 0 ||
-    Boolean(desktopLibraryIcon.value) ||
-    pioneerDriveGroups.value.length > 0
-)
-
 const selectedIcon = ref<HoverableIcon>(iconArr.value[0])
 selectedIcon.value.src = selectedIcon.value.white
 
@@ -325,12 +320,29 @@ const {
   isSelectedDesktopLibraryIcon
 } = useRekordboxSourceIcons({
   runtime,
-  usbDriveIconAsset,
-  rekordboxDesktopIconAsset,
+  usbDriveIconAsset: rekordboxUsbIconAsset,
+  rekordboxDesktopIconAsset: rekordboxIconAsset,
   updateSelectedIcon,
   waitForUiIdle,
   emitLibrarySelectedChange: (payload) => emit('librarySelectedChange', payload)
 })
+const {
+  sourceIcons: externalDjSourceIcons,
+  clickSourceIcon: clickExternalDjSourceIcon,
+  isSelectedSourceIcon: isSelectedExternalDjSourceIcon
+} = useExternalDjSourceIcons({
+  runtime,
+  seratoIconAsset,
+  updateSelectedIcon,
+  emitLibrarySelectedChange: (payload) => emit('librarySelectedChange', payload)
+})
+const hasDynamicEntries = computed(
+  () =>
+    dynamicIconArr.value.length > 0 ||
+    Boolean(desktopLibraryIcon.value) ||
+    externalDjSourceIcons.value.length > 0 ||
+    pioneerDriveGroups.value.length > 0
+)
 const dynamicIconsScrollRef = useTemplateRef<OverlayScrollbarsComponentRef>('dynamicIconsScrollRef')
 const dynamicScrollState = reactive({
   canScroll: false,
@@ -370,7 +382,11 @@ const syncDynamicScrollViewport = async () => {
 }
 const selectedDynamicScrollKey = computed(() => {
   if (runtime.libraryAreaSelected === 'PioneerDeviceLibrary') {
-    return runtime.pioneerDeviceLibrary.selectedSourceKey || ''
+    return (
+      runtime.externalDjLibrary.selectedSourceKey ||
+      runtime.pioneerDeviceLibrary.selectedSourceKey ||
+      ''
+    )
   }
   return dynamicIconArr.value.some((item) => item.name === runtime.libraryAreaSelected)
     ? runtime.libraryAreaSelected
@@ -515,6 +531,9 @@ watch(
   (val) => {
     if (val === 'PioneerDeviceLibrary') {
       const target =
+        externalDjSourceIcons.value.find(
+          (icon) => icon.key === runtime.externalDjLibrary.selectedSourceKey
+        ) ||
         (runtime.pioneerDeviceLibrary.selectedSourceKind === 'desktop'
           ? desktopLibraryIcon.value
           : null) ||
@@ -539,6 +558,7 @@ watch(
     hasDynamicEntries.value,
     dynamicIconArr.value.map((item) => item.name).join('|'),
     desktopLibraryIcon.value?.key || '',
+    externalDjSourceIcons.value.map((item) => item.key).join('|'),
     pioneerDriveGroups.value.map((group) => group.icons.map((item) => item.key).join(',')).join('|')
   ],
   () => {
@@ -677,41 +697,83 @@ watch(
             </div>
           </div>
           <div
-            v-if="desktopLibraryIcon"
-            :ref="(el) => setScrollItemRef(desktopLibraryIcon?.key || '', el)"
-            class="iconBox iconBox--device"
-            data-user-guide-target="rekordbox-library"
-            :class="{ 'is-importing': isImportingDesktopLibraryIcon }"
-            @click="clickDesktopLibraryIcon()"
-            @contextmenu.stop.prevent="handleDesktopLibraryContextmenu($event)"
-            @mouseover="iconMouseover(desktopLibraryIcon)"
-            @mouseout="iconMouseout(desktopLibraryIcon)"
+            v-if="desktopLibraryIcon || externalDjSourceIcons.length"
+            class="deviceGroup deviceGroup--desktop"
+            :class="{
+              'deviceGroup--selected':
+                isSelectedDesktopLibraryIcon ||
+                externalDjSourceIcons.some((item) => isSelectedExternalDjSourceIcon(item)),
+              'deviceGroup--multi': externalDjSourceIcons.length + (desktopLibraryIcon ? 1 : 0) > 1
+            }"
           >
-            <div
-              class="iconBoxAccent"
-              :style="{ backgroundColor: isSelectedDesktopLibraryIcon ? 'var(--accent)' : '' }"
-            ></div>
-            <div class="iconBoxContent">
-              <span
-                :ref="(el) => setIconRef(desktopLibraryIcon?.key || '', el)"
-                :style="getIconMaskStyle(desktopLibraryIcon)"
-                :class="[
-                  'sidebar-icon',
-                  {
-                    'is-active': isSelectedDesktopLibraryIcon,
-                    'is-importing': isImportingDesktopLibraryIcon
-                  }
-                ]"
-              ></span>
-              <bubbleBox
-                :dom="iconRefMap[desktopLibraryIcon?.key || ''] || undefined"
-                :title="
-                  isImportingDesktopLibraryIcon
-                    ? t('pioneer.importArtistsSourceBusyTooltip')
-                    : desktopLibraryIcon?.tooltip || ''
-                "
-                :max-width="320"
-              />
+            <div class="deviceGroupInner">
+              <div
+                v-if="desktopLibraryIcon"
+                :ref="(el) => setScrollItemRef(desktopLibraryIcon?.key || '', el)"
+                class="iconBox iconBox--device iconBox--device-group"
+                data-user-guide-target="rekordbox-library"
+                :class="{ 'is-importing': isImportingDesktopLibraryIcon }"
+                @click="clickDesktopLibraryIcon()"
+                @contextmenu.stop.prevent="handleDesktopLibraryContextmenu($event)"
+                @mouseover="iconMouseover(desktopLibraryIcon)"
+                @mouseout="iconMouseout(desktopLibraryIcon)"
+              >
+                <div
+                  class="iconBoxAccent"
+                  :style="{ backgroundColor: isSelectedDesktopLibraryIcon ? 'var(--accent)' : '' }"
+                ></div>
+                <div class="iconBoxContent">
+                  <span
+                    :ref="(el) => setIconRef(desktopLibraryIcon?.key || '', el)"
+                    :style="getIconMaskStyle(desktopLibraryIcon)"
+                    :class="[
+                      'sidebar-icon',
+                      {
+                        'is-active': isSelectedDesktopLibraryIcon,
+                        'is-importing': isImportingDesktopLibraryIcon
+                      }
+                    ]"
+                  ></span>
+                  <bubbleBox
+                    :dom="iconRefMap[desktopLibraryIcon?.key || ''] || undefined"
+                    :title="
+                      isImportingDesktopLibraryIcon
+                        ? t('pioneer.importArtistsSourceBusyTooltip')
+                        : desktopLibraryIcon?.tooltip || ''
+                    "
+                    :max-width="320"
+                  />
+                </div>
+              </div>
+              <div
+                v-for="item of externalDjSourceIcons"
+                :key="item.key"
+                :ref="(el) => setScrollItemRef(item.key, el)"
+                class="iconBox iconBox--device iconBox--device-group"
+                @click="clickExternalDjSourceIcon(item)"
+                @mouseover="iconMouseover(item)"
+                @mouseout="iconMouseout(item)"
+              >
+                <div
+                  class="iconBoxAccent"
+                  :style="{
+                    backgroundColor: isSelectedExternalDjSourceIcon(item) ? 'var(--accent)' : ''
+                  }"
+                ></div>
+                <div class="iconBoxContent">
+                  <span
+                    :ref="(el) => setIconRef(item.key, el)"
+                    :style="getIconMaskStyle(item)"
+                    class="sidebar-icon sidebar-icon--dj-brand"
+                    :class="{ 'is-active': isSelectedExternalDjSourceIcon(item) }"
+                  ></span>
+                  <bubbleBox
+                    :dom="iconRefMap[item.key] || undefined"
+                    :title="item.tooltip"
+                    :max-width="320"
+                  />
+                </div>
+              </div>
             </div>
           </div>
           <div

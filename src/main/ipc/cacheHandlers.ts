@@ -20,10 +20,14 @@ import {
   normalizeTrackReanalysisSelection,
   resolveTrackReanalysisPlan
 } from '../../shared/trackReanalysisSelection'
-import type { UnifiedDisplayWaveformDetailData } from '../../shared/unifiedDisplayWaveform'
-import type {
-  WaveformGlobalOverviewData,
-  WaveformListPreviewData
+import {
+  buildUnifiedDisplayWaveformDetailFromPersistedMixxx,
+  type UnifiedDisplayWaveformDetailData
+} from '../../shared/unifiedDisplayWaveform'
+import {
+  buildWaveformSurfaceCacheDataFromUnifiedDisplay,
+  type WaveformGlobalOverviewData,
+  type WaveformListPreviewData
 } from '../../shared/waveformSurfaceCache'
 import {
   assertLibraryMergeMutationAllowed,
@@ -129,6 +133,17 @@ export function registerCacheHandlers() {
     })
   }
 
+  const loadExternalUnifiedDisplayWaveform = async (
+    filePath: string,
+    stat: { size: number; mtimeMs: number }
+  ) => {
+    const waveform = await LibraryCacheDb.loadExternalAnalysisWaveformCacheDataByFilePath(
+      filePath,
+      stat
+    )
+    return waveform ? buildUnifiedDisplayWaveformDetailFromPersistedMixxx(waveform) : null
+  }
+
   const loadListPreviewSurface = async (
     filePath: string,
     listRootRaw: string,
@@ -137,17 +152,22 @@ export function registerCacheHandlers() {
   ): Promise<WaveformListPreviewData | null> => {
     if (isLibraryMergeMutationLocked()) return null
     const listRoot = await resolvePayloadListRoot(listRootRaw, filePath)
-    if (!listRoot) return null
     const statResult = await readCacheFileStat(filePath)
     if (statResult.status === 'missing') {
-      await LibraryCacheDb.removeSongCacheEntry(listRoot, filePath)
-      await LibraryCacheDb.removeWaveformCacheEntry(listRoot, filePath)
-      await LibraryCacheDb.removeCompactVisualWaveformCacheEntry(listRoot, filePath)
-      await LibraryCacheDb.removeWaveformSurfaceCacheEntry(listRoot, filePath)
+      if (listRoot) {
+        await LibraryCacheDb.removeSongCacheEntry(listRoot, filePath)
+        await LibraryCacheDb.removeWaveformCacheEntry(listRoot, filePath)
+        await LibraryCacheDb.removeCompactVisualWaveformCacheEntry(listRoot, filePath)
+        await LibraryCacheDb.removeWaveformSurfaceCacheEntry(listRoot, filePath)
+      }
       return null
     }
     if (statResult.status === 'unavailable') return null
     try {
+      if (!listRoot) {
+        const unified = await loadExternalUnifiedDisplayWaveform(filePath, statResult.stat)
+        return buildWaveformSurfaceCacheDataFromUnifiedDisplay(unified)?.listPreview || null
+      }
       const data = await LibraryCacheDb.loadWaveformListPreviewCacheData(
         listRoot,
         filePath,
@@ -177,17 +197,22 @@ export function registerCacheHandlers() {
   ): Promise<WaveformGlobalOverviewData | null> => {
     if (isLibraryMergeMutationLocked()) return null
     const listRoot = await resolvePayloadListRoot(listRootRaw, filePath)
-    if (!listRoot) return null
     const statResult = await readCacheFileStat(filePath)
     if (statResult.status === 'missing') {
-      await LibraryCacheDb.removeSongCacheEntry(listRoot, filePath)
-      await LibraryCacheDb.removeWaveformCacheEntry(listRoot, filePath)
-      await LibraryCacheDb.removeCompactVisualWaveformCacheEntry(listRoot, filePath)
-      await LibraryCacheDb.removeWaveformSurfaceCacheEntry(listRoot, filePath)
+      if (listRoot) {
+        await LibraryCacheDb.removeSongCacheEntry(listRoot, filePath)
+        await LibraryCacheDb.removeWaveformCacheEntry(listRoot, filePath)
+        await LibraryCacheDb.removeCompactVisualWaveformCacheEntry(listRoot, filePath)
+        await LibraryCacheDb.removeWaveformSurfaceCacheEntry(listRoot, filePath)
+      }
       return null
     }
     if (statResult.status === 'unavailable') return null
     try {
+      if (!listRoot) {
+        const unified = await loadExternalUnifiedDisplayWaveform(filePath, statResult.stat)
+        return buildWaveformSurfaceCacheDataFromUnifiedDisplay(unified)?.globalOverview || null
+      }
       const data = await LibraryCacheDb.loadWaveformGlobalOverviewCacheData(
         listRoot,
         filePath,
@@ -324,17 +349,24 @@ export function registerCacheHandlers() {
       if (!listRoot) {
         listRoot = (await findSongListRoot(path.dirname(filePath))) || ''
       }
-      if (!listRoot) return { status: 'missing' as const, data: null }
       const statResult = await readCacheFileStat(filePath)
       if (statResult.status === 'missing') {
-        await LibraryCacheDb.removeUnifiedDisplayWaveformCacheEntry(listRoot, filePath)
-        await clearLegacyLargeWaveformCaches(listRoot, filePath)
+        if (listRoot) {
+          await LibraryCacheDb.removeUnifiedDisplayWaveformCacheEntry(listRoot, filePath)
+          await clearLegacyLargeWaveformCaches(listRoot, filePath)
+        }
         return { status: 'missing' as const, data: null }
       }
       if (statResult.status === 'unavailable') {
         return { status: 'missing' as const, data: null }
       }
       try {
+        if (!listRoot) {
+          const data = await loadExternalUnifiedDisplayWaveform(filePath, statResult.stat)
+          return data
+            ? { status: 'ready' as const, data }
+            : { status: 'missing' as const, data: null }
+        }
         const data = await LibraryCacheDb.loadUnifiedDisplayWaveformCacheData(
           listRoot,
           filePath,

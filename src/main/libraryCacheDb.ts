@@ -101,13 +101,16 @@ export {
   touchExternalAnalysisDevice,
   pruneStaleExternalAnalysisDevices,
   pruneStaleExternalAnalysisCacheEntries,
+  reconcileExternalAnalysisCacheEntries,
   loadExternalAnalysisCacheEntry,
   loadExternalAnalysisCacheEntryByFilePath,
+  loadExternalAnalysisWaveformCacheDataByFilePath,
   touchExternalAnalysisCacheEntrySeen,
   upsertExternalAnalysisCacheEntry,
   upsertExternalAnalysisWaveformCacheEntry,
   removeExternalAnalysisCacheEntry,
   type ExternalAnalysisContext,
+  type ExternalAnalysisActiveEntry,
   type ExternalAnalysisSourceKind,
   type ExternalAnalysisCacheEntry
 } from './libraryCacheDb/externalAnalysisCache'

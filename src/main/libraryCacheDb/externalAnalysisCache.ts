@@ -2,6 +2,7 @@ import path = require('path')
 import { getLibraryDb } from '../libraryDb'
 import { log } from '../log'
 import {
+  decodeMixxxWaveformData,
   encodeMixxxWaveformData,
   MIXXX_WAVEFORM_CACHE_VERSION,
   type MixxxWaveformData
@@ -21,6 +22,30 @@ export type ExternalAnalysisContext = {
   rootPath: string
   relativePath: string
   filePath: string
+}
+
+export type ExternalAnalysisActiveEntry = Pick<ExternalAnalysisContext, 'relativePath' | 'filePath'>
+
+const rowToWaveformData = (row: ExternalAnalysisCacheRow | undefined | null) => {
+  if (!row) return null
+  const version = toNumber(row.waveform_version)
+  const sampleRate = toNumber(row.waveform_sample_rate)
+  const step = toNumber(row.waveform_step)
+  const duration = toNumber(row.waveform_duration)
+  const frames = toNumber(row.waveform_frames)
+  const payload = row.waveform_data
+  if (
+    version !== MIXXX_WAVEFORM_CACHE_VERSION ||
+    sampleRate === null ||
+    step === null ||
+    duration === null ||
+    frames === null ||
+    frames <= 0 ||
+    !Buffer.isBuffer(payload)
+  ) {
+    return null
+  }
+  return decodeMixxxWaveformData({ sampleRate, step, duration, frames }, payload)
 }
 
 export type ExternalAnalysisCacheEntry = {
@@ -286,6 +311,74 @@ export async function pruneStaleExternalAnalysisCacheEntries(
   }
 }
 
+export async function reconcileExternalAnalysisCacheEntries(
+  sourceKind: ExternalAnalysisSourceKind,
+  sourceId: string,
+  activeEntries: ExternalAnalysisActiveEntry[],
+  now = Date.now()
+) {
+  const db = getLibraryDb()
+  const normalizedKind = normalizeSourceKind(sourceKind)
+  const normalizedId = normalizeSourceId(sourceId)
+  if (!db || !normalizedKind || !normalizedId) return 0
+
+  const activeByRelativePath = new Map<string, string>()
+  for (const entry of activeEntries) {
+    const relativePath = normalizeRelativePathKey(entry?.relativePath)
+    const filePath = String(entry?.filePath || '').trim()
+    if (relativePath && filePath) activeByRelativePath.set(relativePath, filePath)
+  }
+
+  try {
+    const rows = db
+      .prepare<{ relative_path?: unknown; file_path?: unknown }>(
+        `SELECT relative_path, file_path
+         FROM ${EXTERNAL_ANALYSIS_CACHE_TABLE}
+         WHERE source_kind = ? AND source_id = ?`
+      )
+      .all(normalizedKind, normalizedId)
+    const updateSeen = db.prepare(
+      `UPDATE ${EXTERNAL_ANALYSIS_CACHE_TABLE}
+       SET file_path = ?, last_seen_at_ms = ?
+       WHERE source_kind = ? AND source_id = ? AND relative_path = ?`
+    )
+    const removeEntry = db.prepare(
+      `DELETE FROM ${EXTERNAL_ANALYSIS_CACHE_TABLE}
+       WHERE source_kind = ? AND source_id = ? AND relative_path = ?`
+    )
+    const removedFilePaths: string[] = []
+    const run = db.transaction(() => {
+      for (const row of rows) {
+        const relativePath = normalizeRelativePathKey(row.relative_path)
+        const activeFilePath = activeByRelativePath.get(relativePath)
+        if (activeFilePath) {
+          updateSeen.run(activeFilePath, now, normalizedKind, normalizedId, relativePath)
+          continue
+        }
+        removeEntry.run(normalizedKind, normalizedId, relativePath)
+        const filePath = String(row.file_path || '').trim()
+        if (filePath) removedFilePaths.push(filePath)
+      }
+    })
+    run()
+
+    const activeRelativePaths = new Set(activeByRelativePath.keys())
+    for (const [pathKey, context] of registeredContextByPath) {
+      if (
+        context.sourceKind === normalizedKind &&
+        normalizeSourceId(context.sourceId) === normalizedId &&
+        !activeRelativePaths.has(normalizeRelativePathKey(context.relativePath))
+      ) {
+        registeredContextByPath.delete(pathKey)
+      }
+    }
+    return removedFilePaths.length
+  } catch (error) {
+    log.error('[sqlite] external analysis cache reconcile failed', error)
+    return 0
+  }
+}
+
 export async function loadExternalAnalysisCacheEntry(
   context: Partial<ExternalAnalysisContext> | null | undefined,
   stat?: { size: number; mtimeMs: number } | null
@@ -367,6 +460,44 @@ export async function loadExternalAnalysisCacheEntryByFilePath(
     }
   } catch (error) {
     log.error('[sqlite] external analysis cache load by file failed', error)
+    return undefined
+  }
+}
+
+export async function loadExternalAnalysisWaveformCacheDataByFilePath(
+  filePath: string,
+  stat?: { size: number; mtimeMs: number } | null
+): Promise<MixxxWaveformData | null | undefined> {
+  const db = getLibraryDb()
+  const normalizedFilePath = String(filePath || '').trim()
+  if (!db || !normalizedFilePath) return undefined
+  try {
+    const context = resolveExternalAnalysisContext(normalizedFilePath)
+    const row = context
+      ? db
+          .prepare<ExternalAnalysisCacheRow>(
+            `SELECT size, mtime_ms, waveform_version, waveform_sample_rate, waveform_step,
+                    waveform_duration, waveform_frames, waveform_data
+             FROM ${EXTERNAL_ANALYSIS_CACHE_TABLE}
+             WHERE source_kind = ? AND source_id = ? AND relative_path = ?`
+          )
+          .get(context.sourceKind, context.sourceId, context.relativePath)
+      : db
+          .prepare<ExternalAnalysisCacheRow>(
+            `SELECT size, mtime_ms, waveform_version, waveform_sample_rate, waveform_step,
+                    waveform_duration, waveform_frames, waveform_data
+             FROM ${EXTERNAL_ANALYSIS_CACHE_TABLE}
+             WHERE file_path = ?
+             ORDER BY updated_at_ms DESC
+             LIMIT 1`
+          )
+          .get(normalizedFilePath)
+    if (!row) return null
+    const entryStat = { size: toNumber(row.size) || 0, mtimeMs: toNumber(row.mtime_ms) || 0 }
+    if (stat && !isSameStat(entryStat, stat)) return null
+    return rowToWaveformData(row)
+  } catch (error) {
+    log.error('[sqlite] external analysis waveform cache load failed', error)
     return undefined
   }
 }

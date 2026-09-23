@@ -25,6 +25,7 @@ import {
   type MiniPlayerTaskProgress
 } from '@shared/miniPlayerTaskProgress'
 import type { LibrarySetupErrorHint, LibrarySetupMode } from '@shared/librarySetup'
+import type { ExternalLibraryKind } from '@shared/externalLibrary'
 export type LibrarySelection =
   | 'FilterLibrary'
   | 'CuratedLibrary'
@@ -210,6 +211,11 @@ interface Runtime {
     songs: ISongInfo[]
     lastLibrarySelection: Exclude<LibrarySelection, 'ExternalPlaylist'>
   }
+  externalDjLibrary: {
+    selectedKind: ExternalLibraryKind | null
+    selectedSourceKey: string
+    selectedSourcePath: string
+  }
   pioneerDeviceLibrary: IRekordboxLibraryBrowserState
   pioneerSelectedRowKeys: string[]
   manualKeyAnalysisPendingFilePaths: string[]
@@ -364,6 +370,11 @@ export const useRuntimeStore = defineStore('runtime', {
       externalPlaylist: {
         songs: [],
         lastLibrarySelection: 'FilterLibrary'
+      },
+      externalDjLibrary: {
+        selectedKind: null,
+        selectedSourceKey: '',
+        selectedSourcePath: ''
       },
       pioneerDeviceLibrary: {
         selectedSourceKey: '',

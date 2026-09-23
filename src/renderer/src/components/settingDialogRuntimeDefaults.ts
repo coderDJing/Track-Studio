@@ -81,6 +81,9 @@ export const ensureSettingDialogRuntimeDefaults = (runtime: SettingDialogRuntime
   if (runtime.setting.rekordboxDesktopTrackStorageDir === undefined) {
     runtime.setting.rekordboxDesktopTrackStorageDir = ''
   }
+  if (runtime.setting.seratoTrackStorageDir === undefined) {
+    runtime.setting.seratoTrackStorageDir = ''
+  }
   if (runtime.setting.songListBubbleAlways === undefined) {
     runtime.setting.songListBubbleAlways = false
   }
