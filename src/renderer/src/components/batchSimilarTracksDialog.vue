@@ -5,7 +5,13 @@ import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { t } from '@renderer/utils/translate'
 import utils from '@renderer/utils/utils'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
-import { buildNeteaseSearchQuery, openNeteaseSearch } from '@renderer/utils/neteaseSearch'
+import confirm from '@renderer/components/confirmDialog'
+import {
+  buildMusicSearchQuery,
+  getMusicSearchOpenFailedMessageKey,
+  openMusicSearch,
+  type MusicSearchProvider
+} from '@renderer/utils/musicSearch'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 import { seedKeyOfSimilarSong } from '@renderer/utils/similarTracksBatch'
 import type {
@@ -319,13 +325,18 @@ const openTrackSource = (track: ISimilarTrackItem) => {
 const hasTrackSourceUrl = (track: ISimilarTrackItem) =>
   !!(track.sourceUrls?.lastfm || track.sourceUrls?.listenbrainz || track.recordingMbid)
 
-const resolveNeteaseSearchQuery = (track: ISimilarTrackItem) =>
-  buildNeteaseSearchQuery(track.title, track.artist)
+const resolveMusicSearchQuery = (track: ISimilarTrackItem) =>
+  buildMusicSearchQuery(track.title, track.artist)
 
-const hasNeteaseSearchQuery = (track: ISimilarTrackItem) => !!resolveNeteaseSearchQuery(track)
+const hasMusicSearchQuery = (track: ISimilarTrackItem) => !!resolveMusicSearchQuery(track)
 
-const openTrackNeteaseSearch = (track: ISimilarTrackItem) => {
-  openNeteaseSearch(resolveNeteaseSearchQuery(track))
+const openTrackMusicSearch = async (provider: MusicSearchProvider, track: ISimilarTrackItem) => {
+  if (await openMusicSearch(provider, resolveMusicSearchQuery(track))) return
+  await confirm({
+    title: t('dialog.hint'),
+    content: [t(getMusicSearchOpenFailedMessageKey(provider))],
+    confirmShow: false
+  })
 }
 
 const loadBlockedRecommendationKeys = async () => {
@@ -540,10 +551,18 @@ onUnmounted(() => {
                     <button
                       class="open-button"
                       type="button"
-                      :disabled="!hasNeteaseSearchQuery(track)"
-                      @click="openTrackNeteaseSearch(track)"
+                      :disabled="!hasMusicSearchQuery(track)"
+                      @click="openTrackMusicSearch('netease', track)"
                     >
                       {{ t('similarTracks.searchNetease') }}
+                    </button>
+                    <button
+                      class="open-button"
+                      type="button"
+                      :disabled="!hasMusicSearchQuery(track)"
+                      @click="openTrackMusicSearch('spotify', track)"
+                    >
+                      {{ t('similarTracks.searchSpotify') }}
                     </button>
                   </div>
                 </div>

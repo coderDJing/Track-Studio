@@ -5,10 +5,11 @@ import confirm from '@renderer/components/confirmDialog'
 import { analyzeFingerprintsForPaths } from '@renderer/utils/fingerprintActions'
 import { openRekordboxDesktopPlaylistForSelectedTracks } from '@renderer/utils/rekordboxDesktopPlaylist'
 import {
-  buildNeteaseSearchQuery,
-  normalizeNeteaseSearchText,
-  openNeteaseSearch
-} from '@renderer/utils/neteaseSearch'
+  createMusicSearchMenuItems,
+  getMusicSearchOpenFailedMessageKey,
+  openMusicSearch,
+  resolveMusicSearchMenuAction
+} from '@renderer/utils/musicSearch'
 import { t } from '@renderer/utils/translate'
 import { promptAndStartTrackReanalysis } from '@renderer/utils/trackReanalysis'
 import type { useRuntimeStore } from '@renderer/stores/runtime'
@@ -48,17 +49,7 @@ const buildPioneerSongMenuGroups = (canRemoveTracksFromDesktopPlaylist: boolean)
     { menuName: 'library.addToMixtapeByCopy' }
   ])
   groups.push([{ menuName: 'tracks.showInFileExplorer' }])
-  groups.push([
-    {
-      menuName: 'tracks.neteaseSearch',
-      children: [
-        { menuName: 'tracks.neteaseSearchTitleArtist' },
-        { menuName: 'tracks.neteaseSearchTitle' },
-        { menuName: 'tracks.neteaseSearchArtist' },
-        { menuName: 'tracks.neteaseSearchAlbum' }
-      ]
-    }
-  ])
+  groups.push(createMusicSearchMenuItems())
   groups.push([{ menuName: 'similarTracks.menu' }])
   groups.push([{ menuName: 'fingerprints.analyzeAndAdd' }])
   groups.push([{ menuName: 'tracks.clearTrackCache' }])
@@ -75,20 +66,6 @@ export const usePioneerSongContextMenu = (params: UsePioneerSongContextMenuParam
     })
   }
 
-  const showNeteaseSearchEmptyHint = async (messageKey: string) => {
-    await confirm({
-      title: t('dialog.hint'),
-      content: [t(messageKey)],
-      confirmShow: false
-    })
-  }
-
-  const openSongNeteaseSearch = async (query: string) => {
-    if (!openNeteaseSearch(query)) {
-      await showNeteaseSearchEmptyHint('tracks.neteaseSearchEmpty')
-    }
-  }
-
   const handleSongContextMenu = async (event: MouseEvent, song: ISongInfo) => {
     params.cancelPendingRepeatSingleClickDeselect()
     if (params.playlistMutationPending.value) return
@@ -103,6 +80,23 @@ export const usePioneerSongContextMenu = (params: UsePioneerSongContextMenuParam
       clickEvent: event
     })
     if (result === 'cancel') return
+
+    const musicSearchAction = resolveMusicSearchMenuAction(result.menuName, song)
+    if (musicSearchAction) {
+      const messageKey = musicSearchAction.query
+        ? (await openMusicSearch(musicSearchAction.provider, musicSearchAction.query))
+          ? ''
+          : getMusicSearchOpenFailedMessageKey(musicSearchAction.provider)
+        : musicSearchAction.emptyMessageKey
+      if (messageKey) {
+        await confirm({
+          title: t('dialog.hint'),
+          content: [t(messageKey)],
+          confirmShow: false
+        })
+      }
+      return
+    }
 
     const selectedTracks = params.resolveSelectedTracks(song)
     if (!selectedTracks.length) return
@@ -221,43 +215,6 @@ export const usePioneerSongContextMenu = (params: UsePioneerSongContextMenuParam
           window.electron.ipcRenderer.send('show-item-in-folder', updatedTracks[0]?.filePath)
         }
         return
-      case 'tracks.neteaseSearchTitle': {
-        const title = normalizeNeteaseSearchText(song.title)
-        if (!title) {
-          await showNeteaseSearchEmptyHint('tracks.neteaseSearchTitleEmpty')
-          return
-        }
-        await openSongNeteaseSearch(title)
-        return
-      }
-      case 'tracks.neteaseSearchArtist': {
-        const artist = normalizeNeteaseSearchText(song.artist)
-        if (!artist) {
-          await showNeteaseSearchEmptyHint('tracks.neteaseSearchArtistEmpty')
-          return
-        }
-        await openSongNeteaseSearch(artist)
-        return
-      }
-      case 'tracks.neteaseSearchAlbum': {
-        const album = normalizeNeteaseSearchText(song.album)
-        if (!album) {
-          await showNeteaseSearchEmptyHint('tracks.neteaseSearchAlbumEmpty')
-          return
-        }
-        await openSongNeteaseSearch(album)
-        return
-      }
-      case 'tracks.neteaseSearchTitleArtist': {
-        const title = normalizeNeteaseSearchText(song.title)
-        const artist = normalizeNeteaseSearchText(song.artist)
-        if (!title && !artist) {
-          await showNeteaseSearchEmptyHint('tracks.neteaseSearchTitleArtistEmpty')
-          return
-        }
-        await openSongNeteaseSearch(buildNeteaseSearchQuery(title, artist))
-        return
-      }
     }
   }
 

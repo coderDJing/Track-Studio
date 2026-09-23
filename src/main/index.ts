@@ -78,6 +78,7 @@ import { registerLibraryStemHandlers } from './ipc/libraryStemHandlers'
 import { registerMixtapeDragSessionHandlers } from './ipc/mixtapeDragSessionHandlers'
 import { registerMixtapeProjectTempoHandlers } from './ipc/mixtapeProjectTempoHandlers'
 import { registerSongSearchHandlers } from './ipc/songSearchHandlers'
+import { registerSpotifySearchHandlers } from './ipc/spotifySearchHandlers'
 import { markGlobalSongSearchDirty } from './services/globalSongSearch'
 import { registerPioneerDeviceLibraryHandlers } from './ipc/pioneerDeviceLibraryHandlers'
 import { registerRekordboxDesktopLibraryHandlers } from './ipc/rekordboxDesktopLibraryHandlers'
@@ -362,6 +363,7 @@ registerLibraryStemHandlers()
 registerMixtapeDragSessionHandlers()
 registerMixtapeProjectTempoHandlers()
 registerSongSearchHandlers()
+registerSpotifySearchHandlers()
 registerPioneerDeviceLibraryHandlers()
 registerRekordboxDesktopLibraryHandlers()
 registerRekordboxXmlExportHandlers()

@@ -2,10 +2,12 @@ import {
   resolveLibraryTransferActionModeForSongList,
   type LibraryTransferActionMode
 } from '@renderer/utils/libraryTransfer'
+import { createMusicSearchMenuItems } from '@renderer/utils/musicSearch'
 import type { IMenu } from '../../../../../../types/globals'
 
 const RECORDING_LIBRARY_ANALYSIS_MENU_NAMES = new Set([
   'tracks.neteaseSearch',
+  'tracks.spotifySearch',
   'similarTracks.menu',
   'metadata.autoFillMenu',
   'fingerprints.analyzeAndAdd',
@@ -40,18 +42,6 @@ export const buildSongItemMenuArr = (base: IMenu[][], matchedArtists: string[]) 
   return next
 }
 
-export const createNeteaseSearchMenu = (): IMenu[] => [
-  {
-    menuName: 'tracks.neteaseSearch',
-    children: [
-      { menuName: 'tracks.neteaseSearchTitleArtist' },
-      { menuName: 'tracks.neteaseSearchTitle' },
-      { menuName: 'tracks.neteaseSearchArtist' },
-      { menuName: 'tracks.neteaseSearchAlbum' }
-    ]
-  }
-]
-
 export const createDefaultMenuArr = (songListUUID: string): IMenu[][] => [
   [{ menuName: 'tracks.exportTracks' }],
   [
@@ -68,7 +58,7 @@ export const createDefaultMenuArr = (songListUUID: string): IMenu[][] => [
     { menuName: 'tracks.deleteAllAbove' }
   ],
   [{ menuName: 'tracks.showInFileExplorer' }],
-  createNeteaseSearchMenu(),
+  createMusicSearchMenuItems(),
   [{ menuName: 'similarTracks.menu' }],
   [{ menuName: 'metadata.autoFillMenu' }, { menuName: 'tracks.editMetadata' }],
   [{ menuName: 'fingerprints.analyzeAndAdd' }],
@@ -99,7 +89,7 @@ export const createRecycleMenuArr = (): IMenu[][] => [
     { menuName: 'tracks.deleteAllAbove' }
   ],
   [{ menuName: 'tracks.showInFileExplorer' }],
-  createNeteaseSearchMenu(),
+  createMusicSearchMenuItems(),
   [{ menuName: 'similarTracks.menu' }],
   [{ menuName: 'metadata.autoFillMenu' }, { menuName: 'tracks.editMetadata' }],
   [{ menuName: 'fingerprints.analyzeAndAdd' }],
@@ -118,7 +108,7 @@ export const createMixtapeMenuArr = (): IMenu[][] => [
   ],
   [{ menuName: 'tracks.deleteTracks', shortcutKey: 'Delete' }],
   [{ menuName: 'tracks.showInFileExplorer' }],
-  createNeteaseSearchMenu(),
+  createMusicSearchMenuItems(),
   [{ menuName: 'similarTracks.menu' }],
   [{ menuName: 'tracks.editMetadata' }],
   [{ menuName: 'tracks.clearTrackCache' }],

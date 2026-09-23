@@ -25,10 +25,10 @@ import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { RECORDING_LIBRARY_UUID } from '@shared/recordingLibrary'
 import {
-  buildNeteaseSearchQuery,
-  normalizeNeteaseSearchText,
-  openNeteaseSearch
-} from '@renderer/utils/neteaseSearch'
+  getMusicSearchOpenFailedMessageKey,
+  openMusicSearch,
+  resolveMusicSearchMenuAction
+} from '@renderer/utils/musicSearch'
 import { delSongsViaSend, permanentlyDelSongsViaSend } from '@renderer/utils/recycleBinActions'
 import {
   buildSongItemMenuArr,
@@ -254,6 +254,23 @@ export function useSongItemContextMenu(
 
     if (result === 'cancel') return null
 
+    const musicSearchAction = resolveMusicSearchMenuAction(result.menuName, song)
+    if (musicSearchAction) {
+      const messageKey = musicSearchAction.query
+        ? (await openMusicSearch(musicSearchAction.provider, musicSearchAction.query))
+          ? ''
+          : getMusicSearchOpenFailedMessageKey(musicSearchAction.provider)
+        : musicSearchAction.emptyMessageKey
+      if (messageKey) {
+        await confirm({
+          title: t('dialog.hint'),
+          content: [t(messageKey)],
+          confirmShow: false
+        })
+      }
+      return null
+    }
+
     const buildDelSongsPayload = (paths: string[]) => {
       if (isExternalView) {
         return { filePaths: paths, sourceType: 'external' }
@@ -263,18 +280,6 @@ export function useSongItemContextMenu(
         return { filePaths: paths, songListPath }
       }
       return paths
-    }
-    const showNeteaseSearchEmptyHint = async (messageKey: string) => {
-      await confirm({
-        title: t('dialog.hint'),
-        content: [t(messageKey)],
-        confirmShow: false
-      })
-    }
-    const openSongNeteaseSearch = async (query: string) => {
-      if (!openNeteaseSearch(query)) {
-        await showNeteaseSearchEmptyHint('tracks.neteaseSearchEmpty')
-      }
     }
     const requestDeleteSongs = async (paths: string[]) => {
       return await delSongsViaSend(buildDelSongsPayload(paths))
@@ -1031,43 +1036,6 @@ export function useSongItemContextMenu(
       case 'tracks.showInFileExplorer':
         window.electron.ipcRenderer.send('show-item-in-folder', song.filePath)
         break
-      case 'tracks.neteaseSearchTitle': {
-        const title = normalizeNeteaseSearchText(song.title)
-        if (!title) {
-          await showNeteaseSearchEmptyHint('tracks.neteaseSearchTitleEmpty')
-          break
-        }
-        await openSongNeteaseSearch(title)
-        break
-      }
-      case 'tracks.neteaseSearchArtist': {
-        const artist = normalizeNeteaseSearchText(song.artist)
-        if (!artist) {
-          await showNeteaseSearchEmptyHint('tracks.neteaseSearchArtistEmpty')
-          break
-        }
-        await openSongNeteaseSearch(artist)
-        break
-      }
-      case 'tracks.neteaseSearchAlbum': {
-        const album = normalizeNeteaseSearchText(song.album)
-        if (!album) {
-          await showNeteaseSearchEmptyHint('tracks.neteaseSearchAlbumEmpty')
-          break
-        }
-        await openSongNeteaseSearch(album)
-        break
-      }
-      case 'tracks.neteaseSearchTitleArtist': {
-        const title = normalizeNeteaseSearchText(song.title)
-        const artist = normalizeNeteaseSearchText(song.artist)
-        if (!title && !artist) {
-          await showNeteaseSearchEmptyHint('tracks.neteaseSearchTitleArtistEmpty')
-          break
-        }
-        await openSongNeteaseSearch(buildNeteaseSearchQuery(title, artist))
-        break
-      }
       case 'tracks.clearTrackCache': {
         const files = resolveSelectedFilePaths()
         await promptAndStartTrackReanalysis(files, resolveSelectedSongs())

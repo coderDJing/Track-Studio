@@ -17,10 +17,12 @@ import { analyzeFingerprintsForPaths } from '@renderer/utils/fingerprintActions'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
 import type { LibraryTransferActionMode } from '@renderer/utils/libraryTransfer'
 import {
-  buildNeteaseSearchQuery,
-  normalizeNeteaseSearchText,
-  openNeteaseSearch
-} from '@renderer/utils/neteaseSearch'
+  getMusicSearchOpenFailedMessageKey,
+  openMusicSearch,
+  resolveMusicSearch,
+  type MusicSearchMode,
+  type MusicSearchProvider
+} from '@renderer/utils/musicSearch'
 import { invokeMetadataAutoFill } from '@renderer/utils/metadataAutoFill'
 import { hasEffectiveAcoustIdKey } from '@renderer/utils/acoustid'
 import { openRekordboxDesktopPlaylistForSelectedTracks } from '@renderer/utils/rekordboxDesktopPlaylist'
@@ -292,7 +294,7 @@ const handleAnalyzeCurrentSongFingerprint = async () => {
   await analyzeFingerprintsForPaths([filePath], { origin: 'player' })
 }
 
-const showNeteaseSearchEmptyHint = async (messageKey: string) => {
+const showMusicSearchHint = async (messageKey: string) => {
   await confirm({
     title: t('dialog.hint'),
     content: [t(messageKey)],
@@ -300,58 +302,17 @@ const showNeteaseSearchEmptyHint = async (messageKey: string) => {
   })
 }
 
-const openSongNeteaseSearch = async (query: string) => {
-  if (!openNeteaseSearch(query)) {
-    await showNeteaseSearchEmptyHint('tracks.neteaseSearchEmpty')
-  }
-}
-
-const handleNeteaseSearchTitleArtist = async () => {
+const handleMusicSearch = async (provider: MusicSearchProvider, mode: MusicSearchMode) => {
   const song = runtime.playingData.playingSong
   if (!song) return
-  const title = normalizeNeteaseSearchText(song.title)
-  const artist = normalizeNeteaseSearchText(song.artist)
-  if (!title && !artist) {
-    await showNeteaseSearchEmptyHint('tracks.neteaseSearchTitleArtistEmpty')
+  const resolution = resolveMusicSearch(provider, mode, song)
+  if (!resolution.query) {
+    await showMusicSearchHint(resolution.emptyMessageKey)
     return
   }
-  await openSongNeteaseSearch(buildNeteaseSearchQuery(title, artist))
-  closeMoreMenu()
-}
-
-const handleNeteaseSearchTitle = async () => {
-  const song = runtime.playingData.playingSong
-  if (!song) return
-  const title = normalizeNeteaseSearchText(song.title)
-  if (!title) {
-    await showNeteaseSearchEmptyHint('tracks.neteaseSearchTitleEmpty')
-    return
+  if (!(await openMusicSearch(provider, resolution.query))) {
+    await showMusicSearchHint(getMusicSearchOpenFailedMessageKey(provider))
   }
-  await openSongNeteaseSearch(title)
-  closeMoreMenu()
-}
-
-const handleNeteaseSearchArtist = async () => {
-  const song = runtime.playingData.playingSong
-  if (!song) return
-  const artist = normalizeNeteaseSearchText(song.artist)
-  if (!artist) {
-    await showNeteaseSearchEmptyHint('tracks.neteaseSearchArtistEmpty')
-    return
-  }
-  await openSongNeteaseSearch(artist)
-  closeMoreMenu()
-}
-
-const handleNeteaseSearchAlbum = async () => {
-  const song = runtime.playingData.playingSong
-  if (!song) return
-  const album = normalizeNeteaseSearchText(song.album)
-  if (!album) {
-    await showNeteaseSearchEmptyHint('tracks.neteaseSearchAlbumEmpty')
-    return
-  }
-  await openSongNeteaseSearch(album)
   closeMoreMenu()
 }
 
@@ -591,7 +552,7 @@ const handleRekordboxXmlExport = async () => {
   }
 }
 
-const neteaseSearchShow = ref(false)
+const musicSearchSubmenu = ref<MusicSearchProvider | null>(null)
 
 const exportTrackLabel = computed(() =>
   isReadOnlyPlaybackSource.value ? t('tracks.exportTracksCopyOnly') : t('tracks.exportTracks')
@@ -878,27 +839,51 @@ onUnmounted(() => {
             <span>{{ t('tracks.showInFileExplorer') }}</span>
           </div>
         </div>
-        <div style="padding: 5px 5px; border-bottom: 1px solid var(--border)">
+        <div
+          style="padding: 5px 5px; border-bottom: 1px solid var(--border)"
+          @mouseleave="musicSearchSubmenu = null"
+        >
           <div
             class="menuButton hasSubmenu"
-            :class="{ submenuOpen: neteaseSearchShow }"
-            @mouseenter="neteaseSearchShow = true"
-            @mouseleave="neteaseSearchShow = false"
+            :class="{ submenuOpen: musicSearchSubmenu === 'netease' }"
+            @mouseenter="musicSearchSubmenu = 'netease'"
           >
             <span>{{ t('tracks.neteaseSearch') }}</span>
             <span style="margin-left: 8px; opacity: 0.6">▸</span>
-            <div v-if="neteaseSearchShow" class="submenu">
-              <div class="menuButton" @click.stop="handleNeteaseSearchTitleArtist()">
+            <div v-if="musicSearchSubmenu === 'netease'" class="submenu">
+              <div class="menuButton" @click.stop="handleMusicSearch('netease', 'titleArtist')">
                 <span>{{ t('tracks.neteaseSearchTitleArtist') }}</span>
               </div>
-              <div class="menuButton" @click.stop="handleNeteaseSearchTitle()">
+              <div class="menuButton" @click.stop="handleMusicSearch('netease', 'title')">
                 <span>{{ t('tracks.neteaseSearchTitle') }}</span>
               </div>
-              <div class="menuButton" @click.stop="handleNeteaseSearchArtist()">
+              <div class="menuButton" @click.stop="handleMusicSearch('netease', 'artist')">
                 <span>{{ t('tracks.neteaseSearchArtist') }}</span>
               </div>
-              <div class="menuButton" @click.stop="handleNeteaseSearchAlbum()">
+              <div class="menuButton" @click.stop="handleMusicSearch('netease', 'album')">
                 <span>{{ t('tracks.neteaseSearchAlbum') }}</span>
+              </div>
+            </div>
+          </div>
+          <div
+            class="menuButton hasSubmenu"
+            :class="{ submenuOpen: musicSearchSubmenu === 'spotify' }"
+            @mouseenter="musicSearchSubmenu = 'spotify'"
+          >
+            <span>{{ t('tracks.spotifySearch') }}</span>
+            <span style="margin-left: 8px; opacity: 0.6">▸</span>
+            <div v-if="musicSearchSubmenu === 'spotify'" class="submenu">
+              <div class="menuButton" @click.stop="handleMusicSearch('spotify', 'titleArtist')">
+                <span>{{ t('tracks.spotifySearchTitleArtist') }}</span>
+              </div>
+              <div class="menuButton" @click.stop="handleMusicSearch('spotify', 'title')">
+                <span>{{ t('tracks.spotifySearchTitle') }}</span>
+              </div>
+              <div class="menuButton" @click.stop="handleMusicSearch('spotify', 'artist')">
+                <span>{{ t('tracks.spotifySearchArtist') }}</span>
+              </div>
+              <div class="menuButton" @click.stop="handleMusicSearch('spotify', 'album')">
+                <span>{{ t('tracks.spotifySearchAlbum') }}</span>
               </div>
             </div>
           </div>

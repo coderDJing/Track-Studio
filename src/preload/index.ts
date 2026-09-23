@@ -78,6 +78,7 @@ const exactInvokeChannels = new Set([
   'select-folder',
   'select-songFingerprintFile',
   'setSetting',
+  'spotify:search',
   'sweepSongListCovers'
 ])
 
