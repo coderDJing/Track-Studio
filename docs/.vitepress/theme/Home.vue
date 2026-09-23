@@ -236,7 +236,7 @@ const zhContent = {
     {
       title: '跨设备云同步',
       details:
-        '支持 SHA256 指纹双向云同步、清晰同步摘要和可最小化进度窗口，精选表演者自动拆分联动。'
+        '可同步精选库目录树、歌单和音频，首次连接时选择两端的对齐方式；也支持 SHA256 指纹与精选表演者跨设备同步。'
     },
     {
       title: '录音库与双轨录音',
@@ -256,8 +256,8 @@ const zhContent = {
       details: '支持按预设规则或自定义格式统一修改歌单内文件名，保持音乐库命名绝对一致性。'
     },
     {
-      title: '全局搜歌与双源发现',
-      details: '支持跨界面搜歌、网易云网页搜索、库菜单相似歌曲推荐和不再推荐屏蔽。'
+      title: '全局搜歌与多源发现',
+      details: '支持跨界面搜歌、网易云网页搜索、Spotify 客户端或网页搜索，以及相似歌曲推荐和不再推荐屏蔽。'
     },
     {
       title: '指纹库与相似歌曲',
@@ -289,7 +289,11 @@ const zhContent = {
     },
     {
       title: '能量与段落分析',
-      details: '分析曲目能量和段落结构，在播放器中展示，并可用指定段落做区间试听。'
+      details: '提供综合能量、舞池能量、舞蹈性等可查看和筛选的指标，并可按分析出的段落区间试听。'
+    },
+    {
+      title: '自定义主题色',
+      details: '在设置中选择预设颜色，或用取色器设定自己的主题强调色。'
     },
     {
       title: '单曲 Stem 工作台',
@@ -392,7 +396,7 @@ const enContent = {
     {
       title: 'Cross-Device Cloud Sync',
       details:
-        'SHA256-based fingerprint sync, clear sync summaries, minimizable progress, curated artist split-linking, and portable library state.'
+        'Sync the Curated library folder tree, playlists, and audio, with a choice of how to align both sides on first connection. Fingerprints and curated artists also sync across devices.'
     },
     {
       title: 'Recording Library',
@@ -417,7 +421,7 @@ const enContent = {
     {
       title: 'Global Search & Discovery',
       details:
-        'Global search, NetEase Cloud search, library-menu similar track discovery, and controls for hiding unwanted recommendations.'
+        'Global search, NetEase Cloud search, Spotify desktop or web search, similar track discovery, and controls for hiding unwanted recommendations.'
     },
     {
       title: 'Fingerprint Library',
@@ -452,7 +456,11 @@ const enContent = {
     {
       title: 'Energy & Section Analysis',
       details:
-        'Analyze track energy and song structure, show them in the player, and audition by analyzed sections.'
+        'View and filter tracks by overall energy, dancefloor energy, danceability, and other measures, then audition by analyzed sections.'
+    },
+    {
+      title: 'Custom Accent Color',
+      details: 'Choose a preset in Settings or use the color picker to set your own theme accent.'
     },
     {
       title: 'Single-track Stem Workspace',

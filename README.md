@@ -24,7 +24,7 @@
 
 ## What It Is
 
-**Track Studio** is a desktop audio workflow tool for DJs and music collectors who need to organize, preview, analyze, and prepare large track libraries quickly. It combines real file-based library management, SET playlist preparation, waveform browsing, fingerprint deduplication, Rekordbox and Pioneer library access, section and energy analysis, library merge, dual-deck auditioning, recording, metadata cleanup, conversion, similar-track discovery, cloud fingerprint sync, single-track stem separation, and Mixtape preparation in one Windows/macOS app.
+**Track Studio** is a desktop audio workflow tool for DJs and music collectors who need to organize, preview, analyze, and prepare large track libraries quickly. It combines real file-based library management, SET playlist preparation, waveform browsing, fingerprint deduplication, Rekordbox and Pioneer library access, section and energy analysis, library merge, dual-deck auditioning, recording, metadata cleanup, conversion, similar-track discovery, curated-library and fingerprint cloud sync, single-track stem separation, and Mixtape preparation in one Windows/macOS app.
 
 Track Studio is built around a simple rule: the structure you see in the app should match the actual music files on disk. It is not just a reference manager. When you organize, move, export, deduplicate, or restore tracks, the file system stays aligned with your library.
 
@@ -73,7 +73,7 @@ Track Studio does not provide an official Linux release.
 - **Playlist fingerprint deduplication**: Analyze a playlist and move duplicates to the recycle bin in one workflow.
 - **BPM and beat-grid analysis**: Analyze tempo and grid placement, tap BPM manually, restore system-analyzed BPM, and work with stricter grid candidate rules for difficult tracks.
 - **Key analysis**: Display musical key in Classic notation such as `C#m` or Camelot notation such as `1A/1B`.
-- **Energy and section analysis**: Analyze track energy and song structure, show them in the player, and audition by analyzed sections.
+- **Energy and section analysis**: View and filter tracks by overall energy, dancefloor energy, danceability, and other measures; use analyzed sections for range playback.
 - **Locate unanalyzed tracks**: Jump from the bottom status bar to the first track that still needs analysis.
 - **Visible analysis progress**: Track-level analysis status is surfaced in the song list instead of leaving background work invisible.
 - **Manual analysis control**: Playlist analysis can be confirmed, skipped, or started manually, so imported crates do not unexpectedly consume foreground playback resources.
@@ -173,9 +173,15 @@ Track Studio does not provide an official Linux release.
 - **Global track search**: Search across the app and jump back to the matching location.
 - **Song filtering**: Filter by title, artist, album, duration, format, BPM, date added, and more, with optional persistence after restart. Date-added supports a between-date range.
 - **NetEase Cloud search**: Search the selected track on NetEase Cloud Music from the context menu.
+- **Spotify search**: Search by track title, artist, or album, opening the Spotify desktop app when available or the web search otherwise.
 - **Similar tracks query**: Query multiple sources for tracks with a similar vibe, launch recommendations from library menus, and hide tracks you no longer want suggested.
 - **Cloud fingerprint sync**: Sync local SHA256 fingerprints with the Track Studio cloud backend, including diff analysis, paginated pulls, batched uploads, quotas, rate limiting, clear summaries, and a minimizable progress window.
+- **Curated library cloud sync**: Sync the Curated library's folder tree, playlists, and audio. Choose how to align both sides when connecting for the first time; later changes sync automatically in both directions.
 - **Curated artist sync**: Split and link multi-artist tracks and sync curated artist data across devices.
+
+### Interface And Personalization
+
+- **Custom accent color**: Choose a preset in Settings or use the color picker to set your own theme accent.
 - **Internationalization**: Built-in Simplified Chinese and English language packs.
 
 ## Project Background
