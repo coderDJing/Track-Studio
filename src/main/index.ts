@@ -45,6 +45,7 @@ import {
   hasWindowsContextMenu,
   removeWindowsContextMenu
 } from './platform/windowsContextMenu'
+import { attachMacEditableContextMenu } from './platform/macEditableContextMenu'
 import { PRODUCT_DISPLAY_NAME } from '@shared/productBrand'
 import { loadLayoutConfigSync } from './layoutConfig'
 import { resolveBundledFfmpegPath, ensureExecutableOnMac } from './ffmpeg'
@@ -682,6 +683,7 @@ app.whenReady().then(async () => {
   }
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
+    attachMacEditableContextMenu(window)
     void processExternalOpenQueue()
   })
   // macOS：交由模块化方法统一处理菜单
