@@ -3,8 +3,6 @@ name: Release
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
     tags:
       - '*.*.*'
 
@@ -420,9 +418,26 @@ jobs:
           name: rekordbox-runtime-darwin-x64
           path: dist/rekordbox-runtime-darwin-x64.tar.gz
 
-      - name: Fetch Intel FFmpeg static libs
+      - name: Restore Intel FFmpeg static libs cache
+        uses: actions/cache@v5
+        with:
+          path: dist/ffmpeg-x64-dev
+          key: ffmpeg-dev-macos-x64-v1-${{ hashFiles('rust_package/Cargo.toml', 'rust_package/Cargo.lock', 'rust_package/native/ffmpeg/frkb_ffmpeg_decode_wrapper.*') }}
+          restore-keys: |
+            ffmpeg-dev-macos-x64-v1-
+
+      - name: Prepare Intel FFmpeg static libs
         run: |
           set -euo pipefail
+          if [ -f dist/ffmpeg-x64-dev/lib/libavcodec.a ] && \
+             [ -f dist/ffmpeg-x64-dev/lib/libavformat.a ] && \
+             [ -f dist/ffmpeg-x64-dev/lib/libavutil.a ] && \
+             [ -f dist/ffmpeg-x64-dev/lib/libswresample.a ] && \
+             [ -f dist/ffmpeg-x64-dev/include/libavcodec/avcodec.h ]; then
+            echo "Using cached Intel FFmpeg static libraries."
+            exit 0
+          fi
+
           # The hosted Intel runner ships an unrelated HashiCorp tap with a
           # broken vagrant formula, which makes `brew update` emit an error.
           if brew tap | grep -Fxq 'hashicorp/tap'; then

@@ -191,7 +191,7 @@
           "to": "r3-stretch/darwin-universal"
         }
       ],
-      "x64ArchFiles": "{Contents/Frameworks/**/*,Contents/Resources/ffmpeg/darwin/{ffmpeg,ffprobe},Contents/Resources/rekordboxDesktopRuntime/**/*,Contents/Resources/app.asar.unpacked/node_modules/@parcel/watcher-darwin-arm64/**/*,Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3/**/*,Contents/Resources/app.asar.unpacked/node_modules/**/better-sqlite3-multiple-ciphers/**/*,Contents/Resources/app.asar.unpacked/node_modules/onnxruntime-node/bin/napi-v3/darwin/**/*,Contents/Resources/app.asar.unpacked/node_modules/rust_package/**/*}",
+      "x64ArchFiles": "{Contents/Frameworks/**/*,Contents/Resources/ffmpeg/darwin/{ffmpeg,ffprobe},Contents/Resources/rekordboxDesktopRuntime/**/*,Contents/Resources/app.asar.unpacked/node_modules/@parcel/watcher-darwin-arm64/**/*,Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3/**/*,Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3-multiple-ciphers/**/*,Contents/Resources/app.asar.unpacked/node_modules/serato-connect/node_modules/better-sqlite3-multiple-ciphers/**/*,Contents/Resources/app.asar.unpacked/node_modules/onnxruntime-node/bin/napi-v3/darwin/**/*,Contents/Resources/app.asar.unpacked/node_modules/rust_package/**/*}",
       "artifactName": "Track-Studio-${version}-universal.${ext}"
     },
     "dmg": {
