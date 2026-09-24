@@ -82,6 +82,7 @@ track_studio_uninstall_start:
   WriteINIStr "$TrackStudioUninstallSessionFile" "frontend" "command" ""
   WriteINIStr "$TrackStudioUninstallSessionFile" "engine" "state" "uninstalling"
   ${NSD_KillTimer} un.TrackStudioUninstallPollBootstrap
+  Return
 track_studio_uninstall_cancel:
   ${NSD_KillTimer} un.TrackStudioUninstallPollBootstrap
   SetErrorLevel 1223
