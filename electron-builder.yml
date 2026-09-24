@@ -132,7 +132,18 @@ mac:
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
 dmg:
-  artifactName: Track-Studio-${version}-${platform}-${arch}.${ext}
+  artifactName: Track-Studio-${version}-mac-${arch}.${ext}
+  title: Track Studio ${version}
+  background: build/dmg-background.png
+  iconSize: 96
+  iconTextSize: 12
+  contents:
+    - x: 370
+      y: 250
+    - x: 600
+      y: 250
+      type: link
+      path: /Applications
 linux:
   target:
     - AppImage

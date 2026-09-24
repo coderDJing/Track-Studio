@@ -194,6 +194,25 @@
       "x64ArchFiles": "{Contents/Frameworks/**/*,Contents/Resources/ffmpeg/darwin/{ffmpeg,ffprobe},Contents/Resources/rekordboxDesktopRuntime/**/*,Contents/Resources/app.asar.unpacked/node_modules/@parcel/watcher-darwin-arm64/**/*,Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3/**/*,Contents/Resources/app.asar.unpacked/node_modules/**/better-sqlite3-multiple-ciphers/**/*,Contents/Resources/app.asar.unpacked/node_modules/onnxruntime-node/bin/napi-v3/darwin/**/*,Contents/Resources/app.asar.unpacked/node_modules/rust_package/**/*}",
       "artifactName": "Track-Studio-${version}-universal.${ext}"
     },
+    "dmg": {
+      "artifactName": "Track-Studio-${version}-mac-${arch}.${ext}",
+      "title": "Track Studio ${version}",
+      "background": "build/dmg-background.png",
+      "iconSize": 96,
+      "iconTextSize": 12,
+      "contents": [
+        {
+          "x": 370,
+          "y": 250
+        },
+        {
+          "x": 600,
+          "y": 250,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
     "linux": {
       "extraResources": [
         {
