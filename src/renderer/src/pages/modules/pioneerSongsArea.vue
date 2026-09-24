@@ -688,7 +688,8 @@ onUnmounted(() => {
 <template>
   <div class="songsAreaShell">
     <div v-if="placeholderText" class="songsAreaPlaceholder">
-      {{ placeholderText }}
+      <span v-if="loading" class="songsAreaLoadingSpinner" aria-hidden="true"></span>
+      <span>{{ placeholderText }}</span>
     </div>
     <OverlayScrollbarsComponent
       v-else
@@ -793,7 +794,24 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 7px;
   color: var(--text-weak);
   font-size: 12px;
+}
+
+.songsAreaLoadingSpinner {
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: songsAreaLoadingSpin 0.7s linear infinite;
+}
+
+@keyframes songsAreaLoadingSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
