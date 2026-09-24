@@ -177,6 +177,7 @@
     "mac": {
       "executableName": "FRKB",
       "hardenedRuntime": false,
+      "mergeASARs": false,
       "extraResources": [
         {
           "from": "vendor/demucs/models",

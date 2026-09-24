@@ -1,0 +1,45 @@
+name: Prepare macOS Intel FFmpeg cache
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Release run containing the validated ffmpeg-x64-dev artifact
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  seed_cache:
+    runs-on: macos-15-intel
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download validated Intel FFmpeg libraries
+        uses: actions/download-artifact@v8
+        with:
+          name: ffmpeg-x64-dev
+          path: dist/ffmpeg-x64-dev
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate Intel FFmpeg libraries
+        run: |
+          set -euo pipefail
+          for lib in libavcodec libavformat libavutil libswresample; do
+            file="dist/ffmpeg-x64-dev/lib/${lib}.a"
+            test -s "$file"
+            lipo -archs "$file" | grep -q 'x86_64'
+            test -d "dist/ffmpeg-x64-dev/include/${lib}"
+          done
+          test -f dist/ffmpeg-x64-dev/include/libavcodec/avcodec.h
+
+      - name: Save Intel FFmpeg libraries for release tags
+        uses: actions/cache/save@v5
+        with:
+          path: dist/ffmpeg-x64-dev
+          key: ffmpeg-dev-macos-x64-v1-${{ hashFiles('rust_package/Cargo.toml', 'rust_package/Cargo.lock', 'rust_package/native/ffmpeg/frkb_ffmpeg_decode_wrapper.*') }}

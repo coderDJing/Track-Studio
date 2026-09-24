@@ -423,8 +423,6 @@ jobs:
         with:
           path: dist/ffmpeg-x64-dev
           key: ffmpeg-dev-macos-x64-v1-${{ hashFiles('rust_package/Cargo.toml', 'rust_package/Cargo.lock', 'rust_package/native/ffmpeg/frkb_ffmpeg_decode_wrapper.*') }}
-          restore-keys: |
-            ffmpeg-dev-macos-x64-v1-
 
       - name: Prepare Intel FFmpeg static libs
         run: |
@@ -433,7 +431,8 @@ jobs:
              [ -f dist/ffmpeg-x64-dev/lib/libavformat.a ] && \
              [ -f dist/ffmpeg-x64-dev/lib/libavutil.a ] && \
              [ -f dist/ffmpeg-x64-dev/lib/libswresample.a ] && \
-             [ -f dist/ffmpeg-x64-dev/include/libavcodec/avcodec.h ]; then
+             [ -f dist/ffmpeg-x64-dev/include/libavcodec/avcodec.h ] && \
+             lipo -archs dist/ffmpeg-x64-dev/lib/libavcodec.a | grep -q 'x86_64'; then
             echo "Using cached Intel FFmpeg static libraries."
             exit 0
           fi
