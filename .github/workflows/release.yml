@@ -284,6 +284,9 @@ jobs:
           FRKB_LASTFM_API_KEY: ${{ secrets.FRKB_LASTFM_API_KEY }}
         run: pnpm build
 
+      - name: Build Windows installer frontend
+        run: pnpm installer-ui:build
+
       - name: Package (electron-builder, no publish)
         run: npx electron-builder --win --x64 --publish never
 

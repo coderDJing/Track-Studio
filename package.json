@@ -1,6 +1,6 @@
 {
   "name": "frkb",
-  "version": "1.2.4-rc.202609230909",
+  "version": "1.2.4-rc.202609241434",
   "packageManager": "pnpm@9.15.9",
   "description": "Track Studio — Rapid Audio Organization Tool",
   "license": "PolyForm-Noncommercial-1.0.0",
@@ -168,8 +168,11 @@
       "shortcutName": "Track Studio",
       "oneClick": false,
       "perMachine": true,
-      "allowToChangeInstallationDirectory": true,
-      "allowElevation": true
+      "allowToChangeInstallationDirectory": false,
+      "allowElevation": true,
+      "include": "build/installer.nsh",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
     },
     "mac": {
       "executableName": "FRKB",
@@ -247,8 +250,9 @@
     "media-tools:validate:mac-universal": "node scripts/validate-bundled-media-tools.mjs --mode package --platform-key darwin-universal",
     "postinstall": "electron-builder install-app-deps",
     "clean": "rimraf dist",
+    "installer-ui:build": "node scripts/build-windows-installer-ui.mjs",
     "build:unpack": "npm run media-tools:ensure:package && npm run build && npm run rekordbox:runtime:ensure && npm run rekordbox:runtime:validate && electron-builder --dir",
-    "build:win": "npm run clean && npm run media-tools:ensure:win && npm run build && npm run rekordbox:runtime:ensure && npm run rekordbox:runtime:validate && electron-builder --win",
+    "build:win": "npm run clean && npm run installer-ui:build && npm run media-tools:ensure:win && npm run build && npm run rekordbox:runtime:ensure && npm run rekordbox:runtime:validate && electron-builder --win",
     "build:mac": "npm run clean && npm run media-tools:validate:mac-universal && npm run build && npm run rekordbox:runtime:ensure:mac-universal && npm run rekordbox:runtime:validate:mac-universal && electron-builder --mac",
     "build:linux": "npm run clean && npm run build && electron-builder --linux",
     "demucs:runtime:prepare": "node scripts/prepare-demucs-runtimes.mjs",
