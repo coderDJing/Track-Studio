@@ -1,6 +1,6 @@
 {
   "name": "frkb",
-  "version": "1.2.4-rc.202609252246",
+  "version": "1.2.4-rc.202609252329",
   "packageManager": "pnpm@9.15.9",
   "description": "Track Studio — Rapid Audio Organization Tool",
   "license": "PolyForm-Noncommercial-1.0.0",
@@ -166,6 +166,7 @@
     "nsis": {
       "uninstallDisplayName": "Track Studio",
       "shortcutName": "Track Studio",
+      "createDesktopShortcut": true,
       "oneClick": false,
       "perMachine": true,
       "allowToChangeInstallationDirectory": false,

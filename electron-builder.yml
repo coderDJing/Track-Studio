@@ -108,7 +108,7 @@ nsis:
   artifactName: Track-Studio-${version}-${platform}-${arch}.${ext}
   shortcutName: Track Studio
   uninstallDisplayName: Track Studio
-  createDesktopShortcut: 'always'
+  createDesktopShortcut: true
   installerIcon: 'build/icon.ico'
   uninstallerIcon: 'build/icon.ico'
   include: build/installer.nsh

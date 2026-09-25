@@ -105,6 +105,7 @@ Var TrackStudioUpdateStagingDir
 Var TrackStudioUpdateBackupDir
 Var TrackStudioUpdateOldUninstallString
 Var TrackStudioUpdateOldQuietUninstallString
+Var TrackStudioHadDesktopShortcut
 Var TrackStudioInstallRegistryKey
 Var TrackStudioUninstallRegistryKey
 
@@ -239,6 +240,17 @@ FunctionEnd
 Function TrackStudioPrepareUpdate
   StrCmp $TrackStudioFrontendMode "update" 0 track_studio_update_prepare_done
   StrCmp $TrackStudioUpdatePrepared "1" track_studio_update_prepare_done
+  ; The stock install section creates a shortcut against the staging path.
+  ; Remember whether the user kept a desktop shortcut before that happens.
+  StrCpy $TrackStudioHadDesktopShortcut "0"
+  ReadRegStr $0 SHELL_CONTEXT "$TrackStudioInstallRegistryKey" ShortcutName
+  StrCmp $0 "" 0 +2
+  StrCpy $0 "${PRODUCT_FILENAME}"
+  IfFileExists "$DESKTOP\$0.lnk" track_studio_existing_desktop_link
+  IfFileExists "$DESKTOP\${SHORTCUT_NAME}.lnk" track_studio_existing_desktop_link track_studio_desktop_link_checked
+track_studio_existing_desktop_link:
+  StrCpy $TrackStudioHadDesktopShortcut "1"
+track_studio_desktop_link_checked:
   StrCpy $TrackStudioUpdateOriginalDir "$INSTDIR"
   StrCpy $TrackStudioUpdateStagingDir "$TrackStudioUpdateOriginalDir.__track-studio-update-stage"
   StrCpy $TrackStudioUpdateBackupDir "$TrackStudioUpdateOriginalDir.__track-studio-update-old"
@@ -329,6 +341,10 @@ track_studio_frontend_timeout:
 FunctionEnd
 
 Function .onInstFailed
+  StrCmp $TrackStudioUpdatePrepared "1" 0 track_studio_failed_shortcut_done
+  StrCmp $TrackStudioHadDesktopShortcut "0" 0 track_studio_failed_shortcut_done
+  Delete "$DESKTOP\${SHORTCUT_NAME}.lnk"
+track_studio_failed_shortcut_done:
   StrCmp $TrackStudioInteractive "1" 0 track_studio_failed_done
   ${NSD_KillTimer} TrackStudioPollInstallProgress
   Call TrackStudioCancelUpdate
@@ -403,7 +419,16 @@ FunctionEnd
   StrCpy $appExe "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
   !insertmacro registryAddInstallInfo
   !insertmacro addStartMenuLink "false"
+  StrCmp $TrackStudioHadDesktopShortcut "1" 0 track_studio_remove_new_desktop_link
   !insertmacro addDesktopLink "false"
+  StrCmp $oldDesktopLink $newDesktopLink track_studio_desktop_link_done
+  Delete "$oldDesktopLink"
+  Goto track_studio_desktop_link_done
+track_studio_remove_new_desktop_link:
+  ; Respect a shortcut that was deleted before the update. The stock install
+  ; section may have recreated one while extracting into the staging folder.
+  Delete "$newDesktopLink"
+track_studio_desktop_link_done:
   ${if} ${FileExists} "$newStartMenuLink"
     StrCpy $launchLink "$newStartMenuLink"
   ${else}
