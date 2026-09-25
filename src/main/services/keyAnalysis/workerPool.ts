@@ -75,6 +75,34 @@ export const getDeferredStructureGridDetail = (
   return 'structure: missing v2 beat grid for v23 structure analysis'
 }
 
+export const collectKeyAnalysisJobResultErrors = (
+  job: KeyAnalysisJob | undefined,
+  payloadResult?: WorkerPayload['result'],
+  payloadError?: string
+): string[] => {
+  const errors: string[] = []
+  if (payloadResult?.keyError) errors.push(`key: ${payloadResult.keyError}`)
+  if (payloadResult?.bpmError && !isNoBpmBeatGridResultError(payloadResult.bpmError)) {
+    errors.push(`bpm: ${payloadResult.bpmError}`)
+  }
+  if (
+    job?.needsEnergy === true &&
+    payloadResult?.energyScore === undefined &&
+    !payloadResult?.bpmError
+  ) {
+    errors.push(`energy: ${payloadResult?.energyError || 'missing energy score from analyzer'}`)
+  }
+  if (job?.needsStructure === true) {
+    if (payloadResult?.songStructureError) {
+      errors.push(`structure: ${payloadResult.songStructureError}`)
+    } else if (!payloadResult?.songStructure) {
+      errors.push('structure: missing v23 structure result from analyzer')
+    }
+  }
+  if (payloadError) errors.push(`worker错误: ${payloadError}`)
+  return errors
+}
+
 export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => {
   const isCurrentWorkerJob = (worker: Worker, job: KeyAnalysisJob) =>
     hasCurrentKeyAnalysisJobOwnership(job, {
@@ -163,30 +191,6 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
     })
   }
 
-  const collectJobResultErrors = (
-    job: KeyAnalysisJob | undefined,
-    payloadResult?: WorkerPayload['result'],
-    payloadError?: string
-  ): string[] => {
-    const errors: string[] = []
-    if (payloadResult?.keyError) errors.push(`key: ${payloadResult.keyError}`)
-    if (payloadResult?.bpmError && !isNoBpmBeatGridResultError(payloadResult.bpmError)) {
-      errors.push(`bpm: ${payloadResult.bpmError}`)
-    }
-    if (job?.needsEnergy === true && payloadResult?.energyScore === undefined) {
-      errors.push(`energy: ${payloadResult?.energyError || 'missing energy score from analyzer'}`)
-    }
-    if (job?.needsStructure === true) {
-      if (payloadResult?.songStructureError) {
-        errors.push(`structure: ${payloadResult.songStructureError}`)
-      } else if (!payloadResult?.songStructure) {
-        errors.push('structure: missing v23 structure result from analyzer')
-      }
-    }
-    if (payloadError) errors.push(`worker错误: ${payloadError}`)
-    return errors
-  }
-
   const collectFatalJobResultErrors = (
     job: KeyAnalysisJob | undefined,
     payloadResult?: WorkerPayload['result'],
@@ -197,7 +201,7 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
       payloadResult,
       payloadError
     )
-    return collectJobResultErrors(job, payloadResult, payloadError).filter(
+    return collectKeyAnalysisJobResultErrors(job, payloadResult, payloadError).filter(
       (error) => error !== deferredStructureGridDetail
     )
   }

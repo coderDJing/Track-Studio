@@ -496,7 +496,7 @@ const analyzeKeyForFileInternal = async (
     })
   }
 
-  if (needsEnergy) {
+  if (needsEnergy && !(needsBpm && result.bpmError)) {
     try {
       if (!energyDecoded) throw new Error('missing 16 kHz mono PCM for song energy model')
       const cachedGridProjection = projectSongBeatGridMapV2ToFixedGrid(options.cachedBeatGridMap)

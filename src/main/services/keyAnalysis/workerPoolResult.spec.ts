@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDeferredStructureGridDetail } from './workerPool'
+import { collectKeyAnalysisJobResultErrors, getDeferredStructureGridDetail } from './workerPool'
 import { normalizePath, type KeyAnalysisJob } from './types'
 
 const createStructureJob = (): KeyAnalysisJob => ({
@@ -34,5 +34,26 @@ describe('key analysis structure result handling', () => {
         'worker crashed'
       )
     ).toBeNull()
+  })
+})
+
+describe('key analysis energy result handling', () => {
+  const energyJob = { ...createStructureJob(), needsStructure: false, needsEnergy: true }
+
+  it('无有效 BPM 时不把依赖项能量计为另一项失败', () => {
+    expect(
+      collectKeyAnalysisJobResultErrors(energyJob, {
+        bpmError: 'no valid Beat-This result'
+      })
+    ).toEqual([])
+    expect(
+      collectKeyAnalysisJobResultErrors(energyJob, { bpmError: 'Beat This runtime failed' })
+    ).toEqual(['bpm: Beat This runtime failed'])
+  })
+
+  it('有效节拍网格下仍报告能量模型失败', () => {
+    expect(collectKeyAnalysisJobResultErrors(energyJob, { energyError: 'model failed' })).toEqual([
+      'energy: model failed'
+    ])
   })
 })

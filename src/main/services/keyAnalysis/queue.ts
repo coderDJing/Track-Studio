@@ -940,7 +940,7 @@ export class KeyAnalysisQueue {
           return
         }
         const coolingRecord =
-          job.needsKey || job.needsBpm || job.needsStructure
+          job.needsKey || job.needsBpm || job.needsEnergy || job.needsStructure
             ? this.failureTracker.getFailureCooldownRecord(job)
             : null
         if (coolingRecord) {

@@ -17,9 +17,9 @@ import store from '../../store'
 import {
   hasUsableKeyAnalysis,
   hasUsableSongBeatGridAnalysis,
+  hasRequiredSongEnergyAnalysis,
   hasRequiredSongStructureAnalysis
 } from '../../../shared/songAnalysisCompleteness'
-import { hasUsableSongEnergyAnalysis } from '../../../shared/songEnergy'
 import type { SongEnergyAnalysisV5 } from '../../../shared/songEnergy'
 import type { KeyAnalysisPersistence } from './persistence'
 import {
@@ -515,7 +515,7 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
       }
       const hasKey = hasUsableKeyAnalysis(info)
       const hasBpm = hasUsableSongBeatGridAnalysis(info)
-      const hasEnergy = hasUsableSongEnergyAnalysis(info)
+      const hasEnergy = hasRequiredSongEnergyAnalysis(info)
       const hasStructure = hasRequiredSongStructureAnalysis(info)
       const listRoot = typeof row?.list_root === 'string' ? row.list_root.trim() : ''
       if (!listRoot) continue
@@ -628,7 +628,7 @@ export const createKeyAnalysisBackground = (deps: KeyAnalysisBackgroundDeps) => 
           if (cached === undefined) continue
           const hasKey = hasUsableKeyAnalysis(cached?.info)
           const hasBpm = hasUsableSongBeatGridAnalysis(cached?.info)
-          const hasEnergy = hasUsableSongEnergyAnalysis(cached?.info)
+          const hasEnergy = hasRequiredSongEnergyAnalysis(cached?.info)
           const hasStructure = hasRequiredSongStructureAnalysis(cached?.info)
           let hasWaveform = false
           if (cached && Number.isFinite(cached.size) && Number.isFinite(cached.mtimeMs)) {

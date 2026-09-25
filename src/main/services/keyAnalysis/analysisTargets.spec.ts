@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   hasUncoveredForcedReanalysisTarget,
   resolveInitialAnalysisNeeds,
+  shouldSkipEnergyWithoutPreparedGrid,
   shouldSkipStructureWithoutPreparedGrid
 } from './analysisTargets'
 
@@ -71,6 +72,13 @@ describe('key analysis reanalysis targets', () => {
     expect(shouldSkipStructureWithoutPreparedGrid(true, true, false)).toBe(false)
     expect(shouldSkipStructureWithoutPreparedGrid(true, false, true)).toBe(false)
     expect(shouldSkipStructureWithoutPreparedGrid(false, false, false)).toBe(false)
+  })
+
+  it('没有已准备网格且不重算网格时，必须跳过能量', () => {
+    expect(shouldSkipEnergyWithoutPreparedGrid(true, false, false)).toBe(true)
+    expect(shouldSkipEnergyWithoutPreparedGrid(true, true, false)).toBe(false)
+    expect(shouldSkipEnergyWithoutPreparedGrid(true, false, true)).toBe(false)
+    expect(shouldSkipEnergyWithoutPreparedGrid(false, false, false)).toBe(false)
   })
 
   it('进行中的补缺任务不能覆盖强制重算', () => {

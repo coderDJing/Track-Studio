@@ -71,11 +71,15 @@ export const hasRequiredSongStructureAnalysis = (
   })
 }
 
+export const hasRequiredSongEnergyAnalysis = (
+  info: SongAnalysisCompletenessInfo | null | undefined
+) => resolveCanonicalSongBeatGridV2(info).kind === 'no-bpm' || hasUsableSongEnergyAnalysis(info)
+
 export const hasUsableCoreSongAnalysis = (
   info: SongAnalysisCompletenessInfo | null | undefined,
   options: { includeStructure?: boolean; waveformAvailable?: boolean } = {}
 ) => {
-  if (!hasUsableKeyAnalysis(info) || !hasUsableSongEnergyAnalysis(info)) return false
+  if (!hasUsableKeyAnalysis(info) || !hasRequiredSongEnergyAnalysis(info)) return false
   if (options.waveformAvailable === false) return false
   const grid = resolveUsableSongBeatGrid(info)
   if (grid.kind === 'missing') return false

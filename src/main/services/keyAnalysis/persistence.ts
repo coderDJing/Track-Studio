@@ -30,6 +30,7 @@ import {
 import { getBeatThisRuntimeAvailabilitySnapshot } from '../../workers/beatThisRuntime'
 import {
   resolveInitialAnalysisNeeds,
+  shouldSkipEnergyWithoutPreparedGrid,
   shouldSkipStructureWithoutPreparedGrid
 } from './analysisTargets'
 import {
@@ -589,6 +590,7 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
     const forceStructure = initialNeeds.forceStructure
     job.cachedUnifiedDisplayWaveformData = undefined
     job.cachedBeatGridMap = undefined
+    job.cachedBpm = undefined
     let stat: { size: number; mtimeMs: number }
     let listRootResolved = false
     let externalCacheResolved = false
@@ -925,7 +927,16 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
       }
     }
 
+    const applyEnergyGridGuard = () => {
+      if (
+        shouldSkipEnergyWithoutPreparedGrid(needsEnergy, needsBpm, Boolean(job.cachedBeatGridMap))
+      ) {
+        needsEnergy = false
+      }
+    }
+
     applyStructureGridGuard()
+    applyEnergyGridGuard()
     if (!needsKey && !needsBpm && !needsWaveform && !needsEnergy && !needsStructure) {
       applyJobNeeds()
       job.prepareReason = job.waveformOnly
@@ -942,6 +953,7 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
       needsBpm = false
     }
     applyStructureGridGuard()
+    applyEnergyGridGuard()
     if (!needsKey && !needsBpm && !needsWaveform && !needsEnergy && !needsStructure) {
       applyJobNeeds()
       job.prepareReason = 'skip-runtime-unavailable'

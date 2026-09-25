@@ -110,6 +110,21 @@ describe('song analysis completeness', () => {
     ).toBe(true)
   })
 
+  it('无 BPM 歌曲不需要无法计算的能量值也算完成', () => {
+    expect(
+      hasUsableCoreSongAnalysis(
+        { key: '8A', beatGridStatus: 'no-bpm' },
+        { includeStructure: true, waveformAvailable: true }
+      )
+    ).toBe(true)
+    expect(
+      hasUsableCoreSongAnalysis(
+        { key: '8A', beatGridMap: createFixedGrid() },
+        { waveformAvailable: true }
+      )
+    ).toBe(false)
+  })
+
   it('keeps a same-grid structure usable across algorithm upgrades', () => {
     const beatGridMap = createFixedGrid()
     const info = {

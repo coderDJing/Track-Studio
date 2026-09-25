@@ -115,6 +115,12 @@ export const shouldSkipStructureWithoutPreparedGrid = (
   hasPreparedGrid: boolean
 ) => needsStructure === true && needsBpm !== true && hasPreparedGrid !== true
 
+export const shouldSkipEnergyWithoutPreparedGrid = (
+  needsEnergy: boolean,
+  needsBpm: boolean,
+  hasPreparedGrid: boolean
+) => needsEnergy === true && needsBpm !== true && hasPreparedGrid !== true
+
 export const resolveInitialAnalysisNeeds = (
   job: Pick<KeyAnalysisJob, 'forceAnalysis' | 'analysisTargets' | 'includeStructure'>
 ): ResolvedKeyAnalysisNeeds => {
