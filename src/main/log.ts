@@ -248,6 +248,16 @@ export async function openLogFile(): Promise<void> {
   }
 }
 
+export async function showLogInFolder(): Promise<void> {
+  const logPath = getLogPath()
+  try {
+    await fs.ensureFile(logPath)
+    await electronShell?.showItemInFolder(logPath)
+  } catch (error) {
+    safeConsoleWrite('error', ['[log] 在文件管理器中打开日志失败', error])
+  }
+}
+
 type ExpectedErrorRule = {
   code?: string
   messageIncludes?: RegExp

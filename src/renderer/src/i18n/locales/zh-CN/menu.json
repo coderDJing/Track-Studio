@@ -19,6 +19,8 @@
     "thirdPartyNotices": "第三方许可",
     "about": "关于",
     "openLog": "打开日志",
+    "showLogInFolder": "在资源管理器中打开日志",
+    "showLogInFinder": "在访达中显示日志",
     "enableWindowScreenshotShortcut": "启用窗口截图快捷键",
     "startSongListTrace": "开始 Trace 录制",
     "stopSongListTrace": "结束 Trace 并导出"

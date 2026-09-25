@@ -116,6 +116,7 @@ const exactSendChannels = new Set([
   'openFileExplorer',
   'openLocalBrowser',
   'openLog',
+  'showLogInFolder',
   'outputLog',
   'player:foreground-activity',
   'readSongFile',

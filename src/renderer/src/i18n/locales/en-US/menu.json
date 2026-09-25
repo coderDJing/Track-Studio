@@ -19,6 +19,8 @@
     "thirdPartyNotices": "Third-Party Notices",
     "about": "About",
     "openLog": "Open Log File",
+    "showLogInFolder": "Show Log in File Manager",
+    "showLogInFinder": "Show Log in Finder",
     "enableWindowScreenshotShortcut": "Enable Window Screenshot Shortcut",
     "startSongListTrace": "Start Trace Recording",
     "stopSongListTrace": "Stop Trace And Export"

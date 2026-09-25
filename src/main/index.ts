@@ -11,6 +11,7 @@ import {
   clearLogFileSync,
   configureLogTransports,
   openLogFile,
+  showLogInFolder,
   type LogLevel
 } from './log'
 import './cloudSync'
@@ -856,6 +857,10 @@ ipcMain.on('openLocalBrowser', (_event, url: string) => {
 
 ipcMain.on('openLog', async () => {
   await openLogFile()
+})
+
+ipcMain.on('showLogInFolder', async () => {
+  await showLogInFolder()
 })
 
 ipcMain.on('main-window-browse-mode-updated', (_e, mode: 'browser' | 'horizontal' | 'edit') => {

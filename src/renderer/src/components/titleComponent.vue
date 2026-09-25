@@ -14,6 +14,7 @@ import hotkeys from 'hotkeys-js'
 import pkg from '../../../../package.json'
 import {
   WINDOW_SCREENSHOT_SHORTCUT,
+  isRcVersion,
   isWindowScreenshotFeatureAvailable
 } from '@shared/windowScreenshotFeature'
 import { PRODUCT_DISPLAY_NAME } from '@shared/productBrand'
@@ -125,6 +126,7 @@ type Menu = {
 }
 
 const isDevMode = computed(() => process.env.NODE_ENV === 'development')
+const isRcBuild = isRcVersion(String(pkg.version || ''))
 const isWindowScreenshotFeatureVisible = computed(() =>
   isWindowScreenshotFeatureAvailable({
     platform: runtime.setting?.platform || '',
@@ -160,6 +162,7 @@ const defaultMenuConfigs = computed<MenuConfig[]>(() => {
         ? [{ name: 'menu.downloadAnalysisRuntime', action: 'download-analysis-runtime' }]
         : []),
       { name: 'menu.openLog', action: 'open-log' },
+      ...(isRcBuild ? [{ name: 'menu.showLogInFolder', action: 'show-log-in-folder' }] : []),
       { name: 'menu.whatsNew' },
       { name: 'menu.thirdPartyNotices' },
       { name: 'menu.about' }
@@ -356,6 +359,10 @@ const menuButtonClick = async (item: MenuItem) => {
   }
   if (item.action === 'open-log') {
     window.electron.ipcRenderer.send('openLog')
+    return
+  }
+  if (item.action === 'show-log-in-folder') {
+    window.electron.ipcRenderer.send('showLogInFolder')
     return
   }
   if (item.action === 'library-merge') {
