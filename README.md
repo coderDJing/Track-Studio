@@ -78,7 +78,7 @@ Track Studio does not provide an official Linux release.
 - **Visible analysis progress**: Track-level analysis status is surfaced in the song list instead of leaving background work invisible.
 - **Manual analysis control**: Playlist analysis can be confirmed, skipped, or started manually, so imported crates do not unexpectedly consume foreground playback resources.
 - **Fingerprint library scanning**: Build a reusable fingerprint library from selected libraries to make future deduplication and similar-track workflows faster and more consistent.
-- **External-source analysis cache**: Rekordbox, Pioneer USB, Serato, and ordinary external tracks can reuse cached analysis data instead of repeatedly reprocessing the same files.
+- **External-source analysis cache**: Rekordbox desktop and USB libraries, Serato, and ordinary external tracks can reuse cached analysis data instead of repeatedly reprocessing the same files.
 - **Metadata editing and online fill**: Edit tags and cover art, search MusicBrainz, use AcoustID/Chromaprint matching, and batch-fill metadata.
 - **Native Chromaprint fingerprinting**: AcoustID fingerprint generation runs through the native module for lower overhead during metadata matching.
 
@@ -119,13 +119,13 @@ Track Studio does not provide an official Linux release.
 ### Rekordbox Desktop And USB Library Integration
 
 - **Local Rekordbox database browsing**: Read Rekordbox playlists directly without manually exporting XML first.
-- **Cue and Loop support**: Read Hot Cues, Memory Cues, and Loop data from Rekordbox/Pioneer sources and preserve them when copying into local Track Studio libraries.
-- **Rekordbox playlist operations**: Browse playlists, reorder tracks, create or move playlist nodes where supported, and export XML for Pioneer workflows.
-- **Pioneer USB support**: Read Device Library and OneLibrary USB structures, including playlist trees, waveform previews, multi-drive identity, and track playback.
-- **External-library context menus**: Use familiar right-click actions on Rekordbox and Pioneer rows, including copying to Filter or Curated libraries.
-- **Keyboard multi-selection**: Select multiple songs in Rekordbox/Pioneer lists with keyboard-style range selection.
-- **Curated artist import**: Import curated artist data from Rekordbox and Pioneer USB libraries to keep selection tags useful across sources.
-- **Read-only analysis for external tracks**: Analyze BPM, beat grid, energy, and sections for Rekordbox, Pioneer USB, Serato, and ordinary external tracks. Results stay inside Track Studio and are not written back to the source library.
+- **Cue and Loop support**: Read Hot Cues, Memory Cues, and Loop data from Rekordbox desktop and USB libraries and preserve them when copying into local Track Studio libraries.
+- **Rekordbox playlist operations**: Browse playlists, reorder tracks, create or move playlist nodes where supported, and export Rekordbox XML.
+- **USB library support**: Read Device Library and OneLibrary structures, including playlist trees, waveform previews, multiple drives, and track playback.
+- **External-library context menus**: Use familiar right-click actions on Rekordbox desktop and USB tracks, including copying to Filter or Curated libraries.
+- **Keyboard multi-selection**: Select multiple songs in Rekordbox desktop and USB libraries with keyboard-style range selection.
+- **Curated artist import**: Import curated artist data from Rekordbox desktop and USB libraries to keep selection tags useful across sources.
+- **Read-only analysis for external tracks**: Analyze BPM, beat grid, energy, and sections for Rekordbox desktop and USB libraries, Serato, and ordinary external tracks. Results stay inside Track Studio and are not written back to the source library.
 - **Missing-file handling**: Missing source files are clearly marked, blocked from playback, and can be cleaned from Rekordbox playlist records when appropriate.
 
 ### Serato Library Integration

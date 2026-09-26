@@ -78,7 +78,7 @@ Track Studio 暂无 Linux 正式版。
 - **可见分析进度**：歌曲列表直接显示曲目级分析状态，后台任务不再完全不可见。
 - **手动分析控制**：歌单分析可以确认、暂不分析或手动启动，导入大批曲目时不会突然抢占前台播放资源。
 - **指纹库扫描**：可从指定库扫描并建立可复用的指纹库，让后续去重和相似歌曲推荐更稳定。
-- **外部来源分析缓存**：Rekordbox、Pioneer U 盘、Serato 和普通外部曲目可复用分析缓存，减少重复分析。
+- **外部来源分析缓存**：Rekordbox 本机库与 U 盘曲库、Serato 和普通外部曲目可复用分析缓存，减少重复分析。
 - **元数据编辑与在线补齐**：支持标签与封面编辑，提供 MusicBrainz 条件搜索、AcoustID/Chromaprint 声纹匹配和批量自动补齐。
 - **原生 Chromaprint 声纹**：AcoustID 指纹生成走原生模块，减少元数据匹配时的子进程开销。
 
@@ -119,13 +119,13 @@ Track Studio 暂无 Linux 正式版。
 ### Rekordbox 本机与 U 盘曲库集成
 
 - **本机 Rekordbox 读取**：直接读取本机 Rekordbox 数据库和歌单，无需先手动导出 XML。
-- **Cue 与 Loop 支持**：可读取 Rekordbox/Pioneer 来源的 Hot Cue、Memory Cue 与 Loop，并在复制到 Track Studio 本地库时保留。
-- **Rekordbox 歌单操作**：可浏览歌单、拖拽排序曲目，在支持范围内创建或移动歌单节点，并可导出 XML 用于 Pioneer 流程。
-- **Pioneer U 盘库支持**：支持读取 Device Library 与 OneLibrary，包含歌单树、预览波形、多盘识别和曲目播放。
-- **外部库右键菜单**：Rekordbox 与 Pioneer 曲目列表支持常用右键操作，包括复制到筛选库或精选库。
-- **键盘多选**：Rekordbox/Pioneer 歌曲列表支持类似本地列表的键盘范围多选。
-- **精选表演者导入**：可从 Rekordbox 与 Pioneer U 盘库导入精选表演者数据，让跨来源选曲标签继续可用。
-- **外部曲目只读分析**：Rekordbox、Pioneer U 盘、Serato 和普通外部曲目可做 BPM、网格、能量和段落分析，结果留在 Track Studio 内，不改写源库。
+- **Cue 与 Loop 支持**：可从 Rekordbox 本机库与 U 盘曲库读取 Hot Cue、Memory Cue 与 Loop，并在复制到 Track Studio 本地库时保留。
+- **Rekordbox 歌单操作**：可浏览歌单、拖拽排序曲目，在支持范围内创建或移动歌单节点，并可导出 Rekordbox XML。
+- **U 盘曲库支持**：支持读取 Device Library 与 OneLibrary，包含歌单树、预览波形、多盘识别和曲目播放。
+- **外部库右键菜单**：Rekordbox 本机库与 U 盘曲库支持常用右键操作，包括复制到筛选库或精选库。
+- **键盘多选**：Rekordbox 本机库与 U 盘曲库支持类似本地列表的键盘范围多选。
+- **精选表演者导入**：可从 Rekordbox 本机库与 U 盘曲库导入精选表演者数据，让跨来源选曲标签继续可用。
+- **外部曲目只读分析**：Rekordbox 本机库与 U 盘曲库、Serato 和普通外部曲目可做 BPM、网格、能量和段落分析，结果留在 Track Studio 内，不改写源库。
 - **缺失文件处理**：找不到原文件的曲目会标红并阻止播放，必要时可清理 Rekordbox 歌单里的失效记录。
 
 ### Serato 曲库集成

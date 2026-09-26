@@ -206,7 +206,7 @@ const zhContent = {
     {
       title: 'Rekordbox 与 Serato 曲库集成',
       details:
-        '直接读取 Rekordbox 本机库与 Rekordbox U 盘库，支持 Cue/Loop 保留、键盘多选、精选表演者导入和 XML 导出；同时可浏览和编辑 Serato 曲库。'
+        '直接读取 Rekordbox 本机库与 U 盘曲库，支持 Cue/Loop 保留、键盘多选、精选表演者导入和 XML 导出；同时可浏览和编辑 Serato 曲库。'
     },
     {
       title: '可控的分析流程',
@@ -271,7 +271,7 @@ const zhContent = {
     },
     {
       title: '外部库分析缓存',
-      details: 'Rekordbox、Rekordbox U 盘、Serato 和普通外部文件可复用分析结果，减少重复分析等待。'
+      details: 'Rekordbox 本机库与 U 盘曲库、Serato 和普通外部文件可复用分析结果，减少重复分析等待。'
     },
     {
       title: 'Serato 曲库编辑',
@@ -440,7 +440,7 @@ const enContent = {
     {
       title: 'External Analysis Cache',
       details:
-        'Reuse analysis results for Rekordbox, Rekordbox USB libraries, Serato, and ordinary external files to avoid repeated waiting.'
+        'Reuse analysis results for Rekordbox desktop and USB libraries, Serato, and ordinary external files to avoid repeated waiting.'
     },
     {
       title: 'Serato Library Editing',
