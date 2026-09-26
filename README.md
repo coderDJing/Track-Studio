@@ -24,7 +24,7 @@
 
 ## What It Is
 
-**Track Studio** is a desktop audio workflow tool for DJs and music collectors who need to organize, preview, analyze, and prepare large track libraries quickly. It combines real file-based library management, SET playlist preparation, waveform browsing, fingerprint deduplication, Rekordbox and Pioneer library access, section and energy analysis, library merge, dual-deck auditioning, recording, metadata cleanup, conversion, similar-track discovery, curated-library and fingerprint cloud sync, single-track stem separation, and Mixtape preparation in one Windows/macOS app.
+**Track Studio** is a desktop audio workflow tool for DJs and music collectors who need to organize, preview, analyze, and prepare large track libraries quickly. It combines real file-based library management, SET playlist preparation, waveform browsing, fingerprint deduplication, Rekordbox, Pioneer, and Serato library access, section and energy analysis, library merge, dual-deck auditioning, recording, metadata cleanup, conversion, similar-track discovery, curated-library and fingerprint cloud sync, single-track stem separation, and Mixtape preparation in one Windows/macOS app.
 
 Track Studio is built around a simple rule: the structure you see in the app should match the actual music files on disk. It is not just a reference manager. When you organize, move, export, deduplicate, or restore tracks, the file system stays aligned with your library.
 
@@ -78,7 +78,7 @@ Track Studio does not provide an official Linux release.
 - **Visible analysis progress**: Track-level analysis status is surfaced in the song list instead of leaving background work invisible.
 - **Manual analysis control**: Playlist analysis can be confirmed, skipped, or started manually, so imported crates do not unexpectedly consume foreground playback resources.
 - **Fingerprint library scanning**: Build a reusable fingerprint library from selected libraries to make future deduplication and similar-track workflows faster and more consistent.
-- **External-source analysis cache**: Rekordbox, Pioneer USB, and ordinary external tracks can reuse cached analysis data instead of repeatedly reprocessing the same files.
+- **External-source analysis cache**: Rekordbox, Pioneer USB, Serato, and ordinary external tracks can reuse cached analysis data instead of repeatedly reprocessing the same files.
 - **Metadata editing and online fill**: Edit tags and cover art, search MusicBrainz, use AcoustID/Chromaprint matching, and batch-fill metadata.
 - **Native Chromaprint fingerprinting**: AcoustID fingerprint generation runs through the native module for lower overhead during metadata matching.
 
@@ -125,8 +125,15 @@ Track Studio does not provide an official Linux release.
 - **External-library context menus**: Use familiar right-click actions on Rekordbox and Pioneer rows, including copying to Filter or Curated libraries.
 - **Keyboard multi-selection**: Select multiple songs in Rekordbox/Pioneer lists with keyboard-style range selection.
 - **Curated artist import**: Import curated artist data from Rekordbox and Pioneer USB libraries to keep selection tags useful across sources.
-- **Read-only analysis for external tracks**: Analyze BPM, beat grid, energy, and sections for Rekordbox, Pioneer USB, and ordinary external tracks. Results stay inside Track Studio and are not written back to the source library.
+- **Read-only analysis for external tracks**: Analyze BPM, beat grid, energy, and sections for Rekordbox, Pioneer USB, Serato, and ordinary external tracks. Results stay inside Track Studio and are not written back to the source library.
 - **Missing-file handling**: Missing source files are clearly marked, blocked from playback, and can be cleaned from Rekordbox playlist records when appropriate.
+
+### Serato Library Integration
+
+- **Serato library browsing**: Detect a local Serato library and browse its folders, crates, playlists, and tracks inside Track Studio.
+- **Serato playlist editing**: Create, rename, delete, reorder, and move folders and playlists, and remove entries from playlists while keeping the audio files.
+- **Serato track writing**: Write selected Track Studio tracks to a Serato playlist. Track Studio can keep dedicated Serato copies so the Serato library remains usable when the original files move.
+- **Serato playback data**: Read Serato metadata, waveform previews, Hot Cues, Memory Cues, and Loops for browsing and auditioning.
 
 ### Mixtape And Stem Workflow
 
