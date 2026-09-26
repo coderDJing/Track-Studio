@@ -156,7 +156,10 @@ const togglePlatform = (e) => {
 }
 
 const zhContent = {
-  nav: [{ label: '特性', href: '#features' }],
+  nav: [
+    { label: '特性', href: '#features' },
+    { label: '完整功能', href: withBase('/features') }
+  ],
   hero: {
     titleTop: '终结混乱的',
     titleBottom: 'DJ 音频工作站',
@@ -257,7 +260,8 @@ const zhContent = {
     },
     {
       title: '全局搜歌与多源发现',
-      details: '支持跨界面搜歌、网易云网页搜索、Spotify 客户端或网页搜索，以及相似歌曲推荐和不再推荐屏蔽。'
+      details:
+        '支持跨界面搜歌、网易云网页搜索、Spotify 客户端或网页搜索，以及相似歌曲推荐和不再推荐屏蔽。'
     },
     {
       title: '指纹库与相似歌曲',
@@ -271,11 +275,13 @@ const zhContent = {
     },
     {
       title: '外部库分析缓存',
-      details: 'Rekordbox 本机库与 U 盘曲库、Serato 和普通外部文件可复用分析结果，减少重复分析等待。'
+      details:
+        'Rekordbox 本机库与 U 盘曲库、Serato 和普通外部文件可复用分析结果，减少重复分析等待。'
     },
     {
       title: 'Serato 曲库编辑',
-      details: '浏览 Serato 文件夹与歌单，创建、重命名、排序和移动歌单，也可把 Track Studio 曲目写入 Serato。'
+      details:
+        '浏览 Serato 文件夹与歌单，创建、重命名、排序和移动歌单，也可把 Track Studio 曲目写入 Serato。'
     },
     {
       title: '闲时分析调度',
@@ -318,7 +324,10 @@ const zhContent = {
 }
 
 const enContent = {
-  nav: [{ label: 'Features', href: '#features' }],
+  nav: [
+    { label: 'Features', href: '#features' },
+    { label: 'All features', href: withBase('/en/features') }
+  ],
   hero: {
     titleTop: 'End the Chaos.',
     titleBottom: 'The Ultimate DJ Audio Workspace.',
