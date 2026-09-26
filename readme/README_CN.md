@@ -24,7 +24,7 @@
 
 ## 这是什么
 
-**Track Studio** 是一款面向 DJ 和音乐收藏整理场景的桌面音频工作流工具。它把真实文件整理、SET 歌单准备、波形试听、指纹去重、Rekordbox、Pioneer 与 Serato 曲库读取、段落与能量分析、本地库合并、双轨横推试听、录音、元数据补齐、格式转换、相似歌曲发现、精选库与指纹云同步、单曲 Stem 分离和 Mixtape 编排整合在同一个 Windows/macOS 应用里。
+**Track Studio** 是一款面向 DJ 和音乐收藏整理场景的桌面音频工作流工具。它把真实文件整理、SET 歌单准备、波形试听、指纹去重、Rekordbox 与 Serato 曲库读取、段落与能量分析、本地库合并、双轨横推试听、录音、元数据补齐、格式转换、相似歌曲发现、精选库与指纹云同步、单曲 Stem 分离和 Mixtape 编排整合在同一个 Windows/macOS 应用里。
 
 Track Studio 的核心原则很简单：界面里看到的整理结构，应该能真实反映到磁盘文件。它不只是引用管理器。移动、导出、去重、删除和恢复曲目时，文件系统会跟着整理结果一起保持清楚。
 
@@ -116,7 +116,7 @@ Track Studio 暂无 Linux 正式版。
 - **录音完成摘要**：停止后显示文件名、格式、时长和保存路径。
 - **分析隔离**：录音库文件不会被当作普通后台分析候选，避免刚录完就抢占整理任务资源。
 
-### Rekordbox 与 Pioneer 库集成
+### Rekordbox 本机与 U 盘曲库集成
 
 - **本机 Rekordbox 读取**：直接读取本机 Rekordbox 数据库和歌单，无需先手动导出 XML。
 - **Cue 与 Loop 支持**：可读取 Rekordbox/Pioneer 来源的 Hot Cue、Memory Cue 与 Loop，并在复制到 Track Studio 本地库时保留。

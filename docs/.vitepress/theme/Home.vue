@@ -161,7 +161,7 @@ const zhContent = {
     titleTop: '终结混乱的',
     titleBottom: 'DJ 音频工作站',
     subtitle:
-      '不再需要在多个软件间疲于奔命。从真实文件整理、SET 歌单、指纹去重、波形试听、Rekordbox、Pioneer 与 Serato 曲库集成、段落与能量分析、本地库合并，到双轨横推、录音库、单曲 Stem 分离与 Mixtape 工作流，Track Studio 用键盘优先的操作方式，为你打造一站式、所见即所得的桌面音频整理引擎。'
+      '不再需要在多个软件间疲于奔命。从真实文件整理、SET 歌单、指纹去重、波形试听、Rekordbox 与 Serato 曲库集成、段落与能量分析、本地库合并，到双轨横推、录音库、单曲 Stem 分离与 Mixtape 工作流，Track Studio 用键盘优先的操作方式，为你打造一站式、所见即所得的桌面音频整理引擎。'
   },
   impacts: [
     {
@@ -204,7 +204,7 @@ const zhContent = {
         '按演出或场景准备映射型歌单，支持重复曲目、稳定序号、拖拽重排、删除保护和按顺序估算 SET 时长（起止可用 Hot Cue）。整理 SET 不必破坏源曲目。'
     },
     {
-      title: 'Rekordbox、Pioneer 与 Serato 生态接入',
+      title: 'Rekordbox 与 Serato 曲库集成',
       details:
         '直接读取 Rekordbox 本机库与 Rekordbox U 盘库，支持 Cue/Loop 保留、键盘多选、精选表演者导入和 XML 导出；同时可浏览和编辑 Serato 曲库。'
     },
@@ -323,7 +323,7 @@ const enContent = {
     titleTop: 'End the Chaos.',
     titleBottom: 'The Ultimate DJ Audio Workspace.',
     subtitle:
-      'Stop bouncing between apps. From real file organization, SET playlists, fingerprint dedup, waveform preview, Rekordbox, Pioneer, and Serato integration, section and energy analysis, and library merge, to dual-deck browsing, the Recording Library, single-track stem separation, and Mixtape workflows. Track Studio is a keyboard-first, WYSIWYG desktop engine for DJs.'
+      'Stop bouncing between apps. From real file organization, SET playlists, fingerprint dedup, waveform preview, Rekordbox and Serato integration, section and energy analysis, and library merge, to dual-deck browsing, the Recording Library, single-track stem separation, and Mixtape workflows. Track Studio is a keyboard-first, WYSIWYG desktop engine for DJs.'
   },
   impacts: [
     {
@@ -367,7 +367,7 @@ const enContent = {
         'Prepare performance sets as mapping-based playlists with duplicate entries, stable indices, drag reordering, source-track deletion protection, and SET duration estimates using Hot Cues as start and end points when available.'
     },
     {
-      title: 'Rekordbox, Pioneer & Serato Integration',
+      title: 'Rekordbox & Serato Library Integration',
       details:
         'Read the Rekordbox desktop library and USB libraries with Cue/Loop preservation, keyboard multi-selection, curated artist import, and XML export; browse and edit Serato libraries alongside them.'
     },

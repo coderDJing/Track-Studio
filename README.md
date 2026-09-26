@@ -24,7 +24,7 @@
 
 ## What It Is
 
-**Track Studio** is a desktop audio workflow tool for DJs and music collectors who need to organize, preview, analyze, and prepare large track libraries quickly. It combines real file-based library management, SET playlist preparation, waveform browsing, fingerprint deduplication, Rekordbox, Pioneer, and Serato library access, section and energy analysis, library merge, dual-deck auditioning, recording, metadata cleanup, conversion, similar-track discovery, curated-library and fingerprint cloud sync, single-track stem separation, and Mixtape preparation in one Windows/macOS app.
+**Track Studio** is a desktop audio workflow tool for DJs and music collectors who need to organize, preview, analyze, and prepare large track libraries quickly. It combines real file-based library management, SET playlist preparation, waveform browsing, fingerprint deduplication, Rekordbox and Serato library access, section and energy analysis, library merge, dual-deck auditioning, recording, metadata cleanup, conversion, similar-track discovery, curated-library and fingerprint cloud sync, single-track stem separation, and Mixtape preparation in one Windows/macOS app.
 
 Track Studio is built around a simple rule: the structure you see in the app should match the actual music files on disk. It is not just a reference manager. When you organize, move, export, deduplicate, or restore tracks, the file system stays aligned with your library.
 
@@ -116,7 +116,7 @@ Track Studio does not provide an official Linux release.
 - **Post-recording summary**: After stopping, Track Studio shows the saved file name, format, duration, and path.
 - **Analysis isolation**: Recording-library files are excluded from normal background analysis candidates so fresh recordings do not steal resources from library work.
 
-### Rekordbox And Pioneer Library Integration
+### Rekordbox Desktop And USB Library Integration
 
 - **Local Rekordbox database browsing**: Read Rekordbox playlists directly without manually exporting XML first.
 - **Cue and Loop support**: Read Hot Cues, Memory Cues, and Loop data from Rekordbox/Pioneer sources and preserve them when copying into local Track Studio libraries.
