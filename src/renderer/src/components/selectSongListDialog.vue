@@ -27,6 +27,11 @@ import type { IDir } from 'src/types/globals'
 import { handleLibraryAreaEmptySpaceDrop } from '../utils/dragUtils'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+import {
+  focusSearchInput,
+  SEARCH_FOCUS_PRIORITY,
+  useSearchFocusTarget
+} from '@renderer/composables/useSearchFocus'
 import { useLibraryTreeSortUi } from '@renderer/composables/useLibraryTreeSortUi'
 import {
   isLibraryTreeManualSort,
@@ -249,6 +254,11 @@ watch(
 const collapseButtonRef = useTemplateRef<HTMLDivElement>('collapseButtonRef')
 const sortButtonRef = useTemplateRef<HTMLDivElement>('sortButtonRef')
 const searchInputRef = useTemplateRef<HTMLInputElement>('searchInputRef')
+useSearchFocusTarget({
+  getInput: () => searchInputRef.value,
+  scope: uuid,
+  priority: SEARCH_FOCUS_PRIORITY.dialog
+})
 
 const libraryTitleText = computed(() => toLibraryDisplayName(libraryData.value.dirName))
 const dialogTitleText = computed(() => {
@@ -502,6 +512,7 @@ onMounted(() => {
     cancel()
   })
   utils.setHotkeysScpoe(uuid)
+  void nextTick(() => focusSearchInput(searchInputRef.value))
 })
 onUnmounted(() => {
   utils.delHotkeysScope(uuid)
@@ -563,7 +574,10 @@ const cancel = () => {
   closeWithAnimation(() => emits('cancel'))
 }
 const handleSearchEnter = () => {
-  if (!searchKeyword.value) return
+  if (!searchKeyword.value) {
+    confirmHandle()
+    return
+  }
   const firstRecent = filteredRecentSongListArr.value[0]
   const firstAll = filteredAllSongListArr.value[0]
   if (!firstRecent && !firstAll) {

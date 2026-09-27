@@ -43,10 +43,21 @@ import type {
   RekordboxDesktopRenamePlaylistResponse
 } from '@shared/rekordboxDesktopPlaylist'
 import { useCleanMissingFiles } from '@renderer/composables/rekordboxDesktop/useCleanMissingFiles'
+import {
+  SEARCH_FOCUS_PRIORITY,
+  SEARCH_FOCUS_WINDOW_SCOPE,
+  useSearchFocusTarget
+} from '@renderer/composables/useSearchFocus'
 
 const runtime = useRuntimeStore()
 const collapseButtonRef = useTemplateRef<HTMLDivElement>('collapseButtonRef')
 const playlistSearch = ref('')
+const playlistSearchInputRef = useTemplateRef<HTMLInputElement>('playlistSearchInputRef')
+useSearchFocusTarget({
+  getInput: () => playlistSearchInputRef.value,
+  scope: SEARCH_FOCUS_WINDOW_SCOPE,
+  priority: SEARCH_FOCUS_PRIORITY.sidebar
+})
 const expandedFolderIds = ref<Set<number>>(new Set())
 const dialogWriting = ref(false)
 const localLibraryCopying = ref(false)
@@ -864,6 +875,7 @@ watch(
       <div class="searchRow">
         <div class="searchInputWrapper">
           <input
+            ref="playlistSearchInputRef"
             v-model="playlistSearch"
             class="searchInput"
             :placeholder="t('playlist.searchPlaylists')"

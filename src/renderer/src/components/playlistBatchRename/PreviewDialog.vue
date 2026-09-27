@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, useTemplateRef } from 'vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import choiceDialog from '@renderer/components/choiceDialog'
 import confirm from '@renderer/components/confirmDialog'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 import emitter from '@renderer/utils/mitt'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+import {
+  SEARCH_FOCUS_PRIORITY,
+  SEARCH_FOCUS_WINDOW_SCOPE,
+  useSearchFocusTarget
+} from '@renderer/composables/useSearchFocus'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { t } from '@renderer/utils/translate'
 import openResultDialog from './resultDialog'
@@ -29,6 +34,12 @@ type PreviewFilter = 'all' | 'issues' | 'checked' | 'unchecked'
 
 const previewFilter = ref<PreviewFilter>('all')
 const previewSearch = ref('')
+const previewSearchInputRef = useTemplateRef<HTMLInputElement>('previewSearchInputRef')
+useSearchFocusTarget({
+  getInput: () => previewSearchInputRef.value,
+  scope: SEARCH_FOCUS_WINDOW_SCOPE,
+  priority: SEARCH_FOCUS_PRIORITY.dialog
+})
 const selectionMap = ref<Record<string, boolean>>(
   Object.fromEntries(props.items.map((item) => [item.id, item.status === 'executable']))
 )
@@ -248,6 +259,7 @@ const handleClose = async () => {
           <div class="control-row control-row-search">
             <div class="control-label">{{ t('batchRename.searchSectionTitle') }}</div>
             <input
+              ref="previewSearchInputRef"
               v-model="previewSearch"
               class="search-input"
               :placeholder="t('batchRename.searchPlaceholder')"

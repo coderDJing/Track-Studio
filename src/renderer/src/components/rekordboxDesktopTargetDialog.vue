@@ -16,6 +16,11 @@ import RekordboxDesktopTargetTreeItem from '@renderer/components/rekordboxDeskto
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
 import {
+  focusSearchInput,
+  SEARCH_FOCUS_PRIORITY,
+  useSearchFocusTarget
+} from '@renderer/composables/useSearchFocus'
+import {
   buildVisibleCombinedNavList,
   loadRecentDialogSelectedSongListUUIDs,
   persistRecentDialogSelectedSongListUUIDs,
@@ -81,6 +86,11 @@ runtime.selectSongListDialogShow = true
 const { dialogVisible, closeWithAnimation } = useDialogTransition()
 const collapseButtonRef = useTemplateRef<HTMLDivElement>('collapseButtonRef')
 const searchInputRef = useTemplateRef<HTMLInputElement>('searchInputRef')
+useSearchFocusTarget({
+  getInput: () => searchInputRef.value,
+  scope: uuid,
+  priority: SEARCH_FOCUS_PRIORITY.dialog
+})
 
 const rawTreeNodes = ref<IPioneerPlaylistTreeNode[]>([])
 const loading = ref(false)
@@ -421,7 +431,10 @@ const cancel = () => {
 
 const handleSearchEnter = async () => {
   if (dialogWriting.value) return
-  if (!normalizeKeyword(playlistSearch.value)) return
+  if (!normalizeKeyword(playlistSearch.value)) {
+    confirmHandle()
+    return
+  }
   const firstRecent = recentPlaylistArr.value.find((item) =>
     String(item.dirName || '')
       .toLowerCase()
@@ -536,6 +549,7 @@ onMounted(() => {
     return false
   })
   utils.setHotkeysScpoe(uuid)
+  void nextTick(() => focusSearchInput(searchInputRef.value))
   void loadTree()
 })
 

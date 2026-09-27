@@ -10,6 +10,10 @@ import globalSongSearchDialog from './components/globalSongSearchDialog.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import hotkeys from 'hotkeys-js'
 import utils from './utils/utils'
+import {
+  installSearchFocusShortcut,
+  uninstallSearchFocusShortcut
+} from './composables/useSearchFocus'
 import exportSongFingerprintDialog from './components/exportSongFingerprintDialog.vue'
 import importSongFingerprintDialog from './components/importSongFingerprintDialog.vue'
 import confirm from '@renderer/components/confirmDialog'
@@ -843,6 +847,7 @@ onMounted(() => {
     })
   }
   utils.setHotkeysScpoe('windowGlobal')
+  installSearchFocusShortcut()
   window.electron.ipcRenderer.on('openDialogFromTray', handleOpenDialogFromTray)
   window.electron.ipcRenderer.on(
     'analysis-runtime-download-state',
@@ -899,6 +904,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  uninstallSearchFocusShortcut()
   if (currentTimeTimer) {
     clearInterval(currentTimeTimer)
     currentTimeTimer = null

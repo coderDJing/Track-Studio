@@ -1,5 +1,11 @@
 <script setup lang="ts">
 import { nextTick, onUnmounted, ref, shallowRef, useTemplateRef, watch } from 'vue'
+import { useRuntimeStore } from '@renderer/stores/runtime'
+import {
+  SEARCH_FOCUS_PRIORITY,
+  SEARCH_FOCUS_WINDOW_SCOPE,
+  useSearchFocusTarget
+} from '@renderer/composables/useSearchFocus'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { t } from '@renderer/utils/translate'
 import bubbleBox from '@renderer/components/bubbleBox.vue'
@@ -54,6 +60,25 @@ const {
   isItemSelected,
   setScrollToIndexHandler
 } = useCustomFileSelector(props, emit)
+
+const searchInputRef = useTemplateRef<HTMLInputElement>('searchInputRef')
+const runtime = useRuntimeStore()
+// 文件选择器挂在导入对话框里，当前 hotkeys scope 仍是外层对话框。
+// 打开时记下这一层；右键菜单再压上来后 scope 对不上，Ctrl/Cmd+F 就不会穿透。
+const searchScope = ref('')
+watch(visible, (isVisible) => {
+  if (!isVisible) {
+    searchScope.value = ''
+    return
+  }
+  const heap = runtime.hotkeysScopesHeap
+  searchScope.value = heap[heap.length - 1] || SEARCH_FOCUS_WINDOW_SCOPE
+})
+useSearchFocusTarget({
+  getInput: () => searchInputRef.value,
+  scope: () => searchScope.value,
+  priority: SEARCH_FOCUS_PRIORITY.dialog
+})
 
 const fileScrollRef = useTemplateRef<OverlayScrollbarsComponentRef>('fileScrollRef')
 const selectedScrollRef = useTemplateRef<OverlayScrollbarsComponentRef>('selectedScrollRef')
@@ -165,6 +190,7 @@ onUnmounted(() => {
           </div>
           <div class="path-search">
             <input
+              ref="searchInputRef"
               v-model="searchQuery"
               type="text"
               :placeholder="t('fileSelector.searchPlaceholder')"

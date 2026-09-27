@@ -6,6 +6,7 @@ import { t } from '@renderer/utils/translate'
 import utils from '@renderer/utils/utils'
 import { formatBpmDisplay } from '@renderer/utils/bpm'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+import { SEARCH_FOCUS_PRIORITY, useSearchFocusTarget } from '@renderer/composables/useSearchFocus'
 
 type CoreLibraryName = 'FilterLibrary' | 'CuratedLibrary' | 'MixtapeLibrary' | 'RecycleBin'
 
@@ -41,6 +42,11 @@ const loading = ref(false)
 const results = ref<GlobalSongSearchDialogItem[]>([])
 const selectedIndex = ref(0)
 const inputRef = ref<HTMLInputElement | null>(null)
+useSearchFocusTarget({
+  getInput: () => inputRef.value,
+  scope,
+  priority: SEARCH_FOCUS_PRIORITY.dialog
+})
 const resultListRef = ref<HTMLDivElement | null>(null)
 const requestSeq = ref(0)
 const actionFeedback = ref('')

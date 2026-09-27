@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 import hotkeys from 'hotkeys-js'
 import { v4 as uuidV4 } from 'uuid'
 import { t } from '@renderer/utils/translate'
 import utils from '@renderer/utils/utils'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+import { focusSearchInput } from '@renderer/composables/useSearchFocus'
 import singleCheckbox from '@renderer/components/singleCheckbox.vue'
 import DateTimePicker from '@renderer/components/DateTimePicker.vue'
 import { normalizeFilterDate, resolveFilterDateBounds } from '@shared/songAddedAt'
@@ -43,6 +44,7 @@ const emits = defineEmits<{
 }>()
 
 const uuid = uuidV4()
+const includeKeywordInputRef = useTemplateRef<HTMLInputElement>('includeKeywordInputRef')
 
 const text = ref(props.initText || '')
 const excludeText = ref(props.initExcludeText || '')
@@ -237,6 +239,9 @@ onMounted(() => {
     handleCancel()
     return false
   })
+  if (props.type === 'text') {
+    void nextTick(() => focusSearchInput(includeKeywordInputRef.value))
+  }
 })
 
 onUnmounted(() => {
@@ -280,6 +285,7 @@ onUnmounted(() => {
           <div class="filter-field">
             <div class="filter-label">{{ t('filters.includeKeyword') }}</div>
             <input
+              ref="includeKeywordInputRef"
               v-model="text"
               class="filter-input"
               type="text"

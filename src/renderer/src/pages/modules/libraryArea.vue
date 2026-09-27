@@ -19,6 +19,11 @@ import {
   setPendingMixtapeProjectMode
 } from '@renderer/composables/mixtape/stemMode'
 import { isLibraryTreeManualSort } from '@renderer/utils/libraryTreeSort'
+import {
+  SEARCH_FOCUS_PRIORITY,
+  SEARCH_FOCUS_WINDOW_SCOPE,
+  useSearchFocusTarget
+} from '@renderer/composables/useSearchFocus'
 import type { IDir } from 'src/types/globals'
 
 const runtime = useRuntimeStore()
@@ -130,6 +135,12 @@ onUnmounted(() => {
 
 // 歌单筛选关键词（仅匹配歌单名）
 const playlistSearch = ref('')
+const playlistSearchInputRef = useTemplateRef<HTMLInputElement>('playlistSearchInputRef')
+useSearchFocusTarget({
+  getInput: () => playlistSearchInputRef.value,
+  scope: SEARCH_FOCUS_WINDOW_SCOPE,
+  priority: SEARCH_FOCUS_PRIORITY.sidebar
+})
 // 扁平化当前库下的全部歌单（不关心折叠状态）
 const allSongListArr = computed<IDir[]>(() => {
   const result: IDir[] = []
@@ -461,6 +472,7 @@ const handleContentClick = () => {
       <div class="searchRow">
         <div class="searchInputWrapper">
           <input
+            ref="playlistSearchInputRef"
             v-model="playlistSearch"
             class="searchInput"
             :placeholder="t('playlist.searchPlaylists')"

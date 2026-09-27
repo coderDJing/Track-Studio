@@ -1,7 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+import {
+  focusSearchInput,
+  SEARCH_FOCUS_PRIORITY,
+  SEARCH_FOCUS_WINDOW_SCOPE,
+  useSearchFocusTarget
+} from '@renderer/composables/useSearchFocus'
 import {
   calculateDragApproach,
   cloneTreeNodes,
@@ -44,6 +50,12 @@ const props = defineProps<{
 const { dialogVisible, closeWithAnimation } = useDialogTransition()
 const nodes = ref<IPioneerPlaylistTreeNode[]>([])
 const search = ref('')
+const searchInputRef = useTemplateRef<HTMLInputElement>('searchInputRef')
+useSearchFocusTarget({
+  getInput: () => searchInputRef.value,
+  scope: SEARCH_FOCUS_WINDOW_SCOPE,
+  priority: SEARCH_FOCUS_PRIORITY.dialog
+})
 const selectedId = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
@@ -430,7 +442,10 @@ const confirm = () => {
 
 const cancel = () => closeWithAnimation(() => props.cancelCallback())
 
-onMounted(() => void loadTree())
+onMounted(() => {
+  void loadTree()
+  void nextTick(() => focusSearchInput(searchInputRef.value))
+})
 const handleKeydown = (event: KeyboardEvent) => {
   if (event.defaultPrevented) return
   if (event.key === 'Escape') {
@@ -461,6 +476,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
         <div class="librarySearchWrapper">
           <div class="searchRow">
             <input
+              ref="searchInputRef"
               v-model="search"
               class="searchInput"
               :disabled="writing"

@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, type ComponentPublicInstance } from 'vue'
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  ref,
+  useTemplateRef,
+  type ComponentPublicInstance
+} from 'vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import hotkeys from 'hotkeys-js'
 import { v4 as uuidV4 } from 'uuid'
@@ -8,6 +16,7 @@ import { t } from '@renderer/utils/translate'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 import confirm from '@renderer/components/confirmDialog'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+import { SEARCH_FOCUS_PRIORITY, useSearchFocusTarget } from '@renderer/composables/useSearchFocus'
 import type { ICuratedArtistFavorite } from 'src/types/globals'
 
 type ArtistDraftEntry = {
@@ -32,6 +41,12 @@ const props = defineProps<{
 }>()
 
 const uuid = uuidV4()
+const searchInputRef = useTemplateRef<HTMLInputElement>('searchInputRef')
+useSearchFocusTarget({
+  getInput: () => searchInputRef.value,
+  scope: uuid,
+  priority: SEARCH_FOCUS_PRIORITY.dialog
+})
 const { dialogVisible, closeWithAnimation } = useDialogTransition()
 const entries = ref<ArtistDraftEntry[]>(
   (props.artists || []).map((artist) => ({
@@ -266,6 +281,7 @@ onUnmounted(() => {
           <div v-if="entries.length > 0" class="search-bar">
             <div class="search-input-wrapper">
               <input
+                ref="searchInputRef"
                 v-model="searchKeyword"
                 class="search-input"
                 :placeholder="t('settings.curatedArtistTracking.managerSearchPlaceholder')"
