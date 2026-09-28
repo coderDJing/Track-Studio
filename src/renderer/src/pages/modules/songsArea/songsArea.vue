@@ -38,6 +38,8 @@ import { useSongItemContextMenu } from '@renderer/pages/modules/songsArea/compos
 import { useSelectAndMoveSongs } from '@renderer/pages/modules/songsArea/composables/useSelectAndMoveSongs'
 import { useDragSongs } from '@renderer/pages/modules/songsArea/composables/useDragSongs'
 import { useSongsAreaColumns } from '@renderer/pages/modules/songsArea/composables/useSongsAreaColumns'
+import { useColumnDragPreview } from '@renderer/pages/modules/songsArea/composables/useColumnDragPreview'
+import { useSongsAreaPlayingFollow } from '@renderer/pages/modules/songsArea/composables/useSongsAreaPlayingFollow'
 import { useSongsLoader } from '@renderer/pages/modules/songsArea/composables/useSongsLoader'
 import { useSweepCovers } from '@renderer/pages/modules/songsArea/composables/useSweepCovers'
 import { useKeyboardSelection } from '@renderer/pages/modules/songsArea/composables/useKeyboardSelection'
@@ -314,6 +316,7 @@ const {
   originalSongInfoArr,
   shouldPersistToLocalStorage: shouldPersistColumnsToLocalStorage
 })
+const { rowsVisibleColumns, handleColumnDragPreview } = useColumnDragPreview(columnDataArr)
 
 // 封面清理
 const { scheduleSweepCovers } = useSweepCovers({ runtime, songsAreaState })
@@ -750,45 +753,6 @@ useGlobalSearchFocus({
   onFocusHit: triggerGlobalSearchFlash
 })
 
-const playingSongFilePathForRows = computed(() => {
-  const playingSong = runtime.playingData.playingSong
-  if (!playingSong) return undefined
-  return getRowKey(playingSong)
-})
-const playingSongFilePathsForRows = computed(() => {
-  const keys = new Set<string>()
-  const mainRowKey = playingSongFilePathForRows.value
-  if (mainRowKey) keys.add(mainRowKey)
-  const topDeckSong = runtime.horizontalBrowseDecks.topSong
-  if (topDeckSong) keys.add(getRowKey(topDeckSong))
-  const bottomDeckSong = runtime.horizontalBrowseDecks.bottomSong
-  if (bottomDeckSong) keys.add(getRowKey(bottomDeckSong))
-  return [...keys]
-})
-const harmonicReferenceKeyForRows = computed(() => {
-  if (runtime.mainWindowBrowseMode === 'browser') return ''
-  if (runtime.mainWindowBrowseMode === 'edit') {
-    return String(runtime.horizontalBrowseDecks.topSong?.key || '').trim()
-  }
-  const leaderDeck = runtime.horizontalBrowseDecks.leaderDeck
-  if (leaderDeck === 'top') {
-    return String(runtime.horizontalBrowseDecks.topSong?.key || '').trim()
-  }
-  if (leaderDeck === 'bottom') {
-    return String(runtime.horizontalBrowseDecks.bottomSong?.key || '').trim()
-  }
-  return ''
-})
-const currentPlayingRowKey = computed(() => {
-  if (runtime.mainWindowBrowseMode === 'edit') {
-    const topDeckSong = runtime.horizontalBrowseDecks.topSong
-    if (topDeckSong) return getRowKey(topDeckSong)
-  }
-  const playingSong = runtime.playingData.playingSong
-  if (!playingSong) return ''
-  return getRowKey(playingSong)
-})
-
 const viewState = computed<'welcome' | 'blank' | 'loading' | 'list'>(() => {
   if (!songsAreaState.songListUUID) {
     return runtime.songsAreaPanels.splitEnabled && props.pane !== 'single' ? 'blank' : 'welcome'
@@ -876,50 +840,20 @@ watch(
   { flush: 'post' }
 )
 
-const currentPlayingIndex = computed(() => {
-  const rowKey = currentPlayingRowKey.value
-  if (!rowKey) return -1
-  return songsAreaState.songInfoArr.findIndex((song) => getRowKey(song) === rowKey)
+const {
+  playingSongFilePathForRows,
+  playingSongFilePathsForRows,
+  harmonicReferenceKeyForRows,
+  showScrollToPlaying,
+  handleScrollToPlaying
+} = useSongsAreaPlayingFollow({
+  runtime,
+  songsAreaState,
+  viewState,
+  getRowKey,
+  scrollToIndex,
+  scrollToIndexIfNeeded
 })
-
-const showScrollToPlaying = computed(() => {
-  return viewState.value === 'list' && currentPlayingIndex.value >= 0
-})
-
-const lastAutoScrollKey = ref('')
-const autoScrollPresence = computed(() => (currentPlayingIndex.value >= 0 ? '1' : '0'))
-const autoScrollIndexToken = computed(() =>
-  currentPlayingIndex.value >= 0 ? String(currentPlayingIndex.value) : 'missing'
-)
-const autoScrollKey = computed(() => {
-  const listUUID = songsAreaState.songListUUID || ''
-  return `${listUUID}|${currentPlayingRowKey.value}|${autoScrollPresence.value}|${autoScrollIndexToken.value}`
-})
-const autoScrollTriggerKey = computed(() => {
-  if (!runtime.setting.autoScrollToCurrentSong) return ''
-  return autoScrollKey.value
-})
-
-watch(
-  () => autoScrollTriggerKey.value,
-  (key) => {
-    if (!key) {
-      lastAutoScrollKey.value = ''
-      return
-    }
-    if (currentPlayingIndex.value < 0) return
-    if (key === lastAutoScrollKey.value) return
-    if (runtime.playingData.playingSongListUUID !== songsAreaState.songListUUID) return
-    lastAutoScrollKey.value = key
-    scrollToIndexIfNeeded(currentPlayingIndex.value)
-  },
-  { flush: 'post' }
-)
-
-const handleScrollToPlaying = () => {
-  if (currentPlayingIndex.value < 0) return
-  scrollToIndex(currentPlayingIndex.value)
-}
 
 async function onMoveSongsDialogConfirmed(targetSongListUuid: string) {
   await handleMoveSongsConfirm(targetSongListUuid)
@@ -990,6 +924,7 @@ const { shouldShowEmptyState, emptyTitleText, emptyHintText } = useSongsAreaEmpt
             @header-contextmenu="contextmenuEvent"
             @drag-start="runtime.dragTableHeader = true"
             @drag-end="runtime.dragTableHeader = false"
+            @columns-preview="handleColumnDragPreview"
             @index-action-click="handleRenumberTracksByVisibleOrder"
           />
 
@@ -1000,7 +935,7 @@ const { shouldShowEmptyState, emptyTitleText, emptyHintText } = useSongsAreaEmpt
                 <SongListRows
                   v-if="displaySongs.length > 0"
                   :songs="displaySongs"
-                  :visible-columns="columnDataArr"
+                  :visible-columns="rowsVisibleColumns"
                   :selected-song-file-paths="songsAreaState.selectedSongFilePath"
                   :playing-song-file-path="playingSongFilePathForRows"
                   :playing-song-file-paths="playingSongFilePathsForRows"

@@ -724,88 +724,90 @@ onUnmounted(() => {
             }"
             :style="{ 'min-width': `var(--songs-total-width, ${totalWidth}px)` }"
           >
-            <template v-for="col in visibleColumns" :key="col.key">
-              <div
-                v-if="col.key === 'index'"
-                class="cell-title"
-                :style="{ width: `var(--songs-col-${col.key}, ${col.width}px)` }"
-              >
-                {{ getIndexCellValue(item.song, item.idx) }}
-              </div>
-              <div
-                v-else-if="col.key === 'cover'"
-                class="cell-cover"
-                :style="{ width: `var(--songs-col-${col.key}, ${col.width}px)` }"
-              >
+            <TransitionGroup name="song-col" tag="div" class="song-row-columns">
+              <template v-for="col in visibleColumns" :key="col.key">
                 <div
-                  :ref="(el) => setCoverCellRef(item.song.filePath, el)"
-                  class="cover-wrapper"
-                  :data-ct="coversTick"
-                  @mouseenter="onCoverMouseEnter(item.idx, $event)"
-                  @mouseleave="onCoverMouseLeave(item.idx, $event)"
-                  @dblclick.stop.prevent="
-                    (!props.readOnly || props.allowDblclickWhenReadOnly) &&
-                    handleCoverDblclick(item.song, $event)
-                  "
+                  v-if="col.key === 'index'"
+                  class="cell-title"
+                  :style="{ width: `var(--songs-col-${col.key}, ${col.width}px)` }"
                 >
-                  <img
-                    v-if="getCoverUrl(item.song.filePath)"
-                    :key="getCoverUrl(item.song.filePath) || item.song.filePath + '-ph'"
-                    :src="getCoverUrl(item.song.filePath) as string"
-                    alt="cover"
-                    decoding="async"
-                    @error="onImgError(item.song.filePath)"
-                  />
-                  <div v-else class="cover-skeleton"></div>
+                  {{ getIndexCellValue(item.song, item.idx) }}
                 </div>
-              </div>
-              <WaveformPreviewCell
-                v-else-if="col.key === 'waveformPreview'"
-                :song="item.song"
-                :row-key="getRowKey(item.song)"
-                :width-px="col.width"
-                :can-preview-waveform="canPreviewWaveform"
-                :is-waveform-preview-active="isWaveformPreviewActive"
-                :handle-waveform-click="handleWaveformClick"
-                :handle-waveform-stop-click="handleWaveformStopClick"
-                :handle-hot-cue-click="handleWaveformHotCueClick"
-                :set-waveform-canvas-ref="setWaveformCanvasRef"
-                :get-waveform-placeholder-text="getWaveformPlaceholderText"
-                :get-waveform-placeholder-title="getWaveformPlaceholderTitle"
-                :get-waveform-preview-playhead-style="getWaveformPreviewPlayheadStyle"
-              />
-              <div
-                v-else
-                :ref="(el) => setCellRef(getCellKey(item.song, col.key), el)"
-                class="cell-title"
-                :class="{
-                  'cell-title--curated-artist-hit': isCuratedArtistHit(item.song, col.key),
-                  'cell-title--harmonic-match': isHarmonicKeyMatch(item.song, col.key)
-                }"
-                :style="{ width: `var(--songs-col-${col.key}, ${col.width}px)` }"
-                :data-key="getCellKey(item.song, col.key)"
-              >
-                <CuratedArtistCellContent
-                  v-if="hasCuratedArtistBadge(item.song, col.key)"
-                  :value="getCellValue(item.song, col.key)"
-                  :badge-text="getCuratedArtistBadgeText(item.song, col.key)"
-                  :badge-title="getCuratedArtistBadgeTitle(item.song, col.key)"
-                  :only-when-overflow="onlyWhenOverflowComputed"
+                <div
+                  v-else-if="col.key === 'cover'"
+                  class="cell-cover"
+                  :style="{ width: `var(--songs-col-${col.key}, ${col.width}px)` }"
+                >
+                  <div
+                    :ref="(el) => setCoverCellRef(item.song.filePath, el)"
+                    class="cover-wrapper"
+                    :data-ct="coversTick"
+                    @mouseenter="onCoverMouseEnter(item.idx, $event)"
+                    @mouseleave="onCoverMouseLeave(item.idx, $event)"
+                    @dblclick.stop.prevent="
+                      (!props.readOnly || props.allowDblclickWhenReadOnly) &&
+                      handleCoverDblclick(item.song, $event)
+                    "
+                  >
+                    <img
+                      v-if="getCoverUrl(item.song.filePath)"
+                      :key="getCoverUrl(item.song.filePath) || item.song.filePath + '-ph'"
+                      :src="getCoverUrl(item.song.filePath) as string"
+                      alt="cover"
+                      decoding="async"
+                      @error="onImgError(item.song.filePath)"
+                    />
+                    <div v-else class="cover-skeleton"></div>
+                  </div>
+                </div>
+                <WaveformPreviewCell
+                  v-else-if="col.key === 'waveformPreview'"
+                  :song="item.song"
+                  :row-key="getRowKey(item.song)"
+                  :width-px="col.width"
+                  :can-preview-waveform="canPreviewWaveform"
+                  :is-waveform-preview-active="isWaveformPreviewActive"
+                  :handle-waveform-click="handleWaveformClick"
+                  :handle-waveform-stop-click="handleWaveformStopClick"
+                  :handle-hot-cue-click="handleWaveformHotCueClick"
+                  :set-waveform-canvas-ref="setWaveformCanvasRef"
+                  :get-waveform-placeholder-text="getWaveformPlaceholderText"
+                  :get-waveform-placeholder-title="getWaveformPlaceholderTitle"
+                  :get-waveform-preview-playhead-style="getWaveformPreviewPlayheadStyle"
                 />
-                <template v-else>
-                  {{ getCellValue(item.song, col.key) }}
-                </template>
-                <bubbleBox
-                  v-if="
-                    hoveredCellKey === getCellKey(item.song, col.key) &&
-                    !hasCuratedArtistBadge(item.song, col.key)
-                  "
-                  :dom="cellRefMap[getCellKey(item.song, col.key)] || undefined"
-                  :title="getCellTitle(item.song, col.key)"
-                  :only-when-overflow="onlyWhenOverflowComputed"
-                />
-              </div>
-            </template>
+                <div
+                  v-else
+                  :ref="(el) => setCellRef(getCellKey(item.song, col.key), el)"
+                  class="cell-title"
+                  :class="{
+                    'cell-title--curated-artist-hit': isCuratedArtistHit(item.song, col.key),
+                    'cell-title--harmonic-match': isHarmonicKeyMatch(item.song, col.key)
+                  }"
+                  :style="{ width: `var(--songs-col-${col.key}, ${col.width}px)` }"
+                  :data-key="getCellKey(item.song, col.key)"
+                >
+                  <CuratedArtistCellContent
+                    v-if="hasCuratedArtistBadge(item.song, col.key)"
+                    :value="getCellValue(item.song, col.key)"
+                    :badge-text="getCuratedArtistBadgeText(item.song, col.key)"
+                    :badge-title="getCuratedArtistBadgeTitle(item.song, col.key)"
+                    :only-when-overflow="onlyWhenOverflowComputed"
+                  />
+                  <template v-else>
+                    {{ getCellValue(item.song, col.key) }}
+                  </template>
+                  <bubbleBox
+                    v-if="
+                      hoveredCellKey === getCellKey(item.song, col.key) &&
+                      !hasCuratedArtistBadge(item.song, col.key)
+                    "
+                    :dom="cellRefMap[getCellKey(item.song, col.key)] || undefined"
+                    :title="getCellTitle(item.song, col.key)"
+                    :only-when-overflow="onlyWhenOverflowComputed"
+                  />
+                </div>
+              </template>
+            </TransitionGroup>
             <RowAnalysisBar
               v-if="showAnalysisProgressBar && !item.song.fileMissing"
               :progress="getAnalysisProgress(item.song.filePath)"

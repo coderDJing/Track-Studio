@@ -66,6 +66,7 @@ const emit = defineEmits<{
   (e: 'header-contextmenu', event: MouseEvent): void
   (e: 'drag-start'): void
   (e: 'drag-end'): void
+  (e: 'columns-preview', value: ISongsAreaColumn[] | null): void
   (e: 'index-action-click'): void
 }>()
 
@@ -192,13 +193,58 @@ const stopResize = (e: MouseEvent) => {
 }
 
 // 拖拽逻辑
-const onStartDraggable = () => {
+// 表头 DOM 由 Sortable 在拖动中直接换位；歌曲行不读这份 DOM。
+// 这里只按当前插入位置发出临时列序，松手后的 onUpdate 才提交并落盘。
+type HeaderDragEvent = {
+  oldDraggableIndex?: number
+  newDraggableIndex?: number
+}
+let dragOriginKeys: string[] = []
+let dragOriginIndex = -1
+let lastPreviewSignature = ''
+
+const emitColumnPreview = (keys: string[]) => {
+  const signature = keys.join('\0')
+  if (signature === lastPreviewSignature) return
+  lastPreviewSignature = signature
+  const byKey = new Map(draggableVisibleColumns.value.map((col) => [col.key, col]))
+  const preview: ISongsAreaColumn[] = []
+  for (const key of keys) {
+    const col = byKey.get(key)
+    if (!col) return
+    preview.push(col)
+  }
+  emit('columns-preview', preview)
+}
+
+const resetColumnPreview = () => {
+  dragOriginKeys = []
+  dragOriginIndex = -1
+  lastPreviewSignature = ''
+  emit('columns-preview', null)
+}
+
+const onStartDraggable = (evt: HeaderDragEvent) => {
+  dragOriginKeys = draggableVisibleColumns.value.map((col) => col.key)
+  dragOriginIndex = evt.oldDraggableIndex ?? 0
+  lastPreviewSignature = dragOriginKeys.join('\0')
   emit('drag-start')
+}
+
+const onChangeDraggable = (evt: HeaderDragEvent) => {
+  const nextIndex = evt.newDraggableIndex
+  if (nextIndex == null || nextIndex < 0 || dragOriginIndex < 0 || !dragOriginKeys.length) return
+  const keys = dragOriginKeys.slice()
+  const [moved] = keys.splice(dragOriginIndex, 1)
+  if (!moved) return
+  keys.splice(Math.min(nextIndex, keys.length), 0, moved)
+  emitColumnPreview(keys)
 }
 
 const onEndDraggable = () => {
   // v-draggable 的 onUpdate 会在顺序改变后调用，那里会 emit('update:columns')
-  // onEnd 主要用于清理拖拽状态
+  // onEnd 只清掉拖动中的临时列序
+  resetColumnPreview()
   emit('drag-end')
 }
 
@@ -208,6 +254,7 @@ const vDraggableData = computed<VDraggableBinding>(() => [
   draggableVisibleColumns.value, // 将 draggableVisibleColumns.value 直接传递给 v-draggable
   {
     animation: 150,
+    easing: 'ease',
     direction: 'horizontal',
     onUpdate: () => {
       // 当列顺序通过拖拽更新后 (draggableVisibleColumns.value 已被修改)
@@ -235,6 +282,7 @@ const vDraggableData = computed<VDraggableBinding>(() => [
       emit('update:columns', reconstructedFullList)
     },
     onStart: onStartDraggable,
+    onChange: onChangeDraggable,
     onEnd: onEndDraggable
   }
 ])

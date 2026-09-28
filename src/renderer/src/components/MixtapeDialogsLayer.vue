@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, toRef } from 'vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import MixtapeOutputDialog from '@renderer/components/mixtapeOutputDialog.vue'
 import MixtapeBeatAlignDialog from '@renderer/components/MixtapeBeatAlignDialog.vue'
 import ColumnHeaderContextMenu from '@renderer/pages/modules/songsArea/ColumnHeaderContextMenu.vue'
 import SongListHeader from '@renderer/pages/modules/songsArea/SongListHeader.vue'
 import SongListRows from '@renderer/pages/modules/songsArea/SongListRows.vue'
+import { useColumnDragPreview } from '@renderer/pages/modules/songsArea/composables/useColumnDragPreview'
 import type { MixtapeTrack } from '@renderer/composables/mixtape/types'
 import { normalizeSongBeatGridMapV2 } from '@shared/songBeatGridMapV2'
 import type { ISongInfo, ISongsAreaColumn } from 'src/types/globals'
@@ -93,6 +94,9 @@ const props = defineProps<{
   handleBeatAlignGridDefinitionSave: (payload: BeatAlignGridPayload) => void
   handleBeatAlignDialogCancel: () => void
 }>()
+
+const { rowsVisibleColumns: autoGainRowsVisibleColumns, handleColumnDragPreview } =
+  useColumnDragPreview(toRef(props, 'autoGainSongColumns'))
 
 const autoGainColumnMenuVisibleModel = computed({
   get: () => props.autoGainColumnMenuVisible,
@@ -203,13 +207,14 @@ const autoGainColumnMenuVisibleModel = computed({
             :descending-order="descendingOrder"
             :total-width="autoGainSongTotalWidth"
             @update:columns="handleAutoGainColumnsUpdate"
+            @columns-preview="handleColumnDragPreview"
             @column-click="handleAutoGainColumnClick"
             @header-contextmenu="handleAutoGainHeaderContextMenu"
           />
           <div class="mixtape-auto-gain-dialog__song-list">
             <SongListRows
               :songs="autoGainDialogSongs"
-              :visible-columns="autoGainSongColumns"
+              :visible-columns="autoGainRowsVisibleColumns"
               :selected-song-file-paths="autoGainSelectedRowKeys"
               :total-width="autoGainSongTotalWidth"
               source-library-name="mixtape-auto-gain"

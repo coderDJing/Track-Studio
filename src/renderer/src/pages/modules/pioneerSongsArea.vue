@@ -18,6 +18,7 @@ import {
   rememberRekordboxSourceSelectedPlaylist
 } from '@renderer/utils/rekordboxLibraryCache'
 import { buildSongsAreaDefaultColumns } from '@renderer/pages/modules/songsArea/composables/useSongsAreaColumns'
+import { useColumnDragPreview } from '@renderer/pages/modules/songsArea/composables/useColumnDragPreview'
 import ColumnHeaderContextMenu from '@renderer/pages/modules/songsArea/ColumnHeaderContextMenu.vue'
 import { useWaveformPreviewPlayer } from '@renderer/pages/modules/songsArea/composables/useWaveformPreviewPlayer'
 import { useKeyboardSelection } from '@renderer/pages/modules/songsArea/composables/useKeyboardSelection'
@@ -163,6 +164,7 @@ const selectedSourceCacheKey = computed(() => {
 })
 
 const visibleColumns = computed(() => columnData.value.filter((item) => item.show))
+const { rowsVisibleColumns, handleColumnDragPreview } = useColumnDragPreview(visibleColumns)
 const totalWidth = computed(() =>
   visibleColumns.value.reduce((sum, col) => sum + Number(col.width || 0), 0)
 )
@@ -719,6 +721,7 @@ onUnmounted(() => {
         :index-action-title="t('rekordboxDesktop.renumberPlaylistTracksAction')"
         :index-action-disabled="playlistMutationPending || loading"
         @update:columns="handleColumnsUpdate"
+        @columns-preview="handleColumnDragPreview"
         @column-click="handleColumnClick"
         @header-contextmenu="contextmenuEvent"
         @index-action-click="handleRenumberTracksByVisibleOrder"
@@ -726,7 +729,7 @@ onUnmounted(() => {
 
       <SongListRows
         :songs="visibleSongs"
-        :visible-columns="visibleColumns"
+        :visible-columns="rowsVisibleColumns"
         :selected-song-file-paths="selectedRowKeysForTemplate"
         :playing-song-file-path="playingSongFilePathForRows"
         :playing-song-file-paths="playingSongFilePathsForRows"
