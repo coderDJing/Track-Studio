@@ -66,7 +66,7 @@ const createUnavailableProbe = (params?: {
   available: false,
   supported: params?.supported !== false,
   sourceKey: 'rekordbox-desktop',
-  sourceName: 'Rekordbox 本机库',
+  sourceName: 'Rekordbox 库',
   sourceRootPath: '',
   dbPath: '',
   dbDir: '',
@@ -93,7 +93,7 @@ const normalizeProbeError = (error: unknown) => {
   return createUnavailableProbe({
     supported: code !== 'UNSUPPORTED_PLATFORM',
     errorCode: code,
-    errorMessage: message || '未检测到可读的 Rekordbox 本机库。'
+    errorMessage: message || '未检测到可读的 Rekordbox 库。'
   })
 }
 
@@ -108,7 +108,7 @@ const normalizeProbe = (
     sourceKey:
       toTrimmedString(payload?.sourceKey) ||
       (dbPath ? `rekordbox-desktop:${dbPath}` : 'rekordbox-desktop'),
-    sourceName: toTrimmedString(payload?.sourceName) || 'Rekordbox 本机库',
+    sourceName: toTrimmedString(payload?.sourceName) || 'Rekordbox 库',
     sourceRootPath,
     dbPath,
     dbDir: toTrimmedString(payload?.dbDir),
@@ -167,7 +167,7 @@ export async function probeRekordboxDesktopLibrary(
 export async function requireRekordboxDesktopLibraryProbe() {
   const probe = await probeRekordboxDesktopLibrary(false)
   if (!probe.available) {
-    throw new Error(probe.errorMessage || '未检测到可读的 Rekordbox 本机库。')
+    throw new Error(probe.errorMessage || '未检测到可读的 Rekordbox 库。')
   }
   return probe
 }

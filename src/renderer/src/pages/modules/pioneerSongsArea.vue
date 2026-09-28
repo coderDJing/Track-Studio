@@ -115,6 +115,9 @@ const isExternalSource = computed(
     Boolean(selectedExternalKind.value) &&
     runtime.externalDjLibrary.selectedSourceKey === selectedSourceKey.value
 )
+const isSeratoSource = computed(
+  () => isExternalSource.value && selectedExternalKind.value === 'serato'
+)
 const isDesktopSource = computed(() => selectedSourceKind.value === 'desktop')
 const selectedSourceName = computed(() => {
   if (runtime.pioneerDeviceLibrary.selectedSourceName) {
@@ -278,6 +281,7 @@ const { placeholderText } = usePioneerSongsPlaceholder({
   loading,
   isDesktopSource,
   isExternalSource,
+  isSeratoSource,
   selectedPlaylistId,
   originalTracks,
   visibleSongs,

@@ -518,7 +518,7 @@ export async function runRekordboxDesktopHelper<TResult, TPayload extends Record
   options?: RunRekordboxDesktopHelperOptions
 ): Promise<TResult> {
   if (process.platform !== 'win32' && process.platform !== 'darwin') {
-    throw createHelperError('当前平台暂不支持 Rekordbox 本机库。', 'UNSUPPORTED_PLATFORM')
+    throw createHelperError('当前平台暂不支持 Rekordbox 库。', 'UNSUPPORTED_PLATFORM')
   }
   return await helperSession.run(command, payload, options)
 }

@@ -127,13 +127,13 @@
     },
     "rekordboxUsb": {
       "rekordboxUsbBody": {
-        "title": "Rekordbox Desktop Library and Rekordbox USB library",
-        "line1": "The Rekordbox Desktop Library and connected Rekordbox USB libraries appear in the lower left.",
+        "title": "Rekordbox Library and Rekordbox USB library",
+        "line1": "The Rekordbox Library and connected Rekordbox USB libraries appear in the lower left.",
         "line2": "You can browse and preview. Copy into Filter to organize; source libraries are not modified.",
         "hint": "Click the corresponding icon to open."
       },
       "rekordboxUsbMenu": {
-        "title": "Desktop Library and Rekordbox USB context menu",
+        "title": "Rekordbox Library and Rekordbox USB context menu",
         "line1": "Right-click an icon to import artists into Curated, scan fingerprints, or eject USB.",
         "line2": "After opening, right-click a playlist or track to copy into Filter. Source libraries are not modified.",
         "hint": "Right-click the corresponding icon."

@@ -716,7 +716,7 @@ def _resolve_rekordbox_config() -> Dict[str, Any]:
             "available": False,
             "supported": False,
             "errorCode": "UNSUPPORTED_PLATFORM",
-            "errorMessage": "当前平台暂不支持 Rekordbox 本机库。",
+            "errorMessage": "当前平台暂不支持 Rekordbox 库。",
         }
 
     update_config()
@@ -757,7 +757,7 @@ def _resolve_rekordbox_config() -> Dict[str, Any]:
         "available": True,
         "supported": True,
         "sourceKey": f"rekordbox-desktop:{db_path}",
-        "sourceName": "Rekordbox 本机库",
+        "sourceName": "Rekordbox 库",
         "sourceRootPath": share_dir,
         "dbPath": db_path,
         "dbDir": db_dir,
@@ -782,7 +782,7 @@ def _build_write_status(config: Dict[str, Any]) -> Dict[str, Any]:
             "writable": False,
             "status": "unavailable",
             "errorCode": str(config.get("errorCode") or "REKORDBOX_NOT_FOUND"),
-            "errorMessage": str(config.get("errorMessage") or "未检测到可写入的 Rekordbox 本机库。"),
+            "errorMessage": str(config.get("errorMessage") or "未检测到可写入的 Rekordbox 库。"),
             "rekordboxPid": 0,
             "checkedAt": checked_at,
         }
@@ -969,7 +969,7 @@ def _build_probe_payload(open_database: bool = True) -> Dict[str, Any]:
         config["trackTotal"] = db.get_content().count()
         return config
     except Exception as exc:
-        message = str(exc).strip() or "打开 Rekordbox 本机库失败。"
+        message = str(exc).strip() or "打开 Rekordbox 库失败。"
         lowered = message.lower()
         config["available"] = False
         config["errorCode"] = "REKORDBOX_DB_BUSY" if ("busy" in lowered or "lock" in lowered) else "REKORDBOX_DB_OPEN_FAILED"
@@ -1081,7 +1081,7 @@ def _build_track_record(
 def _build_playlist_tracks_payload(request_payload: Dict[str, Any]) -> Dict[str, Any]:
     config = _resolve_request_config(request_payload)
     if not config.get("available"):
-        raise RuntimeError(str(config.get("errorMessage") or "未检测到 Rekordbox 本机库。"))
+        raise RuntimeError(str(config.get("errorMessage") or "未检测到 Rekordbox 库。"))
 
     playlist_id = _parse_int(request_payload.get("playlistId"))
     if playlist_id <= 0:
@@ -1173,7 +1173,7 @@ def _handle_probe_write(payload: Dict[str, Any]) -> Dict[str, Any]:
 def _handle_load_tree(payload: Dict[str, Any]) -> Dict[str, Any]:
     config = _resolve_request_config(payload)
     if not config.get("available"):
-        raise RuntimeError(str(config.get("errorMessage") or "未检测到 Rekordbox 本机库。"))
+        raise RuntimeError(str(config.get("errorMessage") or "未检测到 Rekordbox 库。"))
 
     db = None
     try:
@@ -1195,7 +1195,7 @@ def _ensure_request_config(request_payload: Dict[str, Any]) -> Dict[str, Any]:
     if not config.get("available"):
         raise HelperCommandError(
             str(config.get("errorCode") or "REKORDBOX_NOT_FOUND"),
-            str(config.get("errorMessage") or "未检测到 Rekordbox 本机库。"),
+            str(config.get("errorMessage") or "未检测到 Rekordbox 库。"),
         )
     return config
 
@@ -1422,7 +1422,7 @@ def _commit_database(db: Any, error_code: str) -> None:
     try:
         db.commit()
     except Exception as exc:
-        message = str(exc).strip() or "写入 Rekordbox 本机库失败。"
+        message = str(exc).strip() or "写入 Rekordbox 库失败。"
         lowered = message.lower()
         if "rekordbox is running" in lowered:
             raise HelperCommandError(

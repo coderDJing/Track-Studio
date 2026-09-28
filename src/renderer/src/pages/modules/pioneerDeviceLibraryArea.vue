@@ -69,6 +69,9 @@ const isExternalSource = computed(
     Boolean(runtime.externalDjLibrary.selectedKind) &&
     runtime.externalDjLibrary.selectedSourceKey === runtime.pioneerDeviceLibrary.selectedSourceKey
 )
+const isSeratoSource = computed(
+  () => isExternalSource.value && runtime.externalDjLibrary.selectedKind === 'serato'
+)
 const isEditableSource = computed(
   () =>
     isDesktopSource.value ||
@@ -193,7 +196,7 @@ const showFailureDialog = async (message: string, logPath?: string) => {
     )
   }
   await confirm({
-    title: sourceText('rekordboxDesktop.failureTitle', 'library.externalLibraryFailureTitle'),
+    title: sourceText('rekordboxDesktop.failureTitle', 'library.seratoFailureTitle'),
     content,
     confirmShow: false,
     innerWidth: 620,
@@ -236,6 +239,7 @@ const showHint = computed(
 
 const statusText = computed(() => {
   if (runtime.pioneerDeviceLibrary.loading) {
+    if (isSeratoSource.value) return t('library.seratoLoadingPlaylistTree')
     if (isExternalSource.value) return t('library.externalLibraryLoadingTree')
     return isDesktopSource.value
       ? t('rekordboxDesktop.loadingPlaylistTree')
@@ -244,6 +248,7 @@ const statusText = computed(() => {
   if (String(playlistSearch.value || '').trim() && !visibleTreeNodes.value.length) {
     return t('pioneer.noMatchingPlaylists')
   }
+  if (isSeratoSource.value) return t('library.seratoEmptyPlaylistTree')
   if (isExternalSource.value) return t('library.externalLibraryEmptyTree')
   return isDesktopSource.value
     ? t('rekordboxDesktop.emptyPlaylistTree')

@@ -87,7 +87,7 @@ export const usePioneerDesktopPlaylistActions = (params: {
       )
     }
     await confirm({
-      title: sourceText('rekordboxDesktop.failureTitle', 'library.externalLibraryFailureTitle'),
+      title: sourceText('rekordboxDesktop.failureTitle', 'library.seratoFailureTitle'),
       content,
       confirmShow: false,
       innerWidth: 620,

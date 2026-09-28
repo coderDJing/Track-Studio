@@ -127,13 +127,13 @@
     },
     "rekordboxUsb": {
       "rekordboxUsbBody": {
-        "title": "Rekordbox 本机库与 Rekordbox U 盘库",
-        "line1": "左侧下方显示 Rekordbox 本机库，以及已接入的 Rekordbox U 盘库。",
+        "title": "Rekordbox 库与 Rekordbox U 盘库",
+        "line1": "左侧下方显示 Rekordbox 库，以及已接入的 Rekordbox U 盘库。",
         "line2": "可浏览、试听。整理请复制到筛选库，不会修改源库。",
         "hint": "点击对应图标打开。"
       },
       "rekordboxUsbMenu": {
-        "title": "本机库与 Rekordbox U 盘右键菜单",
+        "title": "Rekordbox 库与 Rekordbox U 盘右键菜单",
         "line1": "右键图标可导入艺人到精选库、扫描指纹或弹出 U 盘。",
         "line2": "打开后，在其歌单或曲目上右键，可复制到筛选库，不会修改源库。",
         "hint": "右键对应图标。"

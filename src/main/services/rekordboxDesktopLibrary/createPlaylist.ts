@@ -462,7 +462,7 @@ export async function createRekordboxDesktopPlaylist(
   } catch (error) {
     return await fail(
       getErrorCode(error, 'REKORDBOX_DB_OPEN_FAILED'),
-      getErrorMessage(error, '未检测到可写入的 Rekordbox 本机库。'),
+      getErrorMessage(error, '未检测到可写入的 Rekordbox 库。'),
       {
         sourceKind: request.source.kind,
         target

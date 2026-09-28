@@ -75,7 +75,7 @@ export async function renameRekordboxDesktopPlaylistNode(
     return buildFailureResponse(
       'rename',
       getErrorCode(error, 'REKORDBOX_DB_OPEN_FAILED'),
-      getErrorMessage(error, '未检测到可写入的 Rekordbox 本机库。'),
+      getErrorMessage(error, '未检测到可写入的 Rekordbox 库。'),
       {
         playlistId,
         name
@@ -154,7 +154,7 @@ export async function deleteRekordboxDesktopPlaylistNode(
     return buildFailureResponse(
       'delete',
       getErrorCode(error, 'REKORDBOX_DB_OPEN_FAILED'),
-      getErrorMessage(error, '未检测到可写入的 Rekordbox 本机库。'),
+      getErrorMessage(error, '未检测到可写入的 Rekordbox 库。'),
       {
         playlistId
       }

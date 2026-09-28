@@ -42,7 +42,7 @@ export const openExternalLibraryPlaylistForSelectedTracks = async (params: {
   )
   if (!sourcePath) {
     await confirm({
-      title: t('library.externalLibraryFailureTitle'),
+      title: t('library.seratoFailureTitle'),
       content: [t('library.seratoLibraryNotFound')],
       confirmShow: false
     })
@@ -78,7 +78,7 @@ export const openExternalLibraryPlaylistForSelectedTracks = async (params: {
   })
   if (!copyResponse.ok) {
     await confirm({
-      title: t('library.externalLibraryFailureTitle'),
+      title: t('library.seratoFailureTitle'),
       content: [
         t('library.externalLibraryFailedReason', { message: copyResponse.summary.errorMessage })
       ],
@@ -107,7 +107,7 @@ export const openExternalLibraryPlaylistForSelectedTracks = async (params: {
   })) as ExternalLibraryMutationResponse
   if (!response.ok) {
     await confirm({
-      title: t('library.externalLibraryFailureTitle'),
+      title: t('library.seratoFailureTitle'),
       content: [
         t('library.externalLibraryFailedReason', { message: response.summary.errorMessage })
       ],

@@ -69,7 +69,7 @@ export async function createRekordboxDesktopPlaylistFolder(
   } catch (error) {
     return buildFailureResponse(
       getErrorCode(error, 'REKORDBOX_DB_OPEN_FAILED'),
-      getErrorMessage(error, '未检测到可写入的 Rekordbox 本机库。'),
+      getErrorMessage(error, '未检测到可写入的 Rekordbox 库。'),
       {
         folderName,
         parentId
@@ -145,7 +145,7 @@ export async function createRekordboxDesktopEmptyPlaylist(
   } catch (error) {
     return buildFailureResponse(
       getErrorCode(error, 'REKORDBOX_DB_OPEN_FAILED'),
-      getErrorMessage(error, '未检测到可写入的 Rekordbox 本机库。'),
+      getErrorMessage(error, '未检测到可写入的 Rekordbox 库。'),
       {
         playlistName,
         parentId

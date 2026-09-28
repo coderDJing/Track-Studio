@@ -213,7 +213,7 @@ export async function removeRekordboxDesktopPlaylistTracks(
     return buildTracksFailureResponse(
       'remove',
       getErrorCode(error, 'REKORDBOX_DB_OPEN_FAILED'),
-      getErrorMessage(error, '未检测到可写入的 Rekordbox 本机库。'),
+      getErrorMessage(error, '未检测到可写入的 Rekordbox 库。'),
       { playlistId, rowKeys }
     ) as RekordboxDesktopRemovePlaylistTracksResponse
   }
@@ -286,7 +286,7 @@ export async function reorderRekordboxDesktopPlaylistTracks(
     return buildTracksFailureResponse(
       'reorder',
       getErrorCode(error, 'REKORDBOX_DB_OPEN_FAILED'),
-      getErrorMessage(error, '未检测到可写入的 Rekordbox 本机库。'),
+      getErrorMessage(error, '未检测到可写入的 Rekordbox 库。'),
       { playlistId, rowKeys, targetIndex }
     ) as RekordboxDesktopReorderPlaylistTracksResponse
   }

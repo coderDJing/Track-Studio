@@ -68,7 +68,7 @@ export async function moveRekordboxDesktopPlaylist(
   } catch (error) {
     return buildFailureResponse(
       getErrorCode(error, 'REKORDBOX_DB_OPEN_FAILED'),
-      getErrorMessage(error, '未检测到可写入的 Rekordbox 本机库。'),
+      getErrorMessage(error, '未检测到可写入的 Rekordbox 库。'),
       {
         playlistId,
         parentId,
