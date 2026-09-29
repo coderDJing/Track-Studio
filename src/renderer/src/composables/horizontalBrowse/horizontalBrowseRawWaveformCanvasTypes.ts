@@ -20,7 +20,7 @@ export type UseHorizontalBrowseRawWaveformCanvasOptions = {
   audioEditPendingEndSec?: () => number | null | undefined
   currentSeconds: () => number | undefined
   playbackRate: () => number | undefined
-  visualPlaybackRate?: () => number | undefined
+  visualTimeScale: () => number
   waveformGain?: () => number | undefined
   playing: Ref<boolean>
   playbackSyncRevision: Readonly<Ref<number>>

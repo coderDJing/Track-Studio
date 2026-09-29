@@ -39,10 +39,7 @@ import {
 import { useHorizontalBrowseAudioEditDetailRaw } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseAudioEditDetailRaw'
 import { isHorizontalBrowseWaveformTileRenderingEnabled } from '@renderer/composables/horizontalBrowse/horizontalBrowseWaveformTileFlag'
 import { HORIZONTAL_BROWSE_WAVEFORM_TILE_SLOT_COUNT } from '@renderer/composables/horizontalBrowse/horizontalBrowseWaveformTileLayout'
-import {
-  createPioneerDetailRawWaveform,
-  type PioneerDetailWaveformData
-} from '@renderer/composables/horizontalBrowse/horizontalBrowsePioneerDetailWaveform'
+import { useHorizontalBrowseRawWaveformSourceLoader } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseRawWaveformSourceLoader'
 import { useHorizontalBrowseRawWaveformAudioEditOverlay } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseRawWaveformAudioEditOverlay'
 import {
   useHorizontalBrowseRawWaveformDetailLifecycle,
@@ -62,11 +59,7 @@ import { createHorizontalBrowseDetailPresentationActions } from '@renderer/compo
 import { createHorizontalBrowseDetailGridPersistence } from '@renderer/composables/horizontalBrowse/horizontalBrowseDetailGridPersistence'
 import { createHorizontalBrowseDetailPresentationConsumer } from '@renderer/composables/horizontalBrowse/horizontalBrowseDetailPresentationConsumer'
 import { useHorizontalBrowseDynamicBeatGridEdit } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseDynamicBeatGridEdit'
-import {
-  getRekordboxDetailWaveformRequestChannel,
-  isRekordboxExternalPlaybackSource,
-  resolveSongExternalWaveformSource
-} from '@renderer/utils/rekordboxExternalSource'
+import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
 import { createHorizontalBrowseNativeMetronomeSync } from '@renderer/composables/horizontalBrowse/horizontalBrowseNativeMetronome'
 import {
   createHorizontalBrowseRawWaveformDynamicGridSelectionState,
@@ -196,8 +189,7 @@ const resolveWaveformPlaybackRate = () => Math.max(0.25, Number(props.playbackRa
 const resolveGridEditVisibleFromSec = () =>
   gridEditingEnabled.value ? selectedDynamicGridVisibleFromSec.value : null
 
-let loadToken = 0
-let liveTempoPreviewRateValue: number | null = null
+let liveTempoPreviewTimeScaleValue: number | null = null
 let liveTempoPreviewReleasePendingScale: number | null = null
 let displayedPreviewTimeScale = 1
 const playbackDiscontinuityDetector = createHorizontalBrowsePlaybackDiscontinuityDetector()
@@ -212,8 +204,6 @@ const presentationState = createHorizontalBrowseDetailPresentationState({
   song: () => props.song,
   direction: () => props.direction,
   gridBpm: () => props.gridBpm,
-  playbackRate: () => props.playbackRate,
-  visualPlaybackRate: () => props.visualPlaybackRate,
   linkedGridActive: () => presentationLinkedGridActive.value,
   linkedGridVisualPending: () => presentationLinkedGridVisualPending.value,
   waveformLayout: resolveWaveformLayout,
@@ -234,7 +224,7 @@ const {
   visualGridRenderBpm,
   resolveDisplayGridBpm,
   resolveIncomingPreviewTimeScale,
-  resolveCanvasVisualPlaybackRate,
+  resolveCanvasVisualTimeScale,
   syncVisualGridStateFromPreview,
   publishLinkedGridVisualPhaseSample
 } = presentationState
@@ -323,7 +313,7 @@ const {
   audioEditPendingEndSec: () => null,
   currentSeconds: resolveWaveformCurrentSeconds,
   playbackRate: () => props.playbackRate,
-  visualPlaybackRate: resolveCanvasVisualPlaybackRate,
+  visualTimeScale: resolveCanvasVisualTimeScale,
   waveformGain: () => props.waveformGain,
   playing: previewPlaying,
   playbackSyncRevision,
@@ -365,7 +355,7 @@ const {
       )
     ) {
       liveTempoPreviewReleasePendingScale = null
-      liveTempoPreviewRateValue = null
+      liveTempoPreviewTimeScaleValue = null
     }
     syncLiveTempoPreviewTransform()
   }
@@ -798,12 +788,12 @@ const applyLiveTempoPreviewTransformForBuffer = (bufferIndex: 0 | 1, bufferTimeS
   applyHorizontalBrowseLiveTempoPreviewTransform(
     resolveLiveTempoPreviewScalers(bufferIndex),
     bufferTimeScale,
-    liveTempoPreviewRateValue ?? presentationState.getLastAppliedPreviewTimeScale()
+    liveTempoPreviewTimeScaleValue ?? presentationState.getLastAppliedPreviewTimeScale()
   )
 }
 
 const syncLiveTempoPreviewTransform = () => {
-  if (liveTempoPreviewRateValue == null) {
+  if (liveTempoPreviewTimeScaleValue == null) {
     applyHorizontalBrowseLiveTempoPreviewTransform(
       [
         waveformTempoScalerRef.value,
@@ -824,19 +814,19 @@ const syncLiveTempoPreviewTransform = () => {
 
 const clearLiveTempoPreviewRelease = () => {
   liveTempoPreviewReleasePendingScale = null
-  liveTempoPreviewRateValue = null
+  liveTempoPreviewTimeScaleValue = null
   syncLiveTempoPreviewTransform()
 }
 
 const applyLiveTempoPreviewRate = (liveRate: number | null | undefined) => {
-  const leavingLive = liveTempoPreviewRateValue != null
+  const leavingLive = liveTempoPreviewTimeScaleValue != null
   const nextRate =
     liveRate != null && Number.isFinite(Number(liveRate)) && Number(liveRate) > 0
       ? Number(liveRate)
       : null
   if (nextRate != null) {
     liveTempoPreviewReleasePendingScale = null
-    liveTempoPreviewRateValue = nextRate
+    liveTempoPreviewTimeScaleValue = resolveIncomingPreviewTimeScale()
     syncLiveTempoPreviewTransform()
     if (compactVisualWaveformActive.value && waveformPlaybackActive.value) {
       reanchorStableCanvasPlayback(resolveWaveformCurrentSeconds(), nextRate)
@@ -858,7 +848,7 @@ const applyLiveTempoPreviewRate = (liveRate: number | null | undefined) => {
     return
   }
   liveTempoPreviewReleasePendingScale = releasePlan.pendingScale
-  liveTempoPreviewRateValue = releasePlan.pendingScale
+  liveTempoPreviewTimeScaleValue = releasePlan.pendingScale
   syncLiveTempoPreviewTransform()
   const scheduledNewFrame = applyIncomingPreviewTimeScale(true, {
     keepCurrentFrame: true,
@@ -912,77 +902,28 @@ const { stopDragging, handlePointerDown, handleWheel } =
     clampNumber
   })
 
-const loadWaveform = async () => {
-  const currentSong = props.song
-  const currentToken = ++loadToken
-  clearPendingLocalGridSignature()
-  dragReleaseHandoff.clear()
-
-  clearPersistTimer()
-  clearPlaybackStableFrameRenderTimer()
-  resetCompactVisualWaveformStrip()
-  invalidateWaveformTiles()
-  previewLoading.value = false
-  compactVisualWaveformActive.value = false
-  commitAudioEditSourceRaw(null)
-  previewStartSec.value = 0
-  resetLiveWaveformData()
-  resetGridRenderer()
-  clearCanvas()
-
-  const filePath = String(currentSong?.filePath || '').trim()
-  if (!filePath) {
-    syncGridStateFromSongForDisplay()
-    return
-  }
-  if (isRekordboxExternalPlaybackSource('', currentSong)) {
-    const external = resolveSongExternalWaveformSource(currentSong)
-    if (external) {
-      try {
-        const response = (await window.electron.ipcRenderer.invoke(
-          getRekordboxDetailWaveformRequestChannel(external.sourceKind),
-          external.rootPath,
-          [external.analyzePath]
-        )) as { items?: Array<{ data?: PioneerDetailWaveformData | null }> }
-        if (currentToken !== loadToken || props.song?.filePath !== currentSong?.filePath) return
-        const detailData = response?.items?.[0]?.data
-        const detailRaw = createPioneerDetailRawWaveform(
-          detailData?.columns || [],
-          resolvePreviewDurationSec(),
-          detailData?.detailRate ?? detailData?.detail_rate,
-          detailData?.style
-        )
-        if (detailRaw) {
-          commitAudioEditSourceRaw(detailRaw)
-          compactVisualWaveformActive.value = true
-          scheduleDraw({ preferPreviewStart: true })
-        }
-      } catch {}
-    }
-    syncGridStateFromSongForDisplay()
-    return
-  }
-
-  try {
-    previewLoading.value = true
-    syncGridStateFromSongForDisplay()
-    previewStartSec.value = resolvePlaybackAlignedStart(resolveWaveformCurrentSeconds())
-    compactVisualWaveformActive.value = true
-    await requestCompactVisualWaveformStrip(resolveWaveformCurrentSeconds(), {
-      force: true,
-      clearIfOutside: true
-    })
-    if (currentToken !== loadToken) return
-  } catch {
-    if (currentToken !== loadToken) return
-    previewLoading.value = false
-    compactVisualWaveformActive.value = true
-    commitAudioEditSourceRaw(null)
-    resetGridRenderer()
-    clearCanvas()
-    syncGridStateFromSongForDisplay()
-  }
-}
+const { loadWaveform, invalidateLoad } = useHorizontalBrowseRawWaveformSourceLoader({
+  song: () => props.song,
+  previewLoading,
+  compactVisualWaveformActive,
+  previewStartSec,
+  clearPendingLocalGridSignature,
+  clearDragReleaseHandoff: dragReleaseHandoff.clear,
+  clearPersistTimer,
+  clearPlaybackStableFrameRenderTimer,
+  resetCompactVisualWaveformStrip,
+  invalidateWaveformTiles,
+  commitAudioEditSourceRaw,
+  resetLiveWaveformData,
+  resetGridRenderer,
+  clearCanvas,
+  syncGridStateFromSongForDisplay,
+  resolvePreviewDurationSec,
+  scheduleDraw,
+  resolvePlaybackAlignedStart,
+  resolveWaveformCurrentSeconds,
+  requestCompactVisualWaveformStrip
+})
 
 useHorizontalBrowseRawWaveformDetailLifecycle({
   props,
@@ -1094,9 +1035,7 @@ useHorizontalBrowseRawWaveformDetailLifecycle({
     scheduleDraw
   },
   unmount: {
-    invalidateLoad: () => {
-      loadToken += 1
-    },
+    invalidateLoad,
     resetCompactVisualWaveformStrip,
     clearPersistTimer,
     clearBpmTapResetTimer,
@@ -1147,110 +1086,5 @@ defineExpose(
 )
 </script>
 
-<template>
-  <div
-    ref="wrapRef"
-    :class="[
-      'raw-detail-waveform',
-      `raw-detail-waveform--${props.direction}`,
-      {
-        'is-dragging': dragging,
-        'is-loading': previewLoading,
-        'is-interaction-disabled': props.interactionDisabled
-      }
-    ]"
-    @pointerdown.stop="handlePointerDown"
-    @wheel.prevent.stop="handleWheel"
-  >
-    <div ref="waveformSurfaceRef" class="raw-detail-waveform__surface">
-      <div ref="waveformTempoScalerRef" class="raw-detail-waveform__tempo-scaler">
-        <canvas
-          ref="waveformCanvasRef"
-          class="raw-detail-waveform__canvas raw-detail-waveform__canvas--waveform"
-        />
-        <!-- 分块路径：块容器与旧超宽 canvas 几何一致，统一位移挂在容器上（每块不独立缩放/位移，
-             否则边界会出现亚像素错位）。容器位于 tempo-scaler 之内，故 CSS 变速缩放仍作用于整层。 -->
-        <div
-          v-if="waveformTileRenderingEnabled"
-          :ref="
-            (element) => (waveformTileContainerRefs[0].value = element as HTMLDivElement | null)
-          "
-          class="raw-detail-waveform__tile-container"
-        >
-          <canvas
-            v-for="slotIndex in waveformTileSlotIndexes"
-            :key="`tile-front-${slotIndex}`"
-            :ref="
-              (element) =>
-                (waveformTileCanvasRefs[0].value[slotIndex] = element as HTMLCanvasElement | null)
-            "
-            class="raw-detail-waveform__canvas--waveform raw-detail-waveform__tile"
-          />
-        </div>
-      </div>
-      <div ref="waveformTempoScalerBackRef" class="raw-detail-waveform__tempo-scaler">
-        <canvas
-          ref="waveformCanvasBackRef"
-          class="raw-detail-waveform__canvas raw-detail-waveform__canvas--waveform raw-detail-waveform__canvas--buffer-back"
-        />
-        <div
-          v-if="waveformTileRenderingEnabled"
-          :ref="
-            (element) => (waveformTileContainerRefs[1].value = element as HTMLDivElement | null)
-          "
-          class="raw-detail-waveform__tile-container raw-detail-waveform__tile-container--buffer-back"
-        >
-          <canvas
-            v-for="slotIndex in waveformTileSlotIndexes"
-            :key="`tile-back-${slotIndex}`"
-            :ref="
-              (element) =>
-                (waveformTileCanvasRefs[1].value[slotIndex] = element as HTMLCanvasElement | null)
-            "
-            class="raw-detail-waveform__canvas--waveform raw-detail-waveform__tile"
-          />
-        </div>
-      </div>
-    </div>
-    <div v-if="externalDetailWaveformUnavailable" class="raw-detail-waveform__unavailable">
-      {{ t('horizontalBrowse.waveformUnavailable') }}
-    </div>
-    <div ref="overlaySurfaceRef" class="raw-detail-waveform__overlay-surface">
-      <div ref="overlayTempoScalerRef" class="raw-detail-waveform__tempo-scaler">
-        <canvas
-          ref="overlayCanvasRef"
-          class="raw-detail-waveform__canvas raw-detail-waveform__canvas--overlay"
-        />
-      </div>
-      <div ref="overlayTempoScalerBackRef" class="raw-detail-waveform__tempo-scaler">
-        <canvas
-          ref="overlayCanvasBackRef"
-          class="raw-detail-waveform__canvas raw-detail-waveform__canvas--overlay raw-detail-waveform__canvas--buffer-back"
-        />
-      </div>
-    </div>
-    <div
-      v-for="region in audioEditInsertedStyles"
-      :key="region.key"
-      class="raw-detail-waveform__audio-edit-insert"
-      :style="region.style"
-      aria-hidden="true"
-    ></div>
-    <div
-      v-if="audioEditSelectionStyle"
-      class="raw-detail-waveform__audio-edit-selection"
-      :style="audioEditSelectionStyle"
-    ></div>
-    <div
-      v-for="bound in audioEditBoundStyles"
-      :key="bound.key"
-      class="raw-detail-waveform__audio-edit-bound"
-      :class="`is-${bound.kind}`"
-      :style="bound.style"
-      aria-hidden="true"
-    >
-      <span>{{ bound.label }}</span>
-    </div>
-  </div>
-</template>
+<template src="./HorizontalBrowseRawWaveformDetail.template.html"></template>
 <style scoped lang="scss" src="./HorizontalBrowseRawWaveformDetail.scss"></style>

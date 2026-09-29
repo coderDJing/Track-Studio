@@ -49,7 +49,6 @@ export type HorizontalBrowseRawWaveformDetailProps = {
   playing?: boolean
   playbackActive?: boolean
   playbackRate?: number
-  visualPlaybackRate?: number
   liveTempoPreviewRate?: number | null
   waveformGain?: number
   playbackSyncRevision?: number

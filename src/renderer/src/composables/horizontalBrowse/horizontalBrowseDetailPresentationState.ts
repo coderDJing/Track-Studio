@@ -4,6 +4,7 @@ import { normalizePreviewBpm } from '@renderer/components/MixtapeBeatAlignDialog
 import { HORIZONTAL_BROWSE_LOCAL_GRID_BPM_EPSILON } from '@renderer/composables/horizontalBrowse/horizontalBrowseRawWaveformDetailMath'
 import { publishHorizontalBrowseLinkedGridVisualPhaseSample } from '@renderer/composables/horizontalBrowse/horizontalBrowseLinkedGridVisualPhase'
 import { resolveSongBeatGridV2BpmAtSec } from '@shared/songBeatGridMapV2'
+import { resolveHorizontalBrowseWaveformTimeScale } from './horizontalBrowseWaveformTimeScale'
 
 type HorizontalBrowseDetailDirection = 'up' | 'down'
 type HorizontalBrowseDetailLayout = 'full' | 'top-half' | 'bottom-half'
@@ -26,8 +27,6 @@ type HorizontalBrowseDetailPresentationStateParams = {
   song: () => ISongInfo | null
   direction: () => HorizontalBrowseDetailDirection
   gridBpm: () => number | undefined
-  playbackRate: () => number | undefined
-  visualPlaybackRate: () => number | undefined
   linkedGridActive: () => boolean
   linkedGridVisualPending: () => boolean
   waveformLayout: () => HorizontalBrowseDetailLayout
@@ -86,10 +85,14 @@ export const createHorizontalBrowseDetailPresentationState = (
     visualGridTimeBasisOffsetMs.value = params.previewTimeBasisOffsetMs.value
   }
 
-  const resolveIncomingPreviewTimeScale = () =>
-    Math.max(0.25, Number(params.visualPlaybackRate() ?? params.playbackRate()) || 1)
+  const resolveIncomingPreviewTimeScale = () => {
+    const gridBpm = Number(params.gridBpm())
+    return resolveHorizontalBrowseWaveformTimeScale(
+      Number.isFinite(gridBpm) && gridBpm > 0 ? gridBpm : params.song()?.bpm
+    )
+  }
 
-  const resolveCanvasVisualPlaybackRate = () =>
+  const resolveCanvasVisualTimeScale = () =>
     params.linkedGridVisualPending()
       ? Math.max(0.25, Number(lastAppliedPreviewTimeScale) || 1)
       : resolveIncomingPreviewTimeScale()
@@ -119,7 +122,7 @@ export const createHorizontalBrowseDetailPresentationState = (
     visualGridRenderBpm,
     resolveDisplayGridBpm,
     resolveIncomingPreviewTimeScale,
-    resolveCanvasVisualPlaybackRate,
+    resolveCanvasVisualTimeScale,
     syncVisualGridStateFromPreview,
     publishLinkedGridVisualPhaseSample,
     getLastAppliedPreviewTimeScale: () => lastAppliedPreviewTimeScale,

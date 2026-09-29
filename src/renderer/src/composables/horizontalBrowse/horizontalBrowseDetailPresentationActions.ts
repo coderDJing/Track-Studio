@@ -199,10 +199,7 @@ export const createHorizontalBrowseDetailPresentationActions = (
       if (shouldMutatePresentation) {
         params.syncGridStateFromSong()
       }
-      const timeScale = Math.max(
-        0.25,
-        Number(deckState.playbackRate ?? params.resolveIncomingPreviewTimeScale()) || 1
-      )
+      const timeScale = Math.max(0.25, Number(params.resolveIncomingPreviewTimeScale()) || 1)
       const visibleDurationSec = resolveVisibleDurationSecForTimeScale(timeScale)
       const viewportStartSec = clampPreviewStartForVisibleDuration(
         safeSeconds - visibleDurationSec * HORIZONTAL_BROWSE_DETAIL_PLAYHEAD_RATIO,

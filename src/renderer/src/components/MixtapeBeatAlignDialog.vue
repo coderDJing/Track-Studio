@@ -352,6 +352,7 @@ const {
   loopRange: () => null,
   currentSeconds: () => resolveWaveformCurrentSeconds(),
   playbackRate: () => 1,
+  visualTimeScale: () => 1,
   playing: previewPlaying,
   playbackSyncRevision,
   rawData: previewWaveformData,

@@ -17,8 +17,7 @@ import type {
 export const createHorizontalBrowseRawWaveformViewport = (
   options: UseHorizontalBrowseRawWaveformCanvasOptions
 ) => {
-  const resolvePreviewTimeScale = () =>
-    Math.max(0.25, Number(options.visualPlaybackRate?.() ?? options.playbackRate()) || 1)
+  const resolvePreviewTimeScale = () => Math.max(0.25, Number(options.visualTimeScale()) || 1)
 
   const resolvePreviewDurationSec = () => {
     const duration = Number(
