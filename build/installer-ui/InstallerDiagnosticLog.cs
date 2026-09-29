@@ -13,7 +13,7 @@ namespace TrackStudioInstallerUi
       try
       {
         string directory = Path.Combine(
-          Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+          Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
           "Track Studio");
         Directory.CreateDirectory(directory);
         string line = DateTimeOffset.Now.ToString("o") + " [frontend] " + message + Environment.NewLine;

@@ -119,6 +119,7 @@ Function TrackStudioLog
   ClearErrors
   FileOpen $0 "$LOCALAPPDATA\Track Studio\installer-engine.log" a
   IfErrors track_studio_log_done
+  FileSeek $0 0 END
   FileWrite $0 "${VERSION} [engine] $1$\r$\n"
   FileClose $0
 track_studio_log_done:
