@@ -16,7 +16,6 @@ import RekordboxDesktopTargetTreeItem from '@renderer/components/rekordboxDeskto
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
 import {
-  focusSearchInput,
   SEARCH_FOCUS_PRIORITY,
   useSearchFocusTarget
 } from '@renderer/composables/useSearchFocus'
@@ -549,7 +548,6 @@ onMounted(() => {
     return false
   })
   utils.setHotkeysScpoe(uuid)
-  void nextTick(() => focusSearchInput(searchInputRef.value))
   void loadTree()
 })
 

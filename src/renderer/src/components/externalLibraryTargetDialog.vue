@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
+import { computed, onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
 import {
-  focusSearchInput,
   SEARCH_FOCUS_PRIORITY,
   SEARCH_FOCUS_WINDOW_SCOPE,
   useSearchFocusTarget
@@ -444,7 +443,6 @@ const cancel = () => closeWithAnimation(() => props.cancelCallback())
 
 onMounted(() => {
   void loadTree()
-  void nextTick(() => focusSearchInput(searchInputRef.value))
 })
 const handleKeydown = (event: KeyboardEvent) => {
   if (event.defaultPrevented) return

@@ -28,7 +28,6 @@ import { handleLibraryAreaEmptySpaceDrop } from '../utils/dragUtils'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
 import {
-  focusSearchInput,
   SEARCH_FOCUS_PRIORITY,
   useSearchFocusTarget
 } from '@renderer/composables/useSearchFocus'
@@ -512,7 +511,6 @@ onMounted(() => {
     cancel()
   })
   utils.setHotkeysScpoe(uuid)
-  void nextTick(() => focusSearchInput(searchInputRef.value))
 })
 onUnmounted(() => {
   utils.delHotkeysScope(uuid)
