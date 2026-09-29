@@ -5,6 +5,7 @@ import { log } from '../log'
 import { replaceMixtapeStemAssetFilePath } from '../mixtapeStemDb'
 import store from '../store'
 import { operateHiddenFile } from './hiddenFileOperation'
+import { isPackagedRcBuild } from './rcDiagnostics'
 
 export type CacheFileStat = {
   size: number
@@ -225,7 +226,43 @@ export async function transferTrackDerivedCaches(
 }
 
 export async function transferTrackCaches(params: TrackCacheTransferParams): Promise<void> {
-  const context = await transferTrackCoreCache(params)
-  if (!context) return
-  await transferTrackDerivedCaches(params, context)
+  const startedAt = performance.now()
+  let coreMs = 0
+  let derivedMs = 0
+  let outcome: 'completed' | 'skipped' | 'threw' = 'threw'
+  try {
+    const coreStartedAt = performance.now()
+    let context: TrackCacheTransferContext | null = null
+    try {
+      context = await transferTrackCoreCache(params)
+    } finally {
+      coreMs = performance.now() - coreStartedAt
+    }
+    if (!context) {
+      outcome = 'skipped'
+      return
+    }
+    const derivedStartedAt = performance.now()
+    try {
+      await transferTrackDerivedCaches(params, context)
+    } finally {
+      derivedMs = performance.now() - derivedStartedAt
+    }
+    outcome = 'completed'
+  } finally {
+    const elapsedMs = performance.now() - startedAt
+    // RC 阈值诊断：确认迁移卡在哪一阶段且不再出现慢记录后删除。
+    if (elapsedMs >= 2000 && process.type === 'browser' && isPackagedRcBuild()) {
+      log.warn('[track-cache-transfer] slow transfer', {
+        fileName: path.basename(params.fromPath),
+        fromRoot: params.fromRoot,
+        toRoot: params.toRoot,
+        mode: params.mode || 'move',
+        outcome,
+        elapsedMs: Math.round(elapsedMs),
+        coreMs: Math.round(coreMs),
+        derivedMs: Math.round(derivedMs)
+      })
+    }
+  }
 }

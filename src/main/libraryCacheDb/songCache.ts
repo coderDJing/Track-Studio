@@ -25,6 +25,7 @@ import {
 import { markPlaylistViewSnapshotContentStale } from './playlistViewSnapshot'
 import type { SqliteDatabase } from '../libraryDb'
 import { runTracedSync } from '../services/mainProcessActivityTraceState'
+import { loadSongCacheWithHelpers } from './songCacheLoad'
 
 const migratedSongRoots = new Set<string>()
 const looseSongRootCache = new Map<string, string[]>()
@@ -402,90 +403,11 @@ export async function ensureSongCacheMigrated(db: SqliteDatabase, listRoot: stri
 }
 
 export async function loadSongCache(listRoot: string): Promise<Map<string, SongCacheEntry> | null> {
-  const db = getLibraryDb()
-  if (!db || !listRoot) return null
-  const resolvedRoot = resolveListRootInput(listRoot)
-  if (!resolvedRoot) return null
-  const listRootKey = resolvedRoot.key
-  const listRootAbs = resolvedRoot.abs || resolveAbsoluteListRoot(listRootKey)
-  const legacyListRoot =
-    resolvedRoot.legacyAbs && resolvedRoot.legacyAbs !== listRootKey
-      ? resolvedRoot.legacyAbs
-      : undefined
-  try {
-    await ensureSongCacheMigrated(db, listRoot)
-    // 迁移 await 之后整段都是同步的（全表 SELECT + 逐行 JSON.parse + 路径解析）。
-    // 纳入同步活动埋点后，主进程卡顿时诊断快照的 activity.slowest 会直接点名这一条。
-    return runTracedSync('sqlite:song-cache-load', () => {
-      const map = new Map<string, SongCacheEntry>()
-      const appendRows = (rowsToUse: SongCacheDbRow[], rootKey: string, legacyRelRoot?: string) => {
-        for (const row of rowsToUse || []) {
-          if (!row || !row.file_path || row.info_json === undefined) continue
-          let info: ISongInfo | null = null
-          try {
-            info = JSON.parse(String(row.info_json)) as ISongInfo
-          } catch {
-            info = null
-          }
-          const size = toNumber(row.size)
-          const mtimeMs = toNumber(row.mtime_ms)
-          if (!info || size === null || mtimeMs === null) continue
-          let absFilePath = resolveAbsoluteFilePath(rootKey, String(row.file_path))
-          if (legacyRelRoot) {
-            const resolvedLegacy = resolveFilePathInput(legacyRelRoot, String(row.file_path))
-            if (resolvedLegacy && resolvedLegacy.isRelativeKey) {
-              absFilePath = resolveAbsoluteFilePath(listRootKey, resolvedLegacy.key)
-            }
-          }
-          info.filePath = absFilePath
-          map.set(absFilePath, { size, mtimeMs, info })
-        }
-      }
-      const rows = db
-        .prepare<SongCacheDbRow>(
-          'SELECT file_path, size, mtime_ms, info_json FROM song_cache WHERE list_root = ?'
-        )
-        .all(listRootKey)
-      const legacyRows = legacyListRoot
-        ? db
-            .prepare<SongCacheDbRow>(
-              'SELECT file_path, size, mtime_ms, info_json FROM song_cache WHERE list_root = ?'
-            )
-            .all(legacyListRoot)
-        : []
-      const looseRoots =
-        rows.length === 0 && legacyRows.length === 0
-          ? getLooseSongCacheRoots(db, [listRoot, listRootAbs, listRootKey], listRootKey).filter(
-              (root) => root !== listRootKey && root !== legacyListRoot
-            )
-          : []
-      if (looseRoots.length > 0) {
-        const extraStmt = db.prepare<SongCacheDbRow>(
-          'SELECT file_path, size, mtime_ms, info_json FROM song_cache WHERE list_root = ?'
-        )
-        for (const root of looseRoots) {
-          const extraRows = extraStmt.all(root)
-          if (extraRows && extraRows.length > 0) {
-            appendRows(extraRows, root, listRootAbs)
-            if (resolvedRoot.isRelativeKey && listRootAbs) {
-              migrateSongCacheRows(db, root, listRootKey, listRootAbs)
-            }
-          }
-        }
-      }
-      appendRows(rows, listRootKey)
-      if (legacyRows && legacyRows.length > 0 && legacyListRoot && listRootAbs) {
-        appendRows(legacyRows, legacyListRoot, legacyListRoot)
-        if (resolvedRoot.isRelativeKey) {
-          migrateSongCacheRows(db, legacyListRoot, listRootKey, listRootAbs)
-        }
-      }
-      return map
-    })
-  } catch (error) {
-    log.error('[sqlite] song cache load failed', error)
-    return null
-  }
+  return loadSongCacheWithHelpers(listRoot, {
+    ensureMigrated: ensureSongCacheMigrated,
+    findLooseRoots: getLooseSongCacheRoots,
+    migrateRows: migrateSongCacheRows
+  })
 }
 
 /**
