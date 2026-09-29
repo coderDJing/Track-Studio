@@ -1,5 +1,10 @@
 {
   "horizontalBrowse": {
+    "beatSyncAction": "Turn on Beat Sync",
+    "beatSyncActive": "Turn off Beat Sync",
+    "masterAction": "Make this deck the Master",
+    "masterFailed": "Audio loading or Master selection failed; reload the track or click again to cancel",
+    "masterActive": "This deck is the current Master",
     "editModeControls": "Edit mode controls",
     "saveBlockingSongSwitch": "Saving; song switching is temporarily unavailable",
     "loadPreviousSong": "Load previous song",

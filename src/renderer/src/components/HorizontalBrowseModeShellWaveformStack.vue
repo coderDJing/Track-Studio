@@ -38,6 +38,13 @@ const deckCuePanelMode = reactive<Record<DeckKey, DeckCuePanelMode>>({
 const resolveDetailRef = (deck: DeckKey) =>
   deck === 'top' ? topDetailRef.value : bottomDetailRef.value
 
+const resolveMasterButtonActive = (deck: DeckKey) => {
+  const pending = model.pendingMasterDeck.value
+  if (pending && model.failedMasterDeck.value !== pending) return pending === deck
+  const song = deck === 'top' ? model.topDeckSong.value : model.bottomDeckSong.value
+  return Boolean(song) && model.deckSyncState.leaderDeck === deck
+}
+
 const handleCuePanelHotCuePress = async (payload: { deck: DeckKey; slot: number }) => {
   if (model.isEditMode.value && payload.deck === 'top') {
     const cue = model.audioEdit.session.hotCues.value.find((item) => item.slot === payload.slot)
@@ -105,6 +112,8 @@ const topDisplayMemoryCues = computed(() =>
     ? model.audioEdit.session.memoryCues.value
     : model.topDeckSong.value?.memoryCues || []
 )
+const bottomDisplayHotCues = computed(() => model.bottomDeckSong.value?.hotCues || [])
+const bottomDisplayMemoryCues = computed(() => model.bottomDeckSong.value?.memoryCues || [])
 const topDisplayLoopRange = computed(() =>
   model.isEditMode.value
     ? model.audioEdit.session.loopRange.value
@@ -146,7 +155,10 @@ onUnmounted(() => {
       :deck-hovered="model.isDeckHovered('top')"
       :song="topDisplaySong"
       :beat-sync-enabled="model.topDeckSong.value ? model.resolveDeckSyncUiEnabled('top') : false"
-      :master-active="model.topDeckSong.value ? model.deckSyncState.leaderDeck === 'top' : false"
+      :beat-sync-pending="model.pendingBeatSync.top"
+      :master-active="resolveMasterButtonActive('top')"
+      :master-pending="model.pendingMasterDeck.value === 'top'"
+      :master-failed="model.failedMasterDeck.value === 'top'"
       :key-highlighted="model.deckKeysHarmonicMatched.value"
       :current-seconds="model.topDeckVisibleCurrentSeconds.value"
       :duration-seconds="model.topDeckVisibleDurationSeconds.value"
@@ -345,8 +357,8 @@ onUnmounted(() => {
         :grid-bpm="model.bottomDeckGridBpm.value"
         :loop-range="model.resolveDeckLoopRange('bottom')"
         :cue-seconds="model.bottomDeckCuePointSeconds.value"
-        :hot-cues="model.bottomDeckSong.value?.hotCues || []"
-        :memory-cues="model.bottomDeckSong.value?.memoryCues || []"
+        :hot-cues="bottomDisplayHotCues"
+        :memory-cues="bottomDisplayMemoryCues"
         :seek-target-seconds="model.deckSeekIntent.bottom.seconds"
         :seek-revision="model.deckSeekIntent.bottom.revision"
         :linked-drag-active="model.isDeckWaveformDragging('bottom')"
@@ -383,14 +395,15 @@ onUnmounted(() => {
       :beat-sync-enabled="
         model.bottomDeckSong.value ? model.resolveDeckSyncUiEnabled('bottom') : false
       "
-      :master-active="
-        model.bottomDeckSong.value ? model.deckSyncState.leaderDeck === 'bottom' : false
-      "
+      :beat-sync-pending="model.pendingBeatSync.bottom"
+      :master-active="resolveMasterButtonActive('bottom')"
+      :master-pending="model.pendingMasterDeck.value === 'bottom'"
+      :master-failed="model.failedMasterDeck.value === 'bottom'"
       :key-highlighted="model.deckKeysHarmonicMatched.value"
       :current-seconds="model.bottomDeckRenderCurrentSeconds.value"
       :duration-seconds="model.bottomDeckDurationSeconds.value"
-      :hot-cues="model.bottomDeckSong.value?.hotCues || []"
-      :memory-cues="model.bottomDeckSong.value?.memoryCues || []"
+      :hot-cues="bottomDisplayHotCues"
+      :memory-cues="bottomDisplayMemoryCues"
       :toolbar-state="model.resolveDeckToolbarState('bottom')"
       :loop-range="model.resolveDeckLoopRange('bottom')"
       :read-only-source="model.isDeckSongReadOnly('bottom')"
@@ -438,7 +451,7 @@ onUnmounted(() => {
       v-model:top-mode="deckCuePanelMode.top"
       v-model:bottom-mode="deckCuePanelMode.bottom"
       :top-hot-cues="topDisplayHotCues"
-      :bottom-hot-cues="model.bottomDeckSong.value?.hotCues || []"
+      :bottom-hot-cues="bottomDisplayHotCues"
       :top-hot-cue-editable="
         model.isEditMode.value
           ? model.audioEdit.writable.value
@@ -446,7 +459,7 @@ onUnmounted(() => {
       "
       :bottom-hot-cue-editable="!isRekordboxExternalPlaybackSource('', model.bottomDeckSong.value)"
       :top-memory-cues="topDisplayMemoryCues"
-      :bottom-memory-cues="model.bottomDeckSong.value?.memoryCues || []"
+      :bottom-memory-cues="bottomDisplayMemoryCues"
       :top-memory-cue-editable="!model.isEditMode.value || model.audioEdit.writable.value"
       @hotcue-press="void handleCuePanelHotCuePress($event)"
       @hotcue-delete="void handleCuePanelHotCueDelete($event)"

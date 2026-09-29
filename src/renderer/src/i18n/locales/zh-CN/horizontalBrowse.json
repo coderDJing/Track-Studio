@@ -1,5 +1,10 @@
 {
   "horizontalBrowse": {
+    "beatSyncAction": "开启 Beat Sync",
+    "beatSyncActive": "关闭 Beat Sync",
+    "masterAction": "将此轨设为 Master",
+    "masterFailed": "音频载入或 Master 切换失败，尚未接管；重新载入歌曲或再次点击取消",
+    "masterActive": "此轨当前是 Master",
     "editModeControls": "编辑模式控制",
     "saveBlockingSongSwitch": "正在保存，暂时不能切换歌曲",
     "loadPreviousSong": "载入上一首",

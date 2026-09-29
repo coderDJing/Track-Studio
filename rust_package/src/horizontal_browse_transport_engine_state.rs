@@ -750,7 +750,8 @@ impl HorizontalBrowseTransportEngine {
 
   pub(super) fn set_leader(&mut self, deck: Option<DeckId>) {
     self.mark_state_changed();
-    self.leader = deck.filter(|candidate| self.is_loaded(*candidate));
+    self.manually_selected_leader = deck.filter(|candidate| self.is_loaded(*candidate));
+    self.leader = self.manually_selected_leader;
     self.refresh();
   }
 

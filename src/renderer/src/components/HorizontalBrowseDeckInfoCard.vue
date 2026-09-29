@@ -11,7 +11,10 @@ import { resolveSongBeatGridV2BpmAtSec } from '@shared/songBeatGridMapV2'
 const props = defineProps<{
   song: ISongInfo | null
   beatSyncEnabled: boolean
+  beatSyncPending: boolean
   masterActive: boolean
+  masterPending: boolean
+  masterFailed: boolean
   keyHighlighted: boolean
   currentSeconds?: number
   durationSeconds?: number
@@ -237,24 +240,45 @@ onUnmounted(() => {
       class="deck-info-card__actions"
       :data-user-guide-target="props.userGuideTarget"
     >
-      <button
+      <bubbleBoxTrigger
+        tag="button"
         type="button"
         class="deck-info-action"
-        :class="{ 'is-active': props.beatSyncEnabled }"
-        :disabled="!props.song"
+        :class="{ 'is-active': props.beatSyncEnabled || props.beatSyncPending }"
+        :title="
+          t(
+            props.beatSyncEnabled || props.beatSyncPending
+              ? 'horizontalBrowse.beatSyncActive'
+              : 'horizontalBrowse.beatSyncAction'
+          )
+        "
+        :aria-pressed="props.beatSyncEnabled || props.beatSyncPending"
         @click.stop="emit('trigger-beat-sync')"
       >
         BEAT SYNC
-      </button>
-      <button
+      </bubbleBoxTrigger>
+      <bubbleBoxTrigger
+        tag="button"
         type="button"
         class="deck-info-action deck-info-action--master"
-        :class="{ 'is-active': props.masterActive }"
-        :disabled="!props.song"
+        :class="{
+          'is-active': props.masterActive,
+          'is-failed': props.masterFailed
+        }"
+        :title="
+          t(
+            props.masterFailed
+              ? 'horizontalBrowse.masterFailed'
+              : props.masterActive || props.masterPending
+                ? 'horizontalBrowse.masterActive'
+                : 'horizontalBrowse.masterAction'
+          )
+        "
+        :aria-pressed="props.masterActive || props.masterPending"
         @click.stop="emit('toggle-master')"
       >
         MASTER
-      </button>
+      </bubbleBoxTrigger>
     </div>
   </div>
 </template>
@@ -470,15 +494,6 @@ onUnmounted(() => {
   border-color: var(--shell-control-hover-border, var(--accent));
 }
 
-.deck-info-action:disabled {
-  opacity: 0.46;
-  cursor: not-allowed;
-}
-
-.deck-info-action:disabled:hover {
-  border-color: var(--border);
-}
-
 .deck-info-action.is-active {
   color: var(--shell-active-control-text, #ffffff);
   border-color: var(--shell-active-control-border, var(--accent));
@@ -502,5 +517,11 @@ onUnmounted(() => {
   border-color: color-mix(in srgb, var(--shell-cue-accent, #d98921) 88%, white);
   background: transparent;
   box-shadow: none;
+}
+
+.deck-info-action.is-failed {
+  color: var(--danger, #d96a6a);
+  border-color: var(--danger, #d96a6a);
+  background: color-mix(in srgb, var(--danger, #d96a6a) 10%, transparent);
 }
 </style>

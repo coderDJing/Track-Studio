@@ -17,7 +17,6 @@ import {
   HORIZONTAL_BROWSE_DETAIL_MIN_ZOOM
 } from '@renderer/composables/horizontalBrowse/horizontalBrowseWaveform.constants'
 import {
-  buildHorizontalBrowseDeckToolbarState,
   parseHorizontalBrowseDurationToSeconds,
   resolveHorizontalBrowseDeckDurationSeconds,
   resolveHorizontalBrowseDeckGridBpm,
@@ -49,6 +48,8 @@ import type { HorizontalBrowseDeckAssignTransportOptions } from '@renderer/compo
 import { useHorizontalBrowseTransportController } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseTransportController'
 import { useHorizontalBrowseWaveformPreviewSuspension } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseWaveformPreviewSuspension'
 import { useHorizontalBrowseTransportMutations } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseTransportMutations'
+import { useHorizontalBrowseDeckPreselection } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseDeckPreselection'
+import { resolveHorizontalBrowseDeckToolbarPresentation } from '@renderer/composables/horizontalBrowse/horizontalBrowseDeckToolbarPresentation'
 import { useHorizontalBrowseFaderControls } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseFaderControls'
 import { useHorizontalBrowseVisualizer } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseVisualizer'
 import {
@@ -61,9 +62,6 @@ import { useHorizontalBrowseSongsRemoved } from '@renderer/composables/horizonta
 import {
   createDefaultDeckToolbarState,
   createDefaultSharedDetailZoomState,
-  DUAL_MODE_BPM_INPUT_TITLE,
-  EDIT_MODE_BPM_INPUT_TITLE,
-  EDIT_MODE_TAP_BPM_TITLE,
   type HorizontalBrowseViewMode,
   type SharedDetailZoomState
 } from '@renderer/composables/horizontalBrowse/horizontalBrowseModeShellTypes'
@@ -82,9 +80,7 @@ import {
   resolveHorizontalBrowseDeckToolbarBpmInputValue,
   resolveHorizontalBrowseDeckWaveformPlaybackActive
 } from '@renderer/composables/horizontalBrowse/horizontalBrowseModeShellPresentationResolvers'
-import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
 import { resolveInitialPlaybackRangeStartSec } from '@shared/playbackRange'
-import { t } from '@renderer/utils/translate'
 
 type DeckKey = HorizontalBrowseDeckKey
 const props = withDefaults(defineProps<{ viewMode?: HorizontalBrowseViewMode }>(), {
@@ -308,23 +304,42 @@ const {
   resolveTransportDeckSnapshot
 })
 
-const { commitDeckStateToNative, commitDeckStatesToNative, toggleDeckMaster, triggerDeckBeatSync } =
-  useHorizontalBrowseTransportMutations({
-    touchDeckInteraction,
-    nativeTransport,
-    syncDeckRenderState,
-    commitLinkedGridVisualTransaction,
-    beginLinkedGridVisualTransaction,
-    cancelLinkedGridVisualTransaction,
-    clearLinkedPresentation: waveformPresentation.clearLinkedPresentation,
-    resolveDeckSong,
-    resolveDeckCurrentSeconds,
-    resolveDeckDurationSeconds,
-    resolveDeckPlaying,
-    resolveDeckPlaybackRate: resolveDeckPlaybackRateForTransport,
-    resolveDeckMasterTempoEnabled: (deck) => resolveDeckMasterTempoEnabledForTransport(deck),
-    resolveTransportDeckSnapshot
-  })
+const {
+  commitDeckStateToNative,
+  commitDeckStatesToNative,
+  toggleDeckMaster: activateDeckMaster,
+  triggerDeckBeatSync: activateDeckBeatSync
+} = useHorizontalBrowseTransportMutations({
+  touchDeckInteraction,
+  nativeTransport,
+  syncDeckRenderState,
+  commitLinkedGridVisualTransaction,
+  beginLinkedGridVisualTransaction,
+  cancelLinkedGridVisualTransaction,
+  clearLinkedPresentation: waveformPresentation.clearLinkedPresentation,
+  resolveDeckSong,
+  resolveDeckCurrentSeconds,
+  resolveDeckDurationSeconds,
+  resolveDeckPlaying,
+  resolveDeckPlaybackRate: resolveDeckPlaybackRateForTransport,
+  resolveDeckMasterTempoEnabled: (deck) => resolveDeckMasterTempoEnabledForTransport(deck),
+  resolveTransportDeckSnapshot
+})
+const {
+  pendingMasterDeck,
+  failedMasterDeck,
+  pendingBeatSync,
+  toggleDeckMaster,
+  triggerDeckBeatSync
+} = useHorizontalBrowseDeckPreselection({
+  editMode: () => isEditMode.value,
+  resolveDeckSong,
+  resolveDeckSnapshot: resolveTransportDeckSnapshot,
+  resolveLeaderDeck: () => deckSyncState.leaderDeck,
+  touchDeckInteraction,
+  activateMaster: activateDeckMaster,
+  activateBeatSync: activateDeckBeatSync
+})
 const {
   selectSongListDialogVisible,
   selectSongListDialogTargetLibraryName,
@@ -700,41 +715,18 @@ const resolveDeckSyncUiEnabled = (deck: DeckKey) =>
     resolveDeckCuePreviewRuntimeState(deck).syncEnabledBefore
   )
 
-const resolveDeckToolbarState = (deck: DeckKey) => {
-  const toolbarState = buildHorizontalBrowseDeckToolbarState(
-    deck === 'top' ? topDeckToolbarState.value : bottomDeckToolbarState.value,
-    resolveDeckToolbarBpmInputValue(deck),
-    {
-      loopBeatLabel: resolveDeckLoopBeatLabel(deck),
-      loopActive: isDeckLoopActive(deck),
-      loopDisabled: resolveDeckLoopDisabled(deck),
-      bpmInputTitle: t(
-        isEditMode.value ? EDIT_MODE_BPM_INPUT_TITLE : DUAL_MODE_BPM_INPUT_TITLE
-      ),
-      bpmInputFirst: isEditMode.value,
-      showTapButton: isEditMode.value,
-      tapBpmTitle: isEditMode.value ? t(EDIT_MODE_TAP_BPM_TITLE) : ''
-    }
-  )
-  const editSaving = isEditMode.value && deck === 'top' && audioEdit.saving.value
-  return {
-    ...toolbarState,
-    disabled: toolbarState.disabled || editSaving,
-    // 双轨的 BPM 是 transport 临时速度目标，不能被只读网格/细节波形的状态禁用。
-    bpmInputDisabled: editSaving
-      ? true
-      : isEditMode.value
-        ? toolbarState.bpmInputDisabled
-        : !resolveDeckSong(deck)?.filePath,
-    gridControlsDisabled: toolbarState.gridControlsDisabled || editSaving,
-    // 外部曲目的网格属于 Rekordbox；双轨只保留临时速度控制，隐藏无效的网格工具。
-    showGridControls: isEditMode.value
-      ? audioEdit.subMode.value === 'grid'
-      : !isRekordboxExternalPlaybackSource('', resolveDeckSong(deck)),
-    showMetronome: isEditMode.value || !isRekordboxExternalPlaybackSource('', resolveDeckSong(deck))
-  }
-}
-
+const resolveDeckToolbarState = (deck: DeckKey) =>
+  resolveHorizontalBrowseDeckToolbarPresentation({
+    toolbarState: deck === 'top' ? topDeckToolbarState.value : bottomDeckToolbarState.value,
+    bpmInputValue: resolveDeckToolbarBpmInputValue(deck),
+    loopBeatLabel: resolveDeckLoopBeatLabel(deck),
+    loopActive: isDeckLoopActive(deck),
+    loopDisabled: resolveDeckLoopDisabled(deck),
+    editMode: isEditMode.value,
+    editSaving: isEditMode.value && deck === 'top' && audioEdit.saving.value,
+    editSubMode: audioEdit.subMode.value,
+    song: resolveDeckSong(deck)
+  })
 useHorizontalBrowseModeShellHotkeys({
   runtime,
   onPlayerInteraction: handlePlayerInteraction,
@@ -876,6 +868,9 @@ const waveformStackModel: HorizontalBrowseModeShellWaveformStackModel = {
   waveformPresentation,
   isDeckHovered,
   resolveDeckSyncUiEnabled,
+  pendingMasterDeck,
+  failedMasterDeck,
+  pendingBeatSync,
   resolveDeckToolbarState,
   resolveDeckLoopRange,
   isDeckSongReadOnly,

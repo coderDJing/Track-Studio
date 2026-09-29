@@ -75,6 +75,9 @@ export type HorizontalBrowseModeShellWaveformStackModel = {
   waveformPresentation: ReturnType<typeof useHorizontalBrowseWaveformPresentationCoordinator>
   isDeckHovered: DeckDrop['isDeckHovered']
   resolveDeckSyncUiEnabled: (deck: DeckKey) => boolean
+  pendingMasterDeck: Ref<DeckKey | null>
+  failedMasterDeck: Ref<DeckKey | null>
+  pendingBeatSync: Record<DeckKey, boolean>
   resolveDeckToolbarState: (
     deck: DeckKey
   ) => ReturnType<typeof buildHorizontalBrowseDeckToolbarState>

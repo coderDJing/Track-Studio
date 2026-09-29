@@ -318,6 +318,7 @@ struct HorizontalBrowseTransportEngine {
   output_sample_rate: u32,
   output_channels: u16,
   leader: Option<DeckId>,
+  manually_selected_leader: Option<DeckId>,
   sync_enabled: [bool; 2],
   sync_lock: [&'static str; 2],
   beat_distance: [f64; 2],
@@ -348,6 +349,7 @@ impl Default for HorizontalBrowseTransportEngine {
       output_sample_rate: 44100,
       output_channels: 2,
       leader: None,
+      manually_selected_leader: None,
       sync_enabled: [false, false],
       sync_lock: ["off", "off"],
       beat_distance: [0.0, 0.0],
@@ -500,6 +502,13 @@ impl HorizontalBrowseTransportEngine {
 
   fn auto_select_leader_from_playback(&mut self) {
     let now_ms = self.last_now_ms;
+    if let Some(leader) = self.manually_selected_leader {
+      if self.is_sync_ready(leader, now_ms) {
+        self.leader = Some(leader);
+        return;
+      }
+      self.manually_selected_leader = None;
+    }
     let top_audible = self.is_playing_audible_at(DeckId::Top, now_ms);
     let bottom_audible = self.is_playing_audible_at(DeckId::Bottom, now_ms);
     match (top_audible, bottom_audible) {
