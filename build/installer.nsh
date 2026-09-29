@@ -109,8 +109,28 @@ Var TrackStudioHadDesktopShortcut
 Var TrackStudioInstallRegistryKey
 Var TrackStudioUninstallRegistryKey
 
+; Persist installer-engine milestones outside $PLUGINSDIR, which NSIS removes
+; after an unexpected exit. The WPF frontend writes a separate UTF-8 log.
+; Remove these milestones once the 0% update exit is identified and verified fixed.
+Function TrackStudioLog
+  Exch $1
+  Push $0
+  CreateDirectory "$LOCALAPPDATA\Track Studio"
+  ClearErrors
+  FileOpen $0 "$LOCALAPPDATA\Track Studio\installer-engine.log" a
+  IfErrors track_studio_log_done
+  FileWrite $0 "${VERSION} [engine] $1$\r$\n"
+  FileClose $0
+track_studio_log_done:
+  Pop $0
+  Pop $1
+FunctionEnd
+
 Function TrackStudioBootstrapCreate
   IfSilent track_studio_bootstrap_skip
+
+  Push "bootstrap start"
+  Call TrackStudioLog
 
   StrCpy $TrackStudioInteractive "1"
   StrCpy $TrackStudioLastHeartbeat ""
@@ -148,11 +168,16 @@ track_studio_bootstrap_install_dir_ready:
   Exec '"$PLUGINSDIR\TrackStudioInstallerUi.exe" --session-file "$TrackStudioSessionFile" --install-dir "$0" --version "${VERSION}" --mode "$TrackStudioFrontendMode" --estimated-size-kb "${APP_64_UNPACKED_SIZE}" --engine-window "$HWNDPARENT" --install-registry-key "$TrackStudioInstallRegistryKey" --uninstall-registry-key "$TrackStudioUninstallRegistryKey"'
   IfErrors track_studio_bootstrap_error
 
+  Push "frontend launched mode=$TrackStudioFrontendMode"
+  Call TrackStudioLog
+
   ${NSD_CreateTimer} TrackStudioPollBootstrap 180
   nsDialogs::Show
   Return
 
 track_studio_bootstrap_error:
+  Push "bootstrap failed"
+  Call TrackStudioLog
   Call TrackStudioCancelUpdate
   Call TrackStudioRestoreNativeWindow
   !insertmacro TrackStudioLocalizedString $4 \
@@ -181,10 +206,14 @@ Function TrackStudioBootstrapLeave
 track_studio_keep_prepared_install_dir:
   WriteINIStr "$TrackStudioSessionFile" "frontend" "command" ""
   WriteINIStr "$TrackStudioSessionFile" "engine" "state" "installing"
+  Push "install page entered path=$INSTDIR"
+  Call TrackStudioLog
   ${NSD_KillTimer} TrackStudioPollBootstrap
   Return
 
 track_studio_missing_path:
+  Push "frontend supplied no install path"
+  Call TrackStudioLog
   WriteINIStr "$TrackStudioSessionFile" "engine" "state" "failed"
   !insertmacro TrackStudioLocalizedString $4 \
     "安装路径无效，请重新运行安装程序。" \
@@ -193,6 +222,8 @@ track_studio_missing_path:
   Abort
 
 track_studio_cancel_install:
+  Push "frontend cancelled installation"
+  Call TrackStudioLog
   ${NSD_KillTimer} TrackStudioPollBootstrap
   Call TrackStudioCancelUpdate
   SetErrorLevel 1223
@@ -204,6 +235,8 @@ Function TrackStudioInstallPageShow
   Call TrackStudioPrepareUpdate
   Call TrackStudioParkNativeWindow
   WriteINIStr "$TrackStudioSessionFile" "engine" "state" "installing"
+  Push "frontend requested extraction path=$INSTDIR"
+  Call TrackStudioLog
   StrCpy $TrackStudioLastProgress 0
   WriteINIStr "$TrackStudioSessionFile" "engine" "progressDirectory" "$PLUGINSDIR\7z-out"
   WriteINIStr "$TrackStudioSessionFile" "engine" "progress" "0"
@@ -240,6 +273,8 @@ FunctionEnd
 Function TrackStudioPrepareUpdate
   StrCmp $TrackStudioFrontendMode "update" 0 track_studio_update_prepare_done
   StrCmp $TrackStudioUpdatePrepared "1" track_studio_update_prepare_done
+  Push "update preparation started path=$INSTDIR"
+  Call TrackStudioLog
   ; The stock install section creates a shortcut against the staging path.
   ; Remember whether the user kept a desktop shortcut before that happens.
   StrCpy $TrackStudioHadDesktopShortcut "0"
@@ -256,7 +291,9 @@ track_studio_desktop_link_checked:
   StrCpy $TrackStudioUpdateBackupDir "$TrackStudioUpdateOriginalDir.__track-studio-update-old"
   RMDir /r "$TrackStudioUpdateStagingDir"
   RMDir /r "$TrackStudioUpdateBackupDir"
+  ClearErrors
   CreateDirectory "$TrackStudioUpdateStagingDir"
+  IfErrors track_studio_update_prepare_failed
   ReadRegStr $TrackStudioUpdateOldUninstallString SHELL_CONTEXT "$TrackStudioUninstallRegistryKey" UninstallString
   ReadRegStr $TrackStudioUpdateOldQuietUninstallString SHELL_CONTEXT "$TrackStudioUninstallRegistryKey" QuietUninstallString
   WriteINIStr "$TrackStudioSessionFile" "rollback" "installLocation" "$TrackStudioUpdateOriginalDir"
@@ -269,6 +306,13 @@ track_studio_desktop_link_checked:
   WriteRegStr SHELL_CONTEXT "$TrackStudioUninstallRegistryKey" QuietUninstallString ""
   StrCpy $TrackStudioUpdatePrepared "1"
   StrCpy $INSTDIR "$TrackStudioUpdateStagingDir"
+  Push "update prepared staging=$TrackStudioUpdateStagingDir"
+  Call TrackStudioLog
+  Goto track_studio_update_prepare_done
+track_studio_update_prepare_failed:
+  Push "update staging directory creation failed path=$TrackStudioUpdateStagingDir"
+  Call TrackStudioLog
+  Abort
 track_studio_update_prepare_done:
 FunctionEnd
 
@@ -288,6 +332,8 @@ track_studio_cancel_update_done:
 FunctionEnd
 
 Function TrackStudioFinishShow
+  Push "installer reached finish page"
+  Call TrackStudioLog
   Call TrackStudioParkNativeWindow
   ${NSD_KillTimer} TrackStudioPollInstallProgress
   WriteINIStr "$TrackStudioSessionFile" "engine" "progress" "100"
@@ -329,6 +375,8 @@ track_studio_frontend_watch_done:
   Return
 
 track_studio_frontend_timeout:
+  Push "frontend heartbeat timed out"
+  Call TrackStudioLog
   ${NSD_KillTimer} TrackStudioPollBootstrap
   ${NSD_KillTimer} TrackStudioPollFinish
   Call TrackStudioRestoreNativeWindow
@@ -341,6 +389,8 @@ track_studio_frontend_timeout:
 FunctionEnd
 
 Function .onInstFailed
+  Push "installation failed path=$INSTDIR"
+  Call TrackStudioLog
   StrCmp $TrackStudioUpdatePrepared "1" 0 track_studio_failed_shortcut_done
   StrCmp $TrackStudioHadDesktopShortcut "0" 0 track_studio_failed_shortcut_done
   Delete "$DESKTOP\${SHORTCUT_NAME}.lnk"
@@ -362,6 +412,8 @@ FunctionEnd
 !macroend
 
 !macro customInit
+  Push "init started"
+  Call TrackStudioLog
   ; Keep the internal executable name FRKB for compatibility, but expose the
   ; product name in the default per-machine installation directory.
   StrCpy $TrackStudioInstallRegistryKey "${INSTALL_REGISTRY_KEY}"
@@ -384,6 +436,8 @@ Function TrackStudioCommitUpdate
   StrCmp $TrackStudioUpdatePrepared "1" track_studio_commit_update_start track_studio_commit_update_done
 
 track_studio_commit_update_start:
+  Push "update commit started staging=$TrackStudioUpdateStagingDir"
+  Call TrackStudioLog
   ; The old tree has not been touched while the new package was extracted.
   ; Rename both directories on the same volume so the final switch is fast.
   SetOutPath "$TEMP"
@@ -398,6 +452,8 @@ track_studio_no_old_tree:
   StrCpy $INSTDIR "$TrackStudioUpdateOriginalDir"
   Call TrackStudioRestoreUpdateRegistration
   RMDir /r "$TrackStudioUpdateBackupDir"
+  Push "update commit completed path=$INSTDIR"
+  Call TrackStudioLog
   Return
 
 track_studio_commit_update_restore:
@@ -405,6 +461,8 @@ track_studio_commit_update_restore:
   Rename "$TrackStudioUpdateBackupDir" "$TrackStudioUpdateOriginalDir"
 
 track_studio_commit_update_failed:
+  Push "update commit failed original=$TrackStudioUpdateOriginalDir"
+  Call TrackStudioLog
   RMDir /r "$TrackStudioUpdateStagingDir"
   Call TrackStudioRestoreUpdateRegistration
   MessageBox MB_OK|MB_ICONSTOP|MB_TOPMOST "$(^Name) 更新未完成，旧版本已保留。$\nThe update could not be completed. The previous version was kept."
@@ -414,6 +472,8 @@ track_studio_commit_update_done:
 FunctionEnd
 
 !macro customInstall
+  Push "payload extraction completed path=$INSTDIR"
+  Call TrackStudioLog
   Call TrackStudioCommitUpdate
   StrCmp $TrackStudioUpdatePrepared "1" 0 track_studio_update_metadata_done
   StrCpy $appExe "$INSTDIR\${APP_EXECUTABLE_FILENAME}"

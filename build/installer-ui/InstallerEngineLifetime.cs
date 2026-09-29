@@ -75,6 +75,10 @@ namespace TrackStudioInstallerUi
         }
         if (!stopRequested)
         {
+          int exitCode = -1;
+          try { exitCode = engine.ExitCode; }
+          catch (InvalidOperationException) { }
+          InstallerDiagnosticLog.Write("engine exited unexpectedly code=" + exitCode);
           Environment.Exit(0);
         }
       });
@@ -92,6 +96,7 @@ namespace TrackStudioInstallerUi
         PostMessage(windowHandle, 0x0010, IntPtr.Zero, IntPtr.Zero);
         if (!engine.WaitForExit(1200))
         {
+          InstallerDiagnosticLog.Write("engine did not stop after close request; terminating");
           engine.Kill();
           engine.WaitForExit(5000);
         }

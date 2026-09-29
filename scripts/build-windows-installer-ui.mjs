@@ -22,6 +22,7 @@ if (!compiler) {
 
 const source = join(projectDirectory, 'build', 'installer-ui', 'TrackStudioInstallerUi.cs')
 const sessionSource = join(projectDirectory, 'build', 'installer-ui', 'InstallerSession.cs')
+const diagnosticLogSource = join(projectDirectory, 'build', 'installer-ui', 'InstallerDiagnosticLog.cs')
 const optionsSource = join(projectDirectory, 'build', 'installer-ui', 'InstallerOptions.cs')
 const textSource = join(projectDirectory, 'build', 'installer-ui', 'InstallerText.cs')
 const linksSource = join(projectDirectory, 'build', 'installer-ui', 'InstallerLinks.cs')
@@ -32,6 +33,7 @@ const engineLifetimeSource = join(projectDirectory, 'build', 'installer-ui', 'In
 const windowClosingSource = join(projectDirectory, 'build', 'installer-ui', 'InstallerWindowClosing.cs')
 const nativeProgressSource = join(projectDirectory, 'build', 'installer-ui', 'InstallerNativeProgress.cs')
 const progressWorkerSource = join(projectDirectory, 'build', 'installer-ui', 'InstallerProgressWorker.cs')
+const stateMonitorSource = join(projectDirectory, 'build', 'installer-ui', 'InstallerStateMonitor.cs')
 const icon = join(projectDirectory, 'build', 'icon.ico')
 const projectLogo = join(projectDirectory, 'src', 'renderer', 'src', 'assets', 'logo.png')
 const output = join(projectDirectory, 'dist', 'installer-ui', 'TrackStudioInstallerUi.exe')
@@ -60,6 +62,7 @@ const result = spawnSync(
     `/reference:${join(frameworkDirectory, 'System.Xaml.dll')}`,
     source,
     sessionSource,
+    diagnosticLogSource,
     optionsSource,
     textSource,
     linksSource,
@@ -69,7 +72,8 @@ const result = spawnSync(
     engineLifetimeSource,
     windowClosingSource,
     nativeProgressSource,
-    progressWorkerSource
+    progressWorkerSource,
+    stateMonitorSource
   ],
   {
     cwd: projectDirectory,

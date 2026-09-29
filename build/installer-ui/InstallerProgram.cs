@@ -1,5 +1,6 @@
 using System;
 using System.Windows;
+using System.Windows.Threading;
 
 namespace TrackStudioInstallerUi
 {
@@ -11,6 +12,9 @@ namespace TrackStudioInstallerUi
       try
       {
         InstallerOptions options = InstallerOptions.Parse(args);
+        InstallerDiagnosticLog.Write("start version=" + options.Version +
+          " mode=" + (options.IsUpdate ? "update" : options.IsUninstall ? "uninstall" : "install") +
+          " preview=" + options.Preview);
         InstallerText.SetPreviewLanguage(options.PreviewLanguage);
         if (!options.Preview && string.IsNullOrWhiteSpace(options.SessionFile))
         {
@@ -21,11 +25,22 @@ namespace TrackStudioInstallerUi
         {
           ShutdownMode = ShutdownMode.OnMainWindowClose
         };
+        application.DispatcherUnhandledException += delegate(object sender,
+          DispatcherUnhandledExceptionEventArgs eventArgs)
+        {
+          InstallerDiagnosticLog.Write("dispatcher exception " + eventArgs.Exception);
+        };
+        AppDomain.CurrentDomain.UnhandledException += delegate(object sender,
+          UnhandledExceptionEventArgs eventArgs)
+        {
+          InstallerDiagnosticLog.Write("unhandled exception " + eventArgs.ExceptionObject);
+        };
         application.Run(new InstallerWindow(options));
         return 0;
       }
-      catch (Exception)
+      catch (Exception exception)
       {
+        InstallerDiagnosticLog.Write("fatal " + exception);
         return 1;
       }
     }

@@ -147,6 +147,7 @@ namespace TrackStudioInstallerUi
       engineLifetime = InstallerEngineLifetime.Attach(options.EngineWindowHandle);
       if (engineLifetime == null)
       {
+        InstallerDiagnosticLog.Write("engine window unavailable on frontend load");
         allowWindowClose = true;
         Close();
         return;
@@ -157,9 +158,11 @@ namespace TrackStudioInstallerUi
         InstallerSession.Write(options.SessionFile, "frontend", "state", "ready");
         MarkFrontendAlive(sender, eventArgs);
         heartbeatTimer.Start();
+        InstallerDiagnosticLog.Write("window loaded; engine attached");
       }
       catch (Exception exception)
       {
+        InstallerDiagnosticLog.Write("frontend load failed " + exception);
         ShowErrorView(exception.Message);
       }
     }
@@ -916,14 +919,17 @@ namespace TrackStudioInstallerUi
 
       try
       {
+        InstallerDiagnosticLog.Write("begin installation path=" + selectedPath);
         InstallerSession.Write(options.SessionFile, "frontend", "installPath", selectedPath);
         StartInstallationProgressWorker(selectedPath);
         InstallerSession.Write(options.SessionFile, "frontend", "command", "install");
         AdvanceEnginePage();
+        InstallerDiagnosticLog.Write("engine install page requested");
         stateTimer.Start();
       }
       catch (Exception exception)
       {
+        InstallerDiagnosticLog.Write("begin installation failed " + exception);
         ShowErrorView(exception.Message);
       }
     }
@@ -998,46 +1004,6 @@ namespace TrackStudioInstallerUi
         }
       }
     }
-
-    private void StateTimerTick(object sender, EventArgs eventArgs)
-    {
-      if (!File.Exists(options.SessionFile))
-      {
-        missingSessionTicks++;
-        if (missingSessionTicks >= 8)
-        {
-          allowWindowClose = true;
-          Close();
-        }
-        return;
-      }
-
-      missingSessionTicks = 0;
-      string state = InstallerSession.Read(options.SessionFile, "engine", "state");
-      string progressValue = InstallerSession.Read(options.SessionFile, "engine", "progress");
-      int progress;
-      if (int.TryParse(progressValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out progress))
-      {
-        SetInstallationProgress(progress);
-      }
-      if (!options.IsUninstall && installStarted && !installFinished)
-      {
-        int nativeProgress = ReadNativeEngineProgress();
-        if (nativeProgress > progress) SetInstallationProgress(nativeProgress);
-      }
-      if (string.Equals(state, "success", StringComparison.OrdinalIgnoreCase))
-      {
-        StopInstallationProgressWorker();
-        SetInstallationProgress(100);
-        if (options.IsUninstall) ShowUninstallCompleteView();
-        else ShowCompleteView();
-      }
-      else if (string.Equals(state, "failed", StringComparison.OrdinalIgnoreCase))
-      {
-        ShowErrorView(InstallerSession.Read(options.SessionFile, "engine", "message"));
-      }
-    }
-
 
     private void FinishInstall()
     {
