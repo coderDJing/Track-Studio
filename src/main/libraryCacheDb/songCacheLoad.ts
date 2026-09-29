@@ -1,7 +1,7 @@
 import { getLibraryDb } from '../libraryDb'
 import type { SqliteDatabase } from '../libraryDb'
 import { log } from '../log'
-import { isPackagedRcBuild } from '../services/rcDiagnostics'
+import { isPackagedRcMainProcess } from '../services/rcDiagnosticEnvironment'
 import { runTracedSync } from '../services/mainProcessActivityTraceState'
 import type { ISongInfo } from '../../types/globals'
 import type { SongCacheEntry } from './types'
@@ -156,7 +156,7 @@ export async function loadSongCacheWithHelpers(
     })
     const syncMs = performance.now() - syncStartedAt
     const elapsedMs = performance.now() - startedAt
-    if (elapsedMs >= SLOW_SONG_CACHE_LOAD_MS && process.type === 'browser' && isPackagedRcBuild()) {
+    if (elapsedMs >= SLOW_SONG_CACHE_LOAD_MS && isPackagedRcMainProcess()) {
       log.warn('[sqlite] slow song cache load', {
         listRoot: listRootKey,
         elapsedMs: Math.round(elapsedMs),

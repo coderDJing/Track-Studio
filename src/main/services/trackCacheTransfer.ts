@@ -5,7 +5,7 @@ import { log } from '../log'
 import { replaceMixtapeStemAssetFilePath } from '../mixtapeStemDb'
 import store from '../store'
 import { operateHiddenFile } from './hiddenFileOperation'
-import { isPackagedRcBuild } from './rcDiagnostics'
+import { isPackagedRcMainProcess } from './rcDiagnosticEnvironment'
 
 export type CacheFileStat = {
   size: number
@@ -252,7 +252,7 @@ export async function transferTrackCaches(params: TrackCacheTransferParams): Pro
   } finally {
     const elapsedMs = performance.now() - startedAt
     // RC 阈值诊断：确认迁移卡在哪一阶段且不再出现慢记录后删除。
-    if (elapsedMs >= 2000 && process.type === 'browser' && isPackagedRcBuild()) {
+    if (elapsedMs >= 2000 && isPackagedRcMainProcess()) {
       log.warn('[track-cache-transfer] slow transfer', {
         fileName: path.basename(params.fromPath),
         fromRoot: params.fromRoot,

@@ -258,7 +258,7 @@
     "dev": "node scripts/run-frkb-dev.mjs",
     "dev:no-runtime": "node scripts/run-frkb-dev.mjs --no-runtime",
     "dev:release-runtime": "node scripts/run-frkb-dev.mjs --release-runtime",
-    "build": "node scripts/ensure-rust-package-native.mjs --mode package && electron-vite build",
+    "build": "node scripts/ensure-rust-package-native.mjs --mode package && electron-vite build && node scripts/check-song-list-scan-worker-deps.mjs",
     "rust-package:ensure": "node scripts/ensure-rust-package-native.mjs --mode dev",
     "rust-package:ensure:package": "node scripts/ensure-rust-package-native.mjs --mode package",
     "master-tempo:benchmark": "node scripts/ensure-rust-package-native.mjs --mode dev && node scripts/master-tempo-ab-benchmark.mjs",

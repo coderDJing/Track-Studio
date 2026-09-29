@@ -139,6 +139,7 @@ import { stopRecycleBinCacheTransferQueue } from './services/recycleBinCacheTran
 const devRuntime = configureDevRuntime(is.dev, log)
 configureLogTransports()
 process.env.FRKB_APP_PACKAGED = app.isPackaged ? '1' : '0'
+process.env.FRKB_APP_VERSION = app.getVersion()
 
 try {
   const resolvedUserDataDir = app.getPath('userData')
