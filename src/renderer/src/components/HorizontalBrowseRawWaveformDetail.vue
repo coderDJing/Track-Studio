@@ -360,6 +360,13 @@ const {
     syncLiveTempoPreviewTransform()
   }
 })
+const setWaveformTileContainer = (index: 0 | 1, element: unknown) => {
+  waveformTileContainerRefs[index].value = element instanceof HTMLDivElement ? element : null
+}
+const setWaveformTileCanvas = (index: 0 | 1, slotIndex: number, element: unknown) => {
+  waveformTileCanvasRefs[index].value[slotIndex] =
+    element instanceof HTMLCanvasElement ? element : null
+}
 
 presentationState.setLastAppliedPreviewTimeScale(
   Math.max(0.25, Number(resolvePreviewTimeScale()) || 1)

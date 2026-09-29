@@ -23,21 +23,13 @@
              否则边界会出现亚像素错位）。容器位于 tempo-scaler 之内，故 CSS 变速缩放仍作用于整层。 -->
         <div
           v-if="waveformTileRenderingEnabled"
-          :ref="
-            (element) =>
-              (waveformTileContainerRefs[0].value =
-                element instanceof HTMLDivElement ? element : null)
-          "
+          :ref="(element) => setWaveformTileContainer(0, element)"
           class="raw-detail-waveform__tile-container"
         >
           <canvas
             v-for="slotIndex in waveformTileSlotIndexes"
             :key="`tile-front-${slotIndex}`"
-            :ref="
-              (element) =>
-                (waveformTileCanvasRefs[0].value[slotIndex] =
-                  element instanceof HTMLCanvasElement ? element : null)
-            "
+            :ref="(element) => setWaveformTileCanvas(0, slotIndex, element)"
             class="raw-detail-waveform__canvas--waveform raw-detail-waveform__tile"
           />
         </div>
@@ -49,21 +41,13 @@
         />
         <div
           v-if="waveformTileRenderingEnabled"
-          :ref="
-            (element) =>
-              (waveformTileContainerRefs[1].value =
-                element instanceof HTMLDivElement ? element : null)
-          "
+          :ref="(element) => setWaveformTileContainer(1, element)"
           class="raw-detail-waveform__tile-container raw-detail-waveform__tile-container--buffer-back"
         >
           <canvas
             v-for="slotIndex in waveformTileSlotIndexes"
             :key="`tile-back-${slotIndex}`"
-            :ref="
-              (element) =>
-                (waveformTileCanvasRefs[1].value[slotIndex] =
-                  element instanceof HTMLCanvasElement ? element : null)
-            "
+            :ref="(element) => setWaveformTileCanvas(1, slotIndex, element)"
             class="raw-detail-waveform__canvas--waveform raw-detail-waveform__tile"
           />
         </div>
