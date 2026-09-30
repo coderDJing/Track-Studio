@@ -12,6 +12,18 @@ const templatePath = fileURLToPath(
 )
 
 describe('双轨大波形外置模板', () => {
+  it('外置内容直接编译为可显示的波形容器，不生成原生隐藏 template 节点', () => {
+    const template = compileTemplate({
+      source: readFileSync(templatePath, 'utf8'),
+      filename: templatePath,
+      id: 'horizontal-browse-detail-root-test'
+    })
+
+    expect(template.errors).toEqual([])
+    expect(template.code).toMatch(/return \(_openBlock\(\), _createElementBlock\("div",/)
+    expect(template.code).not.toMatch(/_createElement(?:Block|VNode)\("template"/)
+  })
+
   it('ref 回调使用脚本绑定，不把 DOM 构造函数当作组件变量读取', () => {
     registerTS(() => ts)
     const { descriptor } = parse(readFileSync(componentPath, 'utf8'), {
