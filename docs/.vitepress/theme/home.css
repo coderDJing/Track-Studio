@@ -461,6 +461,11 @@
   height: 620px;
 }
 
+/* 来源栏含 5 个常规入口及 Rekordbox / Serato / 双格式 U 盘入口，完整展示需超过 400px。 */
+.h-surface--external .h-surface-frame {
+  height: 440px;
+}
+
 .h-surface--sync .h-surface-frame {
   height: 1060px;
 }
