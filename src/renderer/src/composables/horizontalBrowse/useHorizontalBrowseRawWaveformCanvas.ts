@@ -52,7 +52,10 @@ import {
   resolveHorizontalBrowseWaveformGain,
   type HorizontalBrowseStableRevisionRenderKind as StableRevisionRenderKind
 } from '@renderer/composables/horizontalBrowse/horizontalBrowseRawWaveformCanvasHelpers'
-import { createHorizontalBrowseRawWaveformViewport } from '@renderer/composables/horizontalBrowse/horizontalBrowseRawWaveformViewport'
+import {
+  createHorizontalBrowseRawWaveformViewport,
+  resolveHorizontalBrowseRawWaveformRenderViewport
+} from '@renderer/composables/horizontalBrowse/horizontalBrowseRawWaveformViewport'
 import {
   createHorizontalBrowseRawWaveformDraw,
   type HorizontalBrowseLiveWaveformRenderPayload,
@@ -555,7 +558,6 @@ export const useHorizontalBrowseRawWaveformCanvas = (
     const renderWidth = width + stableOverscanCssPx * 2
     const renderDurationScale = renderWidth / Math.max(1, width)
     const renderRangeDurationSec = payload.rangeDurationSec * renderDurationScale
-    const stableOverscanSec = (payload.rangeDurationSec * stableOverscanCssPx) / Math.max(1, width)
     const playheadCanvasX =
       stableOverscanCssPx + wrapWidth * HORIZONTAL_BROWSE_DETAIL_PLAYHEAD_RATIO
     liveCanvasBuffers.setGeometry(
@@ -640,24 +642,20 @@ export const useHorizontalBrowseRawWaveformCanvas = (
     )
     const stableRevisionChanged =
       stableWaveformSource && renderPlaybackSyncRevision !== lastQueuedStableRenderRevision
-    const baseViewportRangeStartSec =
-      preferPreviewStart || (!sourcePlaybackActive && !visualGridPhase.linked)
-        ? payload.rangeStartSec
-        : resolvePlaybackAlignedStart(playbackSeconds)
-    const renderAnchorSec =
-      preferPreviewStart || (!sourcePlaybackActive && !visualGridPhase.linked)
-        ? Math.max(
-            0,
-            baseViewportRangeStartSec +
-              payload.rangeDurationSec * HORIZONTAL_BROWSE_DETAIL_PLAYHEAD_RATIO
-          )
-        : playbackSeconds
-    const renderRangeStartSec =
-      renderAnchorSec -
-      (playheadCanvasX / Math.max(1, renderWidth)) * Math.max(0.0001, renderRangeDurationSec)
-    const viewportRangeStartSec = stableWaveformSource
-      ? renderRangeStartSec + stableOverscanSec
-      : renderRangeStartSec
+    const { renderAnchorSec, renderRangeStartSec, viewportRangeStartSec } =
+      resolveHorizontalBrowseRawWaveformRenderViewport({
+        usePreviewStart: preferPreviewStart || (!sourcePlaybackActive && !visualGridPhase.linked),
+        rangeStartSec: payload.rangeStartSec,
+        rangeDurationSec: payload.rangeDurationSec,
+        playbackSeconds,
+        playheadCanvasX,
+        renderWidth,
+        renderRangeDurationSec,
+        stableWaveformSource,
+        stableOverscanCssPx,
+        viewportLeftCssPx: wrapRect.left,
+        pixelRatio
+      })
     const duplicateStableRevisionRenderPending =
       stableWaveformSource &&
       !stableRevisionChanged &&

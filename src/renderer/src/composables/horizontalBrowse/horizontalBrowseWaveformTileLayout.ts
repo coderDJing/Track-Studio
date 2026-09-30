@@ -18,8 +18,8 @@
 //
 // 代价是位图两端各有一个「不完整块」：渲染范围起点通常落在某块中间。因此块容器的原点取第一块的
 // 全局边界，容器自身的 translate 吸收这段不足一块的偏移（见 containerOffsetScaledPx）。容器
-// translate 本来就会被量化到整数物理像素（与现有 resolveHorizontalBrowseStableCanvasOffsetCssPx
-// 一致），所以块与块之间仍严格衔接，只有整层一起偏移不足 1px。
+// 渲染范围由 resolveHorizontalBrowseRawWaveformRenderViewport 按屏幕上的歌曲 0 秒原点对齐，
+// 再配合整数物理像素 translate，确保换帧前后同一采样列的位置一致；只取整 translate 不够。
 
 // 固定块数，而不是固定块宽。
 //

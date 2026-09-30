@@ -14,6 +14,48 @@ import type {
   UseHorizontalBrowseRawWaveformCanvasOptions
 } from '@renderer/composables/horizontalBrowse/horizontalBrowseRawWaveformCanvasTypes'
 
+type RenderViewportParams = {
+  usePreviewStart: boolean
+  rangeStartSec: number
+  rangeDurationSec: number
+  playbackSeconds: number
+  playheadCanvasX: number
+  renderWidth: number
+  renderRangeDurationSec: number
+  stableWaveformSource: boolean
+  stableOverscanCssPx: number
+  viewportLeftCssPx: number
+  pixelRatio: number
+}
+
+export const resolveHorizontalBrowseRawWaveformRenderViewport = (params: RenderViewportParams) => {
+  const renderAnchorSec = params.usePreviewStart
+    ? Math.max(
+        0,
+        params.rangeStartSec + params.rangeDurationSec * HORIZONTAL_BROWSE_DETAIL_PLAYHEAD_RATIO
+      )
+    : params.playbackSeconds
+  const renderWidth = Math.max(1, params.renderWidth)
+  const renderDurationSec = Math.max(0.0001, params.renderRangeDurationSec)
+  const rawRangeStartSec =
+    renderAnchorSec - (params.playheadCanvasX / renderWidth) * renderDurationSec
+  let renderRangeStartSec = rawRangeStartSec
+  if (params.stableWaveformSource) {
+    const pixelRatio = params.pixelRatio > 0 ? params.pixelRatio : 1
+    const scaledPxPerSec = (renderWidth * pixelRatio) / renderDurationSec
+    const screenOriginScaledPx =
+      (params.viewportLeftCssPx - params.stableOverscanCssPx) * pixelRatio
+    // 全局块网格的歌曲 0 秒原点必须落在屏幕整数物理像素上。只取整 translate，
+    // 或单独取整每块 left，都无法保证两张不同起点的帧在同一播放位置完全重合。
+    const songOriginScaledPx = screenOriginScaledPx - rawRangeStartSec * scaledPxPerSec
+    renderRangeStartSec = (screenOriginScaledPx - Math.round(songOriginScaledPx)) / scaledPxPerSec
+  }
+  const viewportRangeStartSec = params.stableWaveformSource
+    ? renderRangeStartSec + (params.stableOverscanCssPx * renderDurationSec) / renderWidth
+    : renderRangeStartSec
+  return { renderAnchorSec, renderRangeStartSec, viewportRangeStartSec }
+}
+
 export const createHorizontalBrowseRawWaveformViewport = (
   options: UseHorizontalBrowseRawWaveformCanvasOptions
 ) => {
