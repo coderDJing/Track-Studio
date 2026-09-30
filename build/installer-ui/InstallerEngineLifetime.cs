@@ -12,6 +12,8 @@ namespace TrackStudioInstallerUi
     private readonly IntPtr windowHandle;
     private volatile bool stopRequested;
 
+    internal int ProcessId { get { return engine.Id; } }
+
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr windowHandle, out uint processId);
 
@@ -57,7 +59,7 @@ namespace TrackStudioInstallerUi
       }
     }
 
-    internal void WatchParentExit()
+    internal void WatchParentExit(Action<int> onUnexpectedExit)
     {
       Thread watcher = new Thread(delegate()
       {
@@ -79,12 +81,25 @@ namespace TrackStudioInstallerUi
           try { exitCode = engine.ExitCode; }
           catch (InvalidOperationException) { }
           InstallerDiagnosticLog.Write("engine exited unexpectedly code=" + exitCode);
+          try
+          {
+            onUnexpectedExit(exitCode);
+          }
+          catch (Exception exception)
+          {
+            InstallerDiagnosticLog.Write("unexpected exit recovery failed " + exception);
+          }
           Environment.Exit(0);
         }
       });
       watcher.IsBackground = true;
       watcher.Name = "Track Studio installer parent watcher";
       watcher.Start();
+    }
+
+    internal void Disarm()
+    {
+      stopRequested = true;
     }
 
     internal bool Stop()

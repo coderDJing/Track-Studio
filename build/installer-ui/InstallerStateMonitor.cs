@@ -6,8 +6,20 @@ namespace TrackStudioInstallerUi
 {
   internal sealed partial class InstallerWindow
   {
+    private void HandleUnexpectedEngineExit(int exitCode)
+    {
+      if (!options.IsUpdate || updateRollback == null) return;
+      bool filesRestored = updateRollback.RestoreFiles();
+      bool registrationRestored = updateRollback.RestoreRegistration();
+      InstallerDiagnosticLog.Write("unexpected exit rollback code=" + exitCode +
+        " files=" + filesRestored + " registration=" + registrationRestored);
+    }
+
     private void StateTimerTick(object sender, EventArgs eventArgs)
     {
+      if (installStarted && !installFinished && engineLifetime != null)
+        engineDialogMonitor.Capture(engineLifetime.ProcessId, options.EngineWindowHandle);
+
       if (!File.Exists(options.SessionFile))
       {
         missingSessionTicks++;
@@ -36,6 +48,7 @@ namespace TrackStudioInstallerUi
       if (string.Equals(state, "success", StringComparison.OrdinalIgnoreCase))
       {
         if (!installFinished) InstallerDiagnosticLog.Write("engine reported success");
+        if (engineLifetime != null) engineLifetime.Disarm();
         StopInstallationProgressWorker();
         SetInstallationProgress(100);
         if (options.IsUninstall) ShowUninstallCompleteView();

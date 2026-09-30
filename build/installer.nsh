@@ -9,6 +9,7 @@
 !include nsDialogs.nsh
 
 !define TRACK_STUDIO_INSTALLER_UI "${__FILEDIR__}\..\dist\installer-ui\TrackStudioInstallerUi.exe"
+!define TRACK_STUDIO_UNINSTALLER_FILENAME "Uninstall Track Studio.exe"
 
 !ifndef BUILD_UNINSTALLER
 !define MUI_CUSTOMFUNCTION_GUIINIT TrackStudioGuiInit
@@ -49,7 +50,7 @@ track_studio_preinit_done:
   !ifdef UNINSTALL_FILENAME
     !undef UNINSTALL_FILENAME
   !endif
-  !define UNINSTALL_FILENAME "Uninstall Track Studio.exe"
+  !define UNINSTALL_FILENAME "${TRACK_STUDIO_UNINSTALLER_FILENAME}"
 !macroend
 
 Function TrackStudioGuiInit
@@ -105,6 +106,8 @@ Var TrackStudioUpdateStagingDir
 Var TrackStudioUpdateBackupDir
 Var TrackStudioUpdateOldUninstallString
 Var TrackStudioUpdateOldQuietUninstallString
+Var TrackStudioUpdateOldDisplayVersion
+Var TrackStudioUpdateOldDisplayIcon
 Var TrackStudioHadDesktopShortcut
 Var TrackStudioInstallRegistryKey
 Var TrackStudioUninstallRegistryKey
@@ -297,11 +300,32 @@ track_studio_desktop_link_checked:
   IfErrors track_studio_update_prepare_failed
   ReadRegStr $TrackStudioUpdateOldUninstallString SHELL_CONTEXT "$TrackStudioUninstallRegistryKey" UninstallString
   ReadRegStr $TrackStudioUpdateOldQuietUninstallString SHELL_CONTEXT "$TrackStudioUninstallRegistryKey" QuietUninstallString
+  ReadRegStr $TrackStudioUpdateOldDisplayVersion SHELL_CONTEXT "$TrackStudioUninstallRegistryKey" DisplayVersion
+  ReadRegStr $TrackStudioUpdateOldDisplayIcon SHELL_CONTEXT "$TrackStudioUninstallRegistryKey" DisplayIcon
+  ; A previous interrupted update can leave the uninstall command pointing at
+  ; its now-empty staging directory. Use the intact installed uninstaller.
+  StrCmp $TrackStudioUpdateOldUninstallString "" track_studio_repair_old_uninstall
+  ${StrStr} $0 $TrackStudioUpdateOldUninstallString ".__track-studio-update-stage"
+  StrCmp $0 "" track_studio_old_uninstall_ready
+track_studio_repair_old_uninstall:
+  IfFileExists "$TrackStudioUpdateOriginalDir\${TRACK_STUDIO_UNINSTALLER_FILENAME}" 0 track_studio_old_uninstall_ready
+  StrCpy $TrackStudioUpdateOldUninstallString '"$TrackStudioUpdateOriginalDir\${TRACK_STUDIO_UNINSTALLER_FILENAME}" /allusers'
+  StrCpy $TrackStudioUpdateOldQuietUninstallString '"$TrackStudioUpdateOriginalDir\${TRACK_STUDIO_UNINSTALLER_FILENAME}" /allusers /S'
+  Push "recovered stale uninstall registration path=$TrackStudioUpdateOriginalDir"
+  Call TrackStudioLog
+track_studio_old_uninstall_ready:
+  ${StrStr} $0 $TrackStudioUpdateOldDisplayIcon ".__track-studio-update-stage"
+  StrCmp $0 "" track_studio_old_icon_ready
+  IfFileExists "$TrackStudioUpdateOriginalDir\uninstallerIcon.ico" 0 track_studio_old_icon_ready
+  StrCpy $TrackStudioUpdateOldDisplayIcon "$TrackStudioUpdateOriginalDir\uninstallerIcon.ico"
+track_studio_old_icon_ready:
   WriteINIStr "$TrackStudioSessionFile" "rollback" "installLocation" "$TrackStudioUpdateOriginalDir"
   WriteINIStr "$TrackStudioSessionFile" "rollback" "stagingLocation" "$TrackStudioUpdateStagingDir"
   WriteINIStr "$TrackStudioSessionFile" "rollback" "backupLocation" "$TrackStudioUpdateBackupDir"
   WriteINIStr "$TrackStudioSessionFile" "rollback" "uninstallString" "$TrackStudioUpdateOldUninstallString"
   WriteINIStr "$TrackStudioSessionFile" "rollback" "quietUninstallString" "$TrackStudioUpdateOldQuietUninstallString"
+  WriteINIStr "$TrackStudioSessionFile" "rollback" "displayVersion" "$TrackStudioUpdateOldDisplayVersion"
+  WriteINIStr "$TrackStudioSessionFile" "rollback" "displayIcon" "$TrackStudioUpdateOldDisplayIcon"
   ; Prevent electron-builder's pre-install uninstall from removing the old tree.
   WriteRegStr SHELL_CONTEXT "$TrackStudioUninstallRegistryKey" UninstallString ""
   WriteRegStr SHELL_CONTEXT "$TrackStudioUninstallRegistryKey" QuietUninstallString ""
@@ -322,12 +346,22 @@ Function TrackStudioRestoreUpdateRegistration
   WriteRegStr SHELL_CONTEXT "$TrackStudioInstallRegistryKey" InstallLocation "$TrackStudioUpdateOriginalDir"
   WriteRegStr SHELL_CONTEXT "$TrackStudioUninstallRegistryKey" UninstallString "$TrackStudioUpdateOldUninstallString"
   WriteRegStr SHELL_CONTEXT "$TrackStudioUninstallRegistryKey" QuietUninstallString "$TrackStudioUpdateOldQuietUninstallString"
+  WriteRegStr SHELL_CONTEXT "$TrackStudioUninstallRegistryKey" DisplayVersion "$TrackStudioUpdateOldDisplayVersion"
+  WriteRegStr SHELL_CONTEXT "$TrackStudioUninstallRegistryKey" DisplayIcon "$TrackStudioUpdateOldDisplayIcon"
 track_studio_restore_update_done:
 FunctionEnd
 
 Function TrackStudioCancelUpdate
   StrCmp $TrackStudioUpdatePrepared "1" 0 track_studio_cancel_update_done
+  SetOutPath "$TEMP"
+  ClearErrors
   RMDir /r "$TrackStudioUpdateStagingDir"
+  IfErrors track_studio_cancel_cleanup_failed
+  Goto track_studio_cancel_cleanup_done
+track_studio_cancel_cleanup_failed:
+  Push "update staging cleanup failed path=$TrackStudioUpdateStagingDir"
+  Call TrackStudioLog
+track_studio_cancel_cleanup_done:
   Call TrackStudioRestoreUpdateRegistration
 track_studio_cancel_update_done:
 FunctionEnd
@@ -473,6 +507,12 @@ track_studio_commit_update_done:
 FunctionEnd
 
 !macro customInstall
+  IfFileExists "$INSTDIR\${APP_EXECUTABLE_FILENAME}" track_studio_payload_ready
+  Push "payload missing executable path=$INSTDIR\${APP_EXECUTABLE_FILENAME}"
+  Call TrackStudioLog
+  Call TrackStudioCancelUpdate
+  Abort
+track_studio_payload_ready:
   Push "payload extraction completed path=$INSTDIR"
   Call TrackStudioLog
   Call TrackStudioCommitUpdate

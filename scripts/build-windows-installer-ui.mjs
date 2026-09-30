@@ -30,6 +30,8 @@ const artworkSource = join(projectDirectory, 'build', 'installer-ui', 'WaveformA
 const uninstallViewSource = join(projectDirectory, 'build', 'installer-ui', 'InstallerUninstallView.cs')
 const programSource = join(projectDirectory, 'build', 'installer-ui', 'InstallerProgram.cs')
 const engineLifetimeSource = join(projectDirectory, 'build', 'installer-ui', 'InstallerEngineLifetime.cs')
+const updateRollbackSource = join(projectDirectory, 'build', 'installer-ui', 'InstallerUpdateRollback.cs')
+const engineDialogMonitorSource = join(projectDirectory, 'build', 'installer-ui', 'InstallerEngineDialogMonitor.cs')
 const windowClosingSource = join(projectDirectory, 'build', 'installer-ui', 'InstallerWindowClosing.cs')
 const nativeProgressSource = join(projectDirectory, 'build', 'installer-ui', 'InstallerNativeProgress.cs')
 const progressWorkerSource = join(projectDirectory, 'build', 'installer-ui', 'InstallerProgressWorker.cs')
@@ -70,6 +72,8 @@ const result = spawnSync(
     uninstallViewSource,
     programSource,
     engineLifetimeSource,
+    updateRollbackSource,
+    engineDialogMonitorSource,
     windowClosingSource,
     nativeProgressSource,
     progressWorkerSource,

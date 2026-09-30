@@ -1,7 +1,6 @@
 using System;
 using System.ComponentModel;
 using System.IO;
-using Microsoft.Win32;
 using System.Windows;
 
 namespace TrackStudioInstallerUi
@@ -76,7 +75,7 @@ namespace TrackStudioInstallerUi
         return;
       }
 
-      if (options.IsUpdate && !RestoreUpdateFiles())
+      if (options.IsUpdate && (updateRollback == null || !updateRollback.RestoreFiles()))
       {
         MessageBox.Show(this, InstallerText.Get(
           "更新已停止，但无法恢复旧版本文件。请不要启动应用或卸载程序，先重新运行更新。",
@@ -84,7 +83,7 @@ namespace TrackStudioInstallerUi
         ), "Track Studio", MessageBoxButton.OK, MessageBoxImage.Warning);
       }
 
-      if (options.IsUpdate && !RestoreUpdateRegistration())
+      if (options.IsUpdate && (updateRollback == null || !updateRollback.RestoreRegistration()))
       {
         MessageBox.Show(this, InstallerText.Get(
           "更新已停止，但无法恢复旧版本的安装登记。请不要启动卸载程序，先重新运行更新。",
@@ -113,77 +112,6 @@ namespace TrackStudioInstallerUi
 
       allowWindowClose = true;
       Close();
-    }
-
-    private bool RestoreUpdateRegistration()
-    {
-      if (string.IsNullOrWhiteSpace(options.InstallRegistryKey) ||
-          string.IsNullOrWhiteSpace(options.UninstallRegistryKey))
-      {
-        return true;
-      }
-
-      try
-      {
-        string installLocation = InstallerSession.Read(options.SessionFile, "rollback", "installLocation");
-        string uninstallString = InstallerSession.Read(options.SessionFile, "rollback", "uninstallString");
-        string quietUninstallString = InstallerSession.Read(
-          options.SessionFile, "rollback", "quietUninstallString");
-        if (string.IsNullOrWhiteSpace(installLocation) || string.IsNullOrWhiteSpace(uninstallString))
-        {
-          return true;
-        }
-
-        using (RegistryKey installKey = Registry.LocalMachine.CreateSubKey(options.InstallRegistryKey))
-        {
-          if (installKey != null)
-          {
-            installKey.SetValue("InstallLocation", installLocation, RegistryValueKind.String);
-          }
-        }
-        using (RegistryKey uninstallKey = Registry.LocalMachine.CreateSubKey(options.UninstallRegistryKey))
-        {
-          if (uninstallKey != null)
-          {
-            uninstallKey.SetValue("UninstallString", uninstallString, RegistryValueKind.String);
-            uninstallKey.SetValue("QuietUninstallString", quietUninstallString, RegistryValueKind.String);
-          }
-        }
-        return true;
-      }
-      catch (Exception)
-      {
-        return false;
-      }
-    }
-
-    private bool RestoreUpdateFiles()
-    {
-      try
-      {
-        string installLocation = InstallerSession.Read(options.SessionFile, "rollback", "installLocation");
-        string stagingLocation = InstallerSession.Read(options.SessionFile, "rollback", "stagingLocation");
-        string backupLocation = InstallerSession.Read(options.SessionFile, "rollback", "backupLocation");
-        if (string.IsNullOrWhiteSpace(installLocation)) return true;
-
-        bool hasBackup = !string.IsNullOrWhiteSpace(backupLocation) && Directory.Exists(backupLocation);
-        bool hasOriginal = Directory.Exists(installLocation);
-        if (hasBackup)
-        {
-          if (hasOriginal) Directory.Delete(installLocation, true);
-          Directory.Move(backupLocation, installLocation);
-        }
-
-        if (!string.IsNullOrWhiteSpace(stagingLocation) && Directory.Exists(stagingLocation))
-        {
-          Directory.Delete(stagingLocation, true);
-        }
-        return true;
-      }
-      catch (Exception)
-      {
-        return false;
-      }
     }
 
     private void WindowClosing(object sender, CancelEventArgs eventArgs)

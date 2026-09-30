@@ -35,7 +35,9 @@ namespace TrackStudioInstallerUi
     private readonly Grid bodyHost;
     private readonly DispatcherTimer stateTimer;
     private readonly DispatcherTimer heartbeatTimer;
+    private readonly InstallerEngineDialogMonitor engineDialogMonitor = new InstallerEngineDialogMonitor();
     private InstallerEngineLifetime engineLifetime;
+    private InstallerUpdateRollback updateRollback;
     private TextBox installPathBox;
     private TextBlock inlineMessage;
     private Grid installationProgressTrack;
@@ -152,7 +154,8 @@ namespace TrackStudioInstallerUi
         Close();
         return;
       }
-      engineLifetime.WatchParentExit();
+      if (options.IsUpdate) updateRollback = InstallerUpdateRollback.Capture(options);
+      engineLifetime.WatchParentExit(HandleUnexpectedEngineExit);
       try
       {
         InstallerSession.Write(options.SessionFile, "frontend", "state", "ready");
