@@ -4,7 +4,9 @@ import WelcomePage from '@renderer/components/welcomePage.vue'
 </script>
 
 <template>
-  <div class="frkb-app theme-dark demo-keyboard">
+  <!-- 欢迎页只展示快捷键；在捕获阶段阻止新建歌单和导入按钮启动应用弹窗。
+       键盘 Enter / Space 产生的 click 也会经过这里。 -->
+  <div class="frkb-app theme-dark demo-keyboard" @click.capture.stop.prevent>
     <WelcomePage />
   </div>
 </template>
