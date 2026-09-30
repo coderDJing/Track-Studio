@@ -12,8 +12,9 @@ namespace TrackStudioInstallerUi
       try
       {
         InstallerOptions options = InstallerOptions.Parse(args);
-        InstallerDiagnosticLog.Write("start version=" + options.Version +
-          " mode=" + (options.IsUpdate ? "update" : options.IsUninstall ? "uninstall" : "install") +
+        InstallerDiagnosticLog.SetVersion(options.Version);
+        InstallerDiagnosticLog.Write("start mode=" +
+          (options.IsUpdate ? "update" : options.IsUninstall ? "uninstall" : "install") +
           " preview=" + options.Preview);
         InstallerText.SetPreviewLanguage(options.PreviewLanguage);
         if (!options.Preview && string.IsNullOrWhiteSpace(options.SessionFile))

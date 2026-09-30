@@ -113,19 +113,34 @@ Var TrackStudioInstallRegistryKey
 Var TrackStudioUninstallRegistryKey
 
 ; Persist installer-engine milestones outside $PLUGINSDIR, which NSIS removes
-; after an unexpected exit. The WPF frontend writes a separate UTF-8 log.
-; Remove these milestones once the 0% update exit is identified and verified fixed.
+; after an unexpected exit. Keep these bounded milestones for future failures.
+; The WPF frontend writes a separate UTF-8 log.
 Function TrackStudioLog
   Exch $1
   Push $0
+  Push $2
+  Push $3
+  Push $4
+  Push $5
+  Push $6
+  Push $7
+  Push $8
   CreateDirectory "$LOCALAPPDATA\Track Studio"
   ClearErrors
   FileOpen $0 "$LOCALAPPDATA\Track Studio\installer-engine.log" a
   IfErrors track_studio_log_done
+  ${GetTime} "" "L" $2 $3 $4 $5 $6 $7 $8
   FileSeek $0 0 END
-  FileWrite $0 "${VERSION} [engine] $1$\r$\n"
+  FileWrite $0 "$2-$3-$4T$5:$6:$7 [v${VERSION}] [engine] $1$\r$\n"
   FileClose $0
 track_studio_log_done:
+  Pop $8
+  Pop $7
+  Pop $6
+  Pop $5
+  Pop $4
+  Pop $3
+  Pop $2
   Pop $0
   Pop $1
 FunctionEnd
