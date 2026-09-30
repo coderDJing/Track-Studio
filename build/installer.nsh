@@ -98,8 +98,6 @@ Var TrackStudioPage
 Var TrackStudioFrontendMode
 Var TrackStudioLastHeartbeat
 Var TrackStudioNoHeartbeatTicks
-Var TrackStudioProgressWindow
-Var TrackStudioLastProgress
 Var TrackStudioUpdatePrepared
 Var TrackStudioUpdateOriginalDir
 Var TrackStudioUpdateStagingDir
@@ -256,37 +254,9 @@ Function TrackStudioInstallPageShow
   WriteINIStr "$TrackStudioSessionFile" "engine" "state" "installing"
   Push "frontend requested extraction path=$INSTDIR"
   Call TrackStudioLog
-  StrCpy $TrackStudioLastProgress 0
   WriteINIStr "$TrackStudioSessionFile" "engine" "progressDirectory" "$PLUGINSDIR\7z-out"
   WriteINIStr "$TrackStudioSessionFile" "engine" "progress" "0"
-  ${NSD_CreateTimer} TrackStudioPollInstallProgress 180
 track_studio_install_show_done:
-FunctionEnd
-
-Function TrackStudioPollInstallProgress
-  GetDlgItem $TrackStudioProgressWindow $HWNDPARENT 1004
-  StrCmp $TrackStudioProgressWindow 0 track_studio_progress_by_files
-  System::Call 'user32::SendMessageW(p rTrackStudioProgressWindow, i 0x0408, i 0, i 0)i.r0'
-  IntCmp $0 0 track_studio_progress_by_files track_studio_progress_by_files track_studio_progress_write
-  Goto track_studio_progress_done
-track_studio_progress_by_files:
-  ; Some Windows builds do not expose the MUI progress position while the
-  ; native window is parked. Estimate from bytes already written to staging.
-  ClearErrors
-  ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
-  IfErrors track_studio_progress_done
-  IntOp $0 $0 * 100
-  IntOp $0 $0 / ${APP_64_UNPACKED_SIZE}
-  IntCmp $0 99 0 track_studio_progress_file_cap track_studio_progress_file_cap
-  Goto track_studio_progress_file_compare
-track_studio_progress_file_cap:
-  StrCpy $0 99
-track_studio_progress_file_compare:
-  IntCmp $0 $TrackStudioLastProgress track_studio_progress_done track_studio_progress_write track_studio_progress_done
-track_studio_progress_write:
-  StrCpy $TrackStudioLastProgress $0
-  WriteINIStr "$TrackStudioSessionFile" "engine" "progress" "$0"
-track_studio_progress_done:
 FunctionEnd
 
 Function TrackStudioPrepareUpdate
@@ -385,7 +355,6 @@ Function TrackStudioFinishShow
   Push "installer reached finish page"
   Call TrackStudioLog
   Call TrackStudioParkNativeWindow
-  ${NSD_KillTimer} TrackStudioPollInstallProgress
   WriteINIStr "$TrackStudioSessionFile" "engine" "progress" "100"
   WriteINIStr "$TrackStudioSessionFile" "engine" "state" "success"
   ${NSD_CreateTimer} TrackStudioPollFinish 180
@@ -446,7 +415,6 @@ Function .onInstFailed
   Delete "$DESKTOP\${SHORTCUT_NAME}.lnk"
 track_studio_failed_shortcut_done:
   StrCmp $TrackStudioInteractive "1" 0 track_studio_failed_done
-  ${NSD_KillTimer} TrackStudioPollInstallProgress
   Call TrackStudioCancelUpdate
   Call TrackStudioRestoreUpdateRegistration
   WriteINIStr "$TrackStudioSessionFile" "engine" "state" "failed"
