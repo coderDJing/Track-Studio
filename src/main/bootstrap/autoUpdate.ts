@@ -6,6 +6,7 @@ import store from '../store'
 import { fetchReleaseNotesRange } from '../services/releaseNotes'
 import { logIfUnexpectedUpdateError } from '../services/updateError'
 import { installResumableAutoUpdaterDownload } from '../services/resumableAutoUpdaterDownload'
+import { updateDownloadDiagnosticLogger } from '../services/updateDownloadDiagnostic'
 
 type AutoUpdaterWithExtras = typeof electronUpdater.autoUpdater & {
   allowPrerelease?: boolean
@@ -15,7 +16,7 @@ type AutoUpdaterWithExtras = typeof electronUpdater.autoUpdater & {
 export function setupAutoUpdate() {
   const autoUpdater = electronUpdater.autoUpdater as AutoUpdaterWithExtras
   autoUpdater.autoDownload = false
-  autoUpdater.logger = null
+  autoUpdater.logger = updateDownloadDiagnosticLogger
   installResumableAutoUpdaterDownload(autoUpdater)
   const versionString = app.getVersion()
   const isPrerelease = versionString.includes('-')

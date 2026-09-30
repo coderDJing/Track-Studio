@@ -21,6 +21,7 @@ import {
 import { GITHUB_RELEASES_URL } from '@shared/productBrand'
 import { isLibraryMergeActive } from '../services/libraryMerge'
 import { installResumableAutoUpdaterDownload } from '../services/resumableAutoUpdaterDownload'
+import { updateDownloadDiagnosticLogger } from '../services/updateDownloadDiagnostic'
 import { openSafeExternalUrl, restrictExternalNavigation } from './externalNavigation'
 import type { ReleaseNotesRangePayload } from '../../shared/releaseNotes'
 const autoUpdater = electronUpdater.autoUpdater
@@ -215,7 +216,7 @@ const normalizeDownloadProgress = (progressObj: {
 const registerAutoUpdaterListeners = () => {
   if (autoUpdaterListenersRegistered) return
   autoUpdaterListenersRegistered = true
-  autoUpdater.logger = null
+  autoUpdater.logger = updateDownloadDiagnosticLogger
   installResumableAutoUpdaterDownload(autoUpdater)
 
   autoUpdater.on('update-available', (info) => {

@@ -303,7 +303,7 @@
     "better-sqlite3-multiple-ciphers": "^13.0.3",
     "dompurify": "^3.4.13",
     "dotenv": "^17.4.2",
-    "electron-updater": "^6.8.9",
+    "electron-updater": "^6.8.10",
     "fs-extra": "^11.3.5",
     "hotkeys-js": "^4.0.4",
     "iconv-lite": "^0.7.2",
