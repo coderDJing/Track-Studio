@@ -1,5 +1,6 @@
 import type { MixtapeDragSessionItem } from '@shared/mixtapeDragSession'
 import type { ISongInfo } from 'src/types/globals'
+import { toIpcCloneablePayload } from './ipcCloneablePayload'
 
 type BuildMixtapeDragSessionItemOptions = {
   song?: ISongInfo | null
@@ -62,14 +63,14 @@ export const buildMixtapeDragSessionItem = ({
   if (!normalizedFilePath) return null
   const normalizedSourceListId = normalizeText(sourceSongListUUID)
   const normalizedSourceItemId = normalizeText(sourceItemId)
-  return {
+  return toIpcCloneablePayload({
     filePath: normalizedFilePath,
     originPlaylistUuid: normalizedSourceListId || null,
     originPathSnapshot: normalizeText(originPathSnapshot) || null,
     info: buildMixtapeSongSnapshot(normalizedFilePath, song),
     sourcePlaylistId: normalizedSourceListId || null,
     sourceItemId: normalizedSourceItemId || null
-  }
+  })
 }
 
 export const createMixtapeDragSessionToken = () => {
