@@ -11,6 +11,7 @@ import {
   type HorizontalBrowseTransportVisualizerSnapshot
 } from '@shared/horizontalBrowseTransport'
 import { resolveHorizontalBrowseTransportGrid } from '@shared/horizontalBrowseTransportGrid'
+import { recordHorizontalBrowseWaveformStartupTransport } from './horizontalBrowseWaveformStartupDiagnostics'
 export type {
   HorizontalBrowseTransportBeatGridInput,
   HorizontalBrowseTransportBandState,
@@ -109,6 +110,7 @@ export const createHorizontalBrowseNativeTransport = () => {
     state.top = { ...preserveLiveClockDeckSnapshot('top', snapshot.top) }
     state.bottom = { ...preserveLiveClockDeckSnapshot('bottom', snapshot.bottom) }
     state.output = { ...snapshot.output }
+    recordHorizontalBrowseWaveformStartupTransport(snapshot)
     if (notifyListeners) {
       notifySnapshotListeners(snapshot)
     }

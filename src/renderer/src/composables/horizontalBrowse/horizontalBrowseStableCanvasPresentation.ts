@@ -1,4 +1,5 @@
 import { applyHorizontalBrowseCanvasPresentationOffset } from './horizontalBrowseCanvasGeometry'
+import { createHorizontalBrowseWaveformStartupDiagnostics } from './horizontalBrowseWaveformStartupDiagnostics'
 
 export type HorizontalBrowseStableCanvasPresentationFrame = {
   renderToken: number
@@ -75,6 +76,7 @@ type StableCanvasRenderedPayload = {
 }
 
 type StableCanvasPresentationControllerOptions = {
+  diagnosticDirection?: () => string
   isActive: () => boolean
   isPlaying: () => boolean
   isDragging: () => boolean
@@ -139,6 +141,13 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
   let reanchorPendingAtMs = 0
   let playbackClock: StableCanvasPresentationPlaybackClock | null = null
   let playbackRaf = 0
+  const startupDiagnostics = createHorizontalBrowseWaveformStartupDiagnostics({
+    direction: () => options.diagnosticDirection?.() ?? 'unknown',
+    canvas: options.waveformCanvas,
+    currentSeconds: options.currentSeconds,
+    playbackRate: options.playbackRate,
+    linked: () => options.linkedPlaybackActive?.() === true
+  })
 
   const resolveRenderRevision = () => normalizeRenderRevision(options.renderRevision?.())
 
@@ -225,6 +234,7 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
   }
 
   const clear = () => {
+    startupDiagnostics.reset()
     clearPlaybackLoop()
     playbackClock = null
     pendingFrame = null
@@ -234,6 +244,7 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
   }
 
   const queueFrame = (frame: HorizontalBrowseStableCanvasPresentationFrame | null) => {
+    startupDiagnostics.queue(frame)
     pendingFrame = frame
     if (!frame) {
       currentFrame = null
@@ -304,6 +315,7 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
     !reanchorPending || performance.now() - reanchorPendingAtMs >= STABLE_REANCHOR_RETRY_MS
 
   const requestReanchor = () => {
+    startupDiagnostics.event('request-reanchor')
     reanchorPending = true
     reanchorPendingAtMs = performance.now()
     options.scheduleDraw()
@@ -412,6 +424,7 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
       allowRevisionHandoff: true,
       useFrameViewportForRevisionHandoff: true
     })
+    startupDiagnostics.tick(estimatedSeconds, currentFrame, result.offsetCssPx)
     if (result.applied) {
       playbackRaf = requestAnimationFrame(tickPlayback)
       return
@@ -433,7 +446,9 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
   ) => {
     const safeSeconds = Number(seconds) || 0
     const safePlaybackRate = Math.max(0.25, Number(playbackRate) || 1)
+    startupDiagnostics.beginPlayback()
     const deferForPendingFrame = shouldDeferPlaybackStartForPendingFrame(safeSeconds)
+    startupDiagnostics.event('start-playback', { safeSeconds, deferForPendingFrame })
     playbackClock = {
       seconds: safeSeconds,
       startedAtMs: resolveClockStartedAtMs(clockOptions),
@@ -465,6 +480,7 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
     clockOptions?: StableCanvasPresentationPlaybackClockOptions
   ) => {
     const rate = Math.max(0.25, Number(playbackRate) || 1)
+    startupDiagnostics.event('reanchor-clock', { seconds, rate })
     playbackClock = {
       seconds,
       startedAtMs: resolveClockStartedAtMs(clockOptions),
@@ -477,6 +493,7 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
 
   const resumePlaybackFrom = (seconds: number) => {
     if (!options.isActive() || !options.isPlaying() || options.isDragging()) return
+    startupDiagnostics.beginPlayback()
     reanchorPlayback(seconds, options.playbackRate())
   }
 
@@ -508,6 +525,11 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
       reanchorPendingAtMs = 0
       return false
     }
+    startupDiagnostics.rendered(
+      payload.renderToken,
+      payload.ready,
+      payload.renderViewportOnly === true
+    )
     const renderedFrame = pendingFrame
     const pendingViewportRangeStartSec = pendingFrame.viewportRangeStartSec
     const canPromoteFrame = payload.ready && payload.renderViewportOnly !== true
