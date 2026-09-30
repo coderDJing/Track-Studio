@@ -61,8 +61,44 @@ const inlineWasmPlugin = (): Plugin => ({
   }
 })
 
+// VitePress 1.x 会把被官网主题静态引用的 DevTools、hookable 和 perfect-debounce
+// 放进 theme chunk，但它自己的 app/devtools 又从 framework chunk 引用同一组模块，
+// 产物因此形成循环导入。
+// 浏览器执行时 framework 的 Vue helper 尚未初始化，首页会停在未挂载的 SSR 状态。
+const keepVueDevtoolsInFrameworkPlugin = (): Plugin => ({
+  name: 'track-studio-docs-vue-devtools-chunk',
+  generateBundle(_, bundle) {
+    const framework = Object.values(bundle).find(
+      (entry) => entry.type === 'chunk' && entry.name === 'framework'
+    )
+    if (framework?.type !== 'chunk') return
+    if (framework.imports.some((file) => /(?:^|\/)theme\.[^/]+\.js$/.test(file))) {
+      this.error('VitePress framework chunk imports theme chunk; this breaks client initialization')
+    }
+  },
+  configResolved(config) {
+    const output = config.build.rollupOptions.output
+    if (!output || Array.isArray(output) || typeof output.manualChunks !== 'function') return
+    const vitePressManualChunks = output.manualChunks
+    output.manualChunks = (id, context) => {
+      const path = id.replaceAll('\\', '/')
+      const frameworkSharedDependency = [
+        '/node_modules/@vue/devtools-',
+        '/node_modules/hookable/',
+        '/node_modules/perfect-debounce/'
+      ].some((segment) => path.includes(segment))
+      return frameworkSharedDependency ? 'framework' : vitePressManualChunks(id, context)
+    }
+  }
+})
+
 export const appBridgeViteConfig: UserConfig = {
-  plugins: [assetQueryPlugin(), inlineExternalTemplatePlugin(), inlineWasmPlugin()],
+  plugins: [
+    assetQueryPlugin(),
+    inlineExternalTemplatePlugin(),
+    inlineWasmPlugin(),
+    keepVueDevtoolsInFrameworkPlugin()
+  ],
   resolve: {
     alias: [
       { find: /^@renderer\//, replacement: `${rendererSrc}/` },
