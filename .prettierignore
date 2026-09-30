@@ -7,3 +7,4 @@ tsconfig.*.json
 resources
 rust_package
 *.md
+docs/public/assets/unified-waveforms/list-previews.json

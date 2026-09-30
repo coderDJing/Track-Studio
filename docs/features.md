@@ -1,3 +1,8 @@
+---
+title: 功能清单与使用说明
+description: 了解 Track Studio 的真实文件管理、指纹去重、双轨波形试听、SET 歌单、Mixtape、Stem 分轨、外部曲库与同步功能。
+---
+
 # Track Studio 功能说明
 
 这里集中列出 Track Studio 的曲库、播放、分析与演出准备能力。[English](./en/features.md)

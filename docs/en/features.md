@@ -1,3 +1,8 @@
+---
+title: Features & Workflow Guide
+description: Explore Track Studio's real file management, fingerprint deduplication, dual-deck waveform auditioning, SET playlists, Mixtape, stem separation, external libraries, and sync.
+---
+
 # Track Studio Features
 
 A detailed reference for Track Studio’s library, playback, analysis, and preparation tools. [简体中文](../features.md)

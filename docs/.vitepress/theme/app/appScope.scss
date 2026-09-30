@@ -1,0 +1,167 @@
+// 官网里嵌入应用真实组件时的样式作用域。
+// 不整份引入 src/renderer/src/styles/main.scss：它带有 html / body / #app / :focus 这类全局规则，
+// 会改掉官网自己的页面。这里只取应用组件依赖的部分，并全部限定在 .frkb-app 之下：
+// - .theme-dark 主题变量（与 main.scss 同源，改动时对照）
+// - 字体栈、全局层级变量
+// - 组件共用的 .button / .dialog-header / .dialog-footer / .bubbleBox
+.frkb-app {
+  --z-content-overlay: 30;
+  --z-app-toolbar: 40;
+  --z-popover: 60;
+  --z-dialog: 70;
+  --z-tooltip: 80;
+  --z-context-menu: 90;
+  --bg: #181818;
+  --bg-elev: #1f1f1f;
+  --waveform-bg: #151515;
+  --waveform-bg-elev: #1c1c1c;
+  --waveform-playhead-needle: rgba(248, 250, 252, 0.98);
+  --waveform-playhead-veil: rgba(248, 250, 252, 0.18);
+  --song-list-waveform-playhead: rgba(255, 255, 255, 0.96);
+  --song-list-waveform-playhead-needle: var(--waveform-playhead-needle);
+  --song-list-waveform-playhead-veil: var(--waveform-playhead-veil);
+  --song-list-file-missing: #c9887a;
+  --text: #cccccc;
+  --text-weak: #a8abb2;
+  --text-secondary: var(--text-weak);
+  --sidebar-icon-opacity: 0.55;
+  --border: #3b3b3b;
+  --divider: var(--border);
+  --hover: #313131;
+  --accent: #0078d4;
+  --scrollbar: rgba(255, 255, 255, 0.2);
+  --songlist-icon-filter: invert(0%);
+  position: relative;
+  color: var(--text);
+  background: var(--bg);
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'SF Pro Text',
+    'SF Pro Display',
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Noto Sans CJK SC',
+    'Microsoft YaHei',
+    'Source Han Sans SC',
+    sans-serif;
+  font-size: 12px;
+  line-height: normal;
+  text-align: left;
+  user-select: none;
+  -webkit-font-smoothing: auto;
+
+  // Electron 桌面端没有网页焦点轮廓
+  :focus {
+    outline: none;
+  }
+
+  // VitePress 默认主题会给 button / input 加上自己的样式，这里还原成浏览器默认，交给组件自己的 scoped 样式
+  button,
+  input {
+    font: inherit;
+    color: inherit;
+    letter-spacing: normal;
+  }
+
+  .button {
+    height: 25px;
+    line-height: 25px;
+    padding: 0 10px;
+    border-radius: 5px;
+    background-color: var(--hover);
+    font-size: 14px;
+
+    &:hover {
+      color: #ffffff;
+      background-color: var(--accent);
+    }
+  }
+
+  // 应用 .dialog（main.scss）：弹窗外层与 .inner 的外观、进场动画保持原样
+  .dialog {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.45);
+    color: var(--text);
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.24s ease;
+
+    .inner {
+      border: 1px solid var(--border);
+      background-color: var(--bg-elev);
+      border-radius: 5px;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+      transform: translateY(16px) scale(0.95);
+      opacity: 0.3;
+      transition:
+        transform 0.24s cubic-bezier(0.33, 1, 0.68, 1),
+        opacity 0.24s ease;
+    }
+
+    &.dialog-visible {
+      opacity: 1;
+      pointer-events: auto;
+
+      .inner {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+      }
+    }
+  }
+
+  // 官网上弹窗嵌在章节里展示：把应用里铺满窗口的 fixed 定位改成铺满这个演示区域
+  &.frkb-app--dialog-host {
+    height: 100%;
+
+    .dialog {
+      position: absolute;
+      inset: 0;
+      width: auto;
+      height: auto;
+    }
+  }
+
+  .dialog-header {
+    min-height: 32px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    background-color: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 12px 18px 18px;
+    border-top: 1px solid var(--border);
+    background-color: var(--bg);
+  }
+
+  .bubbleBox {
+    height: 22px;
+    line-height: 22px;
+    text-align: center;
+    position: relative;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    font-size: 12px;
+    background-color: var(--bg-elev);
+    padding: 0 10px;
+    font-weight: normal;
+  }
+}

@@ -1,40 +1,35 @@
 import { defineConfig } from 'vitepress'
-
-const jsonLd = JSON.stringify({
-  '@context': 'https://schema.org',
-  '@type': 'SoftwareApplication',
-  name: 'Track Studio',
-  alternateName: ['FRKB', 'FRKB Rapid Audio Organization Tool'],
-  applicationCategory: 'MultimediaApplication',
-  operatingSystem: 'Windows, macOS',
-  url: 'https://coderdjing.github.io/Track-Studio/',
-  downloadUrl: 'https://github.com/coderDJing/Track-Studio/releases/latest',
-  description:
-    'Track Studio (formerly FRKB) is a desktop audio workflow tool for DJs: real file organization, SET playlists, fingerprint dedup, waveform preview, Rekordbox libraries, and Mixtape.'
-})
+import { appBridgeViteConfig } from './appBridge'
+import { buildSeoHead } from './seo'
 
 export default defineConfig({
   title: 'Track Studio',
-  description: 'Track Studio (formerly FRKB) — Rapid Audio Organization Tool',
+  description: 'Track Studio — DJ 音乐整理与演出准备工作站',
   base: '/Track-Studio/',
+  // 官网只做暗色，与应用暗色主题保持一致
+  appearance: 'force-dark',
+  // 首页直接渲染应用的真实组件，需要应用的别名与导入约定
+  vite: appBridgeViteConfig,
   lastUpdated: true,
   cleanUrls: true,
+  sitemap: { hostname: 'https://coderdjing.github.io/Track-Studio/' },
+  transformHead: ({ page, title, description }) => buildSeoHead(page, title, description),
 
   locales: {
     root: {
       label: '简体中文',
       lang: 'zh-CN',
-      title: 'Track Studio - 开源音频快速整理工具',
+      title: 'Track Studio - DJ 音乐整理与演出准备工作站',
       description:
-        '内容感知去重、波形试听、Mixtape 自动录制、Stem 分轨与 Rekordbox U 盘库整合在同一套音频工作流里。'
+        '为 DJ 整理真实音频文件、按指纹去重、双轨波形试听、编排 SET，并用 Mixtape 录制与 Stem 分轨准备演出。支持 Windows 和 macOS。'
     },
     en: {
       label: 'English',
       lang: 'en-US',
       link: '/en/',
-      title: 'Track Studio - Fast Audio Organization Tool',
+      title: 'Track Studio - DJ Music Library & Set Preparation',
       description:
-        'Content-aware dedup, waveform preview, Mixtape auto-recording, stem separation, and Rekordbox USB libraries in one desktop workflow.'
+        'Organize real audio files, find duplicates by fingerprint, audition on two decks, prepare SET playlists, record Mixtapes, and separate stems. For Windows and macOS.'
     }
   },
 
@@ -45,6 +40,7 @@ export default defineConfig({
 
   head: [
     ['link', { rel: 'icon', href: '/Track-Studio/assets/icon.webp' }],
+    ['meta', { name: 'theme-color', content: '#181818' }],
     ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
     ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
     [
@@ -53,7 +49,6 @@ export default defineConfig({
         href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap',
         rel: 'stylesheet'
       }
-    ],
-    ['script', { type: 'application/ld+json' }, jsonLd]
+    ]
   ]
 })

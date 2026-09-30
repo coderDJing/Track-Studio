@@ -1,0 +1,50 @@
+{
+  "deck-a": {
+    "file": "deck-a.bin",
+    "version": 1,
+    "parameterVersion": 3,
+    "duration": 120,
+    "sampleRate": 44100,
+    "detailRate": 1200,
+    "overviewRate": 32,
+    "bodyRateDivisor": 4,
+    "fields": [
+      "height",
+      "attack",
+      "colorIndex",
+      "colorLow",
+      "colorMid",
+      "colorHigh",
+      "colorRed",
+      "colorGreen",
+      "colorBlue",
+      "body",
+      "overviewHeight"
+    ],
+    "lengths": [144000, 144000, 144000, 144000, 144000, 144000, 144000, 144000, 144000, 36000, 3840]
+  },
+  "deck-b": {
+    "file": "deck-b.bin",
+    "version": 1,
+    "parameterVersion": 3,
+    "duration": 120,
+    "sampleRate": 44100,
+    "detailRate": 1200,
+    "overviewRate": 32,
+    "bodyRateDivisor": 4,
+    "fields": [
+      "height",
+      "attack",
+      "colorIndex",
+      "colorLow",
+      "colorMid",
+      "colorHigh",
+      "colorRed",
+      "colorGreen",
+      "colorBlue",
+      "body",
+      "overviewHeight"
+    ],
+    "lengths": [144000, 144000, 144000, 144000, 144000, 144000, 144000, 144000, 144000, 36000, 3840]
+  }
+}
