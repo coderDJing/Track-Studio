@@ -131,7 +131,7 @@ Function TrackStudioLog
   IfErrors track_studio_log_done
   ${GetTime} "" "L" $2 $3 $4 $5 $6 $7 $8
   FileSeek $0 0 END
-  FileWrite $0 "$2-$3-$4T$5:$6:$7 [v${VERSION}] [engine] $1$\r$\n"
+  FileWrite $0 "$4-$3-$2T$6:$7:$8 [v${VERSION}] [engine] $1$\r$\n"
   FileClose $0
 track_studio_log_done:
   Pop $8

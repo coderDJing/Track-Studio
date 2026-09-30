@@ -8,11 +8,54 @@ namespace TrackStudioInstallerUi
   {
     private void HandleUnexpectedEngineExit(int exitCode)
     {
+      RecordExtractionSnapshot();
       if (!options.IsUpdate || updateRollback == null) return;
       bool filesRestored = updateRollback.RestoreFiles();
       bool registrationRestored = updateRollback.RestoreRegistration();
       InstallerDiagnosticLog.Write("unexpected exit rollback code=" + exitCode +
         " files=" + filesRestored + " registration=" + registrationRestored);
+    }
+
+    private void RecordExtractionSnapshot()
+    {
+      try
+      {
+        string sessionDirectory = Path.GetDirectoryName(options.SessionFile);
+        if (string.IsNullOrWhiteSpace(sessionDirectory)) return;
+        string archivePath = Path.Combine(sessionDirectory, "app-64.7z");
+        string outputDirectory = Path.Combine(sessionDirectory, "7z-out");
+        long archiveBytes = File.Exists(archivePath) ? new FileInfo(archivePath).Length : -1;
+        int fileCount = 0;
+        long extractedBytes = 0;
+        DateTime latestCreation = DateTime.MinValue;
+        string latestFile = string.Empty;
+        bool truncated = false;
+        if (Directory.Exists(outputDirectory))
+        {
+          foreach (string filePath in Directory.EnumerateFiles(
+            outputDirectory, "*", SearchOption.AllDirectories))
+          {
+            if (fileCount >= 20000) { truncated = true; break; }
+            FileInfo file = new FileInfo(filePath);
+            fileCount++;
+            extractedBytes += file.Length;
+            if (file.CreationTimeUtc > latestCreation)
+            {
+              latestCreation = file.CreationTimeUtc;
+              latestFile = filePath.Substring(outputDirectory.Length).TrimStart(Path.DirectorySeparatorChar);
+            }
+          }
+        }
+        InstallerDiagnosticLog.Write("extraction snapshot archiveBytes=" + archiveBytes +
+          " outputExists=" + Directory.Exists(outputDirectory) + " files=" + fileCount +
+          " bytes=" + extractedBytes + " latestCreatedFile=" + latestFile +
+          " latestCreatedUtc=" + (latestCreation == DateTime.MinValue ? "unknown" :
+            latestCreation.ToString("o")) + " truncated=" + truncated);
+      }
+      catch (Exception exception)
+      {
+        InstallerDiagnosticLog.Write("extraction snapshot failed " + exception);
+      }
     }
 
     private void StateTimerTick(object sender, EventArgs eventArgs)
