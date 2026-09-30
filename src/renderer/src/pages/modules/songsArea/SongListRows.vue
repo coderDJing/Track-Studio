@@ -190,6 +190,33 @@ const topPadVisible = vRef(false)
 const bottomPadVisible = vRef(false)
 const topPadStyle = vRef<Record<string, string>>({})
 const bottomPadStyle = vRef<Record<string, string>>({})
+const updatePadStyle = (
+  current: typeof topPadStyle,
+  top: number,
+  left: number,
+  width: number,
+  height: number
+) => {
+  const nextTop = `${top}px`
+  const nextLeft = `${left}px`
+  const nextWidth = `${width}px`
+  const nextHeight = `${height}px`
+  const previous = current.value
+  if (
+    previous.top === nextTop &&
+    previous.left === nextLeft &&
+    previous.width === nextWidth &&
+    previous.height === nextHeight
+  ) {
+    return
+  }
+  current.value = {
+    top: nextTop,
+    left: nextLeft,
+    width: nextWidth,
+    height: nextHeight
+  }
+}
 const resolveDragHost = () =>
   (viewportElement.value || scrollHostElementRef.value || rowsRoot.value) as HTMLElement | null
 const resolveDropContainer = () => {
@@ -212,12 +239,7 @@ const updateDropPadRects = () => {
   const topHeight = Math.max(0, Math.min(rRect.top, cRect.bottom) - cRect.top)
   if (topHeight > 0) {
     topPadVisible.value = true
-    topPadStyle.value = {
-      top: `${cRect.top}px`,
-      left: `${cRect.left}px`,
-      width: `${cRect.width}px`,
-      height: `${topHeight}px`
-    }
+    updatePadStyle(topPadStyle, cRect.top, cRect.left, cRect.width, topHeight)
   } else {
     topPadVisible.value = false
   }
@@ -228,12 +250,7 @@ const updateDropPadRects = () => {
   const bottomHeight = Math.max(0, cRect.bottom - bottomStart)
   if (bottomHeight > 0) {
     bottomPadVisible.value = true
-    bottomPadStyle.value = {
-      top: `${bottomStart}px`,
-      left: `${cRect.left}px`,
-      width: `${cRect.width}px`,
-      height: `${bottomHeight}px`
-    }
+    updatePadStyle(bottomPadStyle, bottomStart, cRect.left, cRect.width, bottomHeight)
   } else {
     bottomPadVisible.value = false
   }
@@ -554,12 +571,10 @@ const handleEdgeDrop = (event: DragEvent, edge: 'top' | 'bottom') => {
 }
 
 const handleTopPadDragOver = (event: DragEvent) => {
-  updateDropPadRects()
   handleEdgeDragOver(event, 'top')
 }
 
 const handleBottomPadDragOver = (event: DragEvent) => {
-  updateDropPadRects()
   handleEdgeDragOver(event, 'bottom')
 }
 
