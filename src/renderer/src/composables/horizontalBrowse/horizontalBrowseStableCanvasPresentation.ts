@@ -80,6 +80,7 @@ type StableCanvasPresentationControllerOptions = {
   isDragging: () => boolean
   currentSeconds: () => number
   playbackRate: () => number
+  linkedPlaybackActive?: () => boolean
   renderRevision?: () => number
   resolveViewportRangeStartSec: (seconds: number, visibleDurationOverrideSec?: number) => number
   // 分块路径下波形侧是块容器 div，旧路径下是单张超宽 canvas；两者 left / width / transform
@@ -399,7 +400,13 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
       playbackClock = null
       return
     }
-    const estimatedSeconds = estimatePlaybackSeconds()
+    // BeatSync 时两轨的 render-sync 位置共用 native 对齐结果。独立的 canvas 时钟若在
+    // transaction 中以不同延迟重锚，会留下稳定的数十毫秒视觉相位差。
+    const linkedSeconds = Number(options.currentSeconds())
+    const estimatedSeconds =
+      options.linkedPlaybackActive?.() && Number.isFinite(linkedSeconds)
+        ? linkedSeconds
+        : estimatePlaybackSeconds()
     const result = apply(estimatedSeconds, {
       allowReanchor: true,
       allowRevisionHandoff: true,

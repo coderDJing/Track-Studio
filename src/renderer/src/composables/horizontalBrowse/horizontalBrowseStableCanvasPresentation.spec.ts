@@ -199,3 +199,42 @@ describe('horizontalBrowseStableCanvasPresentation 拖动松手 revision 收编'
     expect(controller.measure(frameSeconds).frame).toBeNull()
   })
 })
+
+describe('horizontalBrowseStableCanvasPresentation BeatSync 播放时钟', () => {
+  it('同步中的旧画布按 render-sync 播放位置滚动，消除独立时钟的固定相位差', () => {
+    let currentSeconds = 5
+    const frame = createStaleDensityFrame(currentSeconds, 10)
+    const resolveViewportRangeStartSec = vi.fn((seconds: number, visibleSec = 10) =>
+      alignedStart(seconds, visibleSec)
+    )
+    const callbacks: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callbacks.push(callback)
+      return callbacks.length
+    })
+    const controller = createHorizontalBrowseStableCanvasPresentationController({
+      isActive: () => true,
+      isPlaying: () => true,
+      isDragging: () => false,
+      currentSeconds: () => currentSeconds,
+      playbackRate: () => 1,
+      linkedPlaybackActive: () => true,
+      renderRevision: () => 0,
+      resolveViewportRangeStartSec,
+      waveformCanvas: () => null,
+      overlayCanvas: () => null,
+      scheduleDraw: () => {}
+    })
+    controller.queueFrame(frame)
+    controller.handleRendered({
+      renderToken: frame.renderToken,
+      rangeStartSec: frame.rangeStartSec,
+      rangeDurationSec: frame.rangeDurationSec,
+      ready: true
+    })
+    currentSeconds = 5.04
+    controller.reanchorPlayback(5, 1)
+    callbacks.shift()?.(0)
+    expect(resolveViewportRangeStartSec.mock.calls.at(-1)?.[0]).toBeCloseTo(5.04)
+  })
+})

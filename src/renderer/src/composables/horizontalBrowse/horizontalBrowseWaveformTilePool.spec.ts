@@ -39,6 +39,17 @@ const renderAll = (
 }
 
 describe('createHorizontalBrowseWaveformTilePool 复用与失效', () => {
+  it('worker 回报只登记本轮计划中实际画好的块', () => {
+    const pool = createHorizontalBrowseWaveformTilePool(3)
+    pool.markRenderedSlots([0, 2], GENERATION, [
+      { slotIndex: 0, globalIndex: 12 },
+      { slotIndex: 1, globalIndex: 13 }
+    ])
+    expect(pool.resolveSlot(0)).toMatchObject({ ready: true, globalIndex: 12 })
+    expect(pool.resolveSlot(1)).toMatchObject({ ready: false, globalIndex: null })
+    expect(pool.resolveSlot(2)).toMatchObject({ ready: false, globalIndex: null })
+  })
+
   it('首轮全部是新渲染，每块拿到互不重复的 slot', () => {
     const globalIndexes = resolveGlobalIndexes(30)
     const pool = createHorizontalBrowseWaveformTilePool(grid.maxTileCount)

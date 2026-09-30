@@ -1,10 +1,7 @@
 import { ref } from 'vue'
-import type { MixxxWaveformData } from '@renderer/pages/modules/songPlayer/webAudioPlayer'
 import type { RawWaveformData } from '@renderer/composables/mixtape/types'
 import { HORIZONTAL_BROWSE_DETAIL_PLAYHEAD_RATIO } from '@renderer/composables/horizontalBrowse/horizontalBrowseWaveform.constants'
-import { PREVIEW_MAX_SAMPLES_PER_PIXEL } from '@renderer/components/MixtapeBeatAlignDialog.constants'
 import { shouldUseAttackSafeRawPeaks } from '@renderer/composables/horizontalBrowse/horizontalBrowseRawWaveformCanvasPolicy'
-import { startHorizontalBrowseUserTiming } from '@renderer/composables/horizontalBrowse/horizontalBrowseUserTiming'
 import { resolveHorizontalBrowseWaveformThemeVariant } from '@renderer/composables/horizontalBrowse/horizontalBrowseWaveformDetail.utils'
 import { createHorizontalBrowseDetailLiveCanvasBridge } from '@renderer/composables/horizontalBrowse/horizontalBrowseDetailLiveCanvasBridge'
 import { HORIZONTAL_BROWSE_DETAIL_OVERLAY_EXTEND_PX } from '@renderer/composables/horizontalBrowse/horizontalBrowseDetailOverlayCanvas'
@@ -49,9 +46,6 @@ import { queueHorizontalBrowseLinkedCanvasActivation } from '@renderer/composabl
 import {
   canReplacePendingHorizontalBrowseStableRevisionRender,
   clearHorizontalBrowseRawWaveformGridCanvas,
-  isHorizontalBrowseRawDataCoveringRenderRange,
-  isHorizontalBrowseRawDataIntersectingRenderRange,
-  resolveHorizontalBrowseActiveMixxxSelectionForCanvas,
   resolveHorizontalBrowsePlaybackDurationSecForRender,
   resolveHorizontalBrowseRawSlotForRender,
   resolveHorizontalBrowseStableRevisionRenderKind,
@@ -59,6 +53,11 @@ import {
   type HorizontalBrowseStableRevisionRenderKind as StableRevisionRenderKind
 } from '@renderer/composables/horizontalBrowse/horizontalBrowseRawWaveformCanvasHelpers'
 import { createHorizontalBrowseRawWaveformViewport } from '@renderer/composables/horizontalBrowse/horizontalBrowseRawWaveformViewport'
+import {
+  createHorizontalBrowseRawWaveformDraw,
+  type HorizontalBrowseLiveWaveformRenderPayload,
+  type HorizontalBrowseRawWaveformDrawState
+} from '@renderer/composables/horizontalBrowse/horizontalBrowseRawWaveformDraw'
 import type { HorizontalBrowseDetailLiveCanvasWorkerOutgoing } from '@renderer/workers/horizontalBrowseDetailLiveCanvas.types'
 type LiveCanvasRenderedPayload = Extract<
   HorizontalBrowseDetailLiveCanvasWorkerOutgoing,
@@ -85,9 +84,11 @@ export const useHorizontalBrowseRawWaveformCanvas = (
   let drawScheduler: HorizontalBrowseRawWaveformDrawScheduler | null = null
   let liveCanvasRenderToken = 0
   let liveCanvasAttached = false
-  let suppressNextPlaybackScrollReuse = false
-  let lastRenderedRawData: RawWaveformData | null = null
-  let lastDrawPlaybackActive = false
+  const drawState: HorizontalBrowseRawWaveformDrawState = {
+    suppressNextPlaybackScrollReuse: false,
+    lastRenderedRawData: null,
+    lastDrawPlaybackActive: false
+  }
   const scheduleDraw = (drawOptions: HorizontalBrowseRawWaveformDrawOptions = {}) =>
     drawScheduler?.scheduleDraw(drawOptions)
   const drawWaveformNow = (drawOptions: HorizontalBrowseRawWaveformDrawOptions = {}) =>
@@ -151,6 +152,7 @@ export const useHorizontalBrowseRawWaveformCanvas = (
     isDragging: () => options.dragging.value,
     currentSeconds: () => Number(options.currentSeconds()) || 0,
     playbackRate: () => Number(options.playbackRate()) || 1,
+    linkedPlaybackActive: () => options.linkedGridActive?.() === true,
     renderRevision: () => resolveStableRenderRevision(),
     resolveViewportRangeStartSec: (seconds, visibleDurationOverrideSec) =>
       resolvePlaybackAlignedStart(seconds, visibleDurationOverrideSec),
@@ -201,9 +203,9 @@ export const useHorizontalBrowseRawWaveformCanvas = (
     clearStableRevisionReplacementState()
     liveCanvasRenderToken += 1
     liveCanvasBridge.clearRaw()
-    suppressNextPlaybackScrollReuse = false
-    lastDrawPlaybackActive = false
-    lastRenderedRawData = null
+    drawState.suppressNextPlaybackScrollReuse = false
+    drawState.lastDrawPlaybackActive = false
+    drawState.lastRenderedRawData = null
     playbackRawSettleUntilMs = 0
     lastQueuedPlaybackRawSlot = null
     lastQueuedMissingPlaybackRawSyncRevision = -1
@@ -227,8 +229,8 @@ export const useHorizontalBrowseRawWaveformCanvas = (
       liveCanvasBridge.clear()
       // worker 的 clear 会清掉块画布像素，块池状态必须同步失效，否则会误判「这块已画过」。
       resetTilePools()
-      lastRenderedRawData = null
-      suppressNextPlaybackScrollReuse = true
+      drawState.lastRenderedRawData = null
+      drawState.suppressNextPlaybackScrollReuse = true
     }
     playbackRawSettleUntilMs = 0
     lastQueuedPlaybackRawSlot = null
@@ -390,15 +392,7 @@ export const useHorizontalBrowseRawWaveformCanvas = (
     const pending = pendingTileRender
     if (!pending || pending.renderToken !== payload.renderToken) return
     const pool = tilePools[pending.renderTargetIndex]
-    if (!pool) return
-    const plannedTileBySlot = new Map(
-      pending.plan.tiles.map((tile) => [tile.slotIndex, tile] as const)
-    )
-    for (const slotIndex of renderedTileSlotIndexes) {
-      const tile = plannedTileBySlot.get(slotIndex)
-      if (!tile) continue
-      pool.markRendered(slotIndex, pending.generation, tile.globalIndex)
-    }
+    pool?.markRenderedSlots(renderedTileSlotIndexes, pending.generation, pending.plan.tiles)
     if (payload.tilesPending !== true) pendingTileRender = null
   }
 
@@ -541,17 +535,7 @@ export const useHorizontalBrowseRawWaveformCanvas = (
     syncDisplayViewportFromRenderedCanvas()
   }
 
-  const queueLiveWaveformRender = (payload: {
-    rangeStartSec: number
-    rangeDurationSec: number
-    rawData: RawWaveformData | null
-    maxSamplesPerPixel: number
-    allowScrollReuse: boolean
-    preferRawPeaksOnly: boolean
-    completeSeekTransition?: boolean
-    preferPreviewStart?: boolean
-    viewportOnly?: boolean
-  }) => {
+  const queueLiveWaveformRender = (payload: HorizontalBrowseLiveWaveformRenderPayload) => {
     const wrap = wrapRef.value
     if (!wrap || !ensureLiveCanvasMounted()) return false
     const wrapRect = wrap.getBoundingClientRect()
@@ -901,200 +885,26 @@ export const useHorizontalBrowseRawWaveformCanvas = (
     resetTilePools()
   }
 
-  const drawWaveform = (drawOptions: HorizontalBrowseRawWaveformDrawOptions = {}) => {
-    if (dragPresentationActive) {
-      return
-    }
-    const wrap = wrapRef.value
-    const waveformCanvas = liveCanvasBuffers.activeWaveformCanvas()
-    if (!wrap || !waveformCanvas) {
-      return
-    }
-
-    const duration = resolvePreviewDurationSec()
-    if (!duration) {
-      placeholderVisible.value = false
-      clearCanvas()
-      setDisplayReady(false)
-      return
-    }
-
-    const visibleDuration = Math.max(0.001, resolveVisibleDurationSec() || duration || 0.001)
-    options.previewStartSec.value = clampPreviewStart(options.previewStartSec.value)
-    const renderStartSec =
-      drawOptions.preferPreviewStart === true
-        ? resolveSnappedRenderStartSec(visibleDuration)
-        : resolvePlaybackDrivenRenderStartSec(visibleDuration)
-    const wasDisplayReady = resolveDisplayReadyForReuse()
-    const stableWaveformSource = resolveStableWaveformSource()
-    const playbackViewportMoving = options.playing.value && !options.dragging.value
-    const playbackStartedThisDraw = playbackViewportMoving && !lastDrawPlaybackActive
-    lastDrawPlaybackActive = playbackViewportMoving
-    const canReusePlaybackScroll =
-      playbackViewportMoving &&
-      wasDisplayReady &&
-      !suppressNextPlaybackScrollReuse &&
-      (!playbackStartedThisDraw || stableWaveformSource)
-    const maxSamplesPerPixel = PREVIEW_MAX_SAMPLES_PER_PIXEL
-    const activeMixxxSelection = resolveHorizontalBrowseActiveMixxxSelectionForCanvas(
-      options.mixxxData.value
-    )
-    const preferPreviewStart = drawOptions.preferPreviewStart === true
-    const viewportOnly = drawOptions.viewportOnly === true
-    const liveRawData = options.rawData.value
-
-    let effectiveRawData: RawWaveformData | null
-    let effectiveMixxxSelection: {
-      data: MixxxWaveformData | null
-      source: 'live' | 'placeholder' | 'none'
-    }
-    if (liveRawData) {
-      effectiveRawData = liveRawData
-      effectiveMixxxSelection = activeMixxxSelection.data
-        ? activeMixxxSelection
-        : { data: null, source: 'none' }
-    } else {
-      effectiveRawData = null
-      effectiveMixxxSelection = activeMixxxSelection.data
-        ? activeMixxxSelection
-        : { data: null, source: 'none' }
-    }
-
-    const effectiveMixxxData = effectiveMixxxSelection.data
-    const effectiveMixxxDrawable =
-      !!effectiveMixxxData && effectiveMixxxSelection.source !== 'placeholder'
-    const timeBasisOffsetSec = resolveTimeBasisOffsetSec()
-    const effectiveRawCoverage = isHorizontalBrowseRawDataCoveringRenderRange(
-      effectiveRawData,
-      renderStartSec,
-      visibleDuration,
-      timeBasisOffsetSec
-    )
-    const allowPlaybackScrollReuse = canReusePlaybackScroll
-    const effectiveRawIntersection = isHorizontalBrowseRawDataIntersectingRenderRange(
-      effectiveRawData,
-      renderStartSec,
-      visibleDuration,
-      timeBasisOffsetSec
-    )
-    const drawableRawData = effectiveRawIntersection ? effectiveRawData : null
-    const canRenderWithoutRawCoverage = effectiveMixxxSelection.source === 'live'
-    const shouldHoldPlaybackFrame =
-      playbackViewportMoving && !stableWaveformSource && wasDisplayReady
-    const hasBeatGridTarget = Number(options.previewBpm.value) > 0 || !!options.beatGridMap?.()
-
-    const hasTimelinePlaceholderTarget =
-      canShowTimelinePlaceholder() &&
-      !hasBeatGridTarget &&
-      !hasHorizontalBrowseDrawableRawFrames(drawableRawData)
-    const shouldShowEmptySurface = hasTimelinePlaceholderTarget || hasBeatGridTarget
-
-    if (!effectiveMixxxDrawable && !drawableRawData) {
-      if (shouldHoldPlaybackFrame) {
-        return
-      }
-      lastRenderedRawData = null
-      placeholderVisible.value = shouldShowEmptySurface
-      // 完全无高清波形可画：只清波形层；worker 仍按当前 range 渲染网格或时间轴占位。
-      setDisplayReady(false)
-      queueLiveWaveformRender({
-        rangeStartSec: renderStartSec,
-        rangeDurationSec: visibleDuration,
-        rawData: null,
-        maxSamplesPerPixel,
-        allowScrollReuse: false,
-        preferRawPeaksOnly: false,
-        preferPreviewStart,
-        viewportOnly
-      })
-    } else if (options.playing.value || options.dragging.value) {
-      // 稳定 ref 才允许滚动复用；播放恢复期不能提交 partial raw，避免隐藏 full render 挤占 worker。
-      const rawDataRefStable = drawableRawData != null && drawableRawData === lastRenderedRawData
-      const allowPartialViewportPaint =
-        Boolean(drawableRawData) &&
-        !playbackViewportMoving &&
-        (options.dragging.value || !options.playing.value || !wasDisplayReady)
-      const canDrawWaveform =
-        Boolean(drawableRawData) &&
-        (effectiveRawCoverage ||
-          (allowPlaybackScrollReuse && rawDataRefStable) ||
-          allowPartialViewportPaint)
-      if (!canDrawWaveform) {
-        if (shouldHoldPlaybackFrame) {
-          return
-        }
-        lastRenderedRawData = null
-        placeholderVisible.value = shouldShowEmptySurface
-        setDisplayReady(false)
-        queueLiveWaveformRender({
-          rangeStartSec: renderStartSec,
-          rangeDurationSec: visibleDuration,
-          rawData: null,
-          maxSamplesPerPixel,
-          allowScrollReuse: false,
-          preferRawPeaksOnly: false,
-          preferPreviewStart,
-          viewportOnly
-        })
-      } else {
-        const finishTiming = startHorizontalBrowseUserTiming(
-          `frkb:hb:canvas:worker-live:${options.direction()}`
-        )
-        const queued = queueLiveWaveformRender({
-          rangeStartSec: renderStartSec,
-          rangeDurationSec: visibleDuration,
-          rawData: drawableRawData,
-          maxSamplesPerPixel,
-          allowScrollReuse: allowPlaybackScrollReuse,
-          preferRawPeaksOnly: false,
-          completeSeekTransition: effectiveRawCoverage,
-          preferPreviewStart,
-          viewportOnly
-        })
-        if (queued) {
-          lastRenderedRawData = drawableRawData
-        }
-        suppressNextPlaybackScrollReuse = false
-        finishTiming()
-      }
-    } else if (!drawableRawData && !canRenderWithoutRawCoverage) {
-      lastRenderedRawData = null
-      placeholderVisible.value = shouldShowEmptySurface
-      setDisplayReady(false)
-      queueLiveWaveformRender({
-        rangeStartSec: renderStartSec,
-        rangeDurationSec: visibleDuration,
-        rawData: null,
-        maxSamplesPerPixel,
-        allowScrollReuse: false,
-        preferRawPeaksOnly: false,
-        preferPreviewStart,
-        viewportOnly
-      })
-    } else {
-      placeholderVisible.value = false
-      const finishTiming = startHorizontalBrowseUserTiming(
-        `frkb:hb:canvas:worker-live:${options.direction()}`
-      )
-      const queued = queueLiveWaveformRender({
-        rangeStartSec: renderStartSec,
-        rangeDurationSec: visibleDuration,
-        rawData: drawableRawData,
-        maxSamplesPerPixel,
-        allowScrollReuse: allowPlaybackScrollReuse,
-        preferRawPeaksOnly: false,
-        completeSeekTransition: effectiveRawCoverage,
-        preferPreviewStart,
-        viewportOnly
-      })
-      if (queued) {
-        lastRenderedRawData = drawableRawData
-      }
-      suppressNextPlaybackScrollReuse = false
-      finishTiming()
-    }
-  }
-
+  const drawWaveform = createHorizontalBrowseRawWaveformDraw({
+    options,
+    state: drawState,
+    wrapRef,
+    activeWaveformCanvas: () => liveCanvasBuffers.activeWaveformCanvas(),
+    dragPresentationActive: () => dragPresentationActive,
+    resolvePreviewDurationSec,
+    resolveVisibleDurationSec,
+    clampPreviewStart,
+    resolveSnappedRenderStartSec,
+    resolvePlaybackDrivenRenderStartSec,
+    resolveDisplayReadyForReuse,
+    resolveStableWaveformSource,
+    resolveTimeBasisOffsetSec,
+    canShowTimelinePlaceholder,
+    placeholderVisible,
+    clearCanvas,
+    setDisplayReady,
+    queueLiveWaveformRender
+  })
   drawScheduler = createHorizontalBrowseRawWaveformDrawScheduler({ draw: drawWaveform })
 
   const clearStableFullRenderTimer = () => {

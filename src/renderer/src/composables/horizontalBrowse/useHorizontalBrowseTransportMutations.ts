@@ -212,12 +212,14 @@ export const useHorizontalBrowseTransportMutations = (
     params.beginLinkedGridVisualTransaction?.(provisionalSyncDecks)
     let visualTransactionFinished = false
     try {
+      const alignRequestedAtMs = performance.now()
       await params.nativeTransport.alignToLeader(
         deck,
         Number.isFinite(anchorSec) ? anchorSec : undefined,
         false
       )
-      params.syncDeckRenderState({ force: deck })
+      // native 快照仍对应发起命令时的时刻；IPC 往返后需从该时刻外推从轨播放头。
+      params.syncDeckRenderState({ force: deck, snapshotAtMs: alignRequestedAtMs })
       await nextTick()
       const activeSyncDecks = resolveActiveBeatSyncDecks(deck)
       if (activeSyncDecks) {

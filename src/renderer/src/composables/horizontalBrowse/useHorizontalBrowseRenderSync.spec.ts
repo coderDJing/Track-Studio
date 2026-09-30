@@ -107,6 +107,25 @@ describe('useHorizontalBrowseRenderSync', () => {
     expect(renderSync.bottomDeckPlaybackSyncRevision.value).toBe(1)
   })
 
+  it('BeatSync 快照经过 IPC 延迟后按命令时刻外推，保持不同 BPM 两轨相位一致', () => {
+    const { snapshot, renderSync } = createRenderSync(() => true)
+    snapshot.top.renderCurrentSec = 20.560113
+    snapshot.top.playbackRate = 1
+    snapshot.bottom.renderCurrentSec = 15.07100129787234
+    snapshot.bottom.playbackRate = 150 / 141
+
+    renderSync.syncDeckRenderState({
+      nowMs: 1100,
+      snapshotAtMs: 1000,
+      force: 'all'
+    })
+
+    const topBeatDistance = ((renderSync.topDeckRenderCurrentSeconds.value - 0.050113) * 150) / 60
+    const bottomBeatDistance =
+      ((renderSync.bottomDeckRenderCurrentSeconds.value - 0.060363) * 141) / 60
+    expect(topBeatDistance - bottomBeatDistance).toBeCloseTo(16, 6)
+  })
+
   it('列表试听暂挂时锁存两轨 UI，忽略后续轮询快照的小幅推进', () => {
     const { snapshot, renderSync } = createRenderSync(() => false)
     snapshot.auditionSuspended = true

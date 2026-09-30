@@ -83,6 +83,18 @@ export const createHorizontalBrowseWaveformTilePool = (slotCount: number) => {
     return true
   }
 
+  const markRenderedSlots = (
+    slotIndexes: number[],
+    generation: HorizontalBrowseWaveformTileGeneration,
+    plannedTiles: Array<{ slotIndex: number; globalIndex: number }>
+  ) => {
+    const plannedBySlot = new Map(plannedTiles.map((tile) => [tile.slotIndex, tile.globalIndex]))
+    for (const slotIndex of slotIndexes) {
+      const globalIndex = plannedBySlot.get(slotIndex)
+      if (globalIndex !== undefined) markRendered(slotIndex, generation, globalIndex)
+    }
+  }
+
   /**
    * 为本轮需要的全局块分配 slot。
    *
@@ -160,6 +172,7 @@ export const createHorizontalBrowseWaveformTilePool = (slotCount: number) => {
     invalidateAll,
     invalidateStaleGenerations,
     markRendered,
+    markRenderedSlots,
     assign
   }
 }
