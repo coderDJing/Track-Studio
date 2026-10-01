@@ -265,7 +265,7 @@ fn time_basis_lead_in_does_not_jump_master_tempo_playhead_to_pcm_start() {
 }
 
 #[test]
-fn fully_decoded_pcm_tail_stops_at_real_audio_end() {
+fn fully_decoded_pcm_tail_preserves_play_intent_at_real_audio_end() {
   let mut engine = HorizontalBrowseTransportEngine::default();
   engine.output_sample_rate = 4;
   {
@@ -289,10 +289,11 @@ fn fully_decoded_pcm_tail_stops_at_real_audio_end() {
   let snapshot = engine.snapshot(1000.0);
 
   assert_eq!(sample, (0.0, 0.0));
-  assert!(!engine.deck(DeckId::Top).playing);
+  assert!(engine.deck(DeckId::Top).playing);
   assert!((engine.deck(DeckId::Top).current_sec - 2.5).abs() < 0.0001);
-  assert!(!snapshot.top.playing);
-  assert!(!snapshot.top.play_requested);
+  assert!(snapshot.top.playing);
+  assert!(snapshot.top.play_requested);
+  assert!(!snapshot.top.playing_audible);
   assert!((snapshot.top.current_sec - 2.5).abs() < 0.0001);
   assert!((snapshot.top.duration_sec - 3.0).abs() < 0.0001);
 }

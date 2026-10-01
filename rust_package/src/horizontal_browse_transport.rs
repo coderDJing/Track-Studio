@@ -413,6 +413,9 @@ impl HorizontalBrowseTransportEngine {
     if !target_sec.is_finite() || target_sec < 0.0 {
       return false;
     }
+    if Self::effective_track_end_sec(deck_state).is_some_and(|end_sec| target_sec >= end_sec) {
+      return false;
+    }
     if deck_state.loaded_file_path.as_deref() != deck_state.file_path.as_deref() {
       return false;
     }
@@ -1030,3 +1033,6 @@ mod horizontal_browse_transport_grid_sync_tests;
 #[cfg(test)]
 #[path = "horizontal_browse_transport_tests.rs"]
 mod horizontal_browse_transport_tests;
+#[cfg(test)]
+#[path = "horizontal_browse_transport_track_end_tests.rs"]
+mod horizontal_browse_transport_track_end_tests;

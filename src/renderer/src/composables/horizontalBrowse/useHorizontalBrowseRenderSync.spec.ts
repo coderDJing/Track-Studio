@@ -60,6 +60,53 @@ const createRenderSync = (linkedGridVisualPending: () => boolean) => {
 }
 
 describe('useHorizontalBrowseRenderSync', () => {
+  it.each([
+    ['top', 180, false],
+    ['bottom', 180, false],
+    ['top', 179.9, true],
+    ['bottom', 179.9, true]
+  ] as const)('曲尾保持播放时 %s 渲染位置锁定在 %s，BeatSync=%s', (deck, endSec, syncEnabled) => {
+    const { snapshot, renderSync } = createRenderSync(() => false)
+    snapshot[deck].syncEnabled = syncEnabled
+    snapshot[deck].syncLock = syncEnabled ? 'full' : 'off'
+    snapshot[deck].effectiveDurationSec = endSec
+    snapshot[deck].currentSec = endSec - 0.2
+    snapshot[deck].renderCurrentSec = endSec - 0.2
+    snapshot[deck].playbackRate = 1
+    renderSync.syncDeckRenderState({ nowMs: 1000, snapshotAtMs: 1000 })
+
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(1250)
+    try {
+      expect(renderSync.resolveDeckRenderCurrentSeconds(deck)).toBe(endSec)
+      snapshot[deck].currentSec = endSec
+      snapshot[deck].renderCurrentSec = endSec
+      snapshot[deck].playingAudible = false
+
+      // Audible status can update before the next render synchronization/RAF tick.
+      expect(renderSync.resolveDeckRenderCurrentSeconds(deck)).toBe(endSec)
+      renderSync.syncDeckRenderState({ nowMs: 1300, snapshotAtMs: 1300 })
+      const renderedSeconds =
+        deck === 'top'
+          ? renderSync.topDeckRenderCurrentSeconds
+          : renderSync.bottomDeckRenderCurrentSeconds
+      expect(renderedSeconds.value).toBe(endSec)
+      clock.mockReturnValue(8000)
+      expect(renderSync.resolveDeckRenderCurrentSeconds(deck)).toBe(endSec)
+
+      // The user's drag target still takes priority over the old end snapshot.
+      renderSync.applyDeckRenderCurrentSeconds(deck, 120)
+      expect(renderSync.resolveDeckRenderCurrentSeconds(deck)).toBe(120)
+      snapshot[deck].currentSec = 120
+      snapshot[deck].renderCurrentSec = 120
+      snapshot[deck].playingAudible = true
+      renderSync.syncDeckRenderState({ nowMs: 8000, snapshotAtMs: 8000 })
+      clock.mockReturnValue(8250)
+      expect(renderSync.resolveDeckRenderCurrentSeconds(deck)).toBe(120.25)
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
   it('联结视觉事务 pending 时普通同步不会重锚', () => {
     const { renderSync } = createRenderSync(() => true)
 

@@ -59,6 +59,16 @@ const resolveDeckRenderLimitSec = (snapshot: HorizontalBrowseTransportDeckSnapsh
   return Math.max(0, Number(snapshot.durationSec) || 0)
 }
 
+const resolveDeckReachedRenderEndSec = (snapshot: HorizontalBrowseTransportDeckSnapshot) => {
+  const endSec = resolveDeckRenderLimitSec(snapshot)
+  return snapshot.playing &&
+    !snapshot.playingAudible &&
+    endSec > 0 &&
+    snapshot.renderCurrentSec >= endSec
+    ? endSec
+    : null
+}
+
 const assignDeckRenderCurrentSeconds = (
   deck: DeckKey,
   seconds: number,
@@ -139,6 +149,9 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
     if (pendingIntent) return pendingIntent.seconds
     const snapshot = params.resolveTransportDeckSnapshot(deck)
     const renderLimitSec = resolveDeckRenderLimitSec(snapshot)
+    // Once audio reaches the tail, pin to its final position instead of the old clock base.
+    const reachedEndSec = resolveDeckReachedRenderEndSec(snapshot)
+    if (reachedEndSec !== null) return reachedEndSec
     const liveClockRate = params.nativeTransport.resolveLiveClockPlaybackRate?.(deck)
     const playbackRate = Math.max(0.25, Number(liveClockRate ?? snapshot.playbackRate) || 1)
     const previousClockRate = lastClockPlaybackRate[deck]
@@ -175,6 +188,7 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
       snapshot.label || '',
       snapshot.loaded ? 1 : 0,
       snapshot.playing ? 1 : 0,
+      resolveDeckReachedRenderEndSec(snapshot) !== null ? 1 : 0,
       Number(snapshot.durationSec || 0).toFixed(3),
       Number(snapshot.effectiveDurationSec || 0).toFixed(3),
       Number(snapshot.playbackRate || 1).toFixed(6),

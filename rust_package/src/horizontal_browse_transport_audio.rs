@@ -186,7 +186,7 @@ fn finish_deck_at_decoded_pcm_end(target: &mut DeckState) -> bool {
   };
   target.current_sec = stop_sec;
   target.last_observed_at_ms = -1.0;
-  target.playing = false;
+  // Keep the user's play intent so seeking away from the tail resumes playback.
   target.scrub_preview.active = false;
   target.scrub_preview.rate = 0.0;
   clear_master_tempo_state(target);
@@ -503,7 +503,7 @@ fn sample_deck_rate(target: &mut DeckState, output_sample_rate: f64) -> (f32, f3
   }
   if target.duration_sec.is_finite() && target.current_sec >= target.duration_sec {
     target.current_sec = target.duration_sec;
-    target.playing = false;
+    clear_master_tempo_state(target);
   }
   (left, right)
 }
@@ -645,7 +645,7 @@ fn sample_deck_master_tempo(target: &mut DeckState, output_sample_rate: f64) -> 
 
   if target.duration_sec.is_finite() && target.current_sec >= target.duration_sec {
     target.current_sec = target.duration_sec;
-    target.playing = false;
+    clear_master_tempo_state(target);
   }
 
   (left, right)
@@ -661,6 +661,13 @@ pub(super) fn sample_deck(target: &mut DeckState, output_sample_rate: f64) -> (f
     || target.channels == 0
   {
     return (0.0, 0.0);
+  }
+  if let Some(end_sec) = super::HorizontalBrowseTransportEngine::effective_track_end_sec(target) {
+    if target.current_sec >= end_sec {
+      target.current_sec = end_sec;
+      target.last_observed_at_ms = -1.0;
+      return (0.0, 0.0);
+    }
   }
   if sample_silent_lead_in(target, output_sample_rate) {
     return (0.0, 0.0);

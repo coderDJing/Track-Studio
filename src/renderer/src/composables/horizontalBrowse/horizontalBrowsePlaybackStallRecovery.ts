@@ -35,6 +35,12 @@ const STALL_THRESHOLD_MS = 500
 const RECOVERY_COOLDOWN_MS = 3000
 const PROGRESS_EPSILON_SEC = 0.03
 
+const isDeckAtTrackEnd = (snapshot: HorizontalBrowseTransportDeckSnapshot) => {
+  const endSec =
+    snapshot.effectiveDurationSec > 0 ? snapshot.effectiveDurationSec : snapshot.durationSec
+  return Number.isFinite(endSec) && endSec > 0 && snapshot.currentSec >= endSec
+}
+
 const createDefaultPlaybackStallState = (): PlaybackStallState => ({
   lastCurrentSec: null,
   lastAudioCurrentSec: null,
@@ -93,7 +99,11 @@ export const createHorizontalBrowsePlaybackStallRecovery = (
         const freshTransportSnapshot = await params.nativeTransport.snapshot(performance.now())
         const freshDeckSnapshot =
           deck === 'top' ? freshTransportSnapshot.top : freshTransportSnapshot.bottom
-        if (!freshDeckSnapshot.playing || hasSnapshotProgressed(state, freshDeckSnapshot)) {
+        if (
+          !freshDeckSnapshot.playing ||
+          isDeckAtTrackEnd(freshDeckSnapshot) ||
+          hasSnapshotProgressed(state, freshDeckSnapshot)
+        ) {
           return
         }
         await params.nativeTransport.preparePlayhead(deck)
@@ -116,7 +126,10 @@ export const createHorizontalBrowsePlaybackStallRecovery = (
     const state = deckState[deck]
     const playRequested = snapshot.playing || params.resolveDeckPlaying(deck)
     const canInspect =
-      playRequested && !!String(song?.filePath || '').trim() && !params.resolveDeckPendingPlay(deck)
+      playRequested &&
+      !isDeckAtTrackEnd(snapshot) &&
+      !!String(song?.filePath || '').trim() &&
+      !params.resolveDeckPendingPlay(deck)
     if (!canInspect) {
       resetDeckWatch(deck, snapshot)
       return
