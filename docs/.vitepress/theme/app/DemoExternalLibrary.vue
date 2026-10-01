@@ -36,7 +36,7 @@ onUnmounted(() => {
 
 <template>
   <div ref="rootRef" class="frkb-app theme-dark demo-external">
-    <LibrarySelectArea />
+    <LibrarySelectArea contain-scroll />
     <div class="demo-external__songs">
       <DemoSongList
         source-kind="external"

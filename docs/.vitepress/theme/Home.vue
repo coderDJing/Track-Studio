@@ -13,10 +13,12 @@ import DemoStemWorkbench from './app/DemoStemWorkbench.vue'
 import DemoSyncSearch from './app/DemoSyncSearch.vue'
 import DemoKeyboard from './app/DemoKeyboard.vue'
 import DemoExternalLibrary from './app/DemoExternalLibrary.vue'
+import DemoViewport from './app/DemoViewport.vue'
 import { DEMO_TRACKS, loadDemoUnifiedWaveforms } from './app/demoSongs'
 import { registerDemoUnifiedWaveform } from './app/demoIpc'
 import { enContent, zhContent, type Chapter } from './homeContent'
 import './home.css'
+import './homeMobile.css'
 
 const { localeIndex } = useData()
 const DemoMixtape = defineAsyncComponent(() => import('./app/DemoMixtape.vue'))
@@ -104,6 +106,15 @@ onUnmounted(() => {
 })
 
 const surfaceCaptionOf = (chapter: Chapter) => chapter.surfaceCaption
+const surfaceSizes = {
+  library: { width: 960, height: 300 },
+  dedup: { width: 640, height: 320 },
+  player: { width: 960, height: 360 },
+  mixtape: { width: 1100, height: 560 },
+  stem: { width: 820, height: 620 },
+  external: { width: 960, height: 440 },
+  sync: { width: 868, height: 1060 }
+}
 </script>
 
 <template>
@@ -134,6 +145,13 @@ const surfaceCaptionOf = (chapter: Chapter) => chapter.surfaceCaption
             :duration-seconds="DEMO_TRACKS[0].durationSec"
           />
         </div>
+        <span
+          v-for="(chapter, index) in c.chapters"
+          :key="`marker-${chapter.id}`"
+          class="h-progress-mobile-marker"
+          aria-hidden="true"
+          :style="{ left: `${(chapterRatios[index] ?? 0) * 100}%`, '--cue-color': chapter.color }"
+        ></span>
         <button
           v-for="(chapter, index) in c.chapters"
           :key="chapter.id"
@@ -142,6 +160,7 @@ const surfaceCaptionOf = (chapter: Chapter) => chapter.surfaceCaption
           :class="{ 'is-active': index === activeChapter }"
           :style="{ left: `${(chapterRatios[index] ?? 0) * 100}%`, '--cue-color': chapter.color }"
           :aria-label="`${c.progressLabel} ${chapter.cue}: ${chapter.kicker}`"
+          :aria-current="index === activeChapter ? 'location' : undefined"
           @click="jumpTo(chapter)"
         >
           {{ chapter.cue }}
@@ -149,7 +168,7 @@ const surfaceCaptionOf = (chapter: Chapter) => chapter.surfaceCaption
       </div>
     </header>
 
-    <!-- 首屏：原 slogan + 可动的双轨横推复刻 -->
+    <!-- 首屏：原 slogan + 应用真实双轨组件 -->
     <section class="h-hero">
       <div class="h-container">
         <h1 class="h-hero-title reveal" :class="{ 'h-hero-title--en': isEn }">
@@ -176,7 +195,11 @@ const surfaceCaptionOf = (chapter: Chapter) => chapter.surfaceCaption
             <img :src="withBase('/assets/icon.webp')" alt="" width="14" height="14" />
             <span>Track Studio</span>
           </div>
-          <DemoHorizontalShell v-if="clientReady" />
+          <div class="h-hero-demo">
+            <DemoViewport :width="1100" :height="372">
+              <DemoHorizontalShell v-if="clientReady" />
+            </DemoViewport>
+          </div>
         </div>
         <p class="h-scroll-hint reveal">{{ c.hero.scrollHint }}</p>
       </div>
@@ -202,18 +225,20 @@ const surfaceCaptionOf = (chapter: Chapter) => chapter.surfaceCaption
       <div v-if="chapter.surface !== 'deck'" class="h-container h-container--wide">
         <figure class="h-surface reveal" :class="`h-surface--${chapter.surface}`">
           <div class="h-surface-frame">
-            <DemoSongList v-if="clientReady && chapter.surface === 'library'" />
-            <DemoDedupFlow v-else-if="clientReady && chapter.surface === 'dedup'" />
-            <DemoPlayer v-else-if="clientReady && chapter.surface === 'player'">
-              <DemoSongList
-                source-kind="player"
-                :column-keys="['waveformPreview', 'title', 'artist', 'bpm', 'key']"
-              />
-            </DemoPlayer>
-            <DemoMixtape v-else-if="chapter.surface === 'mixtape' && clientReady" />
-            <DemoStemWorkbench v-else-if="clientReady && chapter.surface === 'stem'" />
-            <DemoExternalLibrary v-else-if="clientReady && chapter.surface === 'external'" />
-            <DemoSyncSearch v-else-if="clientReady && chapter.surface === 'sync'" />
+            <DemoViewport v-bind="surfaceSizes[chapter.surface]">
+              <DemoSongList v-if="clientReady && chapter.surface === 'library'" />
+              <DemoDedupFlow v-else-if="clientReady && chapter.surface === 'dedup'" />
+              <DemoPlayer v-else-if="clientReady && chapter.surface === 'player'">
+                <DemoSongList
+                  source-kind="player"
+                  :column-keys="['waveformPreview', 'title', 'artist', 'bpm', 'key']"
+                />
+              </DemoPlayer>
+              <DemoMixtape v-else-if="chapter.surface === 'mixtape' && clientReady" />
+              <DemoStemWorkbench v-else-if="clientReady && chapter.surface === 'stem'" />
+              <DemoExternalLibrary v-else-if="clientReady && chapter.surface === 'external'" />
+              <DemoSyncSearch v-else-if="clientReady && chapter.surface === 'sync'" />
+            </DemoViewport>
           </div>
           <figcaption><span class="h-cue-dot"></span>{{ surfaceCaptionOf(chapter) }}</figcaption>
         </figure>
@@ -249,7 +274,9 @@ const surfaceCaptionOf = (chapter: Chapter) => chapter.surfaceCaption
           </ul>
         </div>
         <div class="h-surface-frame h-keyboard-frame reveal">
-          <DemoKeyboard v-if="clientReady" />
+          <DemoViewport :width="640" :height="540">
+            <DemoKeyboard v-if="clientReady" />
+          </DemoViewport>
         </div>
       </div>
     </section>

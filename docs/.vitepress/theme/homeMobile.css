@@ -1,0 +1,273 @@
+/* 手机版文案与桌面共用，真实应用界面由 DemoViewport 完整缩放并提供框内放大浏览。 */
+@media (max-width: 640px) {
+  .home-root {
+    --top-height: 110px;
+  }
+
+  .h-container {
+    padding: 0 20px;
+  }
+
+  .h-top-bar {
+    height: 46px;
+    gap: 12px;
+    padding: 0 12px;
+  }
+
+  .h-brand {
+    flex-shrink: 0;
+    gap: 6px;
+    font-size: 13px;
+  }
+
+  .h-top-links {
+    gap: 12px;
+    font-size: 12px;
+  }
+
+  .h-top-links > a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .h-top-links > a[href*='github.com'] {
+    display: none;
+  }
+
+  .h-top-links .h-lang {
+    justify-content: center;
+    min-height: 32px;
+    min-width: 36px;
+    padding: 0 6px;
+  }
+
+  .h-progress {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    height: 64px;
+    margin: 0 12px;
+  }
+
+  .h-progress .h-progress-waveform {
+    position: absolute;
+    inset: 32px 0 0;
+    height: 32px;
+  }
+
+  .h-progress-cue {
+    position: relative;
+    left: auto !important;
+    top: auto;
+    width: 100%;
+    height: 32px;
+    padding: 0;
+    border-radius: 0;
+    background: var(--bg);
+    box-shadow: none;
+    color: var(--cue-color);
+    font-size: 12px;
+    line-height: 32px;
+    transform: none;
+  }
+
+  .h-progress-cue::after {
+    display: none;
+  }
+
+  .h-progress-mobile-marker {
+    display: block;
+    position: absolute;
+    top: 32px;
+    width: 1px;
+    height: 32px;
+    background: var(--cue-color);
+    pointer-events: none;
+  }
+
+  .h-progress-cue::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 -12px;
+  }
+
+  .h-progress-cue:hover,
+  .h-progress-cue.is-active {
+    background: var(--hover);
+    color: #fff;
+    transform: none;
+  }
+
+  .h-hero {
+    padding: calc(var(--top-height) + 40px) 0 40px;
+  }
+
+  .h-hero-title {
+    font-size: clamp(30px, 9.5vw, 52px);
+    line-height: 1.12;
+  }
+
+  .h-hero-title--en {
+    font-size: clamp(29px, 8.5vw, 48px);
+    line-height: 1.13;
+  }
+
+  .h-hero-sub,
+  .h-chapter-lead {
+    font-size: 15px;
+    line-height: 1.75;
+  }
+
+  .h-hero-sub {
+    margin-top: 20px !important;
+  }
+
+  .h-hero-cta {
+    align-items: stretch;
+    gap: 18px;
+    margin-top: 28px;
+  }
+
+  .dl,
+  .dl-row {
+    width: 100%;
+  }
+
+  .dl-row {
+    flex-direction: column;
+  }
+
+  .dl-btn {
+    justify-content: center;
+    flex-wrap: wrap;
+    min-height: 48px;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+
+  .dl-other {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .dl-version {
+    font-size: 10px;
+  }
+
+  .h-hero-meta {
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 10px;
+  }
+
+  .h-window {
+    margin-top: 32px;
+    overflow: hidden;
+    box-shadow: none;
+  }
+
+  .h-window-bar {
+    height: 28px;
+    font-size: 11px;
+  }
+
+  .h-hero-demo,
+  .home-root .h-surface-frame {
+    height: auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    box-shadow: none;
+  }
+
+  .h-chapter {
+    padding: 60px 0;
+    scroll-margin-top: calc(var(--top-height) + 20px);
+  }
+
+  .h-chapter-title {
+    margin-top: 16px !important;
+    font-size: 28px;
+    line-height: 1.25;
+  }
+
+  .h-chapter-lead {
+    margin-top: 16px !important;
+  }
+
+  .home-root .h-surface {
+    margin-top: 28px;
+  }
+
+  .h-surface figcaption {
+    align-items: flex-start;
+    margin-top: 12px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+
+  .h-cue-dot {
+    flex: 0 0 6px;
+    margin-top: 6px;
+  }
+
+  .h-groups {
+    gap: 28px;
+    margin-top: 32px;
+  }
+
+  .h-item {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    padding: 14px 0 14px 12px;
+  }
+
+  .h-item dd {
+    line-height: 1.7;
+  }
+
+  .h-keyboard-grid {
+    gap: 28px;
+  }
+
+  .h-keyboard-points {
+    margin-top: 20px !important;
+    line-height: 1.65;
+  }
+
+  .h-finale {
+    padding: 48px 0 60px;
+  }
+
+  .h-finale-card {
+    padding: 24px 18px;
+  }
+
+  .h-finale-card h2 {
+    font-size: 26px;
+    line-height: 1.3;
+  }
+
+  .h-finale-card > p {
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  .h-specs {
+    gap: 24px;
+    margin-top: 28px !important;
+  }
+
+  .h-footer-inner {
+    flex-direction: column;
+    gap: 8px;
+    line-height: 1.7;
+  }
+
+  .h-footer-links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}

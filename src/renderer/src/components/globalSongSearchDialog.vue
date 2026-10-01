@@ -7,6 +7,9 @@ import utils from '@renderer/utils/utils'
 import { formatBpmDisplay } from '@renderer/utils/bpm'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
 import { SEARCH_FOCUS_PRIORITY, useSearchFocusTarget } from '@renderer/composables/useSearchFocus'
+import { scrollIntoContainerView } from '@renderer/utils/scrollIntoContainerView'
+
+const props = defineProps<{ embedded?: boolean }>()
 
 type CoreLibraryName = 'FilterLibrary' | 'CuratedLibrary' | 'MixtapeLibrary' | 'RecycleBin'
 
@@ -168,6 +171,7 @@ const closeDialog = () => {
 }
 
 const focusInput = () => {
+  if (props.embedded) return
   nextTick(() => {
     inputRef.value?.focus()
     inputRef.value?.select()
@@ -179,7 +183,9 @@ const keepSelectionVisible = () => {
     const host = resultListRef.value
     if (!host) return
     const active = host.querySelector<HTMLElement>('.result-item.active')
-    active?.scrollIntoView({ block: 'nearest' })
+    if (!active) return
+    if (props.embedded) scrollIntoContainerView(active, host)
+    else active.scrollIntoView({ block: 'nearest' })
   })
 }
 

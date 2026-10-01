@@ -128,6 +128,10 @@
   background: var(--waveform-bg);
 }
 
+.h-progress-mobile-marker {
+  display: none;
+}
+
 /* 使用应用真实的整曲概览；章节字母单独覆盖在上面，波形本身不接受跳转。 */
 .h-progress-waveform {
   --shell-playhead-bg: rgba(255, 255, 255, 0.96);
@@ -269,6 +273,10 @@
 
 .h-window-bar img {
   border-radius: 3px;
+}
+
+.h-hero-demo {
+  height: 372px;
 }
 
 .h-scroll-hint {
@@ -679,60 +687,5 @@
   }
   .h-keyboard-grid {
     gap: 32px;
-  }
-}
-
-@media (max-width: 640px) {
-  .home-root {
-    --top-height: 64px;
-  }
-  .h-container {
-    padding: 0 18px;
-  }
-  .h-top-bar {
-    padding: 0 12px;
-  }
-  .h-top-links a:not(.h-lang) {
-    display: none;
-  }
-  .h-progress {
-    height: 24px;
-    margin: 0 12px;
-  }
-  .h-progress-cue::after {
-    height: 12px;
-  }
-  .h-hero {
-    padding-top: calc(var(--top-height) + 48px);
-  }
-  .h-chapter {
-    padding: 80px 0 64px;
-  }
-  .h-surface-frame {
-    max-width: 100%;
-  }
-  .h-hero-title {
-    font-size: clamp(38px, 11vw, 64px);
-  }
-  .h-hero-sub {
-    font-size: 15px;
-  }
-  .h-groups {
-    gap: 36px;
-    margin-top: 42px;
-  }
-  .home-root .h-surface {
-    margin-top: 34px;
-  }
-  .h-item {
-    grid-template-columns: 1fr;
-    gap: 4px;
-  }
-  .h-finale-card {
-    padding: 28px 20px;
-  }
-  .h-surface--mixtape .demo-mixtape,
-  .h-surface--stem .frkb-app {
-    min-width: 760px;
   }
 }

@@ -157,7 +157,7 @@ onUnmounted(() => {
 <template>
   <div ref="rootRef" class="demo-sync">
     <div class="frkb-app theme-dark frkb-app--dialog-host demo-sync__search">
-      <GlobalSongSearchDialog v-if="searchReady" />
+      <GlobalSongSearchDialog v-if="searchReady" embedded />
     </div>
     <div class="frkb-app theme-dark frkb-app--dialog-host demo-sync__summary">
       <CloudSyncSummaryDialog :summary="summary" />

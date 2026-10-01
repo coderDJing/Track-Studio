@@ -36,3 +36,11 @@ onUnmounted(() => {
     <LibraryStemSeparationDialog :file-path="DEMO_STEM_FILE_PATH" song-title="Night Shift" />
   </div>
 </template>
+
+<style scoped>
+/* 应用按窗口大小限制弹窗；官网按演示容器限制，避免手机视口先把原界面压窄再缩放。 */
+.frkb-app :deep(.library-stem-dialog__inner) {
+  width: min(780px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+}
+</style>

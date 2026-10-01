@@ -35,6 +35,8 @@ import { useRekordboxSourceIcons } from './librarySelectArea/useRekordboxSourceI
 import { useExternalDjSourceIcons } from './librarySelectArea/useExternalDjSourceIcons'
 import { useLibraryBatchActions } from './librarySelectArea/useLibraryBatchActions'
 import { resolveActivePlaybackSongListUUIDs } from '@renderer/utils/playbackSongListSources'
+import { scrollIntoContainerView } from '@renderer/utils/scrollIntoContainerView'
+const props = defineProps<{ containScroll?: boolean }>()
 const emit = defineEmits(['librarySelectedChange'])
 
 type HoverableIcon = {
@@ -401,7 +403,8 @@ const scrollSelectedDynamicIconIntoView = async () => {
     | undefined
   const target = scrollItemRefMap[key]
   if (!viewport || !target) return
-  target.scrollIntoView({ block: 'nearest' })
+  if (props.containScroll) scrollIntoContainerView(target, viewport)
+  else target.scrollIntoView({ block: 'nearest' })
   updateDynamicScrollState()
 }
 onMounted(() => {
@@ -413,9 +416,7 @@ onUnmounted(() => {
   dynamicScrollViewportEl = null
 })
 
-const libraryHandleClick = (item: Icon) => {
-  emit('librarySelectedChange', item)
-}
+const libraryHandleClick = (item: Icon) => emit('librarySelectedChange', item)
 
 const isMixtapeSourceSongDrag = () => {
   if (
