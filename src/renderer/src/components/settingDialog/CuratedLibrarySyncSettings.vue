@@ -132,7 +132,9 @@ const refreshOverview = async () => {
   }
 }
 
-const handleEnabledChange = async () => {
+const handleEnabledChange = async (value: boolean) => {
+  // singleCheckbox 的 v-model 更新由 watcher 发出，change 到达时先采用本次勾选值。
+  enabledModel.value = value
   await persistSetting()
 }
 
@@ -224,7 +226,7 @@ onBeforeUnmount(() => {
       <singleCheckbox
         id="setting-checkbox-curatedLibrarySync"
         v-model="enabledModel"
-        @change="handleEnabledChange()"
+        @change="handleEnabledChange"
       />
       <div class="setting-hint">{{ t('cloudSync.curatedLibrary.enabledHint') }}</div>
       <div class="setting-hint">{{ t('cloudSync.curatedLibrary.scopeHint') }}</div>

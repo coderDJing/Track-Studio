@@ -134,6 +134,7 @@ const clickSave = async () => {
       userKey: userKey.value
     })
     if (res?.success) {
+      runtime.setting.cloudSyncUserKey = res.userKey
       cancel()
       return
     }
@@ -212,6 +213,7 @@ const emailHintIconRef = useTemplateRef<HTMLImageElement>('emailHintIconRef')
 onMounted(async () => {
   const cfg = await window.electron.ipcRenderer.invoke('cloudSync/config/get')
   userKey.value = cfg?.userKey || ''
+  runtime.setting.cloudSyncUserKey = userKey.value
   hotkeys('E,Enter', uuid, () => {
     void clickSave()
   })

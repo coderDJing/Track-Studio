@@ -10,14 +10,18 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'node',
-          exclude: [...configDefaults.exclude, '**/CoverThumbnailImage.spec.ts']
+          exclude: [
+            ...configDefaults.exclude,
+            '**/CoverThumbnailImage.spec.ts',
+            '**/CuratedLibrarySyncSettings.spec.ts'
+          ]
         }
       },
       {
         extends: true,
         test: {
           name: 'vue-client',
-          include: ['**/CoverThumbnailImage.spec.ts'],
+          include: ['**/CoverThumbnailImage.spec.ts', '**/CuratedLibrarySyncSettings.spec.ts'],
           environment: './tests/vueClientEnvironment.ts'
         }
       }

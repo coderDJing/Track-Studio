@@ -14,10 +14,15 @@ import {
 import { resolveBaseUrl } from './serverDiscovery'
 import type { CloudSyncTrigger } from '../types/cloudSync'
 import { resolveDevCloudSyncUserKey } from '../shared/cloudSyncDevUserKey'
-import { isCuratedLibrarySyncEnabled, saveLibrarySettingsFromConfig } from './librarySettingsDb'
+import {
+  forgetCuratedLibrarySyncJoinState,
+  isCuratedLibrarySyncEnabled,
+  saveLibrarySettingsFromConfig
+} from './librarySettingsDb'
 import { bindCloudSyncScheduler, restartCloudSyncScheduler } from './cloudSyncScheduler'
 import { syncCuratedLibraryLiveSync } from './curatedLibrarySync/liveSync'
 import { enqueueCloudWork } from './curatedLibrarySync/queue'
+import { clearPendingCuratedLibraryJoinPrompt } from './curatedLibrarySync/joinPrompt'
 
 const CLOUD_SYNC = {
   PREFIX: '/frkbapi/v1/fingerprint-sync',
@@ -240,36 +245,42 @@ ipcMain.handle('cloudSync/resetUserData', async (_e, payload: { notes?: string }
   }
 })
 
-ipcMain.handle('cloudSync/config/save', async (_e, payload: { userKey: string }) => {
-  const userKey = (payload?.userKey || '').trim()
-  try {
-    const currentKey = String(store.settingConfig?.cloudSyncUserKey || '').trim()
-    if (isCuratedLibrarySyncEnabled() && currentKey && currentKey !== userKey) {
-      return { success: false, message: 'cloudSync.curatedLibrary.errors.cannotChangeUserKey' }
+ipcMain.handle('cloudSync/config/save', (_e, payload: { userKey: string }) =>
+  enqueueCloudWork(async () => {
+    const userKey = (payload?.userKey || '').trim()
+    try {
+      const currentKey = String(store.settingConfig?.cloudSyncUserKey || '').trim()
+      if (isCuratedLibrarySyncEnabled() && currentKey && currentKey !== userKey) {
+        return { success: false, message: 'cloudSync.curatedLibrary.errors.cannotChangeUserKey' }
+      }
+      const baseUrl = await resolveBaseUrl()
+      const json = await validateUserKeyRequest(userKey, baseUrl)
+      if (json?.success === true && json?.data?.isActive === true) {
+        cloudSyncConfig.userKey = json?.data?.userKey || userKey
+        store.settingConfig.cloudSyncUserKey = cloudSyncConfig.userKey
+        await persistSettingConfig()
+        await saveLibrarySettingsFromConfig()
+        if (currentKey !== cloudSyncConfig.userKey) {
+          forgetCuratedLibrarySyncJoinState()
+          clearPendingCuratedLibraryJoinPrompt()
+        }
+        restartCloudSyncScheduler({ immediate: true })
+        syncCuratedLibraryLiveSync()
+        return { success: true, userKey: cloudSyncConfig.userKey }
+      }
+      const error = String(json?.error || '').toUpperCase()
+      if (error === 'INVALID_USER_KEY' || error === 'USER_KEY_NOT_FOUND') {
+        return { success: false, message: 'cloudSync.errors.keyInvalid' }
+      }
+      if (error === 'USER_KEY_INACTIVE' || json?.data?.isActive === false) {
+        return { success: false, message: 'cloudSync.errors.keyDisabled' }
+      }
+      return { success: false, message: 'cloudSync.errors.cannotConnect' }
+    } catch (_err) {
+      return { success: false, message: 'cloudSync.errors.cannotConnect' }
     }
-    const baseUrl = await resolveBaseUrl()
-    const json = await validateUserKeyRequest(userKey, baseUrl)
-    if (json?.success === true && json?.data?.isActive === true) {
-      cloudSyncConfig.userKey = json?.data?.userKey || userKey
-      store.settingConfig.cloudSyncUserKey = cloudSyncConfig.userKey
-      await persistSettingConfig()
-      await saveLibrarySettingsFromConfig()
-      restartCloudSyncScheduler({ immediate: true })
-      syncCuratedLibraryLiveSync()
-      return { success: true }
-    }
-    const error = String(json?.error || '').toUpperCase()
-    if (error === 'INVALID_USER_KEY' || error === 'USER_KEY_NOT_FOUND') {
-      return { success: false, message: 'cloudSync.errors.keyInvalid' }
-    }
-    if (error === 'USER_KEY_INACTIVE' || json?.data?.isActive === false) {
-      return { success: false, message: 'cloudSync.errors.keyDisabled' }
-    }
-    return { success: false, message: 'cloudSync.errors.cannotConnect' }
-  } catch (_err) {
-    return { success: false, message: 'cloudSync.errors.cannotConnect' }
-  }
-})
+  })
+)
 
 ipcMain.handle('cloudSync/testConnectivity', async (_e, payload: { userKey: string }) => {
   try {

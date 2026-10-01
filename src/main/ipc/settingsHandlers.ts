@@ -59,6 +59,8 @@ export function registerSettingsHandlers(deps: Dependencies) {
           store.settingConfig?.curatedLibrarySyncEnabled === true
         const normalizedSetting = {
           ...setting,
+          // userKey 只能由 cloudSync/config/save 校验后修改，不能被 renderer 的旧设置覆盖。
+          cloudSyncUserKey: store.settingConfig.cloudSyncUserKey,
           analysisBpmRange: normalizeAnalysisBpmRangeId(setting?.analysisBpmRange),
           trackAnalysisSelection: normalizeTrackReanalysisSelection(
             setting?.trackAnalysisSelection
