@@ -150,7 +150,6 @@ export const useHorizontalBrowseRawWaveformCanvas = (
   } = surfaceVisibility
 
   const stablePresentation = createHorizontalBrowseStableCanvasPresentationController({
-    diagnosticDirection: options.direction,
     isActive: () => resolveStableWaveformSource(),
     isPlaying: () => options.playing.value,
     isDragging: () => options.dragging.value,

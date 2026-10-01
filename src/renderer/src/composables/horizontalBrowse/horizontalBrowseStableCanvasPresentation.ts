@@ -1,5 +1,4 @@
 import { applyHorizontalBrowseCanvasPresentationOffset } from './horizontalBrowseCanvasGeometry'
-import { createHorizontalBrowseWaveformStartupDiagnostics } from './horizontalBrowseWaveformStartupDiagnostics'
 
 export type HorizontalBrowseStableCanvasPresentationFrame = {
   renderToken: number
@@ -76,7 +75,6 @@ type StableCanvasRenderedPayload = {
 }
 
 type StableCanvasPresentationControllerOptions = {
-  diagnosticDirection?: () => string
   isActive: () => boolean
   isPlaying: () => boolean
   isDragging: () => boolean
@@ -141,13 +139,6 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
   let reanchorPendingAtMs = 0
   let playbackClock: StableCanvasPresentationPlaybackClock | null = null
   let playbackRaf = 0
-  const startupDiagnostics = createHorizontalBrowseWaveformStartupDiagnostics({
-    direction: () => options.diagnosticDirection?.() ?? 'unknown',
-    canvas: options.waveformCanvas,
-    currentSeconds: options.currentSeconds,
-    playbackRate: options.playbackRate,
-    linked: () => options.linkedPlaybackActive?.() === true
-  })
 
   const resolveRenderRevision = () => normalizeRenderRevision(options.renderRevision?.())
 
@@ -234,7 +225,6 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
   }
 
   const clear = () => {
-    startupDiagnostics.reset()
     clearPlaybackLoop()
     playbackClock = null
     pendingFrame = null
@@ -244,7 +234,6 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
   }
 
   const queueFrame = (frame: HorizontalBrowseStableCanvasPresentationFrame | null) => {
-    startupDiagnostics.queue(frame)
     pendingFrame = frame
     if (!frame) {
       currentFrame = null
@@ -315,7 +304,6 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
     !reanchorPending || performance.now() - reanchorPendingAtMs >= STABLE_REANCHOR_RETRY_MS
 
   const requestReanchor = () => {
-    startupDiagnostics.event('request-reanchor')
     reanchorPending = true
     reanchorPendingAtMs = performance.now()
     options.scheduleDraw()
@@ -424,7 +412,6 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
       allowRevisionHandoff: true,
       useFrameViewportForRevisionHandoff: true
     })
-    startupDiagnostics.tick(estimatedSeconds, currentFrame, result.offsetCssPx)
     if (result.applied) {
       playbackRaf = requestAnimationFrame(tickPlayback)
       return
@@ -446,9 +433,7 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
   ) => {
     const safeSeconds = Number(seconds) || 0
     const safePlaybackRate = Math.max(0.25, Number(playbackRate) || 1)
-    startupDiagnostics.beginPlayback()
     const deferForPendingFrame = shouldDeferPlaybackStartForPendingFrame(safeSeconds)
-    startupDiagnostics.event('start-playback', { safeSeconds, deferForPendingFrame })
     playbackClock = {
       seconds: safeSeconds,
       startedAtMs: resolveClockStartedAtMs(clockOptions),
@@ -480,7 +465,6 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
     clockOptions?: StableCanvasPresentationPlaybackClockOptions
   ) => {
     const rate = Math.max(0.25, Number(playbackRate) || 1)
-    startupDiagnostics.event('reanchor-clock', { seconds, rate })
     playbackClock = {
       seconds,
       startedAtMs: resolveClockStartedAtMs(clockOptions),
@@ -493,7 +477,6 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
 
   const resumePlaybackFrom = (seconds: number) => {
     if (!options.isActive() || !options.isPlaying() || options.isDragging()) return
-    startupDiagnostics.beginPlayback()
     reanchorPlayback(seconds, options.playbackRate())
   }
 
@@ -525,12 +508,24 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
       reanchorPendingAtMs = 0
       return false
     }
-    startupDiagnostics.rendered(
-      payload.renderToken,
-      payload.ready,
-      payload.renderViewportOnly === true
-    )
     const renderedFrame = pendingFrame
+    const preservePlaybackClock = Boolean(
+      reanchorPending &&
+      playbackClock &&
+      currentFrame &&
+      !options.isDragging() &&
+      !options.linkedPlaybackActive?.() &&
+      currentFrame.renderRevision === renderedFrame.renderRevision &&
+      // 当前帧可能在播放前就已画好；是否正在外推由 playbackClock 判断，而不是旧帧标记。
+      renderedFrame.playbackActive &&
+      currentFrame.playbackRate === renderedFrame.playbackRate &&
+      playbackClock.playbackRate === renderedFrame.playbackRate &&
+      currentFrame.renderWidth === renderedFrame.renderWidth &&
+      // 相同密度的 range 端点相减可能带来浮点尾差，不应因此重置 clock。
+      Math.abs(currentFrame.rangeDurationSec - renderedFrame.rangeDurationSec) < 1e-9 &&
+      currentFrame.overscanCssPx === renderedFrame.overscanCssPx &&
+      currentFrame.pixelRatio === renderedFrame.pixelRatio
+    )
     const pendingViewportRangeStartSec = pendingFrame.viewportRangeStartSec
     const canPromoteFrame = payload.ready && payload.renderViewportOnly !== true
     currentFrame = canPromoteFrame
@@ -560,13 +555,10 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
           renderedFrame.anchorSec +
           (Math.max(0, performance.now() - renderedFrame.anchorStartedAtMs) / 1000) *
             renderedFrame.playbackRate
-        // promote 帧定位与后续 RAF tick 必须同相：playbackClock 是独立外推器，松手后不再被
-        // reanchor，会与 render-sync currentSeconds 自由脱相。若 promote 用回调时刻的
-        // estimatePlaybackSeconds() 定位、下一帧 RAF 又用同一 clock 的 vsync 采样，两次采样相位
-        // 不同，promote 帧就相对相邻帧偏 ±几 ms（亚像素抖动）。promote 时先把 playbackClock 重锚到
-        // render-sync currentSeconds，使这一帧与后续帧共用同一相位基准，消除单帧错位。不改播放
-        // 速率、不露白、不触音频。
-        if (playbackClock) {
+        // 普通播放仅因 overscan 耗尽换同密度帧时，沿用已有视觉 clock。若此处重新对齐到
+        // render-sync，两个 clock 的采样相位差会突然变成一次位置回跳；promote 和后续 RAF
+        // 都使用同一外推器即可保持连续。BeatSync、revision/密度变化等仍走来源时间对齐。
+        if (playbackClock && !preservePlaybackClock) {
           const renderSyncSeconds = Number(options.currentSeconds())
           if (Number.isFinite(renderSyncSeconds)) {
             reanchorPlayback(renderSyncSeconds, playbackClock.playbackRate)

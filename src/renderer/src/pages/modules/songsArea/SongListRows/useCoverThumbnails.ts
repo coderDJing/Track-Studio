@@ -1,4 +1,4 @@
-import { markRaw, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
+import { markRaw, onMounted, onUnmounted, shallowReactive, watch, type Ref } from 'vue'
 import type { ISongInfo } from '../../../../../../types/globals'
 import emitter from '@renderer/utils/mitt'
 import { getRekordboxCoverThumbChannel } from '@renderer/utils/rekordboxExternalSource'
@@ -68,7 +68,8 @@ export function useCoverThumbnails({
   platform,
   enabled
 }: UseCoverThumbnailsOptions) {
-  const coverUrlCache = markRaw(new Map<string, string | null>())
+  // 按路径通知封面单元格；不要用全局 tick 让一次封面返回重渲染整片可见歌单行。
+  const coverUrlCache = shallowReactive(new Map<string, string | null>())
   const inflight = markRaw(new Map<string, InflightCover>())
   const pendingVisibleQueue: QueueTask[] = []
   const pendingPrefetchQueue: QueueTask[] = []
@@ -76,7 +77,6 @@ export function useCoverThumbnails({
   let displayWorker = createCoverDisplayWorkerClient()
   const displayConversionCache = new Map<string, CoverDisplayWorkerResult>()
   const displayConversionInflight = new Map<string, Promise<CoverDisplayWorkerResult>>()
-  const coversTick = ref(0)
   const clientKey = `song-list-covers-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
   let generation = 0
   let disposed = false
@@ -108,7 +108,6 @@ export function useCoverThumbnails({
       return false
     }
     coverUrlCache.set(resolveCoverCacheKey(filePath), url)
-    coversTick.value++
     return true
   }
 
@@ -233,7 +232,6 @@ export function useCoverThumbnails({
     displayConversionInflight.clear()
     displayWorker.dispose()
     displayWorker = createCoverDisplayWorkerClient()
-    coversTick.value++
   }
 
   function pump() {
@@ -416,7 +414,6 @@ export function useCoverThumbnails({
     coverUrlCache.delete(newCacheKey)
     inflight.delete(newCacheKey)
     clearPendingByPath(newPath)
-    coversTick.value++
     void fetchCoverUrl(newPath)
   }
 
@@ -495,7 +492,6 @@ export function useCoverThumbnails({
   })
 
   return {
-    coversTick,
     getCoverUrl,
     fetchCoverUrl,
     onImgError

@@ -16,6 +16,7 @@ import { useSongRowDisplay } from './SongListRows/useSongRowDisplay'
 import { useSongRowRefs } from './SongListRows/useSongRowRefs'
 import { useWaveformPreview } from './SongListRows/useWaveformPreview'
 import CoverPreviewOverlay from './SongListRows/CoverPreviewOverlay.vue'
+import CoverThumbnailImage from './SongListRows/CoverThumbnailImage.vue'
 import CuratedArtistCellContent from './SongListRows/CuratedArtistCellContent.vue'
 import RowAnalysisBar from './SongListRows/RowAnalysisBar.vue'
 import WaveformPreviewCell from './SongListRows/WaveformPreviewCell.vue'
@@ -341,7 +342,7 @@ const { onRowsClick, onRowsContextmenu, onRowsDblclick } = useSongRowEvents({
   shouldSuppressPointerAction
 })
 
-const { coversTick, getCoverUrl, fetchCoverUrl, onImgError } = useCoverThumbnails({
+const { getCoverUrl, fetchCoverUrl, onImgError } = useCoverThumbnails({
   songs: songsRef,
   visibleSongsWithIndex,
   startIndex,
@@ -756,7 +757,6 @@ onUnmounted(() => {
                   <div
                     :ref="(el) => setCoverCellRef(item.song.filePath, el)"
                     class="cover-wrapper"
-                    :data-ct="coversTick"
                     @mouseenter="onCoverMouseEnter(item.idx, $event)"
                     @mouseleave="onCoverMouseLeave(item.idx, $event)"
                     @dblclick.stop.prevent="
@@ -764,15 +764,11 @@ onUnmounted(() => {
                       handleCoverDblclick(item.song, $event)
                     "
                   >
-                    <img
-                      v-if="getCoverUrl(item.song.filePath)"
-                      :key="getCoverUrl(item.song.filePath) || item.song.filePath + '-ph'"
-                      :src="getCoverUrl(item.song.filePath) as string"
-                      alt="cover"
-                      decoding="async"
+                    <CoverThumbnailImage
+                      :file-path="item.song.filePath"
+                      :get-cover-url="getCoverUrl"
                       @error="onImgError(item.song.filePath)"
                     />
-                    <div v-else class="cover-skeleton"></div>
                   </div>
                 </div>
                 <WaveformPreviewCell

@@ -429,6 +429,14 @@ export const resolveSongBeatGridV2ClipAtSec = (
   secInput: unknown
 ): SongBeatGridRuntimeClipV2 | null => {
   const runtime = createSongBeatGridRuntimeV2(value, durationSecInput)
+  return resolveSongBeatGridV2RuntimeClipAtSec(runtime, secInput)
+}
+
+// 播放中的查询复用已构建的 runtime，避免每次查 BPM 都生成整曲节拍线。
+export const resolveSongBeatGridV2RuntimeClipAtSec = (
+  runtime: SongBeatGridRuntimeV2 | null,
+  secInput: unknown
+): SongBeatGridRuntimeClipV2 | null => {
   if (!runtime) return null
   const sec = Math.max(0, Math.min(runtime.durationSec, Number(secInput) || 0))
   let answer = runtime.clips[0] || null

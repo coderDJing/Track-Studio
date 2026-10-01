@@ -6,7 +6,7 @@ import { formatBpmDisplay } from '@renderer/utils/bpm'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 import { getKeyDisplayText } from '@shared/keyDisplay'
 import { t } from '@renderer/utils/translate'
-import { resolveSongBeatGridV2BpmAtSec } from '@shared/songBeatGridMapV2'
+import { useHorizontalBrowseSongBeatGridLookup } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseSongBeatGridLookup'
 
 const props = defineProps<{
   song: ISongInfo | null
@@ -143,11 +143,7 @@ const keyDisplayText = computed(() => {
   return display || '--'
 })
 const bpmText = computed(() => {
-  const dynamicBpm = resolveSongBeatGridV2BpmAtSec(
-    props.song?.beatGridMap,
-    totalSeconds.value,
-    elapsedSeconds.value
-  )
+  const dynamicBpm = beatGridLookup.resolveBpmAtSeconds(elapsedSeconds.value)
   if (dynamicBpm !== null) return formatBpmDisplay(dynamicBpm, '--')
   const bpm = Number(props.song?.bpm)
   return Number.isFinite(bpm) && bpm > 0 ? formatBpmDisplay(bpm, '--') : '--'
@@ -163,6 +159,10 @@ const totalSeconds = computed(() => {
     return explicit
   }
   return parseDurationToSeconds(props.song?.duration)
+})
+const beatGridLookup = useHorizontalBrowseSongBeatGridLookup({
+  beatGridMap: () => props.song?.beatGridMap,
+  durationSeconds: () => totalSeconds.value
 })
 const elapsedSeconds = computed(() => {
   const current = Number(props.currentSeconds)

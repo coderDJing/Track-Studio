@@ -9,6 +9,7 @@ import {
   resolveNearestUnifiedSongBeatGridLine,
   resolveUnifiedSongBeatGridSecAtBeatOrdinal
 } from '@shared/songBeatGridRuntime'
+import { useHorizontalBrowseSongBeatGridLookup } from './useHorizontalBrowseSongBeatGridLookup'
 
 type DeckKey = HorizontalBrowseDeckKey
 
@@ -79,6 +80,15 @@ const normalizeLoopBeatValue = (value: unknown) => {
 export const useHorizontalBrowseDeckLoopController = (
   params: UseHorizontalBrowseDeckLoopControllerParams
 ) => {
+  const createDeckBeatGridLookup = (deck: DeckKey) =>
+    useHorizontalBrowseSongBeatGridLookup({
+      beatGridMap: () => params.resolveDeckSong(deck)?.beatGridMap,
+      durationSeconds: () => params.resolveDeckDurationSeconds(deck)
+    })
+  const deckBeatGridLookup = {
+    top: createDeckBeatGridLookup('top'),
+    bottom: createDeckBeatGridLookup('bottom')
+  }
   const dynamicLoopBeatValueOverride: Record<DeckKey, number | null> = {
     top: null,
     bottom: null
@@ -158,13 +168,7 @@ export const useHorizontalBrowseDeckLoopController = (
 
   const resolveDeckLoopDisabled = (deck: DeckKey) => {
     const song = params.resolveDeckSong(deck)
-    if (
-      resolveNearestUnifiedSongBeatGridLine(
-        song?.beatGridMap,
-        params.resolveDeckDurationSeconds(deck),
-        0
-      )
-    ) {
+    if (deckBeatGridLookup[deck].runtime.value?.lines.length) {
       return false
     }
     const bpm = Number(song?.bpm)

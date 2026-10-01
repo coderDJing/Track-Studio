@@ -3,7 +3,7 @@ import type { ISongInfo } from 'src/types/globals'
 import { normalizePreviewBpm } from '@renderer/components/MixtapeBeatAlignDialog.constants'
 import { HORIZONTAL_BROWSE_LOCAL_GRID_BPM_EPSILON } from '@renderer/composables/horizontalBrowse/horizontalBrowseRawWaveformDetailMath'
 import { publishHorizontalBrowseLinkedGridVisualPhaseSample } from '@renderer/composables/horizontalBrowse/horizontalBrowseLinkedGridVisualPhase'
-import { resolveSongBeatGridV2BpmAtSec } from '@shared/songBeatGridMapV2'
+import { useHorizontalBrowseSongBeatGridLookup } from './useHorizontalBrowseSongBeatGridLookup'
 import { resolveHorizontalBrowseWaveformTimeScale } from './horizontalBrowseWaveformTimeScale'
 
 type HorizontalBrowseDetailDirection = 'up' | 'down'
@@ -48,13 +48,14 @@ export const createHorizontalBrowseDetailPresentationState = (
   const visualGridTimeBasisOffsetMs = ref(0)
   let lastAppliedPreviewTimeScale = 1
 
+  const beatGridLookup = useHorizontalBrowseSongBeatGridLookup({
+    beatGridMap: () => params.song()?.beatGridMap,
+    durationSeconds: () => parseDurationToSeconds(params.song()?.duration)
+  })
+
   const resolveDisplayGridBpm = () => {
     const song = params.song()
-    const dynamicBpm = resolveSongBeatGridV2BpmAtSec(
-      song?.beatGridMap,
-      parseDurationToSeconds(song?.duration),
-      params.resolveWaveformCurrentSeconds()
-    )
+    const dynamicBpm = beatGridLookup.resolveBpmAtSeconds(params.resolveWaveformCurrentSeconds())
     if (dynamicBpm !== null) return normalizePreviewBpm(dynamicBpm)
     const songBpm = Number(song?.bpm)
     return Number.isFinite(songBpm) && songBpm > 0 ? normalizePreviewBpm(songBpm) : 0

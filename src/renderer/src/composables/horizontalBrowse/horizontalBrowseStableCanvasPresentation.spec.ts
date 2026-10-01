@@ -12,6 +12,7 @@ beforeEach(() => {
   vi.stubGlobal('cancelAnimationFrame', () => {})
 })
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -236,5 +237,167 @@ describe('horizontalBrowseStableCanvasPresentation BeatSync 播放时钟', () =>
     controller.reanchorPlayback(5, 1)
     callbacks.shift()?.(0)
     expect(resolveViewportRangeStartSec.mock.calls.at(-1)?.[0]).toBeCloseTo(5.04)
+  })
+})
+
+describe('horizontalBrowseStableCanvasPresentation 普通播放换帧连续性', () => {
+  const setupRefresh = (linked = false, initialFramePlaybackActive = true) => {
+    let nowMs = 0
+    let sourceSeconds = 10
+    let renderRevision = 0
+    let playing = false
+    vi.spyOn(performance, 'now').mockImplementation(() => nowMs)
+    const callbacks: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callbacks.push(callback)
+      return callbacks.length
+    })
+    const resolveViewport = vi.fn((seconds: number, visibleSec = 8) =>
+      alignedStart(seconds, visibleSec)
+    )
+    const scheduleDraw = vi.fn()
+    const controller = createHorizontalBrowseStableCanvasPresentationController({
+      isActive: () => true,
+      isPlaying: () => playing,
+      isDragging: () => false,
+      currentSeconds: () => sourceSeconds,
+      playbackRate: () => 1,
+      linkedPlaybackActive: () => linked,
+      renderRevision: () => renderRevision,
+      resolveViewportRangeStartSec: resolveViewport,
+      waveformCanvas: () => null,
+      overlayCanvas: () => null,
+      scheduleDraw
+    })
+    const promote = (frame: HorizontalBrowseStableCanvasPresentationFrame) => {
+      controller.queueFrame(frame)
+      controller.handleRendered({
+        renderToken: frame.renderToken,
+        rangeStartSec: frame.rangeStartSec,
+        rangeDurationSec: frame.rangeDurationSec,
+        ready: true
+      })
+    }
+    promote({ ...createStaleDensityFrame(10, 8), playbackActive: initialFramePlaybackActive })
+    playing = true
+    // 复现日志中的固定相位差：视觉 clock 比 renderer 来源时间快 34ms。
+    controller.startPlayback(10.034, 1, { startedAtMs: 0 })
+    return {
+      controller,
+      resolveViewport,
+      scheduleDraw,
+      callbacks,
+      promote,
+      setNow: (value: number) => {
+        nowMs = value
+      },
+      setSource: (value: number) => {
+        sourceSeconds = value
+      },
+      setRevision: (value: number) => {
+        renderRevision = value
+      }
+    }
+  }
+
+  it.each([false, true])(
+    '初始帧 playbackActive=%s 的 overscan 换帧沿用 clock，不回跳 34ms',
+    (initialFramePlaybackActive) => {
+      const refresh = setupRefresh(false, initialFramePlaybackActive)
+      refresh.setNow(17000)
+      refresh.setSource(27)
+      refresh.callbacks.shift()?.(17000)
+      expect(refresh.scheduleDraw).toHaveBeenCalledOnce()
+      expect(refresh.resolveViewport.mock.calls.at(-1)?.[0]).toBeCloseTo(27.034, 6)
+      refresh.setNow(17010)
+      refresh.setSource(27.01)
+      refresh.promote({
+        ...createStaleDensityFrame(27, 8),
+        renderToken: 2,
+        anchorStartedAtMs: 17000
+      })
+      expect(refresh.resolveViewport.mock.calls.at(-1)?.[0]).toBeCloseTo(27.044, 6)
+      refresh.setNow(17016)
+      refresh.setSource(27.016)
+      refresh.callbacks.shift()?.(17016)
+      expect(refresh.resolveViewport.mock.calls.at(-1)?.[0]).toBeCloseTo(27.05, 6)
+    }
+  )
+
+  it('BeatSync 换帧仍按共用 renderer 来源时间定位', () => {
+    const refresh = setupRefresh(true)
+    refresh.setNow(17000)
+    refresh.setSource(27)
+    refresh.callbacks.shift()?.(17000)
+    expect(refresh.scheduleDraw).toHaveBeenCalledOnce()
+    refresh.setNow(17010)
+    refresh.setSource(27.01)
+    refresh.promote({
+      ...createStaleDensityFrame(27, 8),
+      renderToken: 2,
+      anchorStartedAtMs: 17000
+    })
+    expect(refresh.resolveViewport.mock.calls.at(-1)?.[0]).toBeCloseTo(27.01, 6)
+  })
+
+  it('重画期间发生 revision 切换时不把旧视觉 clock 带进新位置', () => {
+    const refresh = setupRefresh()
+    refresh.setNow(17000)
+    refresh.setSource(27)
+    refresh.callbacks.shift()?.(17000)
+    refresh.setRevision(1)
+    refresh.setNow(17010)
+    refresh.setSource(100.01)
+    refresh.promote({
+      ...createStaleDensityFrame(100, 8),
+      renderToken: 2,
+      renderRevision: 1,
+      anchorStartedAtMs: 17000
+    })
+    expect(refresh.resolveViewport.mock.calls.at(-1)?.[0]).toBeCloseTo(100.01, 6)
+  })
+
+  it('非 overscan 请求的换帧继续对齐来源时间', () => {
+    const refresh = setupRefresh()
+    refresh.setNow(1000)
+    refresh.setSource(80)
+    refresh.promote({
+      ...createStaleDensityFrame(80, 8),
+      renderToken: 2,
+      anchorStartedAtMs: 1000
+    })
+    expect(refresh.resolveViewport.mock.calls.at(-1)?.[0]).toBeCloseTo(80, 6)
+  })
+
+  it('同密度帧 range 的浮点尾差不触发时钟重置', () => {
+    const refresh = setupRefresh()
+    refresh.setNow(17000)
+    refresh.setSource(27)
+    refresh.callbacks.shift()?.(17000)
+    refresh.setNow(17010)
+    refresh.setSource(27.01)
+    const nextFrame = createStaleDensityFrame(27, 8)
+    refresh.promote({
+      ...nextFrame,
+      renderToken: 2,
+      rangeDurationSec: nextFrame.rangeDurationSec + 1e-13,
+      anchorStartedAtMs: 17000
+    })
+    expect(refresh.resolveViewport.mock.calls.at(-1)?.[0]).toBeCloseTo(27.044, 6)
+  })
+
+  it('重画期间密度改变时继续对齐来源时间', () => {
+    const refresh = setupRefresh()
+    refresh.setNow(17000)
+    refresh.setSource(27)
+    refresh.callbacks.shift()?.(17000)
+    refresh.setNow(17010)
+    refresh.setSource(27.01)
+    refresh.promote({
+      ...createStaleDensityFrame(27, 6),
+      renderToken: 2,
+      anchorStartedAtMs: 17000
+    })
+    expect(refresh.resolveViewport.mock.calls.at(-1)?.[0]).toBeCloseTo(27.01, 6)
   })
 })
