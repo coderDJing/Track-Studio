@@ -421,10 +421,16 @@ pub fn horizontal_browse_transport_set_loop_from_range(
   deck: String,
   start_sec: f64,
   end_sec: f64,
+  preserve_exact_range: Option<bool>,
 ) -> napi::Result<HorizontalBrowseTransportSnapshot> {
   let deck_id = parse_deck_id(&deck)?;
   let mut engine_guard = engine().lock();
-  engine_guard.set_loop_from_range_command(deck_id, start_sec, end_sec);
+  engine_guard.set_loop_from_range_command(
+    deck_id,
+    start_sec,
+    end_sec,
+    preserve_exact_range.unwrap_or(false),
+  );
   Ok(engine_guard.snapshot(engine_guard.last_now_ms))
 }
 

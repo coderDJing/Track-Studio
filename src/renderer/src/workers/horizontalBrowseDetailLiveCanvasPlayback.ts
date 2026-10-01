@@ -1,5 +1,6 @@
 import type { HorizontalBrowseDetailLiveCanvasRenderRequest } from './horizontalBrowseDetailLiveCanvas.types'
 import type { PlaybackAnimationState } from './horizontalBrowseDetailLiveCanvasRenderState'
+import { resolveHorizontalBrowseLoopPlaybackSeconds } from '@shared/horizontalBrowseLoopClock'
 
 export const PLAYHEAD_RATIO = 0.5
 export const PLAYBACK_RENDER_INTERVAL_MS = 16
@@ -47,7 +48,10 @@ const clampPlaybackRangeStart = (
 }
 
 export const resolvePlaybackSeconds = (
-  request: HorizontalBrowseDetailLiveCanvasRenderRequest,
+  request: Pick<
+    HorizontalBrowseDetailLiveCanvasRenderRequest,
+    'playbackRate' | 'playbackDurationSec' | 'playbackActive' | 'loopRange'
+  >,
   baseSeconds: number,
   startedAtMs: number,
   nowMs = performance.now()
@@ -55,8 +59,11 @@ export const resolvePlaybackSeconds = (
   const elapsedSec = Math.max(0, nowMs - startedAtMs) / 1000
   const playbackRate = Math.max(0, Number(request.playbackRate) || 1)
   const durationSec = Math.max(0, Number(request.playbackDurationSec) || 0)
-  const seconds = baseSeconds + elapsedSec * playbackRate
-  if (!Number.isFinite(seconds)) return 0
+  const linearSeconds = baseSeconds + elapsedSec * playbackRate
+  if (!Number.isFinite(linearSeconds)) return 0
+  const seconds = request.playbackActive
+    ? resolveHorizontalBrowseLoopPlaybackSeconds(linearSeconds, request.loopRange)
+    : linearSeconds
   return durationSec ? Math.min(seconds, durationSec) : seconds
 }
 

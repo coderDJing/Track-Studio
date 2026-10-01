@@ -2,6 +2,12 @@ use super::*;
 
 impl HorizontalBrowseTransportEngine {
   pub(super) fn sync_loop_range_for_deck(&mut self, deck: DeckId) -> bool {
+    // Explicit ranges retain their audio positions when the beat grid is refreshed.
+    if self.deck(deck).loop_exact_beat_sec.is_some() {
+      let start_sec = self.deck(deck).loop_start_sec;
+      let end_sec = self.deck(deck).loop_end_sec;
+      return self.sync_exact_loop_range(deck, start_sec, end_sec);
+    }
     let start_beat_index = self.deck(deck).loop_start_beat_index;
     let beat_value = self.deck(deck).loop_beat_value;
     let Some(start_beat_index) = start_beat_index else {
@@ -53,6 +59,7 @@ impl HorizontalBrowseTransportEngine {
     let target = self.deck_mut(deck);
     target.loop_active = false;
     target.loop_start_beat_index = None;
+    target.loop_exact_beat_sec = None;
     target.loop_start_sec = 0.0;
     target.loop_end_sec = 0.0;
   }
@@ -73,6 +80,7 @@ impl HorizontalBrowseTransportEngine {
       let target = self.deck_mut(deck);
       target.loop_active = true;
       target.loop_start_beat_index = Some(start_beat_index);
+      target.loop_exact_beat_sec = None;
       target.loop_beat_value = if target.loop_beat_value.is_finite() && target.loop_beat_value > 0.0
       {
         target.loop_beat_value
@@ -108,6 +116,9 @@ impl HorizontalBrowseTransportEngine {
       if !target.loop_active {
         return;
       }
+      if let Some(beat_sec) = target.loop_exact_beat_sec {
+        target.loop_end_sec = target.loop_start_sec + next_beat_value * beat_sec;
+      }
     }
     if !self.sync_loop_range_for_deck(deck) {
       self.deactivate_loop(deck);
@@ -135,13 +146,47 @@ impl HorizontalBrowseTransportEngine {
     }
   }
 
-  pub(super) fn set_loop_from_range(&mut self, deck: DeckId, start_sec: f64, end_sec: f64) -> bool {
-    let Some(grid) = self.original_beat_grid(deck) else {
+  fn sync_exact_loop_range(&mut self, deck: DeckId, start_sec: f64, end_sec: f64) -> bool {
+    let duration_sec = self.deck(deck).duration_sec.max(0.0);
+    if !start_sec.is_finite() || !end_sec.is_finite() {
+      self.deactivate_loop(deck);
+      return false;
+    }
+    let start_sec = start_sec.clamp(0.0, duration_sec);
+    let end_sec = end_sec.clamp(0.0, duration_sec);
+    if end_sec - start_sec <= HORIZONTAL_BROWSE_LOOP_POSITION_EPSILON_SEC {
+      self.deactivate_loop(deck);
+      return false;
+    }
+    let target = self.deck_mut(deck);
+    target.loop_active = true;
+    target.loop_start_sec = start_sec;
+    target.loop_end_sec = end_sec;
+    true
+  }
+
+  pub(super) fn set_loop_from_range(
+    &mut self,
+    deck: DeckId,
+    start_sec: f64,
+    end_sec: f64,
+    preserve_exact_range: bool,
+  ) -> bool {
+    let grid = if preserve_exact_range {
+      self.original_beat_grid_at_sec(deck, start_sec)
+    } else {
+      self.original_beat_grid(deck)
+    };
+    let Some(grid) = grid else {
       self.deactivate_loop(deck);
       return false;
     };
     let duration_sec = end_sec - start_sec;
-    if !duration_sec.is_finite() || duration_sec <= HORIZONTAL_BROWSE_LOOP_POSITION_EPSILON_SEC {
+    if !start_sec.is_finite()
+      || !end_sec.is_finite()
+      || !duration_sec.is_finite()
+      || duration_sec <= HORIZONTAL_BROWSE_LOOP_POSITION_EPSILON_SEC
+    {
       self.deactivate_loop(deck);
       return false;
     }
@@ -166,6 +211,14 @@ impl HorizontalBrowseTransportEngine {
       target.loop_active = true;
       target.loop_start_beat_index = Some(start_beat_index);
       target.loop_beat_value = nearest_beat_value;
+      target.loop_exact_beat_sec = if preserve_exact_range {
+        Some(duration_sec / nearest_beat_value)
+      } else {
+        None
+      };
+    }
+    if preserve_exact_range {
+      return self.sync_exact_loop_range(deck, start_sec, end_sec);
     }
     self.sync_loop_range_for_deck(deck)
   }

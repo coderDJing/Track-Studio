@@ -48,7 +48,12 @@ type UseHorizontalBrowseDeckTransportInteractionsParams =
       setSyncEnabled: (deck: DeckKey, enabled: boolean) => Promise<unknown>
       toggleLoop: (deck: DeckKey) => Promise<unknown>
       stepLoopBeats: (deck: DeckKey, direction: -1 | 1) => Promise<unknown>
-      setLoopFromRange: (deck: DeckKey, startSec: number, endSec: number) => Promise<unknown>
+      setLoopFromRange: (
+        deck: DeckKey,
+        startSec: number,
+        endSec: number,
+        preserveExactRange?: boolean
+      ) => Promise<unknown>
       clearLoop: (deck: DeckKey) => Promise<unknown>
     }
     syncDeckRenderState: (input?: number | HorizontalBrowseRenderSyncOptions) => void
@@ -62,6 +67,7 @@ type UseHorizontalBrowseDeckTransportInteractionsParams =
     resolveDeckCurrentSeconds: (deck: DeckKey) => number
     resolveDeckRenderCurrentSeconds: (deck: DeckKey) => number
     resolveDeckPlaying: (deck: DeckKey) => boolean
+    resolveDeckQuantizeEnabled: (deck: DeckKey) => boolean
     resolveDeckLoaded: (deck: DeckKey) => boolean
     resolveTransportDeckSnapshot: (deck: DeckKey) => HorizontalBrowseTransportDeckSnapshot
     resolveDeckCuePointRef: (deck: DeckKey) => Ref<number>
@@ -93,6 +99,8 @@ export const useHorizontalBrowseDeckTransportInteractions = (
     nativeTransport: params.nativeTransport,
     resolveDeckSong: params.resolveDeckSong,
     resolveDeckPlaying: params.resolveDeckPlaying,
+    resolveDeckQuantizeEnabled: params.resolveDeckQuantizeEnabled,
+    resolveDeckRenderCurrentSeconds: params.resolveDeckRenderCurrentSeconds,
     resolveDeckDurationSeconds: params.resolveDeckDurationSeconds,
     resolveTransportDeckSnapshot: params.resolveTransportDeckSnapshot,
     resolveDeckCuePointRef: params.resolveDeckCuePointRef

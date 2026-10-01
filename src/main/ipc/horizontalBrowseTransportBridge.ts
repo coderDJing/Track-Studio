@@ -139,7 +139,8 @@ type RustHorizontalBrowseTransportBinding = {
   horizontalBrowseTransportSetLoopFromRange?: (
     deck: HorizontalBrowseDeckKey,
     startSec: number,
-    endSec: number
+    endSec: number,
+    preserveExactRange?: boolean
   ) => HorizontalBrowseTransportSnapshot
   horizontalBrowseTransportClearLoop?: (
     deck: HorizontalBrowseDeckKey
@@ -282,8 +283,18 @@ export const horizontalBrowseTransportBridge = {
   stepLoopBeats(deck: HorizontalBrowseDeckKey, nowMs: number, direction: number) {
     return requireFn('horizontalBrowseTransportStepLoopBeats')(deck, nowMs, direction)
   },
-  setLoopFromRange(deck: HorizontalBrowseDeckKey, startSec: number, endSec: number) {
-    return requireFn('horizontalBrowseTransportSetLoopFromRange')(deck, startSec, endSec)
+  setLoopFromRange(
+    deck: HorizontalBrowseDeckKey,
+    startSec: number,
+    endSec: number,
+    preserveExactRange = false
+  ) {
+    return requireFn('horizontalBrowseTransportSetLoopFromRange')(
+      deck,
+      startSec,
+      endSec,
+      preserveExactRange
+    )
   },
   clearLoop(deck: HorizontalBrowseDeckKey) {
     return requireFn('horizontalBrowseTransportClearLoop')(deck)

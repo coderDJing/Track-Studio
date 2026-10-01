@@ -447,8 +447,19 @@ export function registerHorizontalBrowseTransportHandlers() {
 
   ipcMain.handle(
     'horizontal-browse-transport:set-loop-from-range',
-    async (_event, deck: HorizontalBrowseDeckKey, startSec: number, endSec: number) => {
-      const snapshot = horizontalBrowseTransportBridge.setLoopFromRange(deck, startSec, endSec)
+    async (
+      _event,
+      deck: HorizontalBrowseDeckKey,
+      startSec: number,
+      endSec: number,
+      preserveExactRange = false
+    ) => {
+      const snapshot = horizontalBrowseTransportBridge.setLoopFromRange(
+        deck,
+        startSec,
+        endSec,
+        preserveExactRange === true
+      )
       broadcastHorizontalBrowseTransportSnapshot(snapshot)
       return snapshot
     }

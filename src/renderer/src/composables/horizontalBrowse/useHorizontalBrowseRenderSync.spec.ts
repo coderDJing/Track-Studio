@@ -60,6 +60,76 @@ const createRenderSync = (linkedGridVisualPending: () => boolean) => {
 }
 
 describe('useHorizontalBrowseRenderSync', () => {
+  it.each([0.5, 0.125, 0.0625, 0.03125, 0.0078125])(
+    '两轨短 Loop（%s 秒）每帧回环，无需等待 native 快照',
+    (loopDurationSec) => {
+      const { snapshot, renderSync } = createRenderSync(() => false)
+      for (const deck of ['top', 'bottom'] as const) {
+        snapshot[deck].loopActive = true
+        snapshot[deck].loopStartSec = 10.123
+        snapshot[deck].loopEndSec = 10.123 + loopDurationSec
+        snapshot[deck].renderCurrentSec = 10.123 + loopDurationSec * 0.4
+        snapshot[deck].playbackRate = 1
+      }
+      renderSync.syncDeckRenderState({ nowMs: 1000, snapshotAtMs: 1000 })
+      const clock = vi.spyOn(performance, 'now').mockReturnValue(1000 + loopDurationSec * 3200)
+      try {
+        for (const deck of ['top', 'bottom'] as const) {
+          expect(renderSync.resolveDeckRenderCurrentSeconds(deck)).toBeCloseTo(
+            10.123 + loopDurationSec * 0.6,
+            9
+          )
+        }
+      } finally {
+        clock.mockRestore()
+      }
+    }
+  )
+
+  it('Loop 快照小幅相位误差及时修正，正常回环不提升播放 revision', () => {
+    const { snapshot, renderSync } = createRenderSync(() => false)
+    Object.assign(snapshot.top, {
+      loopActive: true,
+      loopStartSec: 10.123,
+      loopEndSec: 10.248,
+      renderCurrentSec: 10.173,
+      playbackRate: 1
+    })
+    renderSync.syncDeckRenderState({ nowMs: 1000, snapshotAtMs: 1000 })
+    const initialRevision = renderSync.topDeckPlaybackSyncRevision.value
+    // Two cycles later native audio is 5 ms behind the visual clock.
+    snapshot.top.renderCurrentSec = 10.168
+    renderSync.syncDeckRenderState({ nowMs: 1250, snapshotAtMs: 1250 })
+    expect(renderSync.topDeckRenderCurrentSeconds.value).toBeCloseTo(10.168, 9)
+    expect(renderSync.topDeckPlaybackSyncRevision.value).toBe(initialRevision)
+  })
+
+  it('Loop 关闭后继续正常外推，暂停时保持当前位置', () => {
+    const { snapshot, renderSync } = createRenderSync(() => false)
+    Object.assign(snapshot.top, {
+      loopActive: true,
+      loopStartSec: 10.123,
+      loopEndSec: 10.248,
+      renderCurrentSec: 10.173,
+      playbackRate: 1
+    })
+    renderSync.syncDeckRenderState({ nowMs: 1000, snapshotAtMs: 1000 })
+    snapshot.top.loopActive = false
+    renderSync.syncDeckRenderState({ nowMs: 1250, snapshotAtMs: 1250 })
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(1500)
+    try {
+      expect(renderSync.resolveDeckRenderCurrentSeconds('top')).toBeCloseTo(10.423, 9)
+      snapshot.top.playing = false
+      snapshot.top.playingAudible = false
+      snapshot.top.renderCurrentSec = 10.223
+      renderSync.syncDeckRenderState({ nowMs: 1500, snapshotAtMs: 1500 })
+      clock.mockReturnValue(5000)
+      expect(renderSync.resolveDeckRenderCurrentSeconds('top')).toBe(10.223)
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
   it.each([
     ['top', 180, false],
     ['bottom', 180, false],

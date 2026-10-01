@@ -762,6 +762,7 @@ const { handleSharedZoomState, handlePresentationState } =
     previewMaxZoom,
     previewStartSec,
     waveformPlaybackActive: () => waveformPlaybackActive.value,
+    loopRange: () => props.loopRange,
     resolveWaveformCurrentSeconds,
     resolveWaveformPlaybackRate,
     resolveVisibleDurationSec,

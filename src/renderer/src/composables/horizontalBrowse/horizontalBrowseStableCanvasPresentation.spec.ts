@@ -49,6 +49,78 @@ const createStaleDensityFrame = (
 }
 
 describe('horizontalBrowseStableCanvasPresentation tempo 过渡对齐', () => {
+  it('短 Loop 的稳定波形逐帧跟随 render-sync，不沿旧 canvas 时钟越过终点', () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(1000)
+    let nextFrame: FrameRequestCallback | null = null
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      nextFrame = callback
+      return 1
+    })
+    let currentSeconds = 10.223
+    const loopRange = { startSec: 10.123, endSec: 10.248 }
+    const resolveViewportRangeStartSec = vi.fn((seconds: number, visible?: number) =>
+      alignedStart(seconds, visible ?? 12)
+    )
+    const controller = createHorizontalBrowseStableCanvasPresentationController({
+      isActive: () => true,
+      isPlaying: () => true,
+      isDragging: () => false,
+      currentSeconds: () => currentSeconds,
+      playbackRate: () => 1,
+      loopRange: () => loopRange,
+      renderRevision: () => 0,
+      resolveViewportRangeStartSec,
+      waveformCanvas: () => null,
+      overlayCanvas: () => null,
+      scheduleDraw: () => {}
+    })
+    const frame = { ...createStaleDensityFrame(currentSeconds, 12), anchorStartedAtMs: 1000 }
+    controller.queueFrame(frame)
+    controller.handleRendered({
+      renderToken: frame.renderToken,
+      rangeStartSec: frame.rangeStartSec,
+      rangeDurationSec: frame.rangeDurationSec,
+      ready: true
+    })
+    currentSeconds = 10.178
+    clock.mockReturnValue(1080)
+    const callback = nextFrame as FrameRequestCallback | null
+    expect(callback).not.toBeNull()
+    callback?.(1080)
+    expect(resolveViewportRangeStartSec.mock.lastCall?.[0]).toBeCloseTo(currentSeconds, 9)
+    controller.stopPlayback()
+  })
+
+  it('稳定帧延迟就绪时按 Loop 回环后的时刻展示', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(1400)
+    const resolveViewportRangeStartSec = vi.fn((seconds: number, visible?: number) =>
+      alignedStart(seconds, visible ?? 12)
+    )
+    const controller = createHorizontalBrowseStableCanvasPresentationController({
+      isActive: () => true,
+      isPlaying: () => true,
+      isDragging: () => false,
+      currentSeconds: () => 10.223,
+      playbackRate: () => 1,
+      loopRange: () => ({ startSec: 10.123, endSec: 10.248 }),
+      renderRevision: () => 0,
+      resolveViewportRangeStartSec,
+      waveformCanvas: () => null,
+      overlayCanvas: () => null,
+      scheduleDraw: () => {}
+    })
+    const frame = { ...createStaleDensityFrame(10.223, 12), anchorStartedAtMs: 1000 }
+    controller.queueFrame(frame)
+    controller.handleRendered({
+      renderToken: frame.renderToken,
+      rangeStartSec: frame.rangeStartSec,
+      rangeDurationSec: frame.rangeDurationSec,
+      ready: true
+    })
+    expect(resolveViewportRangeStartSec.mock.lastCall?.[0]).toBeCloseTo(10.123, 9)
+    controller.stopPlayback()
+  })
+
   it('过渡期用帧自身密度可见时长对齐时，播放头保持贴住 currentSeconds（不横跳）', () => {
     const currentSeconds = 2.2229
     const oldVisibleSec = 12 // 帧仍是旧密度：一屏 12s

@@ -455,13 +455,15 @@ export const createHorizontalBrowseNativeTransport = () => {
   const setLoopFromRange = async (
     deck: HorizontalBrowseDeckKey,
     startSec: number,
-    endSec: number
+    endSec: number,
+    preserveExactRange = false
   ) => {
     const snapshot = await invoke(
       'horizontal-browse-transport:set-loop-from-range',
       deck,
       startSec,
-      endSec
+      endSec,
+      preserveExactRange
     )
     applySnapshot(snapshot)
     return snapshot

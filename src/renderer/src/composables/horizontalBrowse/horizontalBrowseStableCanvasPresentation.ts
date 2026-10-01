@@ -1,4 +1,8 @@
 import { applyHorizontalBrowseCanvasPresentationOffset } from './horizontalBrowseCanvasGeometry'
+import {
+  resolveHorizontalBrowseLoopPlaybackSeconds,
+  type HorizontalBrowseLoopClockRange
+} from '@shared/horizontalBrowseLoopClock'
 
 export type HorizontalBrowseStableCanvasPresentationFrame = {
   renderToken: number
@@ -80,6 +84,7 @@ type StableCanvasPresentationControllerOptions = {
   isDragging: () => boolean
   currentSeconds: () => number
   playbackRate: () => number
+  loopRange?: () => HorizontalBrowseLoopClockRange | null | undefined
   linkedPlaybackActive?: () => boolean
   renderRevision?: () => number
   resolveViewportRangeStartSec: (seconds: number, visibleDurationOverrideSec?: number) => number
@@ -179,7 +184,10 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
   const estimatePlaybackSeconds = (nowMs = performance.now()) => {
     if (!playbackClock) return Number(options.currentSeconds()) || 0
     const elapsedSec = Math.max(0, nowMs - playbackClock.startedAtMs) / 1000
-    return playbackClock.seconds + elapsedSec * playbackClock.playbackRate
+    return resolveHorizontalBrowseLoopPlaybackSeconds(
+      playbackClock.seconds + elapsedSec * playbackClock.playbackRate,
+      options.loopRange?.()
+    )
   }
 
   const estimateFramePlaybackSeconds = (
@@ -187,7 +195,10 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
     nowMs = performance.now()
   ) => {
     const elapsedSec = Math.max(0, nowMs - frame.anchorStartedAtMs) / 1000
-    return frame.anchorSec + elapsedSec * Math.max(0.25, Number(frame.playbackRate) || 1)
+    return resolveHorizontalBrowseLoopPlaybackSeconds(
+      frame.anchorSec + elapsedSec * Math.max(0.25, Number(frame.playbackRate) || 1),
+      options.loopRange?.()
+    )
   }
 
   const resolveFramePlaybackViewportRangeStartSec = (
@@ -404,7 +415,7 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
     // transaction 中以不同延迟重锚，会留下稳定的数十毫秒视觉相位差。
     const linkedSeconds = Number(options.currentSeconds())
     const estimatedSeconds =
-      options.linkedPlaybackActive?.() && Number.isFinite(linkedSeconds)
+      (options.linkedPlaybackActive?.() || options.loopRange?.()) && Number.isFinite(linkedSeconds)
         ? linkedSeconds
         : estimatePlaybackSeconds()
     const result = apply(estimatedSeconds, {
@@ -551,10 +562,7 @@ export const createHorizontalBrowseStableCanvasPresentationController = (
       } else if (!options.isPlaying()) {
         applyViewportRangeStart(pendingViewportRangeStartSec)
       } else {
-        const pendingPlaybackSeconds =
-          renderedFrame.anchorSec +
-          (Math.max(0, performance.now() - renderedFrame.anchorStartedAtMs) / 1000) *
-            renderedFrame.playbackRate
+        const pendingPlaybackSeconds = estimateFramePlaybackSeconds(renderedFrame)
         // 普通播放仅因 overscan 耗尽换同密度帧时，沿用已有视觉 clock。若此处重新对齐到
         // render-sync，两个 clock 的采样相位差会突然变成一次位置回跳；promote 和后续 RAF
         // 都使用同一外推器即可保持连续。BeatSync、revision/密度变化等仍走来源时间对齐。

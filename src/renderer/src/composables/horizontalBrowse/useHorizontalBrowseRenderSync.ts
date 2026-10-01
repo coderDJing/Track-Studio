@@ -5,6 +5,10 @@ import type {
 } from '@renderer/composables/horizontalBrowse/horizontalBrowseNativeTransport'
 import { rebaseHorizontalBrowsePlaybackClock } from '@renderer/composables/horizontalBrowse/horizontalBrowseLivePlaybackClock'
 import {
+  resolveHorizontalBrowseLoopClockDriftSec,
+  resolveHorizontalBrowseLoopPlaybackSeconds
+} from '@shared/horizontalBrowseLoopClock'
+import {
   publishHorizontalBrowseLinkedGridRenderClock,
   publishHorizontalBrowseLinkedGridRenderClockPair
 } from '@renderer/composables/horizontalBrowse/horizontalBrowseLinkedGridVisualPhase'
@@ -58,6 +62,9 @@ const resolveDeckRenderLimitSec = (snapshot: HorizontalBrowseTransportDeckSnapsh
   if (effectiveDurationSec > 0) return effectiveDurationSec
   return Math.max(0, Number(snapshot.durationSec) || 0)
 }
+
+const resolveDeckRenderLoopRange = (snapshot: HorizontalBrowseTransportDeckSnapshot) =>
+  snapshot.loopActive ? { startSec: snapshot.loopStartSec, endSec: snapshot.loopEndSec } : null
 
 const resolveDeckReachedRenderEndSec = (snapshot: HorizontalBrowseTransportDeckSnapshot) => {
   const endSec = resolveDeckRenderLimitSec(snapshot)
@@ -176,7 +183,10 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
     const nextBaseSec = normalizeTimelineSeconds(deckRenderSyncBaseSec[deck])
     const nextBaseAtMs = Math.max(0, Number(deckRenderSyncBaseAtMs[deck]) || 0)
     const deltaSec = canEstimatePlayback ? Math.max(0, nowMs - nextBaseAtMs) / 1000 : 0
-    const nextSec = nextBaseSec + deltaSec * playbackRate
+    const linearSec = nextBaseSec + deltaSec * playbackRate
+    const nextSec = canEstimatePlayback
+      ? resolveHorizontalBrowseLoopPlaybackSeconds(linearSec, resolveDeckRenderLoopRange(snapshot))
+      : linearSec
     return renderLimitSec > 0 ? Math.min(renderLimitSec, nextSec) : nextSec
   }
 
@@ -345,7 +355,15 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
       )
       return
     }
-    const driftSec = Math.abs(snapshotSec - estimatedSec)
+    const loopRange = resolveDeckRenderLoopRange(snapshot)
+    const driftSec = resolveHorizontalBrowseLoopClockDriftSec(snapshotSec, estimatedSec, loopRange)
+    const reanchorDriftSec =
+      loopRange && loopRange.endSec > loopRange.startSec
+        ? Math.min(
+            RENDER_SYNC_FULL_SYNC_PHASE_REANCHOR_SEC,
+            (loopRange.endSec - loopRange.startSec) * 0.1
+          )
+        : RENDER_SYNC_REANCHOR_DRIFT_SEC
     const recentIntent = recentRenderSeekIntent[deck]
     const recentIntentAgeMs = recentIntent
       ? Math.max(0, renderNowMs - recentIntent.startedAtMs)
@@ -369,7 +387,7 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
       !snapshot.playing ||
       signatureChanged ||
       fullSyncPhaseChanged ||
-      (playbackSnapshotAuthoritative && driftSec >= RENDER_SYNC_REANCHOR_DRIFT_SEC)
+      (playbackSnapshotAuthoritative && driftSec >= reanchorDriftSec)
     const shouldBumpPlaybackRevision =
       !preserveRevision &&
       ((shouldReanchor && forceRevision) ||

@@ -7,6 +7,10 @@ import { normalizeHorizontalBrowseSharedZoom } from '@renderer/composables/horiz
 import type { HorizontalBrowseSharedZoomState } from '@renderer/composables/horizontalBrowse/horizontalBrowseRawWaveformDetailTypes'
 import type { HorizontalBrowseDeckKey } from '@renderer/composables/horizontalBrowse/horizontalBrowseNativeTransport'
 import type { HorizontalBrowseWaveformPresentationState } from '@renderer/composables/horizontalBrowse/horizontalBrowseWaveformPresentationCoordinator'
+import {
+  resolveHorizontalBrowseLoopPlaybackSeconds,
+  type HorizontalBrowseLoopClockRange
+} from '@shared/horizontalBrowseLoopClock'
 
 type DeckKey = HorizontalBrowseDeckKey
 
@@ -18,6 +22,7 @@ type DetailPresentationConsumerParams = {
   previewMaxZoom: Ref<number>
   previewStartSec: Ref<number>
   waveformPlaybackActive: () => boolean
+  loopRange?: () => HorizontalBrowseLoopClockRange | null | undefined
   resolveWaveformCurrentSeconds: () => number
   resolveWaveformPlaybackRate: () => number
   resolveVisibleDurationSec: () => number
@@ -76,7 +81,8 @@ const resolveDeckDirection = (deck: DeckKey | null): 'up' | 'down' | null =>
   deck === 'top' ? 'up' : deck === 'bottom' ? 'down' : null
 
 const resolvePlaybackClockSeconds = (
-  playbackClock: HorizontalBrowseWaveformPresentationState['playbackClock']
+  playbackClock: HorizontalBrowseWaveformPresentationState['playbackClock'],
+  loopRange?: HorizontalBrowseLoopClockRange | null
 ) => {
   if (!playbackClock) return null
   const seconds = Number(playbackClock.seconds)
@@ -84,7 +90,7 @@ const resolvePlaybackClockSeconds = (
   if (!Number.isFinite(seconds) || !Number.isFinite(startedAtMs)) return null
   const elapsedSec = Math.max(0, performance.now() - startedAtMs) / 1000
   const playbackRate = Math.max(0.25, Number(playbackClock.playbackRate) || 1)
-  return seconds + elapsedSec * playbackRate
+  return resolveHorizontalBrowseLoopPlaybackSeconds(seconds + elapsedSec * playbackRate, loopRange)
 }
 
 const PLAYBACK_ZOOM_CLOCK_DRIFT_TOLERANCE_SEC = 0.25
@@ -116,7 +122,7 @@ export const createHorizontalBrowseDetailPresentationConsumer = (
     const sourceOwnsDeck = target.sourceDirection === direction
     const playbackClock = target.presentationState?.playbackClock ?? null
     const rawPlaybackClockSeconds = playbackZoomActive
-      ? resolvePlaybackClockSeconds(playbackClock)
+      ? resolvePlaybackClockSeconds(playbackClock, params.loopRange?.())
       : null
     const waveformCurrentSeconds = params.resolveWaveformCurrentSeconds()
     const playbackClockDriftSec =
@@ -183,7 +189,7 @@ export const createHorizontalBrowseDetailPresentationConsumer = (
     const nextVisible = params.resolveVisibleDurationSec()
     const anchorRatio = Math.max(0, Math.min(1, Number(state.anchorRatio) || 0.5))
     const playbackClockSeconds = params.waveformPlaybackActive()
-      ? resolvePlaybackClockSeconds(state.playbackClock)
+      ? resolvePlaybackClockSeconds(state.playbackClock, params.loopRange?.())
       : null
     const anchorSec =
       playbackClockSeconds !== null

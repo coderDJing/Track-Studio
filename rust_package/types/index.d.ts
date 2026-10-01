@@ -361,7 +361,8 @@ export declare function horizontalBrowseTransportStepLoopBeats(
 export declare function horizontalBrowseTransportSetLoopFromRange(
   deck: string,
   startSec: number,
-  endSec: number
+  endSec: number,
+  preserveExactRange?: boolean
 ): HorizontalBrowseTransportSnapshot
 export declare function horizontalBrowseTransportClearLoop(
   deck: string

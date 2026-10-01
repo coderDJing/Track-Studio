@@ -556,6 +556,7 @@ impl HorizontalBrowseTransportEngine {
         if allow_phase_alignment
           && self.sync_lock[deck_index] == "full"
           && self.quantize_enabled[deck_index]
+          && self.deck(deck).loop_exact_beat_sec.is_none()
           && self.is_playing_audible_at(deck, now_ms)
         {
           let target_duration_sec = self.deck(deck).duration_sec.max(0.0);
@@ -939,9 +940,15 @@ impl HorizontalBrowseTransportEngine {
     self.refresh();
   }
 
-  pub(super) fn set_loop_from_range_command(&mut self, deck: DeckId, start_sec: f64, end_sec: f64) {
+  pub(super) fn set_loop_from_range_command(
+    &mut self,
+    deck: DeckId,
+    start_sec: f64,
+    end_sec: f64,
+    preserve_exact_range: bool,
+  ) {
     self.mark_state_changed();
-    self.set_loop_from_range(deck, start_sec, end_sec);
+    self.set_loop_from_range(deck, start_sec, end_sec, preserve_exact_range);
     self.refresh();
   }
 

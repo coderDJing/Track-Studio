@@ -36,11 +36,18 @@ type UseHorizontalBrowseDeckLoopControllerParams = {
   nativeTransport: {
     toggleLoop: (deck: DeckKey) => Promise<unknown>
     stepLoopBeats: (deck: DeckKey, direction: -1 | 1) => Promise<unknown>
-    setLoopFromRange: (deck: DeckKey, startSec: number, endSec: number) => Promise<unknown>
+    setLoopFromRange: (
+      deck: DeckKey,
+      startSec: number,
+      endSec: number,
+      preserveExactRange?: boolean
+    ) => Promise<unknown>
     clearLoop: (deck: DeckKey) => Promise<unknown>
   }
   resolveDeckSong: (deck: DeckKey) => ISongInfo | null
   resolveDeckPlaying: (deck: DeckKey) => boolean
+  resolveDeckQuantizeEnabled: (deck: DeckKey) => boolean
+  resolveDeckRenderCurrentSeconds: (deck: DeckKey) => number
   resolveDeckDurationSeconds: (deck: DeckKey) => number
   resolveTransportDeckSnapshot: (deck: DeckKey) => HorizontalBrowseTransportDeckSnapshot
   resolveDeckCuePointRef: (deck: DeckKey) => Ref<number>
@@ -93,6 +100,7 @@ export const useHorizontalBrowseDeckLoopController = (
     top: null,
     bottom: null
   }
+  const preserveLoopRange: Record<DeckKey, boolean> = { top: false, bottom: false }
 
   const resolveLoopBeatValueIndex = (value: number) => {
     const exactIndex = LOOP_BEAT_VALUES.findIndex(
@@ -116,7 +124,7 @@ export const useHorizontalBrowseDeckLoopController = (
   const resolveDeckAnchorSec = (deck: DeckKey) => {
     const snapshot = params.resolveTransportDeckSnapshot(deck)
     if (params.resolveDeckPlaying(deck)) {
-      const renderCurrentSec = Number(snapshot.renderCurrentSec)
+      const renderCurrentSec = Number(params.resolveDeckRenderCurrentSeconds(deck))
       if (Number.isFinite(renderCurrentSec)) return renderCurrentSec
     }
     const currentSec = Number(snapshot.currentSec)
@@ -146,6 +154,19 @@ export const useHorizontalBrowseDeckLoopController = (
       startSec: startLine.sec,
       endSec
     }
+  }
+
+  const resolveExactLoopRange = (deck: DeckKey, beatValue: number, anchorSec: number) => {
+    const durationSec = params.resolveDeckDurationSeconds(deck)
+    const bpm =
+      deckBeatGridLookup[deck].resolveBpmAtSeconds(anchorSec) ??
+      Number(params.resolveDeckSong(deck)?.bpm)
+    if (!Number.isFinite(bpm) || bpm <= 0 || !Number.isFinite(durationSec) || durationSec <= 0) {
+      return null
+    }
+    const startSec = Math.max(0, Math.min(durationSec, anchorSec))
+    const endSec = Math.min(durationSec, startSec + (60 / bpm) * beatValue)
+    return endSec > startSec ? { startSec, endSec } : null
   }
 
   const resolveDeckLoopRange = (deck: DeckKey): HorizontalBrowseLoopRange | null => {
@@ -183,6 +204,7 @@ export const useHorizontalBrowseDeckLoopController = (
 
   const deactivateDeckLoop = async (deck: DeckKey) => {
     dynamicLoopBeatValueOverride[deck] = null
+    preserveLoopRange[deck] = false
     await params.nativeTransport.clearLoop(deck)
   }
 
@@ -194,13 +216,19 @@ export const useHorizontalBrowseDeckLoopController = (
     const wasActive = isDeckLoopActive(deck)
     if (!wasActive) {
       const beatValue = resolveDeckLoopBeatValue(deck)
-      const dynamicRange = resolveDynamicLoopRange(deck, beatValue, resolveDeckAnchorSec(deck))
+      const anchorSec = resolveDeckAnchorSec(deck)
+      const preserveExactRange = !params.resolveDeckQuantizeEnabled(deck)
+      const dynamicRange = preserveExactRange
+        ? resolveExactLoopRange(deck, beatValue, anchorSec)
+        : resolveDynamicLoopRange(deck, beatValue, anchorSec)
+      preserveLoopRange[deck] = preserveExactRange
       if (dynamicRange) {
         dynamicLoopBeatValueOverride[deck] = beatValue
         await params.nativeTransport.setLoopFromRange(
           deck,
           dynamicRange.startSec,
-          dynamicRange.endSec
+          dynamicRange.endSec,
+          preserveExactRange
         )
         const nextRange = resolveDeckLoopRange(deck)
         if (nextRange) {
@@ -211,8 +239,12 @@ export const useHorizontalBrowseDeckLoopController = (
           shouldStartPlayback: !params.resolveDeckPlaying(deck) && Boolean(nextRange)
         }
       }
+      if (preserveExactRange) {
+        return { active: false, shouldStartPlayback: false }
+      }
     } else {
       dynamicLoopBeatValueOverride[deck] = null
+      preserveLoopRange[deck] = false
     }
     await params.nativeTransport.toggleLoop(deck)
     const nextRange = resolveDeckLoopRange(deck)
@@ -225,55 +257,36 @@ export const useHorizontalBrowseDeckLoopController = (
     }
   }
 
-  const handleDeckLoopStepDown = async (deck: DeckKey) => {
+  const handleDeckLoopStep = async (deck: DeckKey, direction: -1 | 1) => {
     params.touchDeckInteraction(deck)
     if (resolveDeckLoopDisabled(deck)) return
     const loopRange = resolveDeckLoopRange(deck)
-    if (loopRange && params.resolveDeckSong(deck)?.beatGridMap) {
-      const nextBeatValue = resolveNextLoopBeatValue(loopRange.beatValue, -1)
-      const dynamicRange = resolveDynamicLoopRange(deck, nextBeatValue, loopRange.startSec)
+    if (loopRange && (preserveLoopRange[deck] || params.resolveDeckSong(deck)?.beatGridMap)) {
+      const nextBeatValue = resolveNextLoopBeatValue(loopRange.beatValue, direction)
+      const dynamicRange = preserveLoopRange[deck]
+        ? resolveExactLoopRange(deck, nextBeatValue, loopRange.startSec)
+        : resolveDynamicLoopRange(deck, nextBeatValue, loopRange.startSec)
       if (dynamicRange) {
         dynamicLoopBeatValueOverride[deck] = nextBeatValue
         await params.nativeTransport.setLoopFromRange(
           deck,
           dynamicRange.startSec,
-          dynamicRange.endSec
+          dynamicRange.endSec,
+          preserveLoopRange[deck]
         )
         params.resolveDeckCuePointRef(deck).value = dynamicRange.startSec
         return
       }
     }
-    await params.nativeTransport.stepLoopBeats(deck, -1)
+    await params.nativeTransport.stepLoopBeats(deck, direction)
     const nextRange = resolveDeckLoopRange(deck)
     if (nextRange) {
       params.resolveDeckCuePointRef(deck).value = nextRange.startSec
     }
   }
 
-  const handleDeckLoopStepUp = async (deck: DeckKey) => {
-    params.touchDeckInteraction(deck)
-    if (resolveDeckLoopDisabled(deck)) return
-    const loopRange = resolveDeckLoopRange(deck)
-    if (loopRange && params.resolveDeckSong(deck)?.beatGridMap) {
-      const nextBeatValue = resolveNextLoopBeatValue(loopRange.beatValue, 1)
-      const dynamicRange = resolveDynamicLoopRange(deck, nextBeatValue, loopRange.startSec)
-      if (dynamicRange) {
-        dynamicLoopBeatValueOverride[deck] = nextBeatValue
-        await params.nativeTransport.setLoopFromRange(
-          deck,
-          dynamicRange.startSec,
-          dynamicRange.endSec
-        )
-        params.resolveDeckCuePointRef(deck).value = dynamicRange.startSec
-        return
-      }
-    }
-    await params.nativeTransport.stepLoopBeats(deck, 1)
-    const nextRange = resolveDeckLoopRange(deck)
-    if (nextRange) {
-      params.resolveDeckCuePointRef(deck).value = nextRange.startSec
-    }
-  }
+  const handleDeckLoopStepDown = (deck: DeckKey) => handleDeckLoopStep(deck, -1)
+  const handleDeckLoopStepUp = (deck: DeckKey) => handleDeckLoopStep(deck, 1)
 
   const handleDeckLoopPlaybackTick = (_deck: DeckKey) => {
     // loop 回环已迁到播放内核，renderer 不再靠 RAF 盯着时间补 seek。
@@ -309,6 +322,7 @@ export const useHorizontalBrowseDeckLoopController = (
       | HorizontalBrowseStoredCueDefinition
       | Pick<ISongHotCue, 'sec' | 'isLoop' | 'loopEndSec' | 'source'>
   ) => {
+    preserveLoopRange[deck] = false
     const timelineCue = resolveSongCueTimelineDefinition(
       cue,
       params.resolveDeckSong(deck)?.timeBasisOffsetMs

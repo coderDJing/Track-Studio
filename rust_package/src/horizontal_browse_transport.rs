@@ -123,6 +123,7 @@ struct DeckState {
   loop_active: bool,
   loop_beat_value: f64,
   loop_start_beat_index: Option<i32>,
+  loop_exact_beat_sec: Option<f64>,
   loop_start_sec: f64,
   loop_end_sec: f64,
   master_tempo_state: horizontal_browse_transport_audio::DeckMasterTempoState,
@@ -300,6 +301,7 @@ impl Default for DeckState {
       loop_active: false,
       loop_beat_value: 8.0,
       loop_start_beat_index: None,
+      loop_exact_beat_sec: None,
       loop_start_sec: 0.0,
       loop_end_sec: 0.0,
       master_tempo_state: horizontal_browse_transport_audio::DeckMasterTempoState::default(),
@@ -1033,6 +1035,9 @@ mod horizontal_browse_transport_grid_sync_tests;
 #[cfg(test)]
 #[path = "horizontal_browse_transport_tests.rs"]
 mod horizontal_browse_transport_tests;
+#[cfg(test)]
+#[path = "horizontal_browse_transport_loop_tests.rs"]
+mod horizontal_browse_transport_loop_tests;
 #[cfg(test)]
 #[path = "horizontal_browse_transport_track_end_tests.rs"]
 mod horizontal_browse_transport_track_end_tests;

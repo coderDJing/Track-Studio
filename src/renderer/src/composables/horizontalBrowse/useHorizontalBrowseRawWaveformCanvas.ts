@@ -155,6 +155,7 @@ export const useHorizontalBrowseRawWaveformCanvas = (
     isDragging: () => options.dragging.value,
     currentSeconds: () => Number(options.currentSeconds()) || 0,
     playbackRate: () => Number(options.playbackRate()) || 1,
+    loopRange: options.loopRange,
     linkedPlaybackActive: () => options.linkedGridActive?.() === true,
     renderRevision: () => resolveStableRenderRevision(),
     resolveViewportRangeStartSec: (seconds, visibleDurationOverrideSec) =>

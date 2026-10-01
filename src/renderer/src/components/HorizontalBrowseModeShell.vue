@@ -505,6 +505,7 @@ const {
   resolveDeckCuePointRef,
   resolveDeckCuePlacementSec,
   resolveBrowseViewMode: () => horizontalBrowseViewMode.value,
+  resolveDeckQuantizeEnabled: (deck) => deckQuantizeEnabled[deck],
   resolveDualTransportSyncEnabled: () =>
     dualTransportSyncEnabled.value && canUseDualTransportSync.value,
   ensureDualTransportSync: activateDualTransportSync,
