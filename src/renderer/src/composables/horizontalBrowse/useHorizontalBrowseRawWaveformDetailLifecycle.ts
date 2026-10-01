@@ -73,6 +73,7 @@ type HorizontalBrowseRawWaveformDetailLifecycleParams = {
   resetGridRenderer: () => void
   publishLinkedGridVisualPhaseSample: () => void
   resolveIncomingPreviewTimeScale: () => number
+  liveTempoPreviewActive: () => boolean
   applyIncomingPreviewTimeScale: () => void
   handleSharedZoomState: (state: HorizontalBrowseSharedZoomState | undefined) => void
   handlePresentationState: (state: HorizontalBrowseWaveformPresentationState | undefined) => void
@@ -211,10 +212,11 @@ export const useHorizontalBrowseRawWaveformDetailLifecycle = (
     () =>
       [
         params.resolveIncomingPreviewTimeScale(),
-        state.presentationLinkedGridVisualPending.value
+        state.presentationLinkedGridVisualPending.value,
+        params.liveTempoPreviewActive()
       ] as const,
-    ([, linkedGridVisualPending]) => {
-      if (linkedGridVisualPending) {
+    ([, linkedGridVisualPending, liveTempoPreviewActive]) => {
+      if (linkedGridVisualPending || liveTempoPreviewActive) {
         return
       }
       params.applyIncomingPreviewTimeScale()

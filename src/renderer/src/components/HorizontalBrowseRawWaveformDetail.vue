@@ -31,11 +31,7 @@ import type {
   HorizontalBrowseLinkedGridVisualTransactionDeckState
 } from '@renderer/composables/horizontalBrowse/horizontalBrowseLinkedGridVisualTransaction'
 import { createHorizontalBrowseRawWaveformDetailExpose } from '@renderer/composables/horizontalBrowse/horizontalBrowseRawWaveformDetailExpose'
-import {
-  applyHorizontalBrowseLiveTempoPreviewTransform,
-  resolveHorizontalBrowseLiveTempoPreviewReleasePlan,
-  shouldFinishHorizontalBrowseLiveTempoPreviewRelease
-} from '@renderer/composables/horizontalBrowse/horizontalBrowseLiveTempoPreview'
+import { createHorizontalBrowseLiveTempoPreviewController } from '@renderer/composables/horizontalBrowse/horizontalBrowseLiveTempoPreviewController'
 import { useHorizontalBrowseAudioEditDetailRaw } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseAudioEditDetailRaw'
 import { isHorizontalBrowseWaveformTileRenderingEnabled } from '@renderer/composables/horizontalBrowse/horizontalBrowseWaveformTileFlag'
 import { HORIZONTAL_BROWSE_WAVEFORM_TILE_SLOT_COUNT } from '@renderer/composables/horizontalBrowse/horizontalBrowseWaveformTileLayout'
@@ -189,9 +185,8 @@ const resolveWaveformPlaybackRate = () => Math.max(0.25, Number(props.playbackRa
 const resolveGridEditVisibleFromSec = () =>
   gridEditingEnabled.value ? selectedDynamicGridVisibleFromSec.value : null
 
-let liveTempoPreviewTimeScaleValue: number | null = null
-let liveTempoPreviewReleasePendingScale: number | null = null
-let displayedPreviewTimeScale = 1
+const liveTempoPreviewPlaybackRate = ref<number | null>(null)
+const liveTempoPreviewActive = () => liveTempoPreviewPlaybackRate.value !== null
 const playbackDiscontinuityDetector = createHorizontalBrowsePlaybackDiscontinuityDetector()
 let linkedGridVisualTransactionCommitted = false
 const stablePlaybackReanchorGate = createHorizontalBrowseStablePlaybackReanchorGate()
@@ -210,6 +205,7 @@ const presentationState = createHorizontalBrowseDetailPresentationState({
   waveformPlaybackActive: () => waveformPlaybackActive.value,
   resolveWaveformCurrentSeconds,
   resolveWaveformPlaybackRate,
+  liveTempoPreviewActive,
   previewBpm,
   previewFirstBeatMs,
   previewDownbeatBeatOffset,
@@ -344,20 +340,10 @@ const {
   linkedGridActive: () => presentationLinkedGridActive.value,
   phaseAwareScrollReuse: () => Math.abs(localGridShiftPhaseOffsetSec.value) > 0.000001,
   onPreparingPreviewTimeScale: (timeScale, renderTargetIndex) => {
-    applyLiveTempoPreviewTransformForBuffer(renderTargetIndex, timeScale)
+    liveTempoPreviewController.prepareBuffer(renderTargetIndex, timeScale)
   },
   onPresentedPreviewTimeScale: (timeScale) => {
-    displayedPreviewTimeScale = Math.max(0.25, Number(timeScale) || 1)
-    if (
-      shouldFinishHorizontalBrowseLiveTempoPreviewRelease(
-        displayedPreviewTimeScale,
-        liveTempoPreviewReleasePendingScale
-      )
-    ) {
-      liveTempoPreviewReleasePendingScale = null
-      liveTempoPreviewTimeScaleValue = null
-    }
-    syncLiveTempoPreviewTransform()
+    liveTempoPreviewController.presented(timeScale)
   }
 })
 const setWaveformTileContainer = (index: 0 | 1, element: unknown) => {
@@ -371,7 +357,6 @@ const setWaveformTileCanvas = (index: 0 | 1, slotIndex: number, element: unknown
 presentationState.setLastAppliedPreviewTimeScale(
   Math.max(0.25, Number(resolvePreviewTimeScale()) || 1)
 )
-displayedPreviewTimeScale = presentationState.getLastAppliedPreviewTimeScale()
 
 const applyLocalGridShiftPhaseCompensation = (deltaMs: number) => {
   const deltaSec = Number(deltaMs) / 1000
@@ -792,84 +777,23 @@ const resolveLiveTempoPreviewScalers = (bufferIndex: 0 | 1) =>
     ? [waveformTempoScalerBackRef.value, overlayTempoScalerBackRef.value]
     : [waveformTempoScalerRef.value, overlayTempoScalerRef.value]
 
-const applyLiveTempoPreviewTransformForBuffer = (bufferIndex: 0 | 1, bufferTimeScale: number) => {
-  applyHorizontalBrowseLiveTempoPreviewTransform(
-    resolveLiveTempoPreviewScalers(bufferIndex),
-    bufferTimeScale,
-    liveTempoPreviewTimeScaleValue ?? presentationState.getLastAppliedPreviewTimeScale()
-  )
-}
-
-const syncLiveTempoPreviewTransform = () => {
-  if (liveTempoPreviewTimeScaleValue == null) {
-    applyHorizontalBrowseLiveTempoPreviewTransform(
-      [
-        waveformTempoScalerRef.value,
-        waveformTempoScalerBackRef.value,
-        overlayTempoScalerRef.value,
-        overlayTempoScalerBackRef.value
-      ],
-      1,
-      1
-    )
-    return
-  }
-  applyLiveTempoPreviewTransformForBuffer(
-    resolveLiveTempoPreviewActiveBufferIndex(),
-    displayedPreviewTimeScale
-  )
-}
-
-const clearLiveTempoPreviewRelease = () => {
-  liveTempoPreviewReleasePendingScale = null
-  liveTempoPreviewTimeScaleValue = null
-  syncLiveTempoPreviewTransform()
-}
-
-const applyLiveTempoPreviewRate = (liveRate: number | null | undefined) => {
-  const leavingLive = liveTempoPreviewTimeScaleValue != null
-  const nextRate =
-    liveRate != null && Number.isFinite(Number(liveRate)) && Number(liveRate) > 0
-      ? Number(liveRate)
-      : null
-  if (nextRate != null) {
-    liveTempoPreviewReleasePendingScale = null
-    liveTempoPreviewTimeScaleValue = resolveIncomingPreviewTimeScale()
-    syncLiveTempoPreviewTransform()
-    if (compactVisualWaveformActive.value && waveformPlaybackActive.value) {
-      reanchorStableCanvasPlayback(resolveWaveformCurrentSeconds(), nextRate)
-    }
-    return
-  }
-  if (!leavingLive || presentationLinkedGridVisualPending.value) {
-    clearLiveTempoPreviewRelease()
-    return
-  }
-  const incomingTimeScale = Math.max(0.25, Number(resolveIncomingPreviewTimeScale()) || 1)
-  const releasePlan = resolveHorizontalBrowseLiveTempoPreviewReleasePlan(
-    displayedPreviewTimeScale,
-    incomingTimeScale
-  )
-  if (releasePlan.mode === 'immediate') {
-    clearLiveTempoPreviewRelease()
-    applyIncomingPreviewTimeScale(true, { keepCurrentFrame: true })
-    return
-  }
-  liveTempoPreviewReleasePendingScale = releasePlan.pendingScale
-  liveTempoPreviewTimeScaleValue = releasePlan.pendingScale
-  syncLiveTempoPreviewTransform()
-  const scheduledNewFrame = applyIncomingPreviewTimeScale(true, {
-    keepCurrentFrame: true,
-    forceFrameWhenUnchanged: true
-  })
-  if (!scheduledNewFrame) {
-    clearLiveTempoPreviewRelease()
-  }
-}
+const liveTempoPreviewController = createHorizontalBrowseLiveTempoPreviewController({
+  livePlaybackRate: liveTempoPreviewPlaybackRate,
+  initialTimeScale: presentationState.getLastAppliedPreviewTimeScale(),
+  activeBufferIndex: resolveLiveTempoPreviewActiveBufferIndex,
+  scalers: resolveLiveTempoPreviewScalers,
+  getLastAppliedTimeScale: presentationState.getLastAppliedPreviewTimeScale,
+  resolveIncomingTimeScale: resolveIncomingPreviewTimeScale,
+  linkedGridVisualPending: () => presentationLinkedGridVisualPending.value,
+  stablePlaybackActive: () => compactVisualWaveformActive.value && waveformPlaybackActive.value,
+  currentSeconds: resolveWaveformCurrentSeconds,
+  reanchorPlayback: reanchorStableCanvasPlayback,
+  applyIncomingTimeScale: applyIncomingPreviewTimeScale
+})
 
 watch(
   () => props.liveTempoPreviewRate,
-  (liveRate) => applyLiveTempoPreviewRate(liveRate),
+  (liveRate) => liveTempoPreviewController.setPlaybackRate(liveRate),
   { flush: 'sync' }
 )
 
@@ -969,6 +893,7 @@ useHorizontalBrowseRawWaveformDetailLifecycle({
   resetGridRenderer,
   publishLinkedGridVisualPhaseSample,
   resolveIncomingPreviewTimeScale,
+  liveTempoPreviewActive,
   applyIncomingPreviewTimeScale,
   handleSharedZoomState,
   handlePresentationState,
@@ -1071,7 +996,7 @@ const { audioEditSelectionStyle, audioEditInsertedStyles, audioEditBoundStyles }
 
 defineExpose(
   createHorizontalBrowseRawWaveformDetailExpose({
-    setLiveTempoPreviewRate: (rate) => applyLiveTempoPreviewRate(rate),
+    setLiveTempoPreviewRate: liveTempoPreviewController.setPlaybackRate,
     setDownbeatLineAtPlayhead,
     shiftGrid,
     updateBpmInput: handlePreviewBpmInputUpdate,

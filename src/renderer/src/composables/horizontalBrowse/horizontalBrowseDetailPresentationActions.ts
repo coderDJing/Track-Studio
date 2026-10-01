@@ -32,7 +32,7 @@ type HorizontalBrowseDetailPresentationActionsParams = {
   measureStableCanvasPresentation: (seconds?: number) => { frame: { anchorSec: number } | null }
   getLastAppliedPreviewTimeScale: () => number
   setLastAppliedPreviewTimeScale: (value: number) => void
-  resolveIncomingPreviewTimeScale: () => number
+  resolveIncomingPreviewTimeScale: (playbackRate?: number) => number
   resolveWaveformPlaybackRate: () => number
   resolveGridTimeBasis: () => HorizontalBrowseLinkedGridVisualTransactionGridTimeBasis
   invalidateWaveformTiles: (options?: { preserveDisplay?: boolean }) => void
@@ -199,7 +199,10 @@ export const createHorizontalBrowseDetailPresentationActions = (
       if (shouldMutatePresentation) {
         params.syncGridStateFromSong()
       }
-      const timeScale = Math.max(0.25, Number(params.resolveIncomingPreviewTimeScale()) || 1)
+      const timeScale = Math.max(
+        0.25,
+        Number(params.resolveIncomingPreviewTimeScale(playbackRate)) || 1
+      )
       const visibleDurationSec = resolveVisibleDurationSecForTimeScale(timeScale)
       const viewportStartSec = clampPreviewStartForVisibleDuration(
         safeSeconds - visibleDurationSec * HORIZONTAL_BROWSE_DETAIL_PLAYHEAD_RATIO,

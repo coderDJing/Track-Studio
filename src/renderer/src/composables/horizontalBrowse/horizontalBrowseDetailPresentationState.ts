@@ -33,6 +33,7 @@ type HorizontalBrowseDetailPresentationStateParams = {
   waveformPlaybackActive: () => boolean
   resolveWaveformCurrentSeconds: () => number
   resolveWaveformPlaybackRate: () => number
+  liveTempoPreviewActive: () => boolean
   previewBpm: Ref<number>
   previewFirstBeatMs: Ref<number>
   previewDownbeatBeatOffset: Ref<number>
@@ -86,15 +87,11 @@ export const createHorizontalBrowseDetailPresentationState = (
     visualGridTimeBasisOffsetMs.value = params.previewTimeBasisOffsetMs.value
   }
 
-  const resolveIncomingPreviewTimeScale = () => {
-    const gridBpm = Number(params.gridBpm())
-    return resolveHorizontalBrowseWaveformTimeScale(
-      Number.isFinite(gridBpm) && gridBpm > 0 ? gridBpm : params.song()?.bpm
-    )
-  }
+  const resolveIncomingPreviewTimeScale = (playbackRate = params.resolveWaveformPlaybackRate()) =>
+    resolveHorizontalBrowseWaveformTimeScale(playbackRate)
 
   const resolveCanvasVisualTimeScale = () =>
-    params.linkedGridVisualPending()
+    params.linkedGridVisualPending() || params.liveTempoPreviewActive()
       ? Math.max(0.25, Number(lastAppliedPreviewTimeScale) || 1)
       : resolveIncomingPreviewTimeScale()
 
