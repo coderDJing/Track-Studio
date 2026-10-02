@@ -55,7 +55,7 @@ interface ISongInfo {
   bpm?: number
   firstBeatMs?: number
   downbeatBeatOffset?: number
-  beatGridSource?: 'manual' | 'analysis' | 'rekordbox'
+  beatGridSource?: 'manual' | 'analysis' | 'rekordbox' | 'serato' | 'traktor'
   beatGridStatus?: BeatGridStatus
   beatGridMap?: SongBeatGridMapV2
   rekordboxGridEntries?: IRekordboxBeatGridEntry[]
@@ -80,6 +80,8 @@ interface ISongInfo {
   waveformPreviewListRoot?: string | null
   externalSourceKind?: RekordboxSourceKind | null
   externalLibraryKind?: ExternalLibraryKind | null
+  externalWaveformPreference?: 'frkb-manual'
+  externalBeatGridPreference?: 'frkb-manual'
   pioneerCoverPath?: string | null
   pioneerAnalyzePath?: string | null
   pioneerDeviceRootPath?: string | null
@@ -175,6 +177,7 @@ interface IPioneerPlaylistTreeNode {
   name: string
   isFolder: boolean
   isSmartPlaylist?: boolean
+  isAllTracks?: boolean
   order: number
   sortOrder: number
   children?: IPioneerPlaylistTreeNode[]
@@ -716,6 +719,7 @@ interface ISettingConfig {
   rekordboxDesktopTrackStorageDir?: string
   // 直写 Serato 时复制歌曲的固定存放目录
   seratoTrackStorageDir?: string
+  traktorTrackStorageDir?: string
   // 迁移标记：是否已将 .aif/.aiff 默认加入 audioExt（避免重复覆盖用户选择）
   migratedAudioExtAiffAif?: boolean
   // 指纹模式：pcm（解码后内容哈希）或 file（整文件哈希）

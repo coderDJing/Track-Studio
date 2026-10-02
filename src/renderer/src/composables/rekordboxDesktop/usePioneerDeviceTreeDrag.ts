@@ -1,9 +1,12 @@
 import { ref } from 'vue'
+import { useRuntimeStore } from '@renderer/stores/runtime'
+import { useDjLibrarySongDrop } from './useDjLibrarySongDrop'
 import type { IPioneerPlaylistTreeNode } from '../../../../types/globals'
 import { ensureRekordboxDesktopWriteAvailable } from '@renderer/utils/rekordboxDesktopWriteAvailability'
 import { clearRekordboxSourceCachesByKind } from '@renderer/utils/rekordboxLibraryCache'
 import { buildRekordboxSourceChannel } from '@shared/rekordboxSources'
 import type { RekordboxDesktopMovePlaylistResponse } from '@shared/rekordboxDesktopPlaylist'
+import type { ExternalLibraryKind } from '@shared/externalLibrary'
 import {
   calculateDragApproach,
   cloneTreeNodes,
@@ -25,7 +28,11 @@ type RefreshTreeFn = (preferredPlaylistId?: number) => Promise<void>
 type ShowFailureFn = (message: string, logPath?: string) => Promise<void>
 type RunWritingFn = <T>(task: () => Promise<T>) => Promise<T>
 type GetPreferredPlaylistIdFn = () => number
-type ExternalTreeWriteContext = { enabled: BoolRef; sourcePath: StringRef }
+type ExternalTreeWriteContext = {
+  enabled: BoolRef
+  sourcePath: StringRef
+  kind: { readonly value: ExternalLibraryKind | null }
+}
 
 export function usePioneerDeviceTreeDrag(
   originalTreeNodes: TreeRef,
@@ -40,6 +47,31 @@ export function usePioneerDeviceTreeDrag(
   externalTreeWrite?: ExternalTreeWriteContext
 ) {
   const canWriteTree = () => isDesktopSource.value || Boolean(externalTreeWrite?.enabled.value)
+  const runtime = useRuntimeStore()
+  const songDrop = useDjLibrarySongDrop({
+    getSource: () => {
+      const kind = externalTreeWrite?.enabled.value
+        ? externalTreeWrite.kind.value
+        : isDesktopSource.value
+          ? 'desktop'
+          : null
+      if (!kind) return null
+      return {
+        kind,
+        sourceKey:
+          runtime.pioneerDeviceLibrary.selectedSourceKey ||
+          runtime.pioneerDeviceLibrary.selectedSourceRootPath ||
+          'rekordbox',
+        sourcePath: externalTreeWrite?.enabled.value
+          ? externalTreeWrite.sourcePath.value
+          : runtime.pioneerDeviceLibrary.selectedSourceRootPath
+      }
+    },
+    isWriting: dialogWriting,
+    runWriting: runWithDialogWriting,
+    refreshTree: refreshDesktopTree,
+    showFailure: showFailureDialog
+  })
   const dragSourceId = ref<number | null>(null)
   const dragTarget = ref<{
     nodeId: number | null
@@ -68,6 +100,7 @@ export function usePioneerDeviceTreeDrag(
     if (
       !canWriteTree() ||
       dialogWriting.value ||
+      (externalTreeWrite?.enabled.value && !node.externalId) ||
       !isMovableTreeNode(node) ||
       normalizeKeyword(playlistSearch.value)
     ) {
@@ -84,12 +117,22 @@ export function usePioneerDeviceTreeDrag(
   }
 
   const updateDragTarget = (event: DragEvent, node: IPioneerPlaylistTreeNode) => {
+    if (songDrop.isSongDrag(event)) {
+      dragTarget.value = songDrop.handleDragOver(event, node)
+        ? { nodeId: node.id, approach: 'center', placement: 'node' }
+        : null
+      return
+    }
     if (!canWriteTree() || dialogWriting.value) {
       setUnavailableDrop(event)
       return
     }
     if (!event.dataTransfer || dragSourceId.value === null) return
-    if (!isMovableTreeNode(node) || normalizeKeyword(playlistSearch.value)) {
+    if (
+      (externalTreeWrite?.enabled.value && !node.externalId) ||
+      !isMovableTreeNode(node) ||
+      normalizeKeyword(playlistSearch.value)
+    ) {
       setUnavailableDrop(event)
       return
     }
@@ -100,7 +143,12 @@ export function usePioneerDeviceTreeDrag(
       setUnavailableDrop(event)
       return
     }
-    const approach = calculateDragApproach(event.offsetY, node.isFolder)
+    const row = event.currentTarget as HTMLElement | null
+    if (!row) return
+    const approach = calculateDragApproach(
+      event.clientY - row.getBoundingClientRect().top,
+      node.isFolder
+    )
     if (approach === 'center' && !node.isFolder) {
       setUnavailableDrop(event)
       return
@@ -114,6 +162,10 @@ export function usePioneerDeviceTreeDrag(
   }
 
   const updateRootEndDragTarget = (event: DragEvent) => {
+    if (songDrop.isSongDrag(event)) {
+      setUnavailableDrop(event)
+      return
+    }
     if (!canWriteTree() || dialogWriting.value) {
       setUnavailableDrop(event)
       return
@@ -142,7 +194,7 @@ export function usePioneerDeviceTreeDrag(
         const movedNode = findNodeById(moved.nodes, moved.playlistId)
         const parentNode = moved.parentId > 0 ? findNodeById(moved.nodes, moved.parentId) : null
         const response = (await window.electron.ipcRenderer.invoke('external-library:mutate', {
-          kind: 'serato',
+          kind: externalTreeWrite.kind.value,
           path: externalTreeWrite.sourcePath.value,
           operation: 'move',
           externalId: movedNode?.externalId,
@@ -152,10 +204,10 @@ export function usePioneerDeviceTreeDrag(
         })) as { ok: boolean; summary: { errorMessage?: string } }
         if (!response.ok) {
           syncRuntimeDesktopTree(previousTree, preferredPlaylistId)
-          await showFailureDialog(response.summary.errorMessage || 'Serato 歌单移动失败。')
+          await showFailureDialog(response.summary.errorMessage || '外部歌单移动失败。')
           return
         }
-        await refreshDesktopTree(preferredPlaylistId)
+        await refreshDesktopTree(0)
         return
       }
       if (!(await ensureRekordboxDesktopWriteAvailable('move'))) {
@@ -220,6 +272,12 @@ export function usePioneerDeviceTreeDrag(
   }
 
   const handleDropNode = async (_event: DragEvent, node: IPioneerPlaylistTreeNode) => {
+    if (songDrop.isSongDrag(_event)) {
+      suppressClickAfterDrag()
+      resetDragState()
+      await songDrop.handleDrop(_event, node)
+      return
+    }
     if (!canWriteTree() || dialogWriting.value) {
       suppressClickAfterDrag()
       resetDragState()

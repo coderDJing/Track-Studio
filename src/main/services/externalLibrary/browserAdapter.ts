@@ -1,4 +1,9 @@
 import path from 'node:path'
+import { createHash } from 'node:crypto'
+import {
+  createDjLibraryCollectionNode,
+  EXTERNAL_COLLECTION_PLAYLIST_ID
+} from '../../../shared/djLibraryCollection'
 import type {
   ExternalLibraryKind,
   ExternalLibraryPlaylist,
@@ -15,12 +20,14 @@ import {
   parseSeratoWaveformOverview,
   type SeratoWaveformOverviewData
 } from '../../../shared/seratoWaveformOverview'
+import {
+  createSongBeatGridMapV2FromClips,
+  type SongBeatGridClipV2
+} from '../../../shared/songBeatGridMapV2'
 
-const ALL_TRACKS_PLAYLIST_ID = 1
-const PLAYLIST_ID_OFFSET = 2
-
+const ALL_TRACKS_PLAYLIST_ID = EXTERNAL_COLLECTION_PLAYLIST_ID
 export const getPlaylistNumericId = (playlist: ExternalLibraryPlaylist) =>
-  PLAYLIST_ID_OFFSET + Math.max(0, Number(playlist.order) || 0)
+  2 + Number.parseInt(createHash('sha256').update(playlist.id).digest('hex').slice(0, 13), 16)
 
 const formatDuration = (durationSec: number | undefined) => {
   const total = Math.max(0, Math.round(Number(durationSec) || 0))
@@ -29,25 +36,18 @@ const formatDuration = (durationSec: number | undefined) => {
 
 const buildPlaylistTree = (snapshot: ExternalLibrarySnapshot): IPioneerPlaylistTreeNode[] => {
   const nodesByExternalId = new Map<string, IPioneerPlaylistTreeNode>()
-  const roots: IPioneerPlaylistTreeNode[] = [
-    {
-      id: ALL_TRACKS_PLAYLIST_ID,
-      parentId: 0,
-      name: '全部曲目',
-      isFolder: false,
-      order: 0,
-      sortOrder: 0,
-      children: []
-    }
-  ]
+  const roots: IPioneerPlaylistTreeNode[] = [createDjLibraryCollectionNode(ALL_TRACKS_PLAYLIST_ID)]
 
   for (const playlist of snapshot.playlists) {
+    // Traktor Smartlists persist dynamic rules, which the browser does not evaluate yet.
+    if (snapshot.kind === 'traktor' && playlist.isSmartPlaylist) continue
     nodesByExternalId.set(playlist.id, {
       id: getPlaylistNumericId(playlist),
       externalId: playlist.id,
       parentId: 0,
       name: playlist.name,
       isFolder: playlist.isFolder,
+      isSmartPlaylist: playlist.isSmartPlaylist,
       order: playlist.order + 1,
       sortOrder: playlist.order + 1,
       children: []
@@ -105,14 +105,38 @@ const buildMemoryCues = (track: ExternalLibraryTrack): ISongMemoryCue[] =>
     ]
   })
 
+const buildNativeBeatGridMap = (track: ExternalLibraryTrack, kind: ExternalLibraryKind) => {
+  const markers = track.cues
+    .filter((cue) => cue.kind === 'grid' && Number.isFinite(cue.positionMs) && cue.positionMs >= 0)
+    .sort((left, right) => left.positionMs - right.positionMs)
+  const clips: SongBeatGridClipV2[] = []
+  for (const marker of markers) {
+    const bpm = Number(marker.bpm) > 0 ? Number(marker.bpm) : Number(track.bpm)
+    if (!Number.isFinite(bpm) || bpm <= 0) continue
+    const anchorSec = marker.positionMs / 1000
+    if (clips.length && anchorSec <= clips[clips.length - 1].startSec) continue
+    clips.push({
+      startSec: clips.length ? anchorSec : 0,
+      anchorSec,
+      bpm,
+      downbeatBeatOffset: marker.downbeatBeatOffset ?? 0
+    })
+  }
+  return clips.length
+    ? createSongBeatGridMapV2FromClips(clips, kind, { allowSingleClip: true })
+    : null
+}
+
 const toBrowserTrack = (
   track: ExternalLibraryTrack,
+  kind: ExternalLibraryKind,
   playlistId: number,
   playlistName: string,
   entryIndex: number,
   trackIndex: number
 ): IPioneerPlaylistTrack => {
   const extension = track.fileFormat || path.extname(track.filePath).replace(/^\./, '')
+  const beatGridMap = buildNativeBeatGridMap(track, kind)
   return {
     rowKey: `${track.id}:${playlistId}:${entryIndex}`,
     playlistId,
@@ -130,20 +154,15 @@ const toBrowserTrack = (
     container: extension.toUpperCase(),
     duration: formatDuration(track.durationSec),
     durationSec: Math.max(0, Number(track.durationSec) || 0),
-    bpm: track.bpm,
+    bpm: beatGridMap?.clips[0]?.bpm ?? track.bpm,
+    beatGridMap: beatGridMap ?? undefined,
     key: track.key,
     bitrate: track.bitrate,
     sampleRate: track.sampleRate,
+    timeBasisOffsetMs: track.timeBasisOffsetMs,
     year: track.year,
     comment: track.comment,
     dateAdded: track.dateAdded,
-    rekordboxGridEntries: track.cues
-      .filter((cue) => cue.kind === 'grid' && Number.isFinite(cue.bpm))
-      .map((cue, index) => ({
-        timeMs: Math.max(0, cue.positionMs),
-        bpm: Number(cue.bpm),
-        beatNumber: (index % 4) + 1
-      })),
     hotCues: buildHotCues(track),
     memoryCues: buildMemoryCues(track),
     fileMissing: track.missing === true
@@ -178,6 +197,7 @@ export const buildExternalLibraryBrowserTracks = (
         ? [
             toBrowserTrack(
               matched.track,
+              snapshot.kind,
               Number(playlistId),
               playlistName,
               entryIndex,

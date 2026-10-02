@@ -422,7 +422,7 @@ export async function attachPioneerAnlzRuntime(
   }
 
   const probePaths = tracks
-    .filter((track) => Boolean(entriesByTrack.get(track)?.length))
+    .filter((track) => track.fileMissing !== true && Boolean(entriesByTrack.get(track)?.length))
     .map((track) => track.filePath)
   await resolveAudioTimeBasisOffsetMsForFiles(probePaths)
 
@@ -435,7 +435,7 @@ export async function attachPioneerAnlzRuntime(
       ? createSongBeatGridMapV2FromRekordboxEntries(entries)
       : undefined
     let timeBasisOffsetMs: number | undefined
-    if (beatGridMap) {
+    if (beatGridMap && track.fileMissing !== true) {
       try {
         timeBasisOffsetMs = await resolveAudioTimeBasisOffsetMsForFile(track.filePath)
       } catch {
@@ -466,9 +466,8 @@ export async function attachPioneerPlaylistRuntime(
   options?: { includeCues?: boolean }
 ): Promise<IPioneerPlaylistTrack[]> {
   if (!tracks.length) return tracks
-  const existencePromise = markMissingFiles(tracks)
+  await markMissingFiles(tracks)
   const tracksWithRuntime = await attachPioneerAnlzRuntime(rootPath, tracks, options)
-  await existencePromise
   return applyMissingFileFlags(tracksWithRuntime, tracks)
 }
 
@@ -632,6 +631,7 @@ export async function loadPioneerPlaylistTracksByDrivePath(
     options?.includeRuntime === false
       ? tracks
       : await attachPioneerPlaylistRuntime(rootPath, tracks, { includeCues: true })
+  if (options?.includeRuntime === false) await markMissingFiles(tracks)
 
   return {
     drivePath: rootPath,

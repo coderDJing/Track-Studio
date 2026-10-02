@@ -494,7 +494,7 @@ const handleRekordboxDesktopPlaylist = async () => {
   }
 }
 
-const handleSeratoPlaylist = async () => {
+const handleExternalPlaylist = async (kind: 'serato' | 'traktor') => {
   const song = runtime.playingData.playingSong
   if (!song) return
   if (runtime.isProgressing) {
@@ -508,7 +508,7 @@ const handleSeratoPlaylist = async () => {
   closeMoreMenu()
   runtime.isProgressing = true
   try {
-    await openExternalLibraryPlaylistForSelectedTracks({ tracks: [song] })
+    await openExternalLibraryPlaylistForSelectedTracks({ tracks: [song], kind })
   } finally {
     runtime.isProgressing = false
   }
@@ -784,8 +784,11 @@ onUnmounted(() => {
           <div class="menuButton" @click="handleRekordboxDesktopPlaylist()">
             <span>{{ t('rekordboxDesktop.menuCreatePlaylistFromSelectedTracks') }}</span>
           </div>
-          <div class="menuButton" @click="handleSeratoPlaylist()">
+          <div class="menuButton" @click="handleExternalPlaylist('serato')">
             <span>{{ t('library.writeToSeratoPlaylist') }}</span>
+          </div>
+          <div class="menuButton" @click="handleExternalPlaylist('traktor')">
+            <span>{{ t('library.writeToTraktorPlaylist') }}</span>
           </div>
           <div
             v-if="!isReadOnlyPlaybackSource"

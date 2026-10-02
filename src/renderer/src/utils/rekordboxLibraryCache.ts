@@ -14,11 +14,13 @@ type SourceTreeCacheEntry = {
   treeNodes: IPioneerPlaylistTreeNode[]
   selectedPlaylistId: number
   updatedAt: number
+  revision?: string
 }
 
 type PlaylistTrackCacheEntry = {
   tracks: IPioneerPlaylistTrack[]
   updatedAt: number
+  revision?: string
 }
 
 type ExternalSourceIdentity = {
@@ -97,7 +99,8 @@ export const getCachedRekordboxSourceTree = (sourceCacheKey: string) => {
   return {
     treeNodes: cloneTreeNodes(cached.treeNodes),
     selectedPlaylistId: Number(cached.selectedPlaylistId) || 0,
-    updatedAt: cached.updatedAt
+    updatedAt: cached.updatedAt,
+    revision: cached.revision
   }
 }
 
@@ -112,6 +115,7 @@ export const setCachedRekordboxSourceTree = (
   treeNodes: IPioneerPlaylistTreeNode[],
   options?: {
     selectedPlaylistId?: number
+    revision?: string
   }
 ) => {
   const normalizedKey = normalizeCachePart(sourceCacheKey)
@@ -125,7 +129,8 @@ export const setCachedRekordboxSourceTree = (
     selectedPlaylistId: hasSelectedPlaylistId
       ? Math.max(0, Number(options?.selectedPlaylistId) || 0)
       : Number(previous?.selectedPlaylistId) || 0,
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
+    revision: options?.revision
   })
   pruneCache(sourceTreeCache, MAX_SOURCE_TREE_CACHE_SIZE)
 }
@@ -141,7 +146,8 @@ export const rememberRekordboxSourceSelectedPlaylist = (
   touchCacheEntry(sourceTreeCache, normalizedKey, {
     treeNodes: cloneTreeNodes(previous?.treeNodes || []),
     selectedPlaylistId: Number(playlistId) || 0,
-    updatedAt: previous?.updatedAt || 0
+    updatedAt: previous?.updatedAt || 0,
+    revision: previous?.revision
   })
   pruneCache(sourceTreeCache, MAX_SOURCE_TREE_CACHE_SIZE)
 }
@@ -164,7 +170,8 @@ export const getCachedRekordboxPlaylistTracks = (sourceCacheKey: string, playlis
   touchCacheEntry(playlistTrackCache, cacheKey, cached)
   return {
     tracks: clonePlaylistTracks(cached.tracks),
-    updatedAt: cached.updatedAt
+    updatedAt: cached.updatedAt,
+    revision: cached.revision
   }
 }
 
@@ -186,7 +193,8 @@ export const shouldRefreshRekordboxPlaylistTracks = (
 export const setCachedRekordboxPlaylistTracks = (
   sourceCacheKey: string,
   playlistId: number,
-  tracks: IPioneerPlaylistTrack[]
+  tracks: IPioneerPlaylistTrack[],
+  revision?: string
 ) => {
   const normalizedSourceCacheKey = normalizeCachePart(sourceCacheKey)
   const safePlaylistId = Number(playlistId) || 0
@@ -195,7 +203,8 @@ export const setCachedRekordboxPlaylistTracks = (
   const cacheKey = buildPlaylistTracksCacheKey(normalizedSourceCacheKey, safePlaylistId)
   touchCacheEntry(playlistTrackCache, cacheKey, {
     tracks: clonePlaylistTracks(tracks),
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
+    revision
   })
   pruneCache(playlistTrackCache, MAX_PLAYLIST_TRACK_CACHE_SIZE)
 }

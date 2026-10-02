@@ -54,6 +54,27 @@ export const updateSeratoCrateOrder = async (
     .filter((line) => line.startsWith('[crate]'))
     .map((line) => line.slice('[crate]'.length).trim())
     .filter(Boolean)
+  let folderNames: string[] = []
+  try {
+    const value: unknown = JSON.parse(
+      await fs.readFile(path.join(seratoRoot, 'FRKB folders.json'), 'utf8')
+    )
+    if (Array.isArray(value))
+      folderNames = value.filter((name): name is string => typeof name === 'string')
+  } catch {
+    // Libraries without FRKB-created empty folders have no folder metadata.
+  }
+  for (const name of [...existing, ...folderNames]) {
+    const parts = name.split('%%')
+    for (let index = 1; index <= parts.length; index++) {
+      const prefix = parts.slice(0, index).join('%%')
+      if (existing.some((item) => item.toLowerCase() === prefix.toLowerCase())) continue
+      const descendantIndex = existing.findIndex((item) =>
+        item.toLowerCase().startsWith(`${prefix.toLowerCase()}%%`)
+      )
+      existing.splice(descendantIndex < 0 ? existing.length : descendantIndex, 0, prefix)
+    }
+  }
   const next = transform(existing).filter(Boolean)
   const nextLines: string[] = []
   let crateIndex = 0

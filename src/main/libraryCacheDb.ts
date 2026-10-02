@@ -108,6 +108,7 @@ export {
   touchExternalAnalysisCacheEntrySeen,
   upsertExternalAnalysisCacheEntry,
   upsertExternalAnalysisWaveformCacheEntry,
+  clearExternalAnalysisCacheForReanalysis,
   removeExternalAnalysisCacheEntry,
   type ExternalAnalysisContext,
   type ExternalAnalysisActiveEntry,

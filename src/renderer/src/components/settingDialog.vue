@@ -552,6 +552,15 @@ const chooseSeratoTrackStorageDir = async () => {
   await setSetting()
 }
 
+const chooseTraktorTrackStorageDir = async () => {
+  const folderPath = (await window.electron.ipcRenderer.invoke('select-folder', false)) as
+    | string[]
+    | null
+  if (!Array.isArray(folderPath) || !folderPath[0]) return
+  runtime.setting.traktorTrackStorageDir = String(folderPath[0] || '').trim()
+  await setSetting()
+}
+
 const reSelectLibrary = async () => {
   if (runtime.isProgressing) {
     await confirm({
@@ -913,6 +922,7 @@ const settingDialogContext: SettingDialogContext = {
   reSelectLibrary,
   chooseRekordboxDesktopTrackStorageDir,
   chooseSeratoTrackStorageDir,
+  chooseTraktorTrackStorageDir,
   hintIcon,
   fpModeHintRefs,
   setFpModeHintRef,

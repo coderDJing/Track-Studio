@@ -21,6 +21,13 @@ import { analyzeFingerprintsForPaths } from '@renderer/utils/fingerprintActions'
 import { buildRekordboxSourceChannel } from '@shared/rekordboxSources'
 import { importCuratedArtistsFromPioneerSource } from '@renderer/composables/rekordboxDesktop/useImportCuratedArtists'
 import { groupPioneerDriveIcons } from './groupPioneerDriveIcons'
+import {
+  buildDesktopSourceIcon,
+  loadDesktopLibraryTreeForMenu as loadCachedDesktopTreeForMenu,
+  loadPioneerDriveTreeForMenu as loadCachedPioneerTreeForMenu,
+  readDesktopSourceRevision,
+  resolvePlaylistIdForTree
+} from './loadRekordboxSourceTreeForMenu'
 import type {
   IMenu,
   IPioneerDeviceLibraryKind,
@@ -117,6 +124,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
   let refreshTimer: ReturnType<typeof setInterval> | null = null
   let sourceTreeRequestToken = 0
   let refreshInFlight: Promise<void> | null = null
+  let selectedDesktopCheckInFlight: Promise<void> | null = null
 
   const pioneerDriveGroups = computed<PioneerDriveGroup[]>(() =>
     groupPioneerDriveIcons(pioneerDriveIcons.value)
@@ -262,32 +270,6 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
       libraryType: 'masterDb'
     })
 
-  const hasPlaylistInTree = (
-    treeNodes: IPioneerPlaylistTreeNode[],
-    playlistId: number
-  ): boolean => {
-    if (!playlistId) return false
-    const walk = (nodes: IPioneerPlaylistTreeNode[]): boolean => {
-      for (const node of nodes) {
-        if (!node.isFolder && node.id === playlistId) return true
-        if (Array.isArray(node.children) && node.children.length > 0 && walk(node.children)) {
-          return true
-        }
-      }
-      return false
-    }
-    return walk(Array.isArray(treeNodes) ? treeNodes : [])
-  }
-
-  const resolvePlaylistIdForTree = (
-    treeNodes: IPioneerPlaylistTreeNode[],
-    preferredPlaylistId: number
-  ) => {
-    const safePlaylistId = Number(preferredPlaylistId) || 0
-    if (safePlaylistId <= 0) return 0
-    return hasPlaylistInTree(treeNodes, safePlaylistId) ? safePlaylistId : 0
-  }
-
   const isCurrentSelectedSource = (
     sourceKind: IRekordboxSourceKind,
     sourceKey: string,
@@ -313,6 +295,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
     libraryType: IRekordboxSourceLibraryType
     preferredPlaylistId: number
     hasCachedTree: boolean
+    revision?: string
     fallbackSourceName: string
     loadTree: () => Promise<RekordboxSourceTreeLoadResult>
     loadTreeFailedMessage: string
@@ -328,6 +311,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
       libraryType,
       preferredPlaylistId,
       hasCachedTree,
+      revision,
       fallbackSourceName,
       loadTree,
       loadTreeFailedMessage,
@@ -351,17 +335,27 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
       )
 
       setCachedRekordboxSourceTree(sourceCacheKey, treeNodes, {
-        selectedPlaylistId: resolvedPlaylistId
+        selectedPlaylistId: resolvedPlaylistId,
+        revision
       })
 
       if (!isCurrentSelectedSource(sourceKind, sourceKey, libraryType)) return
       if (requestToken !== sourceTreeRequestToken) return
 
-      runtime.pioneerDeviceLibrary.treeNodes = treeNodes
-      runtime.pioneerDeviceLibrary.selectedPlaylistId = resolvedPlaylistId
-      runtime.pioneerDeviceLibrary.selectedSourceName =
-        resolveSourceName?.(result) || fallbackSourceName
-      runtime.pioneerDeviceLibrary.selectedSourceRootPath = resolveRootPath?.(result) || rootPath
+      if (JSON.stringify(runtime.pioneerDeviceLibrary.treeNodes) !== JSON.stringify(treeNodes)) {
+        runtime.pioneerDeviceLibrary.treeNodes = treeNodes
+      }
+      if (runtime.pioneerDeviceLibrary.selectedPlaylistId !== resolvedPlaylistId) {
+        runtime.pioneerDeviceLibrary.selectedPlaylistId = resolvedPlaylistId
+      }
+      const sourceName = resolveSourceName?.(result) || fallbackSourceName
+      if (runtime.pioneerDeviceLibrary.selectedSourceName !== sourceName) {
+        runtime.pioneerDeviceLibrary.selectedSourceName = sourceName
+      }
+      const nextRootPath = resolveRootPath?.(result) || rootPath
+      if (runtime.pioneerDeviceLibrary.selectedSourceRootPath !== nextRootPath) {
+        runtime.pioneerDeviceLibrary.selectedSourceRootPath = nextRootPath
+      }
     } catch (error) {
       if (!isCurrentSelectedSource(sourceKind, sourceKey, libraryType)) return
       if (requestToken !== sourceTreeRequestToken) return
@@ -415,7 +409,9 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
             } satisfies PioneerDriveIcon
           })
         })
-      pioneerDriveIcons.value = nextIcons
+      if (JSON.stringify(pioneerDriveIcons.value) !== JSON.stringify(nextIcons)) {
+        pioneerDriveIcons.value = nextIcons
+      }
 
       const nextCacheKeys = new Set(
         nextIcons.map((icon) => resolvePioneerDriveSourceCacheKey(icon)).filter(Boolean)
@@ -463,20 +459,12 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
       }
 
       const desktopLabel = t('library.rekordboxDesktopLibrary')
-      desktopLibraryIcon.value = {
-        key: String(probe.sourceKey || 'rekordbox-desktop').trim(),
-        name: desktopLabel,
-        grey: rekordboxDesktopIconAsset,
-        white: rekordboxDesktopIconAsset,
-        src: rekordboxDesktopIconAsset,
-        showAlt: false,
-        tooltip: desktopLabel,
-        rootPath: String(probe.sourceRootPath || '').trim(),
-        i18nKey: 'library.rekordboxDesktopLibrary'
-      }
+      const nextIcon = buildDesktopSourceIcon(probe, desktopLabel, rekordboxDesktopIconAsset)
+      const iconChanged = JSON.stringify(previousIcon) !== JSON.stringify(nextIcon)
+      if (iconChanged) desktopLibraryIcon.value = nextIcon
 
       const previousCacheKey = resolveDesktopLibrarySourceCacheKey(previousIcon)
-      const nextCacheKey = resolveDesktopLibrarySourceCacheKey(desktopLibraryIcon.value)
+      const nextCacheKey = resolveDesktopLibrarySourceCacheKey(nextIcon)
       if (previousCacheKey && nextCacheKey && previousCacheKey !== nextCacheKey) {
         clearRekordboxSourceCache(previousCacheKey)
       }
@@ -484,9 +472,9 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
       if (
         runtime.libraryAreaSelected === 'PioneerDeviceLibrary' &&
         runtime.pioneerDeviceLibrary.selectedSourceKind === 'desktop' &&
-        runtime.pioneerDeviceLibrary.selectedSourceKey === desktopLibraryIcon.value.key
+        runtime.pioneerDeviceLibrary.selectedSourceKey === nextIcon.key
       ) {
-        updateSelectedIcon(desktopLibraryIcon.value)
+        if (iconChanged) updateSelectedIcon(nextIcon)
       }
     } catch (error) {
       console.error('[librarySelectArea] refresh desktop rekordbox failed', error)
@@ -592,9 +580,24 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
   const clickDesktopLibraryIcon = async () => {
     const icon = desktopLibraryIcon.value
     if (!icon?.rootPath) return
-    clearExternalDjSelection()
+    const alreadyCurrent =
+      runtime.libraryAreaSelected === 'PioneerDeviceLibrary' &&
+      runtime.pioneerDeviceLibrary.selectedSourceKind === 'desktop' &&
+      runtime.pioneerDeviceLibrary.selectedSourceKey === icon.key
     const sourceCacheKey = resolveDesktopLibrarySourceCacheKey(icon)
     const cachedTree = getCachedRekordboxSourceTree(sourceCacheKey)
+    let revision = ''
+    try {
+      revision = await readDesktopSourceRevision()
+    } catch (error) {
+      await confirm({
+        title: t('common.error'),
+        content: [getErrorMessage(error, t('rekordboxDesktop.loadTreeFailed'))],
+        confirmShow: false
+      })
+      return
+    }
+    if (alreadyCurrent && cachedTree?.revision && cachedTree.revision === revision) return
     const preferredPlaylistId =
       runtime.pioneerDeviceLibrary.selectedSourceKind === 'desktop' &&
       runtime.pioneerDeviceLibrary.selectedSourceKey === icon.key
@@ -604,20 +607,24 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
       ? resolvePlaylistIdForTree(cachedTree.treeNodes, preferredPlaylistId)
       : 0
 
-    runtime.pioneerDeviceLibrary.selectedSourceKey = icon.key
-    runtime.pioneerDeviceLibrary.selectedSourceName = t('library.rekordboxDesktopLibrary')
-    runtime.pioneerDeviceLibrary.selectedSourceRootPath = icon.rootPath
-    runtime.pioneerDeviceLibrary.selectedSourceKind = 'desktop'
-    runtime.pioneerDeviceLibrary.selectedLibraryType = 'masterDb'
-    runtime.pioneerDeviceLibrary.selectedPlaylistId = restoredPlaylistId
-    runtime.pioneerDeviceLibrary.loading = !cachedTree
-    runtime.pioneerDeviceLibrary.treeNodes = cachedTree ? cachedTree.treeNodes : []
-    runtime.songsArea.songListUUID = ''
-    updateSelectedIcon(icon)
-    runtime.libraryAreaSelected = 'PioneerDeviceLibrary'
-    emitLibrarySelectedChange({ name: 'PioneerDeviceLibrary' })
+    if (!alreadyCurrent) {
+      clearExternalDjSelection()
+      runtime.pioneerDeviceLibrary.selectedSourceKey = icon.key
+      runtime.pioneerDeviceLibrary.selectedSourceName = t('library.rekordboxDesktopLibrary')
+      runtime.pioneerDeviceLibrary.selectedSourceRootPath = icon.rootPath
+      runtime.pioneerDeviceLibrary.selectedSourceKind = 'desktop'
+      runtime.pioneerDeviceLibrary.selectedLibraryType = 'masterDb'
+      runtime.pioneerDeviceLibrary.selectedPlaylistId = restoredPlaylistId
+      runtime.pioneerDeviceLibrary.loading = !cachedTree
+      runtime.pioneerDeviceLibrary.treeNodes = cachedTree ? cachedTree.treeNodes : []
+      runtime.songsArea.songListUUID = ''
+      updateSelectedIcon(icon)
+      runtime.libraryAreaSelected = 'PioneerDeviceLibrary'
+      emitLibrarySelectedChange({ name: 'PioneerDeviceLibrary' })
+    }
 
-    if (cachedTree && !shouldRefreshRekordboxSourceTree(sourceCacheKey)) return
+    if (cachedTree?.revision && cachedTree.revision === revision) return
+    const selectedPlaylistIdBefore = runtime.pioneerDeviceLibrary.selectedPlaylistId
 
     const task = loadSourceTree({
       sourceKind: 'desktop',
@@ -627,6 +634,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
       libraryType: 'masterDb',
       preferredPlaylistId,
       hasCachedTree: Boolean(cachedTree),
+      revision,
       fallbackSourceName: t('library.rekordboxDesktopLibrary'),
       loadTree: () =>
         window.electron.ipcRenderer.invoke(
@@ -636,10 +644,16 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
       resolveSourceName: () => t('library.rekordboxDesktopLibrary'),
       resolveRootPath: (result) => String(result?.sourceRootPath || '').trim() || icon.rootPath
     })
-    if (!cachedTree) {
-      await task
-    } else {
-      void task
+    await task
+    if (
+      alreadyCurrent &&
+      selectedPlaylistIdBefore > 0 &&
+      runtime.pioneerDeviceLibrary.selectedPlaylistId === selectedPlaylistIdBefore
+    ) {
+      emitter.emit('dj-library:refresh-selected-playlist', {
+        sourceKey: icon.key,
+        playlistId: selectedPlaylistIdBefore
+      })
     }
   }
 
@@ -779,43 +793,15 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
     }
   }
 
-  const loadPioneerDriveTreeForMenu = async (item: PioneerDriveIcon) => {
-    const sourceCacheKey = resolvePioneerDriveSourceCacheKey(item)
-    const cachedTree = getCachedRekordboxSourceTree(sourceCacheKey)
-    if (cachedTree && !shouldRefreshRekordboxSourceTree(sourceCacheKey)) {
-      return cachedTree.treeNodes
-    }
-    const result = (await window.electron.ipcRenderer.invoke(
-      buildRekordboxSourceChannel('usb', 'load-tree'),
+  const loadPioneerDriveTreeForMenu = (item: PioneerDriveIcon) =>
+    loadCachedPioneerTreeForMenu(
+      resolvePioneerDriveSourceCacheKey(item),
       item.path,
       item.libraryType
-    )) as RekordboxSourceTreeLoadResult
-    const treeNodes = Array.isArray(result?.treeNodes) ? result.treeNodes : []
-    setCachedRekordboxSourceTree(sourceCacheKey, treeNodes, {
-      selectedPlaylistId: getRememberedRekordboxSourceSelectedPlaylist(sourceCacheKey)
-    })
-    return treeNodes
-  }
+    )
 
-  const loadDesktopLibraryTreeForMenu = async (icon: RekordboxDesktopIcon) => {
-    const sourceCacheKey = resolveDesktopLibrarySourceCacheKey(icon)
-    const cachedTree = getCachedRekordboxSourceTree(sourceCacheKey)
-    if (cachedTree && !shouldRefreshRekordboxSourceTree(sourceCacheKey)) {
-      return {
-        treeNodes: cachedTree.treeNodes,
-        rootPath: icon.rootPath
-      }
-    }
-    const result = (await window.electron.ipcRenderer.invoke(
-      buildRekordboxSourceChannel('desktop', 'load-tree')
-    )) as RekordboxSourceTreeLoadResult
-    const treeNodes = Array.isArray(result?.treeNodes) ? result.treeNodes : []
-    const rootPath = String(result?.sourceRootPath || icon.rootPath || '').trim()
-    setCachedRekordboxSourceTree(sourceCacheKey, treeNodes, {
-      selectedPlaylistId: getRememberedRekordboxSourceSelectedPlaylist(sourceCacheKey)
-    })
-    return { treeNodes, rootPath }
-  }
+  const loadDesktopLibraryTreeForMenu = (icon: RekordboxDesktopIcon) =>
+    loadCachedDesktopTreeForMenu(resolveDesktopLibrarySourceCacheKey(icon), icon.rootPath)
 
   const openSimilarTracksForPioneerDriveIcon = async (item: PioneerDriveIcon) => {
     try {
@@ -1024,14 +1010,27 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
       runtime.pioneerDeviceLibrary.selectedSourceKey === desktopLibraryIcon.value?.key
   )
 
+  const checkSelectedDesktopLibrary = () => {
+    if (!isSelectedDesktopLibraryIcon.value || selectedDesktopCheckInFlight) return
+    const task = clickDesktopLibraryIcon()
+    selectedDesktopCheckInFlight = task
+    void task
+      .finally(() => {
+        if (selectedDesktopCheckInFlight === task) selectedDesktopCheckInFlight = null
+      })
+      .catch((error) => console.error('[rekordboxSourceIcons] refresh failed', error))
+  }
+
   const handleWindowFocus = () => {
     void refreshRekordboxSourceIcons()
+    checkSelectedDesktopLibrary()
   }
 
   const handleDocumentVisibilityChange = () => {
     if (typeof document === 'undefined') return
     if (document.visibilityState !== 'visible') return
     void refreshRekordboxSourceIcons()
+    checkSelectedDesktopLibrary()
   }
 
   onMounted(() => {

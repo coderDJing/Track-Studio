@@ -55,6 +55,16 @@ static void decode_ctx_free(DecodeContext *ctx) {
     if (ctx->fmt_ctx)   avformat_close_input(&ctx->fmt_ctx);
 }
 
+/* Audio operations must not probe or decode embedded artwork/video streams. */
+static void discard_non_audio_streams(AVFormatContext *fmt_ctx) {
+    for (unsigned int i = 0; i < fmt_ctx->nb_streams; i++) {
+        AVStream *stream = fmt_ctx->streams[i];
+        if (stream->codecpar && stream->codecpar->codec_type != AVMEDIA_TYPE_AUDIO) {
+            stream->discard = AVDISCARD_ALL;
+        }
+    }
+}
+
 /**
  * Initialize the decode context: open file, find audio stream, open codec, set up resampler.
  * Returns 0 on success.
@@ -600,13 +610,32 @@ int frkb_ffmpeg_probe_time_basis(
     int ret = avformat_open_input(&fmt_ctx, file_path, NULL, NULL);
     if (ret < 0) return FRKB_ERR_OPEN_INPUT;
 
-    ret = avformat_find_stream_info(fmt_ctx, NULL);
-    if (ret < 0) {
-        avformat_close_input(&fmt_ctx);
-        return FRKB_ERR_STREAM_INFO;
+    discard_non_audio_streams(fmt_ctx);
+    /* MP3's demuxer already reads Xing/LAME lead-in. Reading its first audio
+     * packet fills the sample rate through the MP3 parser; probing all streams
+     * would unnecessarily decode APIC artwork, including mislabeled images. */
+    int is_mp3 = fmt_ctx->iformat && strcmp(fmt_ctx->iformat->name, "mp3") == 0;
+    if (!is_mp3) {
+        ret = avformat_find_stream_info(fmt_ctx, NULL);
+        if (ret < 0) {
+            avformat_close_input(&fmt_ctx);
+            return FRKB_ERR_STREAM_INFO;
+        }
     }
 
-    ret = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_AUDIO, -1, -1, NULL, 0);
+    if (is_mp3) {
+        /* MP3 has a single audio stream whose parameters are populated by the
+         * first packet. av_find_best_stream requires those parameters upfront. */
+        ret = -1;
+        for (unsigned int i = 0; i < fmt_ctx->nb_streams; i++) {
+            if (fmt_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+                ret = (int)i;
+                break;
+            }
+        }
+    } else {
+        ret = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_AUDIO, -1, -1, NULL, 0);
+    }
     if (ret < 0) {
         avformat_close_input(&fmt_ctx);
         return FRKB_ERR_NO_AUDIO;
@@ -631,7 +660,7 @@ int frkb_ffmpeg_probe_time_basis(
         }
     }
 
-    if (*start_time_sec_out <= 0.0 || !read_skip_samples) {
+    if (!is_mp3 && (*start_time_sec_out <= 0.0 || !read_skip_samples)) {
         avformat_close_input(&fmt_ctx);
         return 0;
     }
@@ -643,6 +672,7 @@ int frkb_ffmpeg_probe_time_basis(
     }
     while (av_read_frame(fmt_ctx, pkt) >= 0) {
         if (pkt->stream_index == ret) {
+            *sample_rate_out = stream->codecpar ? stream->codecpar->sample_rate : 0;
             for (int i = 0; i < pkt->side_data_elems; i += 1) {
                 if (pkt->side_data[i].type == AV_PKT_DATA_SKIP_SAMPLES && pkt->side_data[i].size >= 4) {
                     *skip_samples_out = (int)AV_RL32(pkt->side_data[i].data);

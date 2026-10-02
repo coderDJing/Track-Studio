@@ -278,12 +278,24 @@ export const hydrateSeratoTracks = async (
           name: loop.name
         })
       }
-      for (const marker of metadata?.beatgrid?.markers || []) {
+      const beatgridMarkers = metadata?.beatgrid?.markers || []
+      let beatOrdinal = 0
+      for (let index = 0; index < beatgridMarkers.length; index += 1) {
+        const marker = beatgridMarkers[index]
+        const nextMarker = beatgridMarkers[index + 1]
+        const beatsToNext = Number(marker.beatsToNext)
+        const spanSec = nextMarker ? nextMarker.position - marker.position : 0
+        const segmentBpm =
+          Number.isFinite(beatsToNext) && beatsToNext > 0 && spanSec > 0
+            ? (beatsToNext * 60) / spanSec
+            : undefined
         metadataCues.push({
           kind: 'grid',
           positionMs: marker.position * 1000,
-          bpm: marker.bpm
+          bpm: marker.bpm ?? segmentBpm,
+          downbeatBeatOffset: (4 - (beatOrdinal % 4)) % 4
         })
+        if (Number.isInteger(beatsToNext) && beatsToNext > 0) beatOrdinal += beatsToNext
       }
       if (metadataCues.length) track.cues = metadataCues
       if (metadata?.autotags?.bpm && Number.isFinite(metadata.autotags.bpm)) {
@@ -398,12 +410,42 @@ export const readSeratoLibrary = async (
     )
   }
 
+  // Folder metadata records empty nodes, while neworder.pref controls their
+  // position among playlists. Parents missing from the order file inherit
+  // the position of their earliest descendant crate.
+  const rank = (playlist: ExternalLibraryPlaylist) => {
+    const prefix = playlist.id.slice('serato:'.length).replaceAll('/', '%%').toLowerCase()
+    const exact = crateOrderMap.get(prefix)
+    if (exact !== undefined) return exact
+    let first = Number.MAX_SAFE_INTEGER
+    for (const [name, index] of crateOrderMap) {
+      if (name.startsWith(`${prefix}%%`)) first = Math.min(first, index)
+    }
+    return first
+  }
+  const byParent = new Map<string | null, ExternalLibraryPlaylist[]>()
+  for (const playlist of playlists) {
+    const siblings = byParent.get(playlist.parentId) || []
+    siblings.push(playlist)
+    byParent.set(playlist.parentId, siblings)
+  }
+  const orderedPlaylists: ExternalLibraryPlaylist[] = []
+  const appendChildren = (parentId: string | null) => {
+    const siblings = byParent.get(parentId) || []
+    siblings.sort((left, right) => rank(left) - rank(right) || left.order - right.order)
+    for (const playlist of siblings) {
+      playlist.order = orderedPlaylists.length
+      orderedPlaylists.push(playlist)
+      appendChildren(playlist.id)
+    }
+  }
+  appendChildren(null)
   const snapshot: ExternalLibrarySnapshot = {
     kind: 'serato',
     rootPath: path.dirname(seratoRoot),
     libraryPath: seratoRoot,
     tracks: [...trackByPath.values()],
-    playlists,
+    playlists: orderedPlaylists,
     warnings
   }
   if (options?.hydrateTracks === false) return snapshot

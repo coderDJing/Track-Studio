@@ -41,6 +41,10 @@ type PlaybackQueuePayload = {
   filePath?: string
   focusSlot?: string
   onlyIfQueued?: boolean
+  analysisTargets?: {
+    bpm?: boolean
+    waveform?: boolean
+  }
 }
 
 const hasFrkbAnalysisAuthority = (payload: { analysisAuthority?: unknown } | null | undefined) =>
@@ -91,7 +95,8 @@ export function registerKeyAnalysisHandlers() {
       urgent: true,
       source: 'foreground',
       focusSlot: payload?.focusSlot,
-      includeStructure: payload?.onlyIfQueued !== true
+      includeStructure: payload?.onlyIfQueued !== true && !payload?.analysisTargets,
+      analysisTargets: payload?.analysisTargets
     })
   })
 
@@ -104,7 +109,8 @@ export function registerKeyAnalysisHandlers() {
     enqueueKeyAnalysis(filePath, 'low', {
       source: 'foreground',
       preemptible: true,
-      includeStructure: true
+      includeStructure: !payload?.analysisTargets,
+      analysisTargets: payload?.analysisTargets
     })
   })
 

@@ -1,7 +1,11 @@
 import { ipcMain } from 'electron'
+import fs from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { readSeratoLibrary, readTraktorCollection } from '../services/externalLibrary'
 import { hydrateSeratoTracks } from '../services/externalLibrary/serato'
+import { loadTraktorStripePreviews } from '../services/externalLibrary/traktorStripe'
+import { hydrateTraktorTrackTimeBases } from '../services/externalLibrary/traktorAudioTimeBasis'
 import { probeExternalLibraries } from '../services/externalLibrary/detect'
 import {
   buildExternalLibraryBrowserTracks,
@@ -9,10 +13,18 @@ import {
   buildSeratoWaveformOverviews,
   isExternalLibraryKind
 } from '../services/externalLibrary/browserAdapter'
-import type { ExternalLibrarySnapshot, ExternalLibraryTrack } from '../../shared/externalLibrary'
+import type {
+  ExternalLibrarySnapshot,
+  ExternalLibraryTrack,
+  TraktorTrackMetadata
+} from '../../shared/externalLibrary'
 import * as LibraryCacheDb from '../libraryCacheDb'
 import { hydrateExternalLibraryTracksFromAnalysisCache } from '../services/externalLibrary/analysisCache'
 import { mutateSeratoCrate } from '../services/externalLibrary/seratoCrateWriter'
+import {
+  assertTraktorClosed,
+  mutateTraktorCollection
+} from '../services/externalLibrary/traktorCollectionWriter'
 import {
   writeSeratoHotCues,
   type SeratoHotCue
@@ -22,9 +34,8 @@ import type { ExternalLibraryMutationResponse } from '../../shared/externalLibra
 
 type ExternalLibraryKind = 'serato' | 'traktor'
 
-const SNAPSHOT_CACHE_TTL_MS = 30_000
 const SERATO_TRACK_METADATA_CACHE_TTL_MS = 5 * 60_000
-const snapshotCache = new Map<string, { snapshot: ExternalLibrarySnapshot; updatedAt: number }>()
+const snapshotCache = new Map<string, { snapshot: ExternalLibrarySnapshot; sourceStamp?: string }>()
 const snapshotRequests = new Map<string, Promise<ExternalLibrarySnapshot>>()
 const analysisReconcileRequests = new Map<string, Promise<void>>()
 const seratoTrackMetadataCache = new Map<
@@ -37,11 +48,69 @@ const normalizeAbsolutePathKey = (filePath: string) => {
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved
 }
 
+const getTraktorSourceStamp = async (sourcePath: string) => {
+  const stat = await fs.stat(sourcePath)
+  return `${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`
+}
+
+const getOptionalFileStamp = async (filePath: string) => {
+  try {
+    const stat = await fs.stat(filePath)
+    return `${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return 'missing'
+    }
+    throw error
+  }
+}
+
+const getSeratoSourceStamp = async (sourcePath: string) => {
+  const root =
+    path.basename(path.normalize(sourcePath)).toLowerCase() === '_serato_'
+      ? sourcePath
+      : path.join(sourcePath, '_Serato_')
+  const subcratesPath = path.join(root, 'Subcrates')
+  let crateNames: string[] = []
+  try {
+    crateNames = (await fs.readdir(subcratesPath, { withFileTypes: true }))
+      .filter((entry) => entry.isFile() && /\.crate$/i.test(entry.name))
+      .map((entry) => entry.name)
+      .sort()
+  } catch (error) {
+    if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') {
+      throw error
+    }
+  }
+  const files = [
+    path.join(root, 'database V2'),
+    path.join(root, 'FRKB folders.json'),
+    path.join(root, 'neworder.pref'),
+    ...crateNames.map((name) => path.join(subcratesPath, name))
+  ]
+  const stamps = await Promise.all(
+    files.map(
+      async (filePath) => `${path.relative(root, filePath)}:${await getOptionalFileStamp(filePath)}`
+    )
+  )
+  return createHash('sha256').update(stamps.join('|')).digest('hex')
+}
+
+const getExternalSourceStamp = (kind: ExternalLibraryKind, sourcePath: string) =>
+  kind === 'traktor' ? getTraktorSourceStamp(sourcePath) : getSeratoSourceStamp(sourcePath)
+
 const resolveExternalLibraryAnalysisSourceId = (kind: ExternalLibraryKind) =>
   `external-library:${kind}`
 
 const buildSeratoTrackMetadataCacheKey = (sourcePath: string, filePath: string) =>
   `${normalizeAbsolutePathKey(sourcePath)}::${normalizeAbsolutePathKey(filePath)}`
+
+const clearSeratoTrackMetadataCache = (sourcePath: string) => {
+  const prefix = `${normalizeAbsolutePathKey(sourcePath)}::`
+  for (const key of seratoTrackMetadataCache.keys()) {
+    if (key.startsWith(prefix)) seratoTrackMetadataCache.delete(key)
+  }
+}
 
 const hydrateSeratoTrackSubset = async (
   sourcePath: string,
@@ -155,28 +224,52 @@ const registerExternalLibraryAnalysisContexts = (
   }
 }
 
-const readLibrary = async (kind: ExternalLibraryKind, sourcePath: string, preferCached = false) => {
+const readLibrary = async (
+  kind: ExternalLibraryKind,
+  sourcePath: string,
+  preferCached = false,
+  refreshAttempt = 0
+) => {
   const cacheKey = `${kind}:${path.normalize(sourcePath).toLocaleLowerCase()}`
+  const sourceStamp =
+    kind === 'serato' && preferCached ? undefined : await getExternalSourceStamp(kind, sourcePath)
   const cached = snapshotCache.get(cacheKey)
-  if (cached && (preferCached || Date.now() - cached.updatedAt <= SNAPSHOT_CACHE_TTL_MS)) {
+  if (cached && (kind === 'serato' && preferCached ? true : cached.sourceStamp === sourceStamp)) {
     return cached.snapshot
   }
+  if (kind === 'serato' && cached && cached.sourceStamp !== sourceStamp) {
+    clearSeratoTrackMetadataCache(sourcePath)
+  }
   const activeRequest = snapshotRequests.get(cacheKey)
-  if (activeRequest) return await activeRequest
+  if (activeRequest) {
+    await activeRequest
+    return await readLibrary(kind, sourcePath, preferCached)
+  }
 
   const request =
     kind === 'serato'
       ? readSeratoLibrary(sourcePath, { hydrateTracks: false })
       : readTraktorCollection(path.resolve(sourcePath))
   snapshotRequests.set(cacheKey, request)
+  let snapshot: ExternalLibrarySnapshot
   try {
-    const snapshot = await request
-    snapshotCache.set(cacheKey, { snapshot, updatedAt: Date.now() })
-    scheduleExternalLibraryAnalysisReconcile(kind, sourcePath, snapshot)
-    return snapshot
+    snapshot = await request
+    snapshotCache.set(cacheKey, { snapshot, sourceStamp })
   } finally {
     if (snapshotRequests.get(cacheKey) === request) snapshotRequests.delete(cacheKey)
   }
+  const sourceChangedDuringRead =
+    (kind !== 'serato' || !preferCached) &&
+    (await getExternalSourceStamp(kind, sourcePath)) !== sourceStamp
+  if (sourceChangedDuringRead) {
+    if (snapshotCache.get(cacheKey)?.snapshot === snapshot) snapshotCache.delete(cacheKey)
+    if (refreshAttempt < 2) {
+      return await readLibrary(kind, sourcePath, preferCached, refreshAttempt + 1)
+    }
+    return snapshot
+  }
+  scheduleExternalLibraryAnalysisReconcile(kind, sourcePath, snapshot)
+  return snapshot
 }
 
 export const invalidateExternalLibrarySnapshot = (
@@ -185,6 +278,7 @@ export const invalidateExternalLibrarySnapshot = (
 ) => {
   const cacheKey = `${kind}:${path.normalize(sourcePath).toLocaleLowerCase()}`
   snapshotCache.delete(cacheKey)
+  if (kind === 'serato') clearSeratoTrackMetadataCache(sourcePath)
 }
 
 const parseRequest = (request: { kind?: ExternalLibraryKind; path?: string } | undefined) => {
@@ -198,6 +292,23 @@ const parseRequest = (request: { kind?: ExternalLibraryKind; path?: string } | u
 
 export function registerExternalLibraryHandlers() {
   ipcMain.handle('external-library:probe', async () => await probeExternalLibraries())
+
+  ipcMain.handle(
+    'external-library:source-revision',
+    async (_event, request: { kind?: ExternalLibraryKind; path?: string }) => {
+      const { kind, sourcePath } = parseRequest(request)
+      return { revision: await getExternalSourceStamp(kind, sourcePath) }
+    }
+  )
+
+  ipcMain.handle(
+    'external-library:check-write',
+    async (_event, request: { kind?: ExternalLibraryKind; path?: string }) => {
+      const { kind } = parseRequest(request)
+      if (kind === 'traktor') await assertTraktorClosed()
+      return true
+    }
+  )
 
   ipcMain.handle(
     'external-library:read',
@@ -223,6 +334,7 @@ export function registerExternalLibraryHandlers() {
           | 'remove-tracks'
           | 'reorder-tracks'
           | 'write-tracks'
+          | 'append-existing-tracks'
         externalId?: string
         parentExternalId?: string
         name?: string
@@ -230,34 +342,85 @@ export function registerExternalLibraryHandlers() {
         targetIndex?: number
         seq?: number
         playlistId?: number
+        sourcePlaylistId?: number
         trackPaths?: string[]
         trackPathMappings?: Array<{ sourcePath: string; storedPath: string }>
         trackCueMappings?: Array<{ storedPath: string; hotCues?: SeratoHotCue[] }>
+        trackMetadata?: TraktorTrackMetadata[]
       }
     ): Promise<ExternalLibraryMutationResponse> => {
       const { kind, sourcePath } = parseRequest(request)
-      if (kind !== 'serato') {
-        return { ok: false, summary: { errorMessage: 'Traktor 库目前是只读的。' } }
-      }
       try {
-        for (const cueMapping of request.trackCueMappings || []) {
-          const storedPath = String(cueMapping.storedPath || '').trim()
-          if (!storedPath || !Array.isArray(cueMapping.hotCues) || !cueMapping.hotCues.length)
-            continue
-          await writeSeratoHotCues(storedPath, cueMapping.hotCues)
+        const operation =
+          request.operation === 'append-existing-tracks'
+            ? 'write-tracks'
+            : request.operation || 'rename'
+        if (request.operation === 'append-existing-tracks') {
+          // Writes reconcile the source against disk, never against the view snapshot.
+          const source =
+            kind === 'serato'
+              ? await readSeratoLibrary(sourcePath, { hydrateTracks: false })
+              : await readTraktorCollection(path.resolve(sourcePath))
+          const sourcePlaylistId = Number(request.sourcePlaylistId)
+          const requestedPaths = Array.isArray(request.trackPaths) ? request.trackPaths : []
+          const sourcePaths = new Set(
+            selectSnapshotTracks(source, sourcePlaylistId).map((track) =>
+              normalizeAbsolutePathKey(track.filePath)
+            )
+          )
+          if (
+            !Number.isSafeInteger(sourcePlaylistId) ||
+            sourcePlaylistId <= 0 ||
+            !requestedPaths.length ||
+            requestedPaths.some((filePath) => !sourcePaths.has(normalizeAbsolutePathKey(filePath)))
+          ) {
+            throw new Error('来源歌单的曲目已变化，请刷新后重试。')
+          }
+          const target = source.playlists.find((playlist) => playlist.id === request.externalId)
+          if (!target || target.isFolder || target.isSmartPlaylist)
+            throw new Error('目标必须是普通歌单。')
+          if (
+            request.trackCueMappings?.length ||
+            request.trackMetadata?.length ||
+            request.trackPathMappings?.length
+          ) {
+            throw new Error('库内添加曲目不能修改音频文件或曲目分析信息。')
+          }
         }
-        const summary = await mutateSeratoCrate({
-          operation: request.operation || 'rename',
-          sourcePath,
-          externalId: request.externalId,
-          parentExternalId: request.parentExternalId,
-          name: request.name,
-          rowKeys: request.rowKeys,
-          targetIndex: request.targetIndex,
-          seq: request.seq,
-          trackPaths: request.trackPaths,
-          trackPathMappings: request.trackPathMappings
-        })
+        let summary
+        if (kind === 'serato') {
+          for (const cueMapping of request.trackCueMappings || []) {
+            const storedPath = String(cueMapping.storedPath || '').trim()
+            if (!storedPath || !Array.isArray(cueMapping.hotCues) || !cueMapping.hotCues.length)
+              continue
+            await writeSeratoHotCues(storedPath, cueMapping.hotCues)
+          }
+          summary = await mutateSeratoCrate({
+            operation,
+            sourcePath,
+            externalId: request.externalId,
+            parentExternalId: request.parentExternalId,
+            name: request.name,
+            rowKeys: request.rowKeys,
+            targetIndex: request.targetIndex,
+            seq: request.seq,
+            trackPaths: request.trackPaths,
+            trackPathMappings: request.trackPathMappings
+          })
+        } else {
+          summary = await mutateTraktorCollection({
+            operation,
+            sourcePath,
+            externalId: request.externalId,
+            parentExternalId: request.parentExternalId,
+            name: request.name,
+            rowKeys: request.rowKeys,
+            targetIndex: request.targetIndex,
+            seq: request.seq,
+            trackPaths: request.trackPaths,
+            trackMetadata: request.trackMetadata
+          })
+        }
         invalidateExternalLibrarySnapshot(kind, sourcePath)
         const snapshot = await readLibrary(kind, sourcePath, false)
         const selected = summary.externalId
@@ -305,7 +468,7 @@ export function registerExternalLibraryHandlers() {
         tracks:
           kind === 'serato'
             ? await hydrateSeratoTrackSubset(sourcePath, selectedTracks)
-            : selectedTracks
+            : await hydrateTraktorTrackTimeBases(selectedTracks)
       }
       const result = buildExternalLibraryBrowserTracks(browserSnapshot, playlistId)
       registerExternalLibraryAnalysisContexts(kind, sourcePath, result.tracks)
@@ -330,8 +493,11 @@ export function registerExternalLibraryHandlers() {
             .filter(Boolean)
         )
       ).slice(0, 128)
-      if (kind !== 'serato' || !filePaths.length) return { items: [] }
+      if (!filePaths.length) return { items: [] }
       const snapshot = await readLibrary(kind, sourcePath, true)
+      if (kind === 'traktor') {
+        return { items: await loadTraktorStripePreviews(snapshot, filePaths) }
+      }
       const requestedPathSet = new Set(filePaths.map(normalizeAbsolutePathKey))
       const requestedTracks = snapshot.tracks.filter((track) =>
         requestedPathSet.has(normalizeAbsolutePathKey(track.filePath))

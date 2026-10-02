@@ -7,6 +7,8 @@ import {
   probeRekordboxDesktopLibraryWriteAvailability
 } from '../services/rekordboxDesktopLibrary/detect'
 import { createRekordboxDesktopPlaylist } from '../services/rekordboxDesktopLibrary/createPlaylist'
+import { appendExistingRekordboxPlaylistTracks } from '../services/rekordboxDesktopLibrary/appendExistingTracks'
+import type { RekordboxDesktopAppendExistingTracksRequest } from '../../shared/rekordboxDesktopPlaylist'
 import {
   createRekordboxDesktopEmptyPlaylist,
   createRekordboxDesktopPlaylistFolder
@@ -17,6 +19,7 @@ import {
   renameRekordboxDesktopPlaylistNode
 } from '../services/rekordboxDesktopLibrary/playlistNode'
 import { loadRekordboxDesktopPlaylistTree } from '../services/rekordboxDesktopLibrary/tree'
+import { getRekordboxDesktopSourceRevision } from '../services/rekordboxDesktopLibrary/sourceRevision'
 import {
   loadRekordboxDesktopPlaylistTracks,
   attachRekordboxDesktopPlaylistRuntime,
@@ -33,6 +36,10 @@ import {
   copyTracksToRekordboxDesktopStorage
 } from '../services/rekordboxDesktopLibrary/storage'
 import { buildPioneerPlaylistTree } from '../services/pioneerDeviceLibrary/tree'
+import {
+  createDjLibraryCollectionNode,
+  REKORDBOX_COLLECTION_PLAYLIST_ID
+} from '../../shared/djLibraryCollection'
 import type {
   RekordboxDesktopCreateEmptyPlaylistRequest,
   RekordboxDesktopCreateEmptyPlaylistResponse,
@@ -61,6 +68,15 @@ import type { RekordboxDesktopCleanupCopiedTracksRequest } from '../../shared/re
 import type { IPioneerPlaylistTrack } from '../../types/globals'
 
 export function registerRekordboxDesktopLibraryHandlers() {
+  ipcMain.handle(
+    'rekordbox-desktop-library:append-existing-playlist-tracks',
+    async (_event, request: RekordboxDesktopAppendExistingTracksRequest) =>
+      await appendExistingRekordboxPlaylistTracks(request)
+  )
+  ipcMain.handle('rekordbox-desktop-library:source-revision', async () => ({
+    revision: await getRekordboxDesktopSourceRevision()
+  }))
+
   const mimeFromExt = (ext: string) =>
     ext === '.png'
       ? 'image/png'
@@ -87,7 +103,10 @@ export function registerRekordboxDesktopLibraryHandlers() {
     const loaded = await loadRekordboxDesktopPlaylistTree()
     return {
       ...loaded.probe,
-      treeNodes: buildPioneerPlaylistTree(loaded.nodes)
+      treeNodes: [
+        createDjLibraryCollectionNode(REKORDBOX_COLLECTION_PLAYLIST_ID),
+        ...buildPioneerPlaylistTree(loaded.nodes)
+      ]
     }
   })
 

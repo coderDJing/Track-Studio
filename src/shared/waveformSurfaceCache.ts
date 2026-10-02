@@ -1,4 +1,5 @@
 import type { UnifiedDisplayWaveformDetailData } from './unifiedDisplayWaveform'
+import type { NativeWaveformBitmap } from './compactVisualWaveform'
 
 export const WAVEFORM_SURFACE_CACHE_VERSION = 1
 export const WAVEFORM_LIST_PREVIEW_PARAMETER_VERSION = 1
@@ -31,6 +32,9 @@ type WaveformSurfaceDataBase = {
   colorBlue: Uint8Array
   overviewTop: Uint8Array
   overviewBottom: Uint8Array
+  /** Source-specific visual gain for the song-list preview; omitted for cached FRKB waveforms. */
+  displayGain?: number
+  nativeBitmap?: NativeWaveformBitmap
 }
 
 export type WaveformListPreviewData = WaveformSurfaceDataBase & {

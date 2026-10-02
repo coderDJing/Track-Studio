@@ -118,11 +118,16 @@ const isExternalSource = computed(
 const isSeratoSource = computed(
   () => isExternalSource.value && selectedExternalKind.value === 'serato'
 )
+const isTraktorSource = computed(
+  () => isExternalSource.value && selectedExternalKind.value === 'traktor'
+)
 const isDesktopSource = computed(() => selectedSourceKind.value === 'desktop')
 const selectedSourceName = computed(() => {
   if (runtime.pioneerDeviceLibrary.selectedSourceName) {
     return runtime.pioneerDeviceLibrary.selectedSourceName
   }
+  if (isTraktorSource.value) return t('library.traktorLibrary')
+  if (isSeratoSource.value) return t('library.seratoLibrary')
   return isDesktopSource.value ? t('pioneer.desktopLibraryName') : 'Pioneer USB'
 })
 const selectedPlaylistId = computed(() => runtime.pioneerDeviceLibrary.selectedPlaylistId || 0)
@@ -217,6 +222,7 @@ const emitPioneerSongsAreaLog = (_event: string, _payload?: Record<string, unkno
 
 const {
   applyFiltersAndSorting,
+  applyFiltersAndSortingMerged,
   buildSongSnapshot,
   normalizePath,
   resolveSelectedTracks,
@@ -282,6 +288,7 @@ const { placeholderText } = usePioneerSongsPlaceholder({
   isDesktopSource,
   isExternalSource,
   isSeratoSource,
+  isTraktorSource,
   selectedPlaylistId,
   originalTracks,
   visibleSongs,
@@ -291,9 +298,11 @@ const { placeholderText } = usePioneerSongsPlaceholder({
 
 const canRemoveTracksFromDesktopPlaylist = computed(
   () =>
-    (isDesktopSource.value || selectedExternalKind.value === 'serato') &&
+    (isDesktopSource.value || isExternalSource.value) &&
     Boolean(selectedPlaylistNode.value) &&
+    (!isExternalSource.value || Boolean(selectedPlaylistNode.value?.externalId)) &&
     !selectedPlaylistNode.value?.isFolder &&
+    !selectedPlaylistNode.value?.isAllTracks &&
     !selectedPlaylistNode.value?.isSmartPlaylist
 )
 const hasActiveTrackFilters = computed(() =>
@@ -449,9 +458,18 @@ const { loadPlaylistTracks } = usePioneerPlaylistTracks({
   loading,
   selectedRowKeys,
   applyFiltersAndSorting,
+  applyFiltersAndSortingMerged,
   isCurrentPlaylistLoadTarget,
   emitPioneerSongsAreaLog
 })
+
+const handleDjPlaylistRefresh = (payload?: { sourceKey: string; playlistId: number }) => {
+  if (!isDesktopSource.value && !isExternalSource.value) return
+  if (payload?.sourceKey !== selectedSourceKey.value) return
+  if (payload.playlistId !== selectedPlaylistId.value) return
+  void loadPlaylistTracks()
+}
+emitter.on('dj-library:refresh-selected-playlist', handleDjPlaylistRefresh)
 
 const {
   playlistMutationPending,
@@ -685,6 +703,7 @@ const handleSongDblClick = async (song: ISongInfo, event?: MouseEvent) => {
 onUnmounted(() => {
   cancelPendingRepeatSingleClickDeselect()
   emitter.off('songsArea/focus-song', handleFocusSongRequest)
+  emitter.off('dj-library:refresh-selected-playlist', handleDjPlaylistRefresh)
   emitter.off('preview-transfer:open-dialog', handlePreviewMoveRequest)
   emitter.off('songFileMissing', handleSongFileMissing)
   emitter.off('songFileRestored', handleSongFileRestored)

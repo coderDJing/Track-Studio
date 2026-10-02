@@ -9,6 +9,8 @@ import {
 } from '../waveformCodec'
 import type { ISongInfo } from '../../types/globals'
 import { stripBeatThisDebugInfo } from './pathResolvers'
+import { stripSongCoreAnalysisFields, type SongCoreAnalysisClearFields } from './songCache'
+import { buildLiteSongInfo } from '../services/songInfoLite'
 
 const EXTERNAL_ANALYSIS_DEVICE_TABLE = 'external_analysis_devices'
 const EXTERNAL_ANALYSIS_CACHE_TABLE = 'external_analysis_cache'
@@ -656,6 +658,40 @@ export async function upsertExternalAnalysisWaveformCacheEntry(
     return true
   } catch (error) {
     log.error('[sqlite] external analysis waveform cache upsert failed', error)
+    return false
+  }
+}
+
+export async function clearExternalAnalysisCacheForReanalysis(
+  context: Partial<ExternalAnalysisContext> | null | undefined,
+  stat: { size: number; mtimeMs: number },
+  fields: SongCoreAnalysisClearFields,
+  clearWaveform: boolean
+) {
+  const db = getLibraryDb()
+  const normalized = normalizeContext(context)
+  if (!db || !normalized) return false
+  try {
+    const existing = await loadExternalAnalysisCacheEntry(normalized, stat)
+    const info = stripSongCoreAnalysisFields(
+      existing?.info ?? buildLiteSongInfo(normalized.filePath),
+      fields
+    )
+    if (fields.beatGrid) info.externalBeatGridPreference = 'frkb-manual'
+    if (clearWaveform) info.externalWaveformPreference = 'frkb-manual'
+    if (!(await upsertExternalAnalysisCacheEntry(normalized, stat, info))) return false
+    if (clearWaveform || !existing) {
+      db.prepare(
+        `UPDATE ${EXTERNAL_ANALYSIS_CACHE_TABLE}
+         SET waveform_version = NULL, waveform_sample_rate = NULL, waveform_step = NULL,
+             waveform_duration = NULL, waveform_frames = NULL, waveform_data = NULL,
+             updated_at_ms = ?
+         WHERE source_kind = ? AND source_id = ? AND relative_path = ?`
+      ).run(Date.now(), normalized.sourceKind, normalized.sourceId, normalized.relativePath)
+    }
+    return true
+  } catch (error) {
+    log.error('[sqlite] external analysis reanalysis clear failed', error)
     return false
   }
 }

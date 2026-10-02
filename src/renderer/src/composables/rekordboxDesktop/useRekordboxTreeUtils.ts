@@ -125,8 +125,9 @@ export const isDescendantNode = (
 }
 
 const reorderTreeNodes = (nodes: IPioneerPlaylistTreeNode[]) => {
-  nodes.forEach((node, index) => {
-    node.order = index + 1
+  let seq = 0
+  nodes.forEach((node) => {
+    node.order = node.isAllTracks ? 0 : ++seq
     if (Array.isArray(node.children) && node.children.length > 0) {
       reorderTreeNodes(node.children)
     }
@@ -143,9 +144,12 @@ export const moveTreeNode = (
   const sourceBeforeMove = findNodeLocation(nextNodes, sourceId)
   const targetBeforeMove = findNodeLocation(nextNodes, targetId)
   if (!sourceBeforeMove || !targetBeforeMove) return null
+  if (sourceBeforeMove.node.isAllTracks || targetBeforeMove.node.isAllTracks) return null
 
   const originalParentId = sourceBeforeMove.parentId
-  const originalSeq = sourceBeforeMove.index + 1
+  const originalSeq = sourceBeforeMove.siblings
+    .slice(0, sourceBeforeMove.index + 1)
+    .filter((node) => !node.isAllTracks).length
 
   const [movedNode] = sourceBeforeMove.siblings.splice(sourceBeforeMove.index, 1)
   if (!movedNode) return null
@@ -175,7 +179,9 @@ export const moveTreeNode = (
   if (!movedAfter) return null
 
   const finalParentId = movedAfter.parentId
-  const finalSeq = movedAfter.index + 1
+  const finalSeq = movedAfter.siblings
+    .slice(0, movedAfter.index + 1)
+    .filter((node) => !node.isAllTracks).length
   if (finalParentId === originalParentId && finalSeq === originalSeq) {
     return null
   }
@@ -195,9 +201,12 @@ export const moveTreeNodeToRootEnd = (
   const nextNodes = cloneTreeNodes(nodes)
   const sourceBeforeMove = findNodeLocation(nextNodes, sourceId)
   if (!sourceBeforeMove) return null
+  if (sourceBeforeMove.node.isAllTracks) return null
 
   const originalParentId = sourceBeforeMove.parentId
-  const originalSeq = sourceBeforeMove.index + 1
+  const originalSeq = sourceBeforeMove.siblings
+    .slice(0, sourceBeforeMove.index + 1)
+    .filter((node) => !node.isAllTracks).length
 
   const [movedNode] = sourceBeforeMove.siblings.splice(sourceBeforeMove.index, 1)
   if (!movedNode) return null
@@ -210,7 +219,9 @@ export const moveTreeNodeToRootEnd = (
   if (!movedAfter) return null
 
   const finalParentId = movedAfter.parentId
-  const finalSeq = movedAfter.index + 1
+  const finalSeq = movedAfter.siblings
+    .slice(0, movedAfter.index + 1)
+    .filter((node) => !node.isAllTracks).length
   if (finalParentId === originalParentId && finalSeq === originalSeq) {
     return null
   }
@@ -227,14 +238,18 @@ export const isPlayablePlaylistNode = (
   node: IPioneerPlaylistTreeNode | null | undefined
 ): node is IPioneerPlaylistTreeNode => Boolean(node && !node.isFolder && !node.isSmartPlaylist)
 
+export const isWritablePlaylistNode = (
+  node: IPioneerPlaylistTreeNode | null | undefined
+): node is IPioneerPlaylistTreeNode => isPlayablePlaylistNode(node) && !node.isAllTracks
+
 export const isMovableTreeNode = (node: IPioneerPlaylistTreeNode | null | undefined) =>
-  Boolean(node && !node.isSmartPlaylist)
+  Boolean(node && !node.isSmartPlaylist && !node.isAllTracks)
 
 export const flattenPlayableNodes = (nodes: IPioneerPlaylistTreeNode[]) => {
   const result: IPioneerPlaylistTreeNode[] = []
   const walk = (items: IPioneerPlaylistTreeNode[]) => {
     for (const item of items) {
-      if (isPlayablePlaylistNode(item)) result.push(item)
+      if (isWritablePlaylistNode(item)) result.push(item)
       if (Array.isArray(item.children) && item.children.length > 0) {
         walk(item.children)
       }

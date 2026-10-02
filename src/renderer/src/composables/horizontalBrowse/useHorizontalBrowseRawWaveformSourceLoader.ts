@@ -1,15 +1,15 @@
-import type { Ref } from 'vue'
+import { onMounted, onUnmounted, type Ref } from 'vue'
 import type { ISongInfo } from 'src/types/globals'
-import {
-  createPioneerDetailRawWaveform,
-  type PioneerDetailWaveformData
-} from './horizontalBrowsePioneerDetailWaveform'
-import {
-  getRekordboxDetailWaveformRequestChannel,
-  isRekordboxExternalPlaybackSource,
-  resolveSongExternalWaveformSource
-} from '@renderer/utils/rekordboxExternalSource'
 import type { RawWaveformData } from '@renderer/composables/mixtape/types'
+import {
+  isHorizontalBrowseNativeDetailSong,
+  loadHorizontalBrowseNativeDetailWaveform
+} from './loadHorizontalBrowseNativeDetailWaveform'
+import {
+  loadUnifiedDisplayWaveformData,
+  unifiedDisplayWaveformToRawData
+} from './horizontalBrowseCompactVisualWaveform'
+import { isSameHorizontalBrowseSongFilePath } from './horizontalBrowseShellSongs'
 
 type SourceLoaderOptions = {
   song: () => ISongInfo | null
@@ -65,31 +65,22 @@ export const useHorizontalBrowseRawWaveformSourceLoader = (options: SourceLoader
       options.syncGridStateFromSongForDisplay()
       return
     }
-    if (isRekordboxExternalPlaybackSource('', currentSong)) {
-      const external = resolveSongExternalWaveformSource(currentSong)
-      if (external) {
-        try {
-          const response = (await window.electron.ipcRenderer.invoke(
-            getRekordboxDetailWaveformRequestChannel(external.sourceKind),
-            external.rootPath,
-            [external.analyzePath]
-          )) as { items?: Array<{ data?: PioneerDetailWaveformData | null }> }
-          if (currentToken !== loadToken || options.song()?.filePath !== currentSong?.filePath) {
-            return
-          }
-          const detailData = response?.items?.[0]?.data
-          const detailRaw = createPioneerDetailRawWaveform(
-            detailData?.columns || [],
-            options.resolvePreviewDurationSec(),
-            detailData?.detailRate ?? detailData?.detail_rate,
-            detailData?.style
-          )
-          if (detailRaw) {
-            options.commitAudioEditSourceRaw(detailRaw)
-            options.compactVisualWaveformActive.value = true
-            options.scheduleDraw({ preferPreviewStart: true })
-          }
-        } catch {}
+    if (isHorizontalBrowseNativeDetailSong(currentSong)) {
+      options.previewLoading.value = true
+      try {
+        const detailRaw = await loadHorizontalBrowseNativeDetailWaveform(currentSong, {
+          durationSec: options.resolvePreviewDurationSec()
+        })
+        if (currentToken !== loadToken || options.song()?.filePath !== filePath) return
+        if (detailRaw) {
+          options.commitAudioEditSourceRaw(detailRaw)
+          options.compactVisualWaveformActive.value = true
+          options.scheduleDraw({ preferPreviewStart: true })
+        }
+      } catch (error) {
+        console.error('[external-native-detail-waveform] load failed', error)
+      } finally {
+        if (currentToken === loadToken) options.previewLoading.value = false
       }
       options.syncGridStateFromSongForDisplay()
       return
@@ -117,6 +108,33 @@ export const useHorizontalBrowseRawWaveformSourceLoader = (options: SourceLoader
       options.syncGridStateFromSongForDisplay()
     }
   }
+
+  const handleNativeSongWaveformUpdated = (_event: unknown, payload?: { filePath?: string }) => {
+    const song = options.song()
+    if (!isHorizontalBrowseNativeDetailSong(song)) return
+    if (!isSameHorizontalBrowseSongFilePath(song.filePath, payload?.filePath)) return
+    const filePath = song.filePath
+    void loadUnifiedDisplayWaveformData(filePath, undefined, true)
+      .then((data) => {
+        if (!isSameHorizontalBrowseSongFilePath(options.song()?.filePath, filePath)) return
+        const raw = data ? unifiedDisplayWaveformToRawData(data) : null
+        if (!raw) return
+        options.commitAudioEditSourceRaw(raw)
+        options.compactVisualWaveformActive.value = true
+        options.scheduleDraw({ preferPreviewStart: true })
+      })
+      .catch(() => undefined)
+  }
+
+  onMounted(() => {
+    window.electron.ipcRenderer.on('song-waveform-updated', handleNativeSongWaveformUpdated)
+  })
+  onUnmounted(() => {
+    window.electron.ipcRenderer.removeListener(
+      'song-waveform-updated',
+      handleNativeSongWaveformUpdated
+    )
+  })
 
   return { loadWaveform, invalidateLoad }
 }

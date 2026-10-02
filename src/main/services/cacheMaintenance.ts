@@ -274,8 +274,46 @@ export async function clearTrackCoreAnalysisForReanalysis(
     return { status: 'skipped', filePath: normalizedFilePath, reason: 'invalid-path' }
   }
 
+  const clearKey = plan ? plan.key === true : true
+  const clearBeatGrid = plan ? plan.beatGrid === true : true
+  const clearEnergy = plan ? plan.energy === true : true
+  const clearWaveform = plan ? plan.waveform === true : true
+  const requestStructure = plan ? plan.structure === true : true
+
   const listRoot = await findSongListRoot(path.dirname(normalizedFilePath))
   if (!listRoot) {
+    const externalContext = LibraryCacheDb.resolveExternalAnalysisContext(normalizedFilePath)
+    if (externalContext) {
+      try {
+        const stat = await fs.stat(normalizedFilePath)
+        const existing = await LibraryCacheDb.loadExternalAnalysisCacheEntry(externalContext, {
+          size: stat.size,
+          mtimeMs: stat.mtimeMs
+        })
+        const hasExistingGrid = resolveCanonicalSongBeatGridV2(existing?.info).kind === 'grid'
+        const clearStructure = requestStructure && (clearBeatGrid || hasExistingGrid)
+        if (!clearKey && !clearBeatGrid && !clearEnergy && !clearWaveform && !clearStructure) {
+          return { status: 'skipped', filePath: normalizedFilePath, reason: 'nothing-to-clear' }
+        }
+        await cancelKeyAnalysisForPaths(normalizedFilePath)
+        const cleared = await LibraryCacheDb.clearExternalAnalysisCacheForReanalysis(
+          externalContext,
+          { size: stat.size, mtimeMs: stat.mtimeMs },
+          {
+            key: clearKey,
+            beatGrid: clearBeatGrid,
+            energy: clearEnergy,
+            structure: clearStructure
+          },
+          clearWaveform
+        )
+        return cleared
+          ? { status: 'cleared', filePath: normalizedFilePath, listRoot: '' }
+          : { status: 'skipped', filePath: normalizedFilePath, reason: 'clear-failed' }
+      } catch {
+        return { status: 'skipped', filePath: normalizedFilePath, reason: 'clear-failed' }
+      }
+    }
     return {
       status: 'skipped',
       filePath: normalizedFilePath,
@@ -292,11 +330,6 @@ export async function clearTrackCoreAnalysisForReanalysis(
     }
   }
 
-  const clearKey = plan ? plan.key === true : true
-  const clearBeatGrid = plan ? plan.beatGrid === true : true
-  const clearEnergy = plan ? plan.energy === true : true
-  const clearWaveform = plan ? plan.waveform === true : true
-  const requestStructure = plan ? plan.structure === true : true
   let cacheMatchesFile = false
   try {
     const stat = await fs.stat(normalizedFilePath)

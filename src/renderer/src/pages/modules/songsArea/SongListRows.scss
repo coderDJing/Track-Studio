@@ -25,6 +25,9 @@
 
 .song-rows-root {
   position: relative;
+  // Virtual rows move and are recycled during scrolling; they must not become
+  // browser scroll anchors when covers or waveform canvases update asynchronously.
+  overflow-anchor: none;
 }
 
 .mixtape-drop-pad {

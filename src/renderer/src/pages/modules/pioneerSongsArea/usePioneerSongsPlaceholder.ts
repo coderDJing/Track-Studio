@@ -11,6 +11,7 @@ type UsePioneerSongsPlaceholderParams = {
   isDesktopSource: ComputedRef<boolean>
   isExternalSource: ComputedRef<boolean>
   isSeratoSource: ComputedRef<boolean>
+  isTraktorSource: ComputedRef<boolean>
   selectedPlaylistId: ComputedRef<number>
   originalTracks: ShallowRef<IPioneerPlaylistTrack[]>
   visibleSongs: Ref<ISongInfo[]>
@@ -23,6 +24,7 @@ export const usePioneerSongsPlaceholder = (params: UsePioneerSongsPlaceholderPar
   const placeholderText = computed(() => {
     if (params.loading.value) {
       if (params.isSeratoSource.value) return t('library.seratoLoadingPlaylistTracks')
+      if (params.isTraktorSource.value) return t('library.traktorLoadingPlaylistTracks')
       if (params.isExternalSource.value) return t('library.externalLibraryLoadingTracks')
       return params.isDesktopSource.value
         ? t('rekordboxDesktop.loadingPlaylistTracks')
@@ -30,6 +32,7 @@ export const usePioneerSongsPlaceholder = (params: UsePioneerSongsPlaceholderPar
     }
     if (!params.selectedPlaylistId.value) {
       if (params.isSeratoSource.value) return t('library.seratoSelectPlaylistPrompt')
+      if (params.isTraktorSource.value) return t('library.traktorSelectPlaylistPrompt')
       if (params.isExternalSource.value) return t('library.externalLibrarySelectPlaylist')
       return params.isDesktopSource.value
         ? t('rekordboxDesktop.selectPlaylistPrompt')
@@ -37,6 +40,7 @@ export const usePioneerSongsPlaceholder = (params: UsePioneerSongsPlaceholderPar
     }
     if (!params.visibleSongs.value.length) {
       if (params.isSeratoSource.value) return t('library.seratoEmptyPlaylist')
+      if (params.isTraktorSource.value) return t('library.traktorEmptyPlaylist')
       if (params.isExternalSource.value) return t('library.externalLibraryEmptyPlaylist')
       return params.isDesktopSource.value
         ? t('rekordboxDesktop.emptyPlaylist')

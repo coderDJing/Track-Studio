@@ -60,6 +60,38 @@ const createSong = (songStructure: SongStructureAnalysis): ISongInfo => ({
 })
 
 describe('useHorizontalBrowseDeckSongSync', () => {
+  it('保留原生 Serato 网格，只有用户手动重分析后才切到 FRKB 网格', () => {
+    const native = createSongBeatGridMapV2FromFixedGrid({
+      bpm: 128,
+      firstBeatMs: 120,
+      downbeatBeatOffset: 0,
+      source: 'serato'
+    })
+    const analyzed = createSongBeatGridMapV2FromFixedGrid({
+      bpm: 126,
+      firstBeatMs: 240,
+      downbeatBeatOffset: 0,
+      source: 'analysis'
+    })
+    if (!native || !analyzed) throw new Error('grid fixture failed')
+    const song = { ...createSong(createStructure('groove')), beatGridMap: native }
+    expect(
+      mergeHorizontalBrowseSongWithSharedGrid(song, {
+        filePath: FILE_PATH,
+        beatGridMap: analyzed,
+        bpm: 126
+      })
+    ).toBe(song)
+    expect(
+      mergeHorizontalBrowseSongWithSharedGrid(song, {
+        filePath: FILE_PATH,
+        beatGridMap: analyzed,
+        bpm: 126,
+        externalBeatGridPreference: 'frkb-manual'
+      }).beatGridMap?.signature
+    ).toBe(analyzed.signature)
+  })
+
   it('网格更新保留历史段落结果', () => {
     const songStructure = createStructure('groove')
     const song = createSong(songStructure)

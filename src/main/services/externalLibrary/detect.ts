@@ -81,6 +81,7 @@ const findTraktorCollection = async () => {
 
 export const probeExternalLibraries = async (): Promise<ExternalLibrarySourceProbe[]> => {
   const seratoRoot = await findSeratoRoot()
+  const traktorCollection = await findTraktorCollection()
   return [
     {
       kind: 'serato',
@@ -88,6 +89,13 @@ export const probeExternalLibraries = async (): Promise<ExternalLibrarySourcePro
       sourceKey: seratoRoot ? `serato:${seratoRoot.toLocaleLowerCase()}` : 'serato',
       sourcePath: seratoRoot,
       displayName: 'Serato'
+    },
+    {
+      kind: 'traktor',
+      available: Boolean(traktorCollection),
+      sourceKey: traktorCollection ? `traktor:${traktorCollection.toLocaleLowerCase()}` : 'traktor',
+      sourcePath: traktorCollection,
+      displayName: 'Traktor'
     }
   ]
 }

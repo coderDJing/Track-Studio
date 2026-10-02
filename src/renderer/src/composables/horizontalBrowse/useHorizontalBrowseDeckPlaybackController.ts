@@ -36,7 +36,7 @@ import {
 } from '@renderer/composables/horizontalBrowse/horizontalBrowseLinkedDeckOrder'
 import { createHorizontalBrowseSectionSeekPlayHandler } from '@renderer/composables/horizontalBrowse/horizontalBrowseSectionSeekPlay'
 import { createHorizontalBrowseBeatJumpHandlers } from '@renderer/composables/horizontalBrowse/horizontalBrowseBeatJumpHandlers'
-import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
+import { queueHorizontalBrowseDeckAnalysis } from '@renderer/composables/horizontalBrowse/horizontalBrowseExternalDjAnalysis'
 
 type DeckKey = HorizontalBrowseDeckKey
 
@@ -166,17 +166,6 @@ export const useHorizontalBrowseDeckPlaybackController = (
     resolveDeckGridBpm: params.resolveDeckGridBpm,
     resolveTransportDeckSnapshot: params.resolveTransportDeckSnapshot
   })
-
-  const queueDeckSongPriorityAnalysis = (deck: DeckKey, filePath: string) => {
-    if (isRekordboxExternalPlaybackSource('', params.resolveDeckSong(deck))) return
-    const normalizedPath = String(filePath || '').trim()
-    if (!normalizedPath) return
-    window.electron.ipcRenderer.send('key-analysis:queue-playing', {
-      analysisAuthority: 'frkb',
-      filePath: normalizedPath,
-      focusSlot: `horizontal-browse-${deck}`
-    })
-  }
 
   const canDeckExecuteImmediateTransportAction = (deck: DeckKey) =>
     Boolean(String(params.resolveDeckSong(deck)?.filePath || '').trim())
@@ -915,7 +904,7 @@ export const useHorizontalBrowseDeckPlaybackController = (
           for (const targetDeck of [deck, otherDeck] as DeckKey[]) {
             const filePath = String(params.resolveDeckSong(targetDeck)?.filePath || '').trim()
             beginHorizontalBrowseDeckAction(targetDeck, 'play-toggle', filePath)
-            queueDeckSongPriorityAnalysis(targetDeck, filePath)
+            queueHorizontalBrowseDeckAnalysis(targetDeck, params.resolveDeckSong(targetDeck))
             await params.syncDeckIntoLoopRangeBeforePlay(targetDeck)
           }
           if (!isDeckPlayheadReady(deck) || !isDeckPlayheadReady(otherDeck)) {
@@ -972,7 +961,7 @@ export const useHorizontalBrowseDeckPlaybackController = (
     const finishTiming = startHorizontalBrowseUserTiming(`frkb:hb:play-toggle:${deck}`)
     if (nextPlaying) {
       beginHorizontalBrowseDeckAction(deck, 'play-toggle', filePath)
-      queueDeckSongPriorityAnalysis(deck, filePath)
+      queueHorizontalBrowseDeckAnalysis(deck, params.resolveDeckSong(deck))
       traceDeckAction(deck, 'play-toggle:start')
     }
     let playStartSecondsOverride: number | null = null

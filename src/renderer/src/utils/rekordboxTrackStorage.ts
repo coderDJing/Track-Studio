@@ -53,3 +53,21 @@ export const ensureSeratoTrackStorageDirConfigured = async () => {
   )
   return nextDir
 }
+
+export const ensureTraktorTrackStorageDirConfigured = async () => {
+  const runtime = useRuntimeStore()
+  const current = String(runtime.setting.traktorTrackStorageDir || '').trim()
+  if (current) return current
+
+  const result = await rekordboxDesktopStorageDirDialog({ storageKind: 'traktor' })
+  if (result === 'cancel') return ''
+  const nextDir = String(result || '').trim()
+  if (!nextDir) return ''
+
+  runtime.setting.traktorTrackStorageDir = nextDir
+  await window.electron.ipcRenderer.invoke(
+    'setSetting',
+    JSON.parse(JSON.stringify(runtime.setting))
+  )
+  return nextDir
+}

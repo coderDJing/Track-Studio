@@ -1,5 +1,6 @@
 import type { IPioneerPlaylistTrack } from '../../../types/globals'
 import { attachPioneerPlaylistRuntime } from '../pioneerDeviceLibrary/tree'
+import { markMissingFiles } from '../fileExistenceCheck'
 import { requireRekordboxDesktopLibraryProbe } from './detect'
 import { buildRekordboxDesktopFailureSummary, logRekordboxDesktopFailure } from './failure'
 import { runRekordboxDesktopHelper } from './helper'
@@ -132,6 +133,7 @@ export async function loadRekordboxDesktopPlaylistTracks(
     options?.includeRuntime === false
       ? tracks
       : await attachPioneerPlaylistRuntime(probe.sourceRootPath, tracks, { includeCues: false })
+  if (options?.includeRuntime === false) await markMissingFiles(tracks)
 
   return {
     probe,

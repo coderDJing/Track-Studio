@@ -3,6 +3,7 @@ import HotCueMarkersLayer from '@renderer/components/HotCueMarkersLayer.vue'
 import MemoryCueMarkersLayer from '@renderer/components/MemoryCueMarkersLayer.vue'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 import type { ISongInfo } from 'src/types/globals'
+import { parseDurationToSeconds } from './waveformPreviewDuration'
 
 const props = defineProps<{
   song: ISongInfo
@@ -18,20 +19,6 @@ const props = defineProps<{
   getWaveformPlaceholderTitle: (filePath: string) => string
   getWaveformPreviewPlayheadStyle: (filePath: string) => Record<string, string | undefined>
 }>()
-
-const parseDurationToSeconds = (input: unknown) => {
-  const raw = String(input || '').trim()
-  if (!raw) return 0
-  if (/^\d+(\.\d+)?$/.test(raw)) return Math.max(0, Number(raw) || 0)
-  const parts = raw
-    .split(':')
-    .map((part) => Number(part))
-    .filter((part) => Number.isFinite(part))
-  if (!parts.length) return 0
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
-  if (parts.length === 2) return parts[0] * 60 + parts[1]
-  return parts[0]
-}
 </script>
 
 <template>

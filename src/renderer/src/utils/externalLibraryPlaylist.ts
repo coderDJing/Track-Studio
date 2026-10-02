@@ -3,6 +3,7 @@ import externalLibraryTargetDialog from '@renderer/components/externalLibraryTar
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { t } from '@renderer/utils/translate'
 import type { ExternalLibraryMutationResponse, ExternalLibraryKind } from '@shared/externalLibrary'
+import type { TraktorTrackMetadata } from '@shared/externalLibrary'
 import type { ExternalLibrarySourceProbe } from '@shared/externalLibrary'
 import type {
   RekordboxDesktopPlaylistSuccessSummary,
@@ -11,7 +12,8 @@ import type {
 import type { ISongInfo } from '../../../types/globals'
 import {
   copyTracksToStorage,
-  ensureSeratoTrackStorageDirConfigured
+  ensureSeratoTrackStorageDirConfigured,
+  ensureTraktorTrackStorageDirConfigured
 } from '@renderer/utils/rekordboxTrackStorage'
 
 type ExternalLibraryPlaylistWriteResult = ExternalLibraryMutationResponse['summary'] &
@@ -20,13 +22,23 @@ type ExternalLibraryPlaylistWriteResult = ExternalLibraryMutationResponse['summa
     removedSetItemIds?: string[]
   }
 
+const parseDurationSec = (value: string) => {
+  const parts = value.split(':').map(Number)
+  if (!parts.length || parts.some((part) => !Number.isFinite(part) || part < 0)) return undefined
+  return parts.reduce((total, part) => total * 60 + part, 0)
+}
+
 export const openExternalLibraryPlaylistForSelectedTracks = async (params: {
   tracks: ISongInfo[]
+  kind?: ExternalLibraryKind
 }): Promise<ExternalLibraryPlaylistWriteResult | null> => {
   const runtime = useRuntimeStore()
-  const kind: ExternalLibraryKind = 'serato'
+  const kind: ExternalLibraryKind = params.kind || 'serato'
+  const failureTitle = t(
+    kind === 'serato' ? 'library.seratoFailureTitle' : 'library.traktorFailureTitle'
+  )
   let sourcePath =
-    runtime.externalDjLibrary.selectedKind === 'serato'
+    runtime.externalDjLibrary.selectedKind === kind
       ? String(runtime.externalDjLibrary.selectedSourcePath || '').trim()
       : ''
   if (!sourcePath) {
@@ -34,7 +46,7 @@ export const openExternalLibraryPlaylistForSelectedTracks = async (params: {
       'external-library:probe'
     )) as ExternalLibrarySourceProbe[]
     sourcePath = String(
-      probes.find((item) => item.kind === 'serato' && item.available)?.sourcePath || ''
+      probes.find((item) => item.kind === kind && item.available)?.sourcePath || ''
     ).trim()
   }
   const trackPaths = Array.from(
@@ -42,8 +54,10 @@ export const openExternalLibraryPlaylistForSelectedTracks = async (params: {
   )
   if (!sourcePath) {
     await confirm({
-      title: t('library.seratoFailureTitle'),
-      content: [t('library.seratoLibraryNotFound')],
+      title: failureTitle,
+      content: [
+        t(kind === 'serato' ? 'library.seratoLibraryNotFound' : 'library.traktorLibraryNotFound')
+      ],
       confirmShow: false
     })
     return null
@@ -53,13 +67,33 @@ export const openExternalLibraryPlaylistForSelectedTracks = async (params: {
   const target = await externalLibraryTargetDialog({
     kind,
     sourcePath,
-    dialogTitle: t('library.externalWriteDialogTitle'),
+    dialogTitle: t(
+      kind === 'serato' ? 'library.externalWriteDialogTitle' : 'library.traktorWriteDialogTitle'
+    ),
     defaultPlaylistName: t('library.externalWriteDefaultPlaylistName'),
     trackCount: trackPaths.length
   })
   if (target === 'cancel') return null
 
-  const storageDir = await ensureSeratoTrackStorageDirConfigured()
+  if (kind === 'traktor') {
+    try {
+      await window.electron.ipcRenderer.invoke('external-library:check-write', {
+        kind,
+        path: sourcePath
+      })
+    } catch (error) {
+      await confirm({
+        title: failureTitle,
+        content: [error instanceof Error ? error.message : String(error)],
+        confirmShow: false
+      })
+      return null
+    }
+  }
+
+  const storageDir = await (kind === 'serato'
+    ? ensureSeratoTrackStorageDirConfigured()
+    : ensureTraktorTrackStorageDirConfigured())
   if (!storageDir) return null
   const storageTracks: RekordboxDesktopPlaylistTrackInput[] = params.tracks.map((track) => ({
     filePath: track.filePath,
@@ -78,7 +112,7 @@ export const openExternalLibraryPlaylistForSelectedTracks = async (params: {
   })
   if (!copyResponse.ok) {
     await confirm({
-      title: t('library.seratoFailureTitle'),
+      title: failureTitle,
       content: [
         t('library.externalLibraryFailedReason', { message: copyResponse.summary.errorMessage })
       ],
@@ -90,12 +124,42 @@ export const openExternalLibraryPlaylistForSelectedTracks = async (params: {
     .map((track) => String(track.filePath || '').trim())
     .filter(Boolean)
 
+  const trackMetadata: TraktorTrackMetadata[] = params.tracks.map((track, index) => ({
+    storedPath: String(copyResponse.summary.copiedTracks[index]?.filePath || '').trim(),
+    title: track.title || undefined,
+    artist: track.artist || undefined,
+    album: track.album || undefined,
+    genre: track.genre || undefined,
+    key: track.key,
+    bpm: track.bpm,
+    durationSec: parseDurationSec(track.duration),
+    bitrate: track.bitrate,
+    hotCues: Array.isArray(track.hotCues)
+      ? track.hotCues.map((cue) => ({
+          slot: cue.slot,
+          sec: cue.sec,
+          label: cue.label,
+          isLoop: cue.isLoop,
+          loopEndSec: cue.loopEndSec
+        }))
+      : [],
+    memoryCues: Array.isArray(track.memoryCues)
+      ? track.memoryCues.map((cue) => ({
+          sec: cue.sec,
+          comment: cue.comment,
+          isLoop: cue.isLoop,
+          loopEndSec: cue.loopEndSec
+        }))
+      : []
+  }))
+
   const response = (await window.electron.ipcRenderer.invoke('external-library:mutate', {
     kind,
     path: sourcePath,
     operation: 'write-tracks',
     externalId: target.target.externalId,
     trackPaths: storedTrackPaths,
+    trackMetadata: kind === 'traktor' ? trackMetadata : undefined,
     trackPathMappings: params.tracks.map((track, index) => ({
       sourcePath: track.filePath,
       storedPath: String(copyResponse.summary.copiedTracks[index]?.filePath || '').trim()
@@ -107,7 +171,7 @@ export const openExternalLibraryPlaylistForSelectedTracks = async (params: {
   })) as ExternalLibraryMutationResponse
   if (!response.ok) {
     await confirm({
-      title: t('library.seratoFailureTitle'),
+      title: failureTitle,
       content: [
         t('library.externalLibraryFailedReason', { message: response.summary.errorMessage })
       ],
@@ -116,7 +180,9 @@ export const openExternalLibraryPlaylistForSelectedTracks = async (params: {
     return null
   }
   await confirm({
-    title: t('library.externalWriteSuccessTitle'),
+    title: t(
+      kind === 'serato' ? 'library.externalWriteSuccessTitle' : 'library.traktorWriteSuccessTitle'
+    ),
     content: [
       t('library.externalWriteSuccessLine', {
         name: target.target.playlistName || '',

@@ -16,9 +16,15 @@ import {
   resolveSongExternalWaveformSource
 } from '@renderer/utils/rekordboxExternalSource'
 import type { WaveformGlobalOverviewData } from '@shared/waveformSurfaceCache'
+import type { WaveformListPreviewData } from '@shared/waveformSurfaceCache'
+import type { SeratoWaveformOverviewData } from '@shared/seratoWaveformOverview'
 import { formatSaturatedWaveformRgb } from '@shared/waveformDisplayColor'
 import { loadWaveformGlobalOverviewData } from '@renderer/composables/horizontalBrowse/horizontalBrowseCompactVisualWaveform'
 import { drawCompactVisualWaveform } from '@renderer/components/compactVisualWaveformRenderer'
+import {
+  drawSongListCompactVisualWaveform,
+  drawSongListSeratoOverview
+} from '@renderer/workers/songListWaveformPreview.shared'
 import {
   drawWaveformTimelineTicks,
   resolveWaveformTimelineTickThemeVariant
@@ -64,6 +70,8 @@ const trackRef = ref<HTMLDivElement | null>(null)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const compactVisualData = ref<WaveformGlobalOverviewData | null>(null)
 const pioneerPreviewData = ref<IPioneerPreviewWaveformData | null>(null)
+const seratoOverviewData = ref<SeratoWaveformOverviewData | null>(null)
+const traktorOverviewData = ref<WaveformListPreviewData | null>(null)
 const scrubbing = ref(false)
 const trackWidth = ref(0)
 
@@ -453,6 +461,24 @@ const drawWaveform = () => {
     return
   }
 
+  if (seratoOverviewData.value) {
+    drawSongListSeratoOverview(ctx, width, height, seratoOverviewData.value, 0, 'transparent', {
+      isHalf: useHalfWaveform(),
+      themeVariant: resolveWaveformTimelineTickThemeVariant(runtime.setting?.themeMode)
+    })
+    return
+  }
+
+  if (traktorOverviewData.value) {
+    drawSongListCompactVisualWaveform(ctx, width, height, traktorOverviewData.value, {
+      isHalf: useHalfWaveform(),
+      playedPercent: 0,
+      progressColor: 'transparent',
+      themeVariant: resolveWaveformTimelineTickThemeVariant(runtime.setting?.themeMode)
+    })
+    return
+  }
+
   if (displayWaveformData.value) {
     drawCompactVisualWaveform(ctx, {
       width,
@@ -475,15 +501,62 @@ const loadWaveform = async () => {
   const currentToken = ++loadToken
   compactVisualData.value = null
   pioneerPreviewData.value = null
+  seratoOverviewData.value = null
+  traktorOverviewData.value = null
   clearCanvas()
 
   const filePath = String(currentSong?.filePath || '').trim()
   if (!filePath) return
 
+  const externalKind = currentSong?.externalLibraryKind
   const externalWaveformSource = resolveSongExternalWaveformSource(currentSong, {
     rootPath: runtime.pioneerDeviceLibrary.selectedSourceRootPath,
     sourceKind: runtime.pioneerDeviceLibrary.selectedSourceKind || undefined
   })
+  if (externalKind === 'serato' || externalKind === 'traktor' || externalWaveformSource) {
+    const manualOverview = await loadWaveformGlobalOverviewData(filePath, undefined, true).catch(
+      () => null
+    )
+    if (currentToken !== loadToken) return
+    if (manualOverview) {
+      compactVisualData.value = manualOverview
+      drawWaveform()
+      return
+    }
+  }
+  if (externalKind === 'serato' || externalKind === 'traktor') {
+    const sourcePath = String(
+      currentSong?.externalWaveformRootPath ||
+        (runtime.externalDjLibrary.selectedKind === externalKind
+          ? runtime.externalDjLibrary.selectedSourcePath
+          : '') ||
+        ''
+    ).trim()
+    if (sourcePath) {
+      try {
+        const response = (await window.electron.ipcRenderer.invoke(
+          'external-library:load-waveform-overviews',
+          { kind: externalKind, path: sourcePath, filePaths: [filePath] }
+        )) as {
+          items?: Array<{
+            filePath: string
+            data: SeratoWaveformOverviewData | WaveformListPreviewData | null
+          }>
+        }
+        if (currentToken !== loadToken) return
+        const data = response?.items?.[0]?.data
+        if (externalKind === 'serato' && data && 'pixels' in data) {
+          seratoOverviewData.value = data
+        } else if (externalKind === 'traktor' && data && 'surfaceKind' in data) {
+          traktorOverviewData.value = data
+        }
+      } catch (error) {
+        console.error('[external-library-waveform-overview] load failed', error)
+      }
+    }
+    drawWaveform()
+    return
+  }
 
   if (externalWaveformSource) {
     try {
@@ -522,6 +595,7 @@ const loadWaveform = async () => {
 watch(
   [
     () => props.song?.filePath ?? '',
+    () => props.song?.externalLibraryKind ?? '',
     () => props.song?.externalAnalyzePath ?? props.song?.pioneerAnalyzePath ?? '',
     () => props.song?.externalWaveformRootPath ?? props.song?.pioneerDeviceRootPath ?? ''
   ],
@@ -548,7 +622,13 @@ watch(
 watch(
   () => [Number(props.currentSeconds) || 0, totalSeconds.value] as const,
   () => {
-    if (displayWaveformData.value || pioneerPreviewData.value) return
+    if (
+      displayWaveformData.value ||
+      pioneerPreviewData.value ||
+      seratoOverviewData.value ||
+      traktorOverviewData.value
+    )
+      return
     drawWaveform()
   }
 )
@@ -563,9 +643,28 @@ watch(
 
 const handleSongWaveformUpdated = (_event: unknown, payload: { filePath?: string }) => {
   const filePath = String(payload?.filePath || '').trim()
-  const currentSongFilePath = String(props.song?.filePath || '').trim()
+  const song = props.song
+  const currentSongFilePath = String(song?.filePath || '').trim()
   if (!filePath || !currentSongFilePath) return
   if (!isSameHorizontalBrowseSongFilePath(filePath, currentSongFilePath)) return
+  if (song?.externalLibraryKind || resolveSongExternalWaveformSource(song)) {
+    void loadWaveformGlobalOverviewData(filePath, undefined, true)
+      .then((manualOverview) => {
+        if (
+          !manualOverview ||
+          !isSameHorizontalBrowseSongFilePath(props.song?.filePath, filePath)
+        ) {
+          return
+        }
+        compactVisualData.value = manualOverview
+        pioneerPreviewData.value = null
+        seratoOverviewData.value = null
+        traktorOverviewData.value = null
+        drawWaveform()
+      })
+      .catch(() => undefined)
+    return
+  }
   void loadWaveform()
 }
 

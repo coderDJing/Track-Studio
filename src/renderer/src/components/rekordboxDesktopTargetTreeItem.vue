@@ -50,7 +50,9 @@ const dragApproach = computed(() =>
   props.dragTargetNodeId === props.node.id ? props.dragTargetApproach || '' : ''
 )
 const isDragging = computed(() => props.dragSourceId === props.node.id)
-const canDrag = computed(() => !props.node.isSmartPlaylist && !!props.node.name)
+const canDrag = computed(
+  () => !props.node.isSmartPlaylist && !props.node.isAllTracks && !!props.node.name
+)
 
 const handleClick = () => {
   if (props.interactionDisabled) return

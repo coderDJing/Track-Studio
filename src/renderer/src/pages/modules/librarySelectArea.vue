@@ -8,6 +8,7 @@ import recordIconAsset from '@renderer/assets/record.svg?asset'
 import rekordboxIconAsset from '@renderer/assets/rekordbox.svg?asset'
 import rekordboxUsbIconAsset from '@renderer/assets/rekordboxUsb.svg?asset'
 import seratoIconAsset from '@renderer/assets/serato.svg?asset'
+import traktorIconAsset from '@renderer/assets/traktor.svg?asset'
 import {
   computed,
   ref,
@@ -28,6 +29,10 @@ import tempListIconAsset from '@renderer/assets/tempList.svg?asset'
 import emitter from '@renderer/utils/mitt'
 import libraryUtils from '@renderer/utils/libraryUtils'
 import { requestUserGuideStep } from '@renderer/composables/userGuideBridge'
+import {
+  requestLibraryUserGuide,
+  resolveLibraryUserGuideTarget
+} from './librarySelectArea/libraryUserGuide'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { RECORDING_LIBRARY_CHANGED_EVENT, RECORDING_LIBRARY_UUID } from '@shared/recordingLibrary'
 import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
@@ -162,28 +167,6 @@ const scheduleRecycleBinTrackCountRefresh = (delay = 0) => {
     recycleBinTrackCountRefreshTimer = null
     void refreshRecycleBinTrackCount(requestId)
   }, delay)
-}
-
-const resolveLibraryUserGuideTarget = (name: string) => {
-  if (name === 'FilterLibrary' || name === 'CuratedLibrary') return 'filter-curated'
-  if (name === 'SetLibrary') return 'set-library'
-  if (name === 'MixtapeLibrary') return 'mixtape-library'
-  if (name === 'RecordingLibrary') return 'recording-library'
-  return undefined
-}
-
-const requestLibraryUserGuide = (name: string) => {
-  if (name === 'SetLibrary') {
-    void requestUserGuideStep('setLibrary')
-    return
-  }
-  if (name === 'MixtapeLibrary') {
-    void requestUserGuideStep('mixtapeLibrary')
-    return
-  }
-  if (name === 'RecordingLibrary') {
-    void requestUserGuideStep('recordingLibrary')
-  }
 }
 
 const getIconTooltipTitle = (item: Icon) => {
@@ -335,6 +318,7 @@ const {
 } = useExternalDjSourceIcons({
   runtime,
   seratoIconAsset,
+  traktorIconAsset,
   updateSelectedIcon,
   emitLibrarySelectedChange: (payload) => emit('librarySelectedChange', payload)
 })

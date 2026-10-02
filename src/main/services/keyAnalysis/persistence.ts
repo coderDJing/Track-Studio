@@ -359,7 +359,8 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
         sharedGrid ?? {
           filePath,
           beatGridAlgorithmVersion: normalizedBeatGridAlgorithmVersion,
-          beatGridMap
+          beatGridMap,
+          externalBeatGridPreference: existingSongCacheEntry?.info.externalBeatGridPreference
         }
       )
 

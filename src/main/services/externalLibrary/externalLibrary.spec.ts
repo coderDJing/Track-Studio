@@ -4,7 +4,8 @@ import { __traktorTestUtils } from './traktor'
 import {
   buildExternalLibraryBrowserTracks,
   buildExternalLibraryBrowserTree,
-  buildSeratoWaveformOverviews
+  buildSeratoWaveformOverviews,
+  getPlaylistNumericId
 } from './browserAdapter'
 import type { ExternalLibrarySnapshot } from '../../../shared/externalLibrary'
 import { parseSeratoWaveformOverview } from '../../../shared/seratoWaveformOverview'
@@ -73,6 +74,51 @@ describe('Serato external library parser', () => {
 })
 
 describe('Traktor external library parser', () => {
+  it('hides unevaluated smartlists while preserving ordinary playlists with the same names', () => {
+    const xml = `<NML VERSION="20"><COLLECTION ENTRIES="0"/><PLAYLISTS>
+      <NODE TYPE="FOLDER" NAME="$ROOT"><SUBNODES COUNT="4">
+        <NODE TYPE="SMARTLIST" NAME="Played in this session">
+          <SMARTLIST><SEARCH_EXPRESSION QUERY="$PLAYED == TRUE"/></SMARTLIST>
+        </NODE>
+        <NODE TYPE="SMARTLIST" NAME="Recently added">
+          <SMARTLIST><SEARCH_EXPRESSION QUERY="$IMPORTDATE &gt;= MONTHS_AGO(1)"/></SMARTLIST>
+        </NODE>
+        <NODE TYPE="FOLDER" NAME="Sets"><SUBNODES COUNT="2">
+          <NODE TYPE="SMARTLIST" NAME="Top rated tracks">
+            <SMARTLIST><SEARCH_EXPRESSION QUERY="$RATING == 5"/></SMARTLIST>
+          </NODE>
+          <NODE TYPE="PLAYLIST" NAME="4444"><PLAYLIST UUID="4444" ENTRIES="0"/></NODE>
+        </SUBNODES></NODE>
+        <NODE TYPE="PLAYLIST" NAME="Recently added">
+          <PLAYLIST UUID="ORDINARY" ENTRIES="0"/>
+        </NODE>
+      </SUBNODES></NODE>
+    </PLAYLISTS></NML>`
+    const snapshot: ExternalLibrarySnapshot = {
+      ...__traktorTestUtils.parseTraktorCollectionXml(xml),
+      kind: 'traktor',
+      rootPath: '',
+      libraryPath: ''
+    }
+    expect(snapshot.playlists.filter((playlist) => playlist.isSmartPlaylist)).toHaveLength(3)
+    const { treeNodes } = buildExternalLibraryBrowserTree(snapshot)
+    expect(treeNodes.map((node) => node.name)).toEqual(['全部曲目', 'Sets', 'Recently added'])
+    expect(treeNodes[1].children?.map((node) => node.name)).toEqual(['4444'])
+    expect(treeNodes[2].isSmartPlaylist).toBe(false)
+  })
+
+  it('keeps a playlist numeric ID when another playlist changes its order', () => {
+    const playlist = {
+      id: 'traktor-playlist:4444',
+      name: '4444',
+      parentId: null,
+      isFolder: false,
+      trackIds: [],
+      order: 1
+    }
+    expect(getPlaylistNumericId({ ...playlist, order: 8 })).toBe(getPlaylistNumericId(playlist))
+  })
+
   it('maps collection tracks, playlists and cue types', () => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
       <NML VERSION="20">
@@ -83,7 +129,7 @@ describe('Traktor external library parser', () => {
             <INFO GENRE="House" COMMENT="Note"/>
             <TEMPO BPM="128.5"/>
             <MUSICAL_KEY VALUE="8"/>
-            <CUE_V2 NAME="AutoGrid" TYPE="4" START="1000" LEN="0" HOTCUE="-1"/>
+            <CUE_V2 NAME="AutoGrid" TYPE="4" START="1000" LEN="0" HOTCUE="-1"><GRID BPM="128.500123"/></CUE_V2>
             <CUE_V2 NAME="Drop" TYPE="0" START="2000" LEN="0" HOTCUE="1"/>
             <CUE_V2 NAME="Loop" TYPE="5" START="3000" LEN="4000" HOTCUE="0"/>
           </ENTRY>
@@ -102,6 +148,7 @@ describe('Traktor external library parser', () => {
     expect(parsed.tracks).toHaveLength(1)
     expect(parsed.tracks[0]).toMatchObject({ title: 'Track', artist: 'Artist', bpm: 128.5 })
     expect(parsed.tracks[0].cues.map((cue) => cue.kind)).toEqual(['grid', 'hotCue', 'loop'])
+    expect(parsed.tracks[0].cues[0].bpm).toBe(128.500123)
     expect(parsed.playlists.at(-1)).toMatchObject({ name: 'Set', trackIds: [parsed.tracks[0].id] })
   })
 })
@@ -153,19 +200,60 @@ describe('External library browser adapter', () => {
     expect(result.treeNodes[1].children?.[0]).toMatchObject({ name: 'Friday', isFolder: false })
   })
 
+  it.each(['serato', 'traktor'] as const)(
+    '%s collection display numbers preserve source order independently of playlist order',
+    (kind) => {
+      const source: ExternalLibrarySnapshot = {
+        ...snapshot,
+        kind,
+        tracks: ['Zebra', 'Alpha', 'Middle'].map((title, index) => ({
+          ...snapshot.tracks[0],
+          id: `track-${index}`,
+          filePath: `C:\\Music\\${title}.mp3`,
+          title
+        })),
+        playlists: [{ ...snapshot.playlists[1], trackIds: ['track-2', 'track-0'] }]
+      }
+      const collection = buildExternalLibraryBrowserTree(source).treeNodes[0]
+      expect(collection.isAllTracks).toBe(true)
+      const allTracks = buildExternalLibraryBrowserTracks(source, collection.id).tracks
+      expect(allTracks.map((track) => track.title)).toEqual(['Zebra', 'Alpha', 'Middle'])
+      expect(allTracks.map((track) => track.entryIndex + 1)).toEqual([1, 2, 3])
+      const playlist = buildExternalLibraryBrowserTracks(
+        source,
+        getPlaylistNumericId(source.playlists[0])
+      ).tracks
+      expect(playlist.map((track) => track.title)).toEqual(['Middle', 'Zebra'])
+      expect(playlist.map((track) => track.entryIndex + 1)).toEqual([1, 2])
+    }
+  )
+
   it('maps playlist tracks to the standard song-table model', () => {
-    const result = buildExternalLibraryBrowserTracks(snapshot, 3)
+    const result = buildExternalLibraryBrowserTracks(
+      snapshot,
+      getPlaylistNumericId(snapshot.playlists[1])
+    )
     expect(result.tracks[0]).toMatchObject({
       title: 'Track',
       artist: 'Artist',
       duration: '3:05',
       bpm: 128,
+      beatGridMap: { source: 'traktor', clips: [{ anchorSec: 0.12, bpm: 128 }] },
       hotCues: [{ slot: 1, sec: 1, label: 'Drop' }]
     })
   })
 
-  it('prefers a persisted FRKB grid BPM over the external library BPM', () => {
-    const track = buildExternalLibraryBrowserTracks(snapshot, 3).tracks[0]
+  it('keeps the native grid when an automatic FRKB analysis cache also exists', () => {
+    const track = buildExternalLibraryBrowserTracks(snapshot, 1).tracks[0]
+    const beatGridMap = createSongBeatGridMapV2FromFixedGrid({ bpm: 126.25, firstBeatMs: 240 })
+    const merged = mergeExternalAnalysisIntoBrowserTrack(track, {
+      beatGridMap: beatGridMap || undefined
+    })
+    expect(merged).toBe(track)
+  })
+
+  it('prefers a manually reanalyzed FRKB grid over the native grid', () => {
+    const track = buildExternalLibraryBrowserTracks(snapshot, 1).tracks[0]
     const beatGridMap = createSongBeatGridMapV2FromFixedGrid({
       bpm: 126.25,
       firstBeatMs: 240,
@@ -175,11 +263,31 @@ describe('External library browser adapter', () => {
     expect(beatGridMap).not.toBeNull()
     const merged = mergeExternalAnalysisIntoBrowserTrack(track, {
       beatGridMap: beatGridMap || undefined,
+      externalBeatGridPreference: 'frkb-manual',
       timeBasisOffsetMs: 12
     })
     expect(merged.bpm).toBe(126.25)
     expect(merged.beatGridMap?.source).toBe('analysis')
     expect(merged.timeBasisOffsetMs).toBe(12)
+  })
+
+  it('builds a Serato native grid from an analyzed marker and not from BPM alone', () => {
+    const analyzed: ExternalLibrarySnapshot = {
+      ...snapshot,
+      kind: 'serato',
+      tracks: [{ ...snapshot.tracks[0], cues: [{ kind: 'grid', positionMs: 750, bpm: 124 }] }]
+    }
+    const withGrid = buildExternalLibraryBrowserTracks(analyzed, 1).tracks[0]
+    expect(withGrid.beatGridMap).toMatchObject({
+      source: 'serato',
+      clips: [{ anchorSec: 0.75, bpm: 124 }]
+    })
+    const withoutGrid = buildExternalLibraryBrowserTracks(
+      { ...analyzed, tracks: [{ ...analyzed.tracks[0], cues: [] }] },
+      1
+    ).tracks[0]
+    expect(withoutGrid.bpm).toBe(128)
+    expect(withoutGrid.beatGridMap).toBeUndefined()
   })
 
   it('returns Serato overviews only for requested track paths', () => {

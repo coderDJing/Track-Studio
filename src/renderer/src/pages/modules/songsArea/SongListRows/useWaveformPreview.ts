@@ -1,9 +1,5 @@
 import { computed, markRaw, nextTick, onBeforeUnmount, ref, watch, type Ref } from 'vue'
-import type {
-  IPioneerPreviewWaveformData,
-  ISongInfo,
-  ISongsAreaColumn
-} from '../../../../../../types/globals'
+import type { ISongInfo, ISongsAreaColumn } from '../../../../../../types/globals'
 import type { SongsAreaPaneKey } from '@renderer/stores/runtime'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import emitter from '@renderer/utils/mitt'
@@ -12,9 +8,9 @@ import {
   resolveSongExternalWaveformSource
 } from '@renderer/utils/rekordboxExternalSource'
 import { t } from '@renderer/utils/translate'
-import type { MixxxWaveformData } from '@renderer/pages/modules/songPlayer/webAudioPlayer'
 import type { WaveformListPreviewData } from '@shared/waveformSurfaceCache'
 import type { SeratoWaveformOverviewData } from '@shared/seratoWaveformOverview'
+import type { ExternalLibraryKind } from '@shared/externalLibrary'
 import type { RekordboxSourceKind } from '@shared/rekordboxSources'
 import { createSongListWaveformPreviewWorker } from '@renderer/workers/songListWaveformPreview.workerClient'
 import {
@@ -26,10 +22,7 @@ import {
   type SongListWaveformRgbMetricsCacheEntry
 } from '@renderer/workers/songListWaveformPreview.shared'
 import { resolveWaveformTimelineTickThemeVariant } from '@renderer/components/waveformTimelineTicks'
-import type {
-  SongListWaveformWorkerData,
-  SongListWaveformWorkerIncoming
-} from '@renderer/workers/songListWaveformPreview.types'
+import type { SongListWaveformWorkerIncoming } from '@renderer/workers/songListWaveformPreview.types'
 import {
   subscribePioneerPreviewWaveformDone,
   subscribePioneerPreviewWaveformItem,
@@ -40,25 +33,10 @@ import {
 } from './waveformPreviewIpcSubscriptions'
 import { createWaveformPreviewCanvasRegistry } from './waveformPreviewCanvasRegistry'
 import { createWaveformPreviewRetry, type WaveformPlaceholderState } from './waveformPreviewRetry'
+import { loadManualExternalWaveformPreviews } from './loadManualExternalWaveformPreviews'
+import { toWaveformPreviewWorkerData, type WaveformCacheEntry } from './waveformPreviewWorkerData'
+import { parseDurationToSeconds } from './waveformPreviewDuration'
 type VisibleSongItem = { song: ISongInfo; idx: number }
-type WaveformCacheEntry =
-  | {
-      kind: 'mixxx'
-      data: MixxxWaveformData
-    }
-  | {
-      kind: 'pioneer'
-      data: IPioneerPreviewWaveformData
-    }
-  | {
-      kind: 'compactVisual'
-      data: WaveformListPreviewData
-    }
-  | {
-      kind: 'serato'
-      data: SeratoWaveformOverviewData
-    }
-  | null
 const PIONEER_WAVEFORM_EAGER_COUNT = 8
 const clamp01 = (value: number) => (Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0)
 export function useWaveformPreview(params: {
@@ -108,6 +86,7 @@ export function useWaveformPreview(params: {
   const placeholderReasonMap = markRaw(new Map<string, string>())
   const rgbMetricsCache = markRaw(new Map<string, SongListWaveformRgbMetricsCacheEntry>())
   const waveformDataVersionMap = markRaw(new Map<string, number>())
+  const manualPreviewPaths = markRaw(new Set<string>())
   const inflight = new Set<string>()
   const MAX_CACHE_ENTRIES = 200
   let loadTimer: ReturnType<typeof setTimeout> | null = null
@@ -149,31 +128,6 @@ export function useWaveformPreview(params: {
     canUseAsyncWaveformWorker,
     ensureWaveformWorker
   })
-  const toWorkerData = (data: WaveformCacheEntry): SongListWaveformWorkerData => {
-    if (!data) return null
-    if (data.kind === 'pioneer') {
-      return {
-        kind: 'pioneer',
-        data: data.data
-      }
-    }
-    if (data.kind === 'compactVisual') {
-      return {
-        kind: 'compactVisual',
-        data: data.data
-      }
-    }
-    if (data.kind === 'serato') {
-      return {
-        kind: 'serato',
-        data: data.data
-      }
-    }
-    return {
-      kind: 'mixxx',
-      data: data.data
-    }
-  }
   const syncWaveformDataToWorker = (filePath: string, data: WaveformCacheEntry) => {
     if (!canUseAsyncWaveformWorker || !filePath) return
     const worker = ensureWaveformWorker()
@@ -188,7 +142,7 @@ export function useWaveformPreview(params: {
             type: 'setData',
             payload: {
               filePath,
-              data: toWorkerData(data)
+              data: toWaveformPreviewWorkerData(data)
             }
           }
     worker.postMessage(payload)
@@ -282,7 +236,11 @@ export function useWaveformPreview(params: {
   }
   waveformPreviewRetry = createWaveformPreviewRetry({
     resolvePlaceholderState: (filePath) => placeholderStateMap.get(filePath),
-    retryLoading: (filePath) => void fetchWaveformBatch([filePath])
+    retryLoading: (filePath) => {
+      const song = resolveVisibleSongByFilePath(filePath)
+      if (!song || song.externalLibraryKind) return
+      void fetchWaveformBatch([filePath])
+    }
   })
   const buildPioneerStreamRequestId = () =>
     `pioneer-waveform:${Date.now()}:${Math.random().toString(36).slice(2)}`
@@ -401,6 +359,7 @@ export function useWaveformPreview(params: {
     if (song?.fileMissing) return ''
 
     if (
+      !song?.externalLibraryKind &&
       !resolveSongExternalWaveformSource(song, {
         rootPath: resolveExternalRootPath(),
         sourceKind: runtime.pioneerDeviceLibrary.selectedSourceKind || undefined
@@ -437,6 +396,7 @@ export function useWaveformPreview(params: {
       waveformDataVersionMap.set(normalizedPath, getWaveformDataVersion(filePath) + 1)
     }
     dataMap.delete(filePath)
+    manualPreviewPaths.delete(normalizedPath)
     rgbMetricsCache.delete(filePath)
     inflight.delete(filePath)
     syncWaveformDataToWorker(filePath, null)
@@ -463,6 +423,12 @@ export function useWaveformPreview(params: {
         syncWaveformDataToWorker(oldest, null)
       }
     }
+  }
+  const storeManualPreview = (filePath: string, data: WaveformListPreviewData) => {
+    const normalizedPath = normalizePath(filePath)
+    manualPreviewPaths.add(normalizedPath)
+    waveformDataVersionMap.set(normalizedPath, getWaveformDataVersion(filePath) + 1)
+    storeWaveformData(filePath, { kind: 'compactVisual', data })
   }
   const resizeCanvas = (
     canvas: HTMLCanvasElement,
@@ -523,12 +489,16 @@ export function useWaveformPreview(params: {
         drawSongListCompactVisualWaveform(ctx, width, height, data.data, {
           isHalf: useHalfWaveform(),
           progressColor,
-          playedPercent
+          playedPercent,
+          themeVariant: resolveWaveformTimelineTickThemeVariant(runtime.setting?.themeMode)
         })
         continue
       }
       if (data.kind === 'serato') {
-        drawSongListSeratoOverview(ctx, width, height, data.data, playedPercent, progressColor)
+        drawSongListSeratoOverview(ctx, width, height, data.data, playedPercent, progressColor, {
+          isHalf: useHalfWaveform(),
+          themeVariant: resolveWaveformTimelineTickThemeVariant(runtime.setting?.themeMode)
+        })
         continue
       }
       drawSongListMixxxWaveform(ctx, width, height, filePath, data.data, {
@@ -667,6 +637,10 @@ export function useWaveformPreview(params: {
     const itemMap = new Map(items.map((item) => [item.filePath, item.data ?? null]))
     const missing: string[] = []
     for (const filePath of filePaths) {
+      if (manualPreviewPaths.has(normalizePath(filePath))) {
+        inflight.delete(filePath)
+        continue
+      }
       if (getWaveformDataVersion(filePath) !== (requestVersions.get(filePath) ?? 0)) {
         inflight.delete(filePath)
         continue
@@ -699,7 +673,7 @@ export function useWaveformPreview(params: {
     }
     scheduleDrawForFilePaths(filePaths)
   }
-  const fetchSeratoWaveformBatch = async (filePaths: string[]) => {
+  const fetchDjLibraryWaveformBatch = async (kind: ExternalLibraryKind, filePaths: string[]) => {
     if (!filePaths.length) return
     const sourcePath = resolveExternalRootPath()
     if (!sourcePath) return
@@ -711,15 +685,18 @@ export function useWaveformPreview(params: {
       setWaveformPlaceholderLoading(filePath)
     }
     let response: {
-      items?: Array<{ filePath: string; data: SeratoWaveformOverviewData | null }>
+      items?: Array<{
+        filePath: string
+        data: SeratoWaveformOverviewData | WaveformListPreviewData | null
+      }>
     } | null = null
     try {
       response = await window.electron.ipcRenderer.invoke(
         'external-library:load-waveform-overviews',
-        { kind: 'serato', path: sourcePath, filePaths }
+        { kind, path: sourcePath, filePaths }
       )
     } catch (error) {
-      console.error('[serato-waveform-overview] load failed', error)
+      console.error('[external-library-waveform-overview] load failed', error)
       response = null
     }
     const itemMap = new Map(
@@ -729,18 +706,28 @@ export function useWaveformPreview(params: {
       ])
     )
     for (const filePath of filePaths) {
+      if (manualPreviewPaths.has(normalizePath(filePath))) {
+        inflight.delete(filePath)
+        continue
+      }
       if (getWaveformDataVersion(filePath) !== (requestVersions.get(filePath) ?? 0)) {
         inflight.delete(filePath)
         continue
       }
       const data = itemMap.get(normalizePath(filePath)) ?? null
       inflight.delete(filePath)
-      if (data) {
+      if (kind === 'serato' && data && 'pixels' in data) {
         storeWaveformData(filePath, { kind: 'serato', data })
+        setWaveformPlaceholderReady(filePath)
+      } else if (kind === 'traktor' && data && 'surfaceKind' in data) {
+        storeWaveformData(filePath, { kind: 'compactVisual', data })
         setWaveformPlaceholderReady(filePath)
       } else {
         storeWaveformData(filePath, null)
-        setWaveformPlaceholderUnavailable(filePath, 'missing Serato Overview')
+        setWaveformPlaceholderUnavailable(
+          filePath,
+          kind === 'traktor' ? 'missing Traktor Stripe' : 'missing Serato Overview'
+        )
       }
     }
     scheduleDrawForFilePaths(filePaths)
@@ -794,6 +781,17 @@ export function useWaveformPreview(params: {
     if (!paths.length) return
     const pending = paths.filter((filePath) => !dataMap.has(filePath) && !inflight.has(filePath))
     if (!pending.length) return
+    const fallbackSourceKind = runtime.pioneerDeviceLibrary.selectedSourceKind || undefined
+    const manualReady = await loadManualExternalWaveformPreviews({
+      filePaths: pending,
+      resolveSong: resolveVisibleSongByFilePath,
+      rootPath: resolveExternalRootPath(),
+      sourceKind: fallbackSourceKind,
+      inflight,
+      getVersion: getWaveformDataVersion,
+      store: storeManualPreview,
+      markReady: setWaveformPlaceholderReady
+    })
     const externalRequests: Array<{
       filePath: string
       analyzePath: string
@@ -801,15 +799,16 @@ export function useWaveformPreview(params: {
     }> = []
     const libraryFilePaths: string[] = []
     const seratoFilePaths: string[] = []
-    const fallbackSourceKind = runtime.pioneerDeviceLibrary.selectedSourceKind || undefined
+    const traktorFilePaths: string[] = []
     for (const filePath of pending) {
+      if (manualReady.has(filePath)) continue
       const song = resolveVisibleSongByFilePath(filePath)
       if (song?.externalLibraryKind === 'serato') {
         seratoFilePaths.push(filePath)
         continue
       }
       if (song?.externalLibraryKind === 'traktor') {
-        libraryFilePaths.push(filePath)
+        traktorFilePaths.push(filePath)
         continue
       }
       const source = resolveSongExternalWaveformSource(song, {
@@ -833,7 +832,10 @@ export function useWaveformPreview(params: {
       await fetchWaveformBatch(libraryFilePaths)
     }
     if (seratoFilePaths.length) {
-      await fetchSeratoWaveformBatch(seratoFilePaths)
+      await fetchDjLibraryWaveformBatch('serato', seratoFilePaths)
+    }
+    if (traktorFilePaths.length) {
+      await fetchDjLibraryWaveformBatch('traktor', traktorFilePaths)
     }
     if (externalRequests.length) {
       await fetchExternalWaveformStream(externalRequests)
@@ -853,12 +855,24 @@ export function useWaveformPreview(params: {
     const visibleFilePath = typeof song?.filePath === 'string' ? song.filePath : ''
     if (!visibleFilePath) return
     if (!waveformCanvasRegistry.hasCanvasForFilePath(visibleFilePath)) return
+    const rootPath = resolveExternalRootPath()
+    const sourceKind = runtime.pioneerDeviceLibrary.selectedSourceKind || undefined
     if (
-      resolveSongExternalWaveformSource(song, {
-        rootPath: resolveExternalRootPath(),
-        sourceKind: runtime.pioneerDeviceLibrary.selectedSourceKind || undefined
-      })
+      song?.externalLibraryKind ||
+      resolveSongExternalWaveformSource(song, { rootPath, sourceKind })
     ) {
+      void loadManualExternalWaveformPreviews({
+        filePaths: [visibleFilePath],
+        resolveSong: resolveVisibleSongByFilePath,
+        rootPath,
+        sourceKind,
+        inflight,
+        getVersion: getWaveformDataVersion,
+        store: storeManualPreview,
+        markReady: setWaveformPlaceholderReady
+      }).then((ready) => {
+        if (ready.has(visibleFilePath)) scheduleDrawForFilePath(visibleFilePath)
+      })
       return
     }
     clearWaveformDataForFilePath(visibleFilePath)
@@ -873,6 +887,10 @@ export function useWaveformPreview(params: {
     if (!filePaths.length) return
     const data = payload?.data ?? null
     for (const filePath of filePaths) {
+      if (manualPreviewPaths.has(normalizePath(filePath))) {
+        inflight.delete(filePath)
+        continue
+      }
       storeWaveformData(
         filePath,
         data
@@ -1070,17 +1088,4 @@ export function useWaveformPreview(params: {
     getWaveformPlaceholderText,
     getWaveformPlaceholderTitle
   }
-}
-const parseDurationToSeconds = (input: unknown) => {
-  const raw = String(input || '').trim()
-  if (!raw) return 0
-  if (/^\d+(\.\d+)?$/.test(raw)) return Math.max(0, Number(raw) || 0)
-  const parts = raw
-    .split(':')
-    .map((part) => Number(part))
-    .filter((part) => Number.isFinite(part))
-  if (!parts.length) return 0
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
-  if (parts.length === 2) return parts[0] * 60 + parts[1]
-  return parts[0]
 }

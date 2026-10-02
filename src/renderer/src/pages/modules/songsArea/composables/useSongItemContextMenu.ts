@@ -961,7 +961,8 @@ export function useSongItemContextMenu(
         break
       }
       case 'rekordboxDesktop.menuCreatePlaylistFromSelectedTracks':
-      case 'library.writeToSeratoPlaylist': {
+      case 'library.writeToSeratoPlaylist':
+      case 'library.writeToTraktorPlaylist': {
         if (runtime.isProgressing) {
           await confirmTaskBusy()
           return null
@@ -978,8 +979,12 @@ export function useSongItemContextMenu(
         runtime.isProgressing = true
         try {
           const summary =
-            result.menuName === 'library.writeToSeratoPlaylist'
-              ? await openExternalLibraryPlaylistForSelectedTracks({ tracks: selectedSongs })
+            result.menuName === 'library.writeToSeratoPlaylist' ||
+            result.menuName === 'library.writeToTraktorPlaylist'
+              ? await openExternalLibraryPlaylistForSelectedTracks({
+                  tracks: selectedSongs,
+                  kind: result.menuName === 'library.writeToTraktorPlaylist' ? 'traktor' : 'serato'
+                })
               : await openRekordboxDesktopPlaylistForSelectedTracks({
                   tracks: selectedSongs,
                   songListUUID: songsAreaState.songListUUID,

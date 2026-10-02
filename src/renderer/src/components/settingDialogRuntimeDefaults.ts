@@ -84,6 +84,9 @@ export const ensureSettingDialogRuntimeDefaults = (runtime: SettingDialogRuntime
   if (runtime.setting.seratoTrackStorageDir === undefined) {
     runtime.setting.seratoTrackStorageDir = ''
   }
+  if (runtime.setting.traktorTrackStorageDir === undefined) {
+    runtime.setting.traktorTrackStorageDir = ''
+  }
   if (runtime.setting.songListBubbleAlways === undefined) {
     runtime.setting.songListBubbleAlways = false
   }

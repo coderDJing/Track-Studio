@@ -7,7 +7,7 @@ const EXTERNAL_ANALYSIS_HYDRATE_CONCURRENCY = 8
 
 type ExternalCachedGridInfo = Pick<
   ISongInfo,
-  'beatGridMap' | 'beatGridStatus' | 'timeBasisOffsetMs'
+  'beatGridMap' | 'beatGridStatus' | 'timeBasisOffsetMs' | 'externalBeatGridPreference'
 >
 
 export const mergeExternalAnalysisIntoBrowserTrack = (
@@ -16,6 +16,7 @@ export const mergeExternalAnalysisIntoBrowserTrack = (
 ): IPioneerPlaylistTrack => {
   const grid = resolveCanonicalSongBeatGridV2(info)
   if (grid.kind !== 'grid') return track
+  if (track.beatGridMap && info?.externalBeatGridPreference !== 'frkb-manual') return track
   const timeBasisOffsetMs = Number(info?.timeBasisOffsetMs)
   return {
     ...track,

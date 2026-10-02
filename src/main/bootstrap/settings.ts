@@ -134,6 +134,7 @@ const defaultSettings = {
   showPlaylistTrackCount: true,
   rekordboxDesktopTrackStorageDir: '',
   seratoTrackStorageDir: '',
+  traktorTrackStorageDir: '',
   nextCheckUpdateTime: '',
   enableErrorReport: true,
   errorReportUsageMsSinceLastSuccess: 0,

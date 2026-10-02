@@ -17,6 +17,7 @@ export type ExternalLibraryCue = {
   slot?: number
   name?: string
   bpm?: number
+  downbeatBeatOffset?: number
 }
 
 export type ExternalLibraryTrack = {
@@ -33,10 +34,12 @@ export type ExternalLibraryTrack = {
   durationSec?: number
   bitrate?: number
   sampleRate?: number
+  timeBasisOffsetMs?: number
   fileFormat?: string
   year?: number
   dateAdded?: string
   missing?: boolean
+  audioId?: string
   waveformOverview?: Uint8Array
   cues: ExternalLibraryCue[]
 }
@@ -69,6 +72,31 @@ export type ExternalLibraryPlaylistWriteTarget = {
   mode: 'append'
   externalId: string
   playlistName?: string
+}
+
+export type TraktorTrackMetadata = {
+  storedPath: string
+  title?: string
+  artist?: string
+  album?: string
+  genre?: string
+  key?: string
+  bpm?: number
+  durationSec?: number
+  bitrate?: number
+  hotCues?: Array<{
+    slot: number
+    sec: number
+    label?: string
+    isLoop?: boolean
+    loopEndSec?: number
+  }>
+  memoryCues?: Array<{
+    sec: number
+    comment?: string
+    isLoop?: boolean
+    loopEndSec?: number
+  }>
 }
 
 export type ExternalLibrarySnapshot = {

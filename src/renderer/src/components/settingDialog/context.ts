@@ -67,6 +67,7 @@ export type SettingDialogContext = {
   reSelectLibrary: () => Promise<void>
   chooseRekordboxDesktopTrackStorageDir: () => Promise<void>
   chooseSeratoTrackStorageDir: () => Promise<void>
+  chooseTraktorTrackStorageDir: () => Promise<void>
   hintIcon: string
   fpModeHintRefs: Record<string, HTMLImageElement | null>
   setFpModeHintRef: (value: string, el: HTMLImageElement | null) => void

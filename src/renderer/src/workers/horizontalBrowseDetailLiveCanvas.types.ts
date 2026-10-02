@@ -142,7 +142,7 @@ export type HorizontalBrowseDetailLiveCanvasWorkerOutgoing =
         renderViewportOnly?: boolean
         renderTargetIndex?: number
         stableWaveformSource?: boolean
-        rawWaveformKind?: 'rekordbox-rgb' | 'rekordbox-triband'
+        rawWaveformKind?: 'rekordbox-rgb' | 'rekordbox-triband' | 'traktor'
         /** 分块路径本轮成功绘制的块，供主线程更新块池 ready 状态。 */
         renderedTileSlotIndexes?: number[]
         /** 分块路径是否还有屏幕外块待补（P1/P2 未画完）。 */

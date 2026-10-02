@@ -4,11 +4,11 @@ import confirm from '@renderer/components/confirmDialog'
 import {
   getCachedRekordboxSourceTree,
   getRememberedRekordboxSourceSelectedPlaylist,
-  setCachedRekordboxSourceTree,
-  shouldRefreshRekordboxSourceTree
+  setCachedRekordboxSourceTree
 } from '@renderer/utils/rekordboxLibraryCache'
 import type { ExternalLibraryKind, ExternalLibrarySourceProbe } from '@shared/externalLibrary'
 import { t } from '@renderer/utils/translate'
+import emitter from '@renderer/utils/mitt'
 import type { IPioneerPlaylistTreeNode } from '../../../../../types/globals'
 
 type HoverableIcon = {
@@ -30,6 +30,7 @@ export type ExternalDjSourceIcon = HoverableIcon & {
 type Options = {
   runtime: ReturnType<typeof useRuntimeStore>
   seratoIconAsset: string
+  traktorIconAsset: string
   updateSelectedIcon: (item: HoverableIcon | undefined) => void
   emitLibrarySelectedChange: (payload: { name: string }) => void
 }
@@ -53,10 +54,32 @@ const containsPlaylist = (nodes: IPioneerPlaylistTreeNode[], playlistId: number)
   return false
 }
 
+const findPlaylistExternalId = (nodes: IPioneerPlaylistTreeNode[], playlistId: number): string => {
+  for (const node of nodes) {
+    if (!node.isFolder && node.id === playlistId) return node.externalId || ''
+    const nested = findPlaylistExternalId(node.children || [], playlistId)
+    if (nested) return nested
+  }
+  return ''
+}
+
+const findPlaylistIdByExternalId = (
+  nodes: IPioneerPlaylistTreeNode[],
+  externalId: string
+): number => {
+  for (const node of nodes) {
+    if (!node.isFolder && node.externalId === externalId) return node.id
+    const nested = findPlaylistIdByExternalId(node.children || [], externalId)
+    if (nested) return nested
+  }
+  return 0
+}
+
 export function useExternalDjSourceIcons(options: Options) {
   const sourceIcons = ref<ExternalDjSourceIcon[]>([])
   let refreshTimer: ReturnType<typeof setInterval> | null = null
   let refreshInFlight: Promise<void> | null = null
+  let selectedSourceCheckInFlight: Promise<void> | null = null
   let treeRequestToken = 0
 
   const clearExternalSelection = () => {
@@ -79,14 +102,22 @@ export function useExternalDjSourceIcons(options: Options) {
       const probes = (await window.electron.ipcRenderer.invoke(
         'external-library:probe'
       )) as ExternalLibrarySourceProbe[]
-      sourceIcons.value = (Array.isArray(probes) ? probes : [])
-        .filter((probe) => probe?.kind === 'serato' && probe.available && probe.sourcePath)
+      const nextIcons = (Array.isArray(probes) ? probes : [])
+        .filter(
+          (probe) =>
+            (probe?.kind === 'serato' || probe?.kind === 'traktor') &&
+            probe.available &&
+            probe.sourcePath
+        )
         .map((probe) => {
-          const iconSrc = options.seratoIconAsset
-          const tooltip = t('library.seratoLibrary')
+          const iconSrc =
+            probe.kind === 'serato' ? options.seratoIconAsset : options.traktorIconAsset
+          const tooltip = t(
+            probe.kind === 'serato' ? 'library.seratoLibrary' : 'library.traktorLibrary'
+          )
           return {
             key: probe.sourceKey,
-            kind: 'serato',
+            kind: probe.kind,
             sourcePath: probe.sourcePath,
             name: tooltip,
             tooltip,
@@ -96,12 +127,12 @@ export function useExternalDjSourceIcons(options: Options) {
             showAlt: false
           }
         })
+      if (JSON.stringify(sourceIcons.value) !== JSON.stringify(nextIcons)) {
+        sourceIcons.value = nextIcons
+      }
 
       const selectedKey = options.runtime.externalDjLibrary.selectedSourceKey
-      if (
-        options.runtime.externalDjLibrary.selectedKind === 'traktor' ||
-        (selectedKey && !sourceIcons.value.some((item) => item.key === selectedKey))
-      ) {
+      if (selectedKey && !sourceIcons.value.some((item) => item.key === selectedKey)) {
         clearExternalSelection()
         if (options.runtime.libraryAreaSelected === 'PioneerDeviceLibrary') {
           options.runtime.libraryAreaSelected = 'FilterLibrary'
@@ -127,24 +158,44 @@ export function useExternalDjSourceIcons(options: Options) {
     item: ExternalDjSourceIcon,
     result: ExternalLibraryTreeResult,
     preferredPlaylistId: number,
-    cacheKey: string
+    preferredExternalId: string,
+    cacheKey: string,
+    revision: string
   ) => {
     const treeNodes = Array.isArray(result?.treeNodes) ? result.treeNodes : []
     const currentPlaylistId = Number(options.runtime.pioneerDeviceLibrary.selectedPlaylistId) || 0
-    const nextPlaylistId = containsPlaylist(treeNodes, currentPlaylistId)
-      ? currentPlaylistId
-      : containsPlaylist(treeNodes, preferredPlaylistId)
-        ? preferredPlaylistId
-        : 0
-    setCachedRekordboxSourceTree(cacheKey, treeNodes, { selectedPlaylistId: nextPlaylistId })
+    const selectedExternalId =
+      findPlaylistExternalId(options.runtime.pioneerDeviceLibrary.treeNodes, currentPlaylistId) ||
+      preferredExternalId
+    const nextPlaylistId = selectedExternalId
+      ? findPlaylistIdByExternalId(treeNodes, selectedExternalId)
+      : containsPlaylist(treeNodes, currentPlaylistId)
+        ? currentPlaylistId
+        : containsPlaylist(treeNodes, preferredPlaylistId)
+          ? preferredPlaylistId
+          : 0
+    setCachedRekordboxSourceTree(cacheKey, treeNodes, {
+      selectedPlaylistId: nextPlaylistId,
+      revision
+    })
     if (!isCurrentSource(item)) return
-    options.runtime.pioneerDeviceLibrary.treeNodes = treeNodes
-    options.runtime.pioneerDeviceLibrary.selectedPlaylistId = nextPlaylistId
-    options.runtime.pioneerDeviceLibrary.selectedSourceName = result.sourceName || item.tooltip
+    if (
+      JSON.stringify(options.runtime.pioneerDeviceLibrary.treeNodes) !== JSON.stringify(treeNodes)
+    ) {
+      options.runtime.pioneerDeviceLibrary.treeNodes = treeNodes
+    }
+    if (options.runtime.pioneerDeviceLibrary.selectedPlaylistId !== nextPlaylistId) {
+      options.runtime.pioneerDeviceLibrary.selectedPlaylistId = nextPlaylistId
+    }
+    const nextSourceName = result.sourceName || item.tooltip
+    if (options.runtime.pioneerDeviceLibrary.selectedSourceName !== nextSourceName) {
+      options.runtime.pioneerDeviceLibrary.selectedSourceName = nextSourceName
+    }
   }
 
   const clickSourceIcon = async (item: ExternalDjSourceIcon) => {
     const requestToken = ++treeRequestToken
+    const alreadyCurrent = isCurrentSource(item)
     const cacheKey = buildExternalSourceCacheKey(item)
     const cachedTree = getCachedRekordboxSourceTree(cacheKey)
     const preferredPlaylistId =
@@ -155,32 +206,54 @@ export function useExternalDjSourceIcons(options: Options) {
       cachedTree && containsPlaylist(cachedTree.treeNodes, preferredPlaylistId)
         ? preferredPlaylistId
         : 0
+    const preferredExternalId = findPlaylistExternalId(
+      cachedTree?.treeNodes ||
+        (isCurrentSource(item) ? options.runtime.pioneerDeviceLibrary.treeNodes : []),
+      preferredPlaylistId
+    )
 
-    options.runtime.externalDjLibrary.selectedKind = item.kind
-    options.runtime.externalDjLibrary.selectedSourceKey = item.key
-    options.runtime.externalDjLibrary.selectedSourcePath = item.sourcePath
-    options.runtime.pioneerDeviceLibrary.selectedSourceKey = item.key
-    options.runtime.pioneerDeviceLibrary.selectedSourceName = item.tooltip
-    options.runtime.pioneerDeviceLibrary.selectedSourceRootPath = item.sourcePath
-    options.runtime.pioneerDeviceLibrary.selectedSourceKind = ''
-    options.runtime.pioneerDeviceLibrary.selectedLibraryType = ''
-    options.runtime.pioneerDeviceLibrary.selectedPlaylistId = restoredPlaylistId
-    options.runtime.pioneerDeviceLibrary.loading = !cachedTree
-    options.runtime.pioneerDeviceLibrary.treeNodes = cachedTree?.treeNodes || []
-    options.runtime.songsArea.songListUUID = ''
-    options.runtime.libraryAreaSelected = 'PioneerDeviceLibrary'
-    options.updateSelectedIcon(item)
-    options.emitLibrarySelectedChange({ name: 'PioneerDeviceLibrary' })
-
-    if (cachedTree && !shouldRefreshRekordboxSourceTree(cacheKey)) return
+    if (!alreadyCurrent) {
+      options.runtime.externalDjLibrary.selectedKind = item.kind
+      options.runtime.externalDjLibrary.selectedSourceKey = item.key
+      options.runtime.externalDjLibrary.selectedSourcePath = item.sourcePath
+      options.runtime.pioneerDeviceLibrary.selectedSourceKey = item.key
+      options.runtime.pioneerDeviceLibrary.selectedSourceName = item.tooltip
+      options.runtime.pioneerDeviceLibrary.selectedSourceRootPath = item.sourcePath
+      options.runtime.pioneerDeviceLibrary.selectedSourceKind = ''
+      options.runtime.pioneerDeviceLibrary.selectedLibraryType = ''
+      options.runtime.pioneerDeviceLibrary.selectedPlaylistId = restoredPlaylistId
+      options.runtime.pioneerDeviceLibrary.loading = !cachedTree
+      options.runtime.pioneerDeviceLibrary.treeNodes = cachedTree?.treeNodes || []
+      options.runtime.songsArea.songListUUID = ''
+      options.runtime.libraryAreaSelected = 'PioneerDeviceLibrary'
+      options.updateSelectedIcon(item)
+      options.emitLibrarySelectedChange({ name: 'PioneerDeviceLibrary' })
+    }
 
     try {
+      const revisionResult = (await window.electron.ipcRenderer.invoke(
+        'external-library:source-revision',
+        { kind: item.kind, path: item.sourcePath }
+      )) as { revision?: string }
+      const revision = String(revisionResult?.revision || '')
+      if (cachedTree?.revision && cachedTree.revision === revision) return
       const result = (await window.electron.ipcRenderer.invoke('external-library:load-tree', {
         kind: item.kind,
         path: item.sourcePath
       })) as ExternalLibraryTreeResult
       if (requestToken !== treeRequestToken) return
-      applyTreeResult(item, result, preferredPlaylistId, cacheKey)
+      const selectedPlaylistIdBefore = options.runtime.pioneerDeviceLibrary.selectedPlaylistId
+      applyTreeResult(item, result, preferredPlaylistId, preferredExternalId, cacheKey, revision)
+      if (
+        alreadyCurrent &&
+        selectedPlaylistIdBefore > 0 &&
+        options.runtime.pioneerDeviceLibrary.selectedPlaylistId === selectedPlaylistIdBefore
+      ) {
+        emitter.emit('dj-library:refresh-selected-playlist', {
+          sourceKey: item.key,
+          playlistId: options.runtime.pioneerDeviceLibrary.selectedPlaylistId
+        })
+      }
     } catch (error) {
       if (requestToken !== treeRequestToken || !isCurrentSource(item)) return
       if (!cachedTree) {
@@ -193,7 +266,11 @@ export function useExternalDjSourceIcons(options: Options) {
         })
       }
     } finally {
-      if (requestToken === treeRequestToken && isCurrentSource(item)) {
+      if (
+        requestToken === treeRequestToken &&
+        isCurrentSource(item) &&
+        options.runtime.pioneerDeviceLibrary.loading
+      ) {
         options.runtime.pioneerDeviceLibrary.loading = false
       }
     }
@@ -206,7 +283,19 @@ export function useExternalDjSourceIcons(options: Options) {
     return options.runtime.externalDjLibrary.selectedSourceKey
   })
 
-  const handleWindowFocus = () => void refreshSourceIcons()
+  const handleWindowFocus = () => {
+    if (selectedSourceCheckInFlight) return
+    const task = refreshSourceIcons().then(async () => {
+      const selected = sourceIcons.value.find((item) => isCurrentSource(item))
+      if (selected) await clickSourceIcon(selected)
+    })
+    selectedSourceCheckInFlight = task
+    void task
+      .finally(() => {
+        if (selectedSourceCheckInFlight === task) selectedSourceCheckInFlight = null
+      })
+      .catch((error) => console.error('[externalDjSourceIcons] refresh failed', error))
+  }
 
   onMounted(() => {
     void refreshSourceIcons()

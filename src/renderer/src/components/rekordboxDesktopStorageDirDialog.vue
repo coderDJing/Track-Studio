@@ -10,7 +10,7 @@ import utils from '../utils/utils'
 const uuid = uuidV4()
 const props = defineProps<{
   initialPath?: string
-  storageKind?: 'rekordbox' | 'serato'
+  storageKind?: 'rekordbox' | 'serato' | 'traktor'
   confirmCallback: (path: string) => void
   cancelCallback: () => void
 }>()
@@ -25,9 +25,11 @@ const pathText = computed(
 const textKey = (
   suffix: 'title' | 'intro' | 'why' | 'settingHint' | 'pathLabel' | 'confirmButton'
 ) =>
-  props.storageKind === 'serato'
-    ? t(`library.seratoStorageDirSetup${suffix[0].toUpperCase()}${suffix.slice(1)}`)
-    : t(`rekordboxDesktop.storageDirSetup${suffix[0].toUpperCase()}${suffix.slice(1)}`)
+  props.storageKind === 'rekordbox'
+    ? t(`rekordboxDesktop.storageDirSetup${suffix[0].toUpperCase()}${suffix.slice(1)}`)
+    : t(
+        `library.${props.storageKind === 'traktor' ? 'traktor' : 'serato'}StorageDirSetup${suffix[0].toUpperCase()}${suffix.slice(1)}`
+      )
 
 const triggerFlash = () => {
   flashPath.value = true

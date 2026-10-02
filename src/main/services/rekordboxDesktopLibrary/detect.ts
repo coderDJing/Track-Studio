@@ -11,11 +11,15 @@ import type {
 
 const PROBE_CACHE_TTL_MS = 60_000
 
-let probeCache: {
-  value: RekordboxDesktopLibraryProbe
-  expiresAt: number
-} | null = null
-let probeInflight: Promise<RekordboxDesktopLibraryProbe> | null = null
+type ProbeMode = 'database' | 'source-path'
+const probeCache = new Map<
+  ProbeMode,
+  {
+    value: RekordboxDesktopLibraryProbe
+    expiresAt: number
+  }
+>()
+const probeInflight = new Map<ProbeMode, Promise<RekordboxDesktopLibraryProbe>>()
 
 const toTrimmedString = (value: unknown) => String(value || '').trim()
 
@@ -103,7 +107,7 @@ const normalizeProbe = (
   const sourceRootPath = toTrimmedString(payload?.sourceRootPath || payload?.shareDir)
   const dbPath = toTrimmedString(payload?.dbPath)
   return {
-    available: Boolean(payload?.available),
+    available: Boolean(payload?.available && dbPath),
     supported: payload?.supported !== false,
     sourceKey:
       toTrimmedString(payload?.sourceKey) ||
@@ -129,46 +133,72 @@ const normalizeProbe = (
   }
 }
 
-export async function probeRekordboxDesktopLibrary(
-  forceRefresh = false
+async function readLibraryProbe(
+  mode: ProbeMode,
+  forceRefresh: boolean
 ): Promise<RekordboxDesktopLibraryProbe> {
-  if (!forceRefresh && probeCache && probeCache.expiresAt > Date.now()) {
-    return probeCache.value
+  const cached = probeCache.get(mode)
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) {
+    return cached.value
   }
-  if (probeInflight) return await probeInflight
+  const inflight = probeInflight.get(mode)
+  if (inflight) return await inflight
 
   const request = (async () => {
     let probe: RekordboxDesktopLibraryProbe
     try {
       probe = normalizeProbe(
-        await runRekordboxDesktopHelper<RekordboxDesktopHelperProbePayload, Record<string, never>>(
-          'probe',
-          {}
-        )
+        await runRekordboxDesktopHelper<
+          RekordboxDesktopHelperProbePayload,
+          { openDatabase: boolean }
+        >('probe', { openDatabase: mode === 'database' })
       )
     } catch (error) {
       probe = normalizeProbeError(error)
     }
 
-    probeCache = {
-      value: probe,
-      expiresAt: Date.now() + PROBE_CACHE_TTL_MS
+    if (probe.available) {
+      probeCache.set(mode, {
+        value: probe,
+        expiresAt: Date.now() + PROBE_CACHE_TTL_MS
+      })
+    } else {
+      // A transient helper/database error must not suppress the next real check.
+      probeCache.delete(mode)
     }
     return probe
   })()
-  probeInflight = request
+  probeInflight.set(mode, request)
   try {
     return await request
   } finally {
-    if (probeInflight === request) probeInflight = null
+    if (probeInflight.get(mode) === request) probeInflight.delete(mode)
   }
+}
+
+export async function probeRekordboxDesktopLibrary(forceRefresh = false) {
+  return await readLibraryProbe('database', forceRefresh)
+}
+
+const assertLibraryAvailable = (probe: RekordboxDesktopLibraryProbe) => {
+  if (!probe.available) {
+    const code = probe.errorCode
+    const detail = probe.errorMessage || '未检测到 Rekordbox master.db。'
+    throw Object.assign(new Error(code ? `[${code}] ${detail}` : detail), { code })
+  }
+}
+
+export async function requireRekordboxDesktopSourceDbPath() {
+  // Revision checks only need the configured path; opening/counting the DB can fail
+  // independently and should be reserved for actual library reads.
+  const probe = await readLibraryProbe('source-path', false)
+  assertLibraryAvailable(probe)
+  return probe.dbPath
 }
 
 export async function requireRekordboxDesktopLibraryProbe() {
   const probe = await probeRekordboxDesktopLibrary(false)
-  if (!probe.available) {
-    throw new Error(probe.errorMessage || '未检测到可读的 Rekordbox 库。')
-  }
+  assertLibraryAvailable(probe)
   return probe
 }
 

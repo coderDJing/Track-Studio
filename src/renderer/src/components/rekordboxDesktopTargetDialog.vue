@@ -15,10 +15,7 @@ import listIconAsset from '@renderer/assets/listIcon.svg?asset'
 import RekordboxDesktopTargetTreeItem from '@renderer/components/rekordboxDesktopTargetTreeItem.vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
-import {
-  SEARCH_FOCUS_PRIORITY,
-  useSearchFocusTarget
-} from '@renderer/composables/useSearchFocus'
+import { SEARCH_FOCUS_PRIORITY, useSearchFocusTarget } from '@renderer/composables/useSearchFocus'
 import {
   buildVisibleCombinedNavList,
   loadRecentDialogSelectedSongListUUIDs,
@@ -43,7 +40,7 @@ import {
   filterTreeNodes,
   flattenPlayableNodes,
   collectFolderIds,
-  isPlayablePlaylistNode,
+  isWritablePlaylistNode,
   toPseudoSongList,
   normalizeKeyword
 } from '@renderer/composables/rekordboxDesktop/useRekordboxTreeUtils'
@@ -151,7 +148,7 @@ const recentPlaylistArr = computed<PseudoSongList[]>(() => {
   const invalidIds: string[] = []
   for (const item of recentSelectedPlaylistIds) {
     const node = findNodeById(rawTreeNodes.value, Number(item) || 0)
-    if (!isPlayablePlaylistNode(node)) {
+    if (!isWritablePlaylistNode(node)) {
       invalidIds.push(item)
       continue
     }
@@ -271,9 +268,10 @@ const syncRuntimeDesktopTree = (result: LoadTreeResult) => {
     rootPath,
     libraryType: 'masterDb'
   })
-  setCachedRekordboxSourceTree(sourceCacheKey, rawTreeNodes.value)
+  const browserTree = Array.isArray(result.treeNodes) ? result.treeNodes : []
+  setCachedRekordboxSourceTree(sourceCacheKey, browserTree)
   if (runtime.pioneerDeviceLibrary.selectedSourceKind !== 'desktop') return
-  runtime.pioneerDeviceLibrary.treeNodes = rawTreeNodes.value
+  runtime.pioneerDeviceLibrary.treeNodes = browserTree
 }
 
 const loadTree = async (preferredPlaylistId = Number(runtime.dialogSelectedSongListUUID) || 0) => {
@@ -283,11 +281,13 @@ const loadTree = async (preferredPlaylistId = Number(runtime.dialogSelectedSongL
     const result = (await window.electron.ipcRenderer.invoke(
       buildRekordboxSourceChannel('desktop', 'load-tree')
     )) as LoadTreeResult
-    rawTreeNodes.value = Array.isArray(result?.treeNodes) ? result.treeNodes : []
+    rawTreeNodes.value = Array.isArray(result?.treeNodes)
+      ? result.treeNodes.filter((node) => !node.isAllTracks)
+      : []
 
     const nextSelectedId =
       preferredPlaylistId > 0 &&
-      isPlayablePlaylistNode(findNodeById(rawTreeNodes.value, preferredPlaylistId))
+      isWritablePlaylistNode(findNodeById(rawTreeNodes.value, preferredPlaylistId))
         ? preferredPlaylistId
         : Number(allSongListArr.value[0]?.uuid) || 0
 
@@ -370,7 +370,7 @@ const confirmRecentPlaylist = () => {
 
 const selectPlaylist = (node: IPioneerPlaylistTreeNode) => {
   if (dialogWriting.value) return
-  if (!isPlayablePlaylistNode(node)) return
+  if (!isWritablePlaylistNode(node)) return
   runtime.dialogSelectedSongListUUID = String(node.id)
   selectedArea.value = 'tree'
 }
@@ -390,7 +390,7 @@ const confirmHandle = () => {
   const selectionVisible =
     !normalizeKeyword(playlistSearch.value) || filteredAllSongListIds.value.includes(selectedId)
   const selectedNode = findNodeById(rawTreeNodes.value, Number(selectedId) || 0)
-  if (!selectedId || !selectionVisible || !isPlayablePlaylistNode(selectedNode)) {
+  if (!selectedId || !selectionVisible || !isWritablePlaylistNode(selectedNode)) {
     if (!flashArea.value) {
       flashBorder('selectSongList')
     }

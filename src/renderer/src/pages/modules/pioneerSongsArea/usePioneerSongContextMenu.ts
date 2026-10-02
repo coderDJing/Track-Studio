@@ -45,7 +45,8 @@ const buildPioneerSongMenuGroups = (canRemoveTracksFromDesktopPlaylist: boolean)
   groups.push([{ menuName: 'tracks.exportTracksCopyOnly' }])
   groups.push([
     { menuName: 'rekordboxDesktop.menuCreatePlaylistFromSelectedTracks' },
-    { menuName: 'library.writeToSeratoPlaylist' }
+    { menuName: 'library.writeToSeratoPlaylist' },
+    { menuName: 'library.writeToTraktorPlaylist' }
   ])
   groups.push([
     { menuName: 'library.copyToFilter' },
@@ -176,6 +177,7 @@ export const usePioneerSongContextMenu = (params: UsePioneerSongContextMenuParam
       }
       case 'rekordboxDesktop.menuCreatePlaylistFromSelectedTracks':
       case 'library.writeToSeratoPlaylist':
+      case 'library.writeToTraktorPlaylist':
         if (params.runtime.isProgressing) {
           await confirmTaskBusy()
           return
@@ -186,8 +188,14 @@ export const usePioneerSongContextMenu = (params: UsePioneerSongContextMenuParam
         }
         params.runtime.isProgressing = true
         try {
-          if (result.menuName === 'library.writeToSeratoPlaylist') {
-            await openExternalLibraryPlaylistForSelectedTracks({ tracks: existingTracks })
+          if (
+            result.menuName === 'library.writeToSeratoPlaylist' ||
+            result.menuName === 'library.writeToTraktorPlaylist'
+          ) {
+            await openExternalLibraryPlaylistForSelectedTracks({
+              tracks: existingTracks,
+              kind: result.menuName === 'library.writeToTraktorPlaylist' ? 'traktor' : 'serato'
+            })
           } else {
             await openRekordboxDesktopPlaylistForSelectedTracks({
               tracks: existingTracks,

@@ -32,6 +32,7 @@ type SharedSongGridPayload = {
   memoryCues?: ISongInfo['memoryCues']
   bpm?: number
   fileMissing?: boolean
+  externalBeatGridPreference?: 'frkb-manual'
 } | null
 
 type SongStructurePayload = {

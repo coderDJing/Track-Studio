@@ -4,6 +4,8 @@ import crypto from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { reorderSeratoCrateOrder, updateSeratoCrateOrder } from './seratoCrateOrder'
+import { readSeratoLibrary } from './serato'
+import { buildExternalLibraryBrowserTracks, getPlaylistNumericId } from './browserAdapter'
 
 const execFileAsync = promisify(execFile)
 
@@ -245,21 +247,52 @@ const assertSeratoClosed = async () => {
   }
 }
 
-const rowKeyEntryIndex = (rowKey: string) => {
-  const match = String(rowKey || '').match(/:(\d+)$/)
-  return match ? Number(match[1]) : -1
+const selectedEntryIndexes = async (seratoRoot: string, externalId: string, rowKeys: string[]) => {
+  const snapshot = await readSeratoLibrary(seratoRoot, { hydrateTracks: false })
+  const playlist = snapshot.playlists.find((item) => item.id === externalId)
+  if (!playlist || playlist.isFolder) throw new Error('Serato 歌单已变化，请刷新后重试。')
+  const tracks = buildExternalLibraryBrowserTracks(snapshot, getPlaylistNumericId(playlist)).tracks
+  const indexByKey = new Map(tracks.map((track) => [track.rowKey, track.entryIndex]))
+  return [...new Set(rowKeys)].map((key) => {
+    const index = indexByKey.get(key)
+    if (index === undefined) throw new Error('Serato 歌单已变化，请刷新后重试。')
+    return index
+  })
 }
 
-const writeTrackOrder = async (filePath: string, rowKeys: string[], targetIndex: number) => {
+const assertDestinationAvailable = async (
+  seratoRoot: string,
+  prefix: string,
+  oldPrefix?: string
+) => {
+  if (prefix.toLowerCase() === oldPrefix?.toLowerCase()) return
+  const entries = await fs.readdir(path.join(seratoRoot, 'Subcrates'), { withFileTypes: true })
+  const names = [
+    ...entries
+      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.crate'))
+      .map((entry) => entry.name.slice(0, -'.crate'.length)),
+    ...(await readFrkbFolderNames(seratoRoot))
+  ]
+  const key = prefix.toLowerCase()
+  if (
+    names.some((name) => name.toLowerCase() === key || name.toLowerCase().startsWith(`${key}%%`))
+  ) {
+    throw new Error('目标位置已经存在同名 Serato 歌单或文件夹。')
+  }
+}
+
+const writeTrackOrder = async (
+  filePath: string,
+  selectedIndexes: number[],
+  targetIndex: number
+) => {
   const parsed = await readCrate(filePath)
-  const selectedIndexes = [...new Set(rowKeys.map(rowKeyEntryIndex).filter((index) => index >= 0))]
-    .filter((index) => index < parsed.trackChunks.length)
-    .sort((left, right) => left - right)
   if (!selectedIndexes.length) return 0
   const selectedSet = new Set(selectedIndexes)
   const selected = selectedIndexes.map((index) => parsed.trackChunks[index])
   const remaining = parsed.trackChunks.filter((_chunk, index) => !selectedSet.has(index))
-  const insertAt = Math.max(0, Math.min(Number(targetIndex) || 0, remaining.length))
+  const boundary = Math.max(0, Math.min(Number(targetIndex) || 0, parsed.trackChunks.length))
+  const insertAt = boundary - selectedIndexes.filter((index) => index < boundary).length
   const nextTracks = [...remaining.slice(0, insertAt), ...selected, ...remaining.slice(insertAt)]
   const nonTrack = parsed.chunks.filter((chunk) => chunk.tag !== 'otrk')
   const output = Buffer.concat([
@@ -284,6 +317,7 @@ export const mutateSeratoCrate = async (
     const name = validateName(request.name)
     const nextParts = [...splitExternalId(request.parentExternalId), name]
     const targetPath = cratePath(subcratesPath, nextParts)
+    await assertDestinationAvailable(seratoRoot, nextParts.join('%%'))
     try {
       await fs.access(targetPath)
       throw new Error('同名 Serato 歌单已经存在。')
@@ -295,6 +329,7 @@ export const mutateSeratoCrate = async (
       // empty folder state in FRKB metadata instead, and let child crates
       // provide the visible Serato hierarchy when they exist.
       await updateFrkbFolderNames(seratoRoot, (names) => [...names, nextParts.join('%%')])
+      await updateSeratoCrateOrder(seratoRoot, (names) => names)
     } else {
       await atomicWrite(targetPath, await makeEmptyCrate(subcratesPath, false))
       await updateSeratoCrateOrder(seratoRoot, (names) => [...names, nextParts.join('%%')])
@@ -311,6 +346,7 @@ export const mutateSeratoCrate = async (
     const nextParts = [...parts.slice(0, -1), name]
     const oldPrefix = crateFileName(parts).slice(0, -'.crate'.length)
     const nextPrefix = crateFileName(nextParts).slice(0, -'.crate'.length)
+    await assertDestinationAvailable(seratoRoot, nextPrefix, oldPrefix)
     const entries = await fs.readdir(subcratesPath, { withFileTypes: true })
     for (const entry of entries) {
       if (!entry.isFile() || !entry.name.toLowerCase().endsWith('.crate')) continue
@@ -347,6 +383,13 @@ export const mutateSeratoCrate = async (
     const nextParts = [...splitExternalId(request.parentExternalId), name]
     const oldPrefix = crateFileName(parts).slice(0, -'.crate'.length)
     const nextPrefix = crateFileName(nextParts).slice(0, -'.crate'.length)
+    const parentParts = splitExternalId(request.parentExternalId)
+    const oldKey = parts.join('/').toLowerCase()
+    const parentKey = parentParts.join('/').toLowerCase()
+    if (parentKey === oldKey || parentKey.startsWith(`${oldKey}/`)) {
+      throw new Error('不能将文件夹移入自身。')
+    }
+    await assertDestinationAvailable(seratoRoot, nextPrefix, oldPrefix)
     if (oldPrefix === nextPrefix) {
       await updateSeratoCrateOrder(seratoRoot, (names) =>
         reorderSeratoCrateOrder(
@@ -433,9 +476,11 @@ export const mutateSeratoCrate = async (
   await fs.access(targetPath)
   if (request.operation === 'remove-tracks') {
     const parsed = await readCrate(targetPath)
-    const indexes = [
-      ...new Set((request.rowKeys || []).map(rowKeyEntryIndex).filter((index) => index >= 0))
-    ].filter((index) => index < parsed.trackChunks.length)
+    const indexes = await selectedEntryIndexes(
+      seratoRoot,
+      request.externalId || '',
+      request.rowKeys || []
+    )
     if (!indexes.length) return { removedCount: 0 }
     const removeSet = new Set(indexes)
     const output = Buffer.concat(
@@ -453,7 +498,7 @@ export const mutateSeratoCrate = async (
     return {
       removedCount: await writeTrackOrder(
         targetPath,
-        request.rowKeys || [],
+        await selectedEntryIndexes(seratoRoot, request.externalId || '', request.rowKeys || []),
         Number(request.targetIndex) || 0
       )
     }

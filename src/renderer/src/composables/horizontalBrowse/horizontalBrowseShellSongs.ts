@@ -14,6 +14,7 @@ type SharedSongGridPayload = {
   bpm?: number
   fileMissing?: boolean
   songStructure?: SongStructureAnalysis
+  externalBeatGridPreference?: 'frkb-manual'
 } | null
 
 export const isSameHorizontalBrowseSongFilePath = (left: unknown, right: unknown) => {
@@ -61,7 +62,16 @@ export const mergeHorizontalBrowseSongWithSharedGrid = (
 
   let touched = false
   const nextSong: ISongInfo = { ...song }
+  const currentGrid = normalizeSongBeatGridMapV2(song.beatGridMap, { allowSingleClip: true })
+  const incomingGrid = normalizeSongBeatGridMapV2(payload.beatGridMap, { allowSingleClip: true })
+  const preserveNativeGrid =
+    (currentGrid?.source === 'rekordbox' ||
+      currentGrid?.source === 'serato' ||
+      currentGrid?.source === 'traktor') &&
+    incomingGrid?.source !== 'manual' &&
+    payload.externalBeatGridPreference !== 'frkb-manual'
   if (
+    !preserveNativeGrid &&
     typeof payload.timeBasisOffsetMs === 'number' &&
     Number.isFinite(payload.timeBasisOffsetMs) &&
     nextSong.timeBasisOffsetMs !== payload.timeBasisOffsetMs
@@ -69,7 +79,7 @@ export const mergeHorizontalBrowseSongWithSharedGrid = (
     nextSong.timeBasisOffsetMs = payload.timeBasisOffsetMs
     touched = true
   }
-  if (payload.beatGridMap !== undefined) {
+  if (!preserveNativeGrid && payload.beatGridMap !== undefined) {
     const beatGridMap = normalizeSongBeatGridMapV2(payload.beatGridMap, {
       allowSingleClip: true
     })
@@ -87,7 +97,7 @@ export const mergeHorizontalBrowseSongWithSharedGrid = (
       touched = true
     }
   }
-  if (Array.isArray(payload.rekordboxGridEntries)) {
+  if (!preserveNativeGrid && Array.isArray(payload.rekordboxGridEntries)) {
     nextSong.rekordboxGridEntries = payload.rekordboxGridEntries.map((entry) => ({ ...entry }))
     touched = true
   }
@@ -106,6 +116,7 @@ export const mergeHorizontalBrowseSongWithSharedGrid = (
     }
   }
   if (
+    !preserveNativeGrid &&
     typeof payload.bpm === 'number' &&
     Number.isFinite(payload.bpm) &&
     nextSong.bpm !== payload.bpm

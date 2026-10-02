@@ -35,9 +35,16 @@ export const usePioneerDesktopPlaylistActions = (params: {
     loadPlaylistTracks
   } = params
 
-  const isExternalSerato = () => selectedExternalKind.value === 'serato'
+  const isExternalLibrary = () => Boolean(selectedExternalKind.value)
   const sourceText = (rekordboxKey: string, seratoKey: string, values?: Record<string, unknown>) =>
-    t(isExternalSerato() ? seratoKey : rekordboxKey, values)
+    t(
+      !isExternalLibrary()
+        ? rekordboxKey
+        : selectedExternalKind.value === 'traktor'
+          ? seratoKey.replaceAll('Serato', 'Traktor').replaceAll('serato', 'traktor')
+          : seratoKey,
+      values
+    )
 
   const resolveSelectedExternalPlaylistId = () => {
     const selectedId = selectedPlaylistId.value
@@ -171,7 +178,7 @@ export const usePioneerDesktopPlaylistActions = (params: {
           | ExternalLibraryMutationResponse
           | RekordboxDesktopRemovePlaylistTracksResponse
           | null
-        if (isExternalSerato()) {
+        if (isExternalLibrary()) {
           response = await invokeExternalMutation({ operation: 'remove-tracks', rowKeys })
         } else {
           if (!(await ensureRekordboxDesktopWriteAvailable('edit'))) return
@@ -227,7 +234,7 @@ export const usePioneerDesktopPlaylistActions = (params: {
           | ExternalLibraryMutationResponse
           | RekordboxDesktopReorderPlaylistTracksResponse
           | null
-        if (isExternalSerato()) {
+        if (isExternalLibrary()) {
           response = await invokeExternalMutation({
             operation: 'reorder-tracks',
             rowKeys,
@@ -276,7 +283,7 @@ export const usePioneerDesktopPlaylistActions = (params: {
           | ExternalLibraryMutationResponse
           | RekordboxDesktopReorderPlaylistTracksResponse
           | null
-        if (isExternalSerato()) {
+        if (isExternalLibrary()) {
           response = await invokeExternalMutation({
             operation: 'reorder-tracks',
             rowKeys,

@@ -15,7 +15,7 @@ import { shouldAcceptSharedSongGridCache } from './sharedSongGridCachePolicy'
 
 type SharedGridInfo = Pick<
   ISongInfo,
-  'beatGridMap' | 'beatGridAlgorithmVersion' | 'timeBasisOffsetMs'
+  'beatGridMap' | 'beatGridAlgorithmVersion' | 'timeBasisOffsetMs' | 'externalBeatGridPreference'
 >
 
 export type SharedSongGridDefinition = {
@@ -24,9 +24,10 @@ export type SharedSongGridDefinition = {
   firstBeatMs?: number
   downbeatBeatOffset?: number
   timeBasisOffsetMs?: number
-  beatGridSource?: 'manual' | 'analysis' | 'rekordbox'
+  beatGridSource?: 'manual' | 'analysis' | 'rekordbox' | 'serato' | 'traktor'
   beatGridMap?: SongBeatGridMapV2 | null
   beatGridAlgorithmVersion?: number
+  externalBeatGridPreference?: 'frkb-manual'
 }
 
 type SharedSongGridCandidate = {
@@ -75,7 +76,8 @@ const extractSharedGridFromInfo = (
         : undefined,
     beatGridSource: beatGridMapV2.source,
     beatGridMap: beatGridMapV2,
-    beatGridAlgorithmVersion
+    beatGridAlgorithmVersion,
+    externalBeatGridPreference: info.externalBeatGridPreference
   }
 }
 

@@ -22,6 +22,7 @@ import {
 } from '@renderer/utils/playlistAnalysisGate'
 import { resolveInitialPlaybackRangeStartSec } from '@shared/playbackRange'
 import { projectSongBeatGridMapV2ToFixedGrid } from '@shared/songBeatGridMapV2'
+import { loadRekordboxPlaybackRuntime } from '@renderer/utils/loadRekordboxPlaybackRuntime'
 
 type WaveformCacheResponse = {
   items?: Array<{
@@ -448,6 +449,17 @@ export function useSongLoader(params: {
 
     const useHtmlPlayback = canPlayHtmlAudio(filePath)
     const currentSong = runtime.playingData.playingSong
+    if (currentSong && isRekordboxExternalPlaybackSource('', currentSong)) {
+      void loadRekordboxPlaybackRuntime(currentSong)
+        .then((resolved) => {
+          if (requestId !== currentLoadRequestId.value) return
+          if (runtime.playingData.playingSong?.filePath !== filePath) return
+          runtime.playingData.playingSong = resolved
+          resolveBpmValue()
+          emitter.emit('horizontalBrowse/shared-grid-batch-updated', [resolved])
+        })
+        .catch((error) => console.error('[rekordbox] load playback runtime failed', error))
+    }
     const externalWaveformSource = resolveSongExternalWaveformSource(currentSong, {
       rootPath: runtime.pioneerDeviceLibrary.selectedSourceRootPath,
       sourceKind: runtime.pioneerDeviceLibrary.selectedSourceKind || undefined

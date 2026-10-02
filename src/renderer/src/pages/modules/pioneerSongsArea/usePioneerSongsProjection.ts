@@ -3,6 +3,10 @@ import { normalizeBpmDisplayScaled } from '@renderer/utils/bpm'
 import { getKeyDisplayText, getKeySortText } from '@shared/keyDisplay'
 import { normalizeAddedAtMs, matchTimestampByDateFilter } from '@shared/songAddedAt'
 import { matchComparableByFilter } from '@shared/filterCompare'
+import { planSongListMerge } from '@shared/playlistViewMerge'
+import { createSongListItemComparator } from '@shared/songListItemCompare'
+import { isWindowsPathPlatform } from '@shared/filePathComparison'
+import { useRuntimeStore } from '@renderer/stores/runtime'
 import { getSongListFieldRawValue } from '@renderer/utils/songListFieldDisplay'
 import type { RekordboxSourceKind } from '@shared/rekordboxSources'
 import type { ExternalLibraryKind } from '@shared/externalLibrary'
@@ -132,6 +136,14 @@ const parseExcludeKeywords = (input: unknown): string[] => {
 }
 
 export const usePioneerSongsProjection = (params: UsePioneerSongsProjectionParams) => {
+  const runtime = useRuntimeStore()
+  const caseInsensitiveFilePath = isWindowsPathPlatform(
+    runtime.setting.platform || runtime.platform
+  )
+  const comparator = createSongListItemComparator({
+    caseInsensitiveFileName: caseInsensitiveFilePath,
+    caseInsensitiveFilePath
+  })
   const toSongInfo = (track: IPioneerPlaylistTrack): ISongInfo => ({
     filePath: track.filePath,
     fileName: track.fileName,
@@ -158,7 +170,10 @@ export const usePioneerSongsProjection = (params: UsePioneerSongsProjectionParam
     // the second entry's zero-based `entryIndex`.
     mixOrder: params.isExternalSource.value ? track.entryIndex + 1 : track.entryIndex,
     ...(params.isExternalSource.value
-      ? { externalLibraryKind: params.selectedExternalKind.value || null }
+      ? {
+          externalLibraryKind: params.selectedExternalKind.value || null,
+          externalWaveformRootPath: params.selectedSourceRootPath.value || null
+        }
       : {
           externalAnalyzePath: track.analyzePath || null,
           externalWaveformRootPath: params.selectedSourceRootPath.value || null,
@@ -222,9 +237,8 @@ export const usePioneerSongsProjection = (params: UsePioneerSongsProjectionParam
     }
   }
 
-  const applyFiltersAndSorting = (reason = 'unspecified') => {
-    let filtered = params.originalTracks.value.map((track) => toSongInfo(track))
-    const beforeCount = filtered.length
+  const buildProjectedSongs = (tracks: IPioneerPlaylistTrack[]) => {
+    let filtered = tracks.map((track) => toSongInfo(track))
     for (const col of params.columnData.value) {
       if (!col.filterActive) continue
       if (col.filterType === 'text' && col.key) {
@@ -352,6 +366,30 @@ export const usePioneerSongsProjection = (params: UsePioneerSongsProjectionParam
       }
     }
 
+    return filtered
+  }
+
+  const applyFiltersAndSortingMerged = async (tracks: IPioneerPlaylistTrack[]) => {
+    const filtered = buildProjectedSongs(tracks)
+    const merged = await planSongListMerge({
+      current: params.visibleSongs.value,
+      next: filtered,
+      comparator
+    })
+    if (!merged.changed) return false
+    params.visibleSongs.value = merged.items
+    if (
+      params.getCurrentPlaybackListKey() &&
+      params.getPlayingSongListUUID() === params.getCurrentPlaybackListKey()
+    ) {
+      params.setPlayingSongListData([...merged.items])
+    }
+    return true
+  }
+
+  const applyFiltersAndSorting = (reason = 'unspecified') => {
+    const filtered = buildProjectedSongs(params.originalTracks.value)
+    const beforeCount = params.originalTracks.value.length
     params.visibleSongs.value = filtered
 
     if (
@@ -396,6 +434,7 @@ export const usePioneerSongsProjection = (params: UsePioneerSongsProjectionParam
 
   return {
     applyFiltersAndSorting,
+    applyFiltersAndSortingMerged,
     buildSongSnapshot,
     normalizePath,
     resolveSelectedTracks,

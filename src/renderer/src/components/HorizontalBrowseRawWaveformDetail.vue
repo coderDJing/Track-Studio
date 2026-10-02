@@ -32,6 +32,7 @@ import type {
 } from '@renderer/composables/horizontalBrowse/horizontalBrowseLinkedGridVisualTransaction'
 import { createHorizontalBrowseRawWaveformDetailExpose } from '@renderer/composables/horizontalBrowse/horizontalBrowseRawWaveformDetailExpose'
 import { createHorizontalBrowseLiveTempoPreviewController } from '@renderer/composables/horizontalBrowse/horizontalBrowseLiveTempoPreviewController'
+import { createHorizontalBrowseStableRenderRevision } from '@renderer/composables/horizontalBrowse/createHorizontalBrowseStableRenderRevision'
 import { useHorizontalBrowseAudioEditDetailRaw } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseAudioEditDetailRaw'
 import { isHorizontalBrowseWaveformTileRenderingEnabled } from '@renderer/composables/horizontalBrowse/horizontalBrowseWaveformTileFlag'
 import { HORIZONTAL_BROWSE_WAVEFORM_TILE_SLOT_COUNT } from '@renderer/composables/horizontalBrowse/horizontalBrowseWaveformTileLayout'
@@ -97,33 +98,7 @@ const localGridShiftPhaseOffsetSec = ref(0)
 const playbackSyncRevision = computed(() =>
   Math.max(0, Math.floor(Number(props.playbackSyncRevision) || 0))
 )
-let lastPresentationStableRenderRevision = 0
-const stableRenderRevision = computed(() => {
-  const state = props.presentationState
-  const presentationRevision = Math.max(0, Math.floor(Number(state?.revision) || 0))
-  if (
-    state?.owner === 'linked-playback' ||
-    state?.owner === 'seek' ||
-    state?.owner === 'drag' ||
-    state?.owner === 'linked-drag'
-  ) {
-    lastPresentationStableRenderRevision = presentationRevision
-    return presentationRevision
-  }
-  if (
-    state?.owner === 'sync-transaction' ||
-    (state?.owner === 'playback' &&
-      state.sourceDeck === null &&
-      state.visualPending === false &&
-      lastPresentationStableRenderRevision > 0) ||
-    state?.visualPending === true ||
-    props.linkedGridVisualPending === true
-  ) {
-    return lastPresentationStableRenderRevision
-  }
-  lastPresentationStableRenderRevision = 0
-  return 0
-})
+const stableRenderRevision = createHorizontalBrowseStableRenderRevision(props)
 const waveformPlaybackActive = computed(() => Boolean(props.playbackActive ?? props.playing))
 // macOS 上播放期间不使用超宽稳定 Canvas 的 CSS transform 路径；
 // 交给已有 Worker 增量滚动渲染，避免 Metal 合成超宽纹理时出现抽动。
@@ -132,7 +107,7 @@ const resolveCanvasStableWaveformSource = () =>
   (runtime.setting.platform !== 'darwin' || !waveformPlaybackActive.value)
 const isRekordboxReadOnlySong = computed(() => isRekordboxExternalPlaybackSource('', props.song))
 const externalDetailWaveformUnavailable = computed(
-  () => isRekordboxReadOnlySong.value && !rawData.value
+  () => isRekordboxReadOnlySong.value && !rawData.value && !previewLoading.value
 )
 
 const gridEditingEnabled = computed(

@@ -1,4 +1,5 @@
 import type { CompactVisualWaveformData } from '@shared/compactVisualWaveform'
+import { drawNativeOverviewRaster } from './nativeWaveformRasterRenderer'
 import { resolveSaturatedWaveformColor } from '@shared/waveformDisplayColor'
 import {
   RAW_ENERGY_PRESENCE_FLOOR_AMP,
@@ -276,6 +277,17 @@ export const drawCompactVisualWaveform = (
   const height = Math.max(1, Math.floor(options.height))
   const rangeDurationSec = Math.max(0.0001, Number(options.rangeDurationSec) || 0)
   if (!data || width <= 0 || height <= 0 || rangeDurationSec <= 0) return false
+  if (data.nativeBitmap) {
+    return drawNativeOverviewRaster(ctx, data.nativeBitmap, {
+      width,
+      height,
+      durationSec: data.duration,
+      rangeStartSec: options.rangeStartSec,
+      rangeDurationSec,
+      waveformLayout: options.waveformLayout,
+      themeVariant: options.themeVariant
+    })
+  }
   const detailFrames = resolveDetailFrames(data)
   const duration = Math.max(0, Number(data.duration) || 0)
   const rawDetailRate = Number(data.detailRate)

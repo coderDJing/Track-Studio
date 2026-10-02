@@ -4,7 +4,7 @@ import RekordboxDesktopStorageDirDialog from './rekordboxDesktopStorageDirDialog
 
 export default (params?: {
   initialPath?: string
-  storageKind?: 'rekordbox' | 'serato'
+  storageKind?: 'rekordbox' | 'serato' | 'traktor'
 }): Promise<string | 'cancel'> => {
   return new Promise((resolve) => {
     const div = document.createElement('div')

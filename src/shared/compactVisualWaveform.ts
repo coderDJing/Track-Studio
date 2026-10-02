@@ -1,5 +1,12 @@
 export const COMPACT_VISUAL_WAVEFORM_COLOR_RAW_RATE = 4800
 
+export type NativeWaveformBitmap = {
+  width: number
+  height: number
+  /** Straight-alpha RGBA pixels in row-major order. Overview data only. */
+  rgba: Uint8Array
+}
+
 export type CompactVisualWaveformData = {
   version: number
   parameterVersion: number
@@ -21,4 +28,5 @@ export type CompactVisualWaveformData = {
   colorBlue: Uint8Array
   overviewTop: Uint8Array
   overviewBottom: Uint8Array
+  nativeBitmap?: NativeWaveformBitmap
 }

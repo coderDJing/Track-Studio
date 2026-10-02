@@ -15,6 +15,7 @@ import {
   setCachedRekordboxSourceTree
 } from '@renderer/utils/rekordboxLibraryCache'
 import { t } from '@renderer/utils/translate'
+import emitter from '@renderer/utils/mitt'
 import { buildRekordboxSourceChannel } from '@shared/rekordboxSources'
 import { copyPioneerNodeToLibrary } from '@renderer/composables/rekordboxDesktop/usePioneerCopyToLibrary'
 import { copyPioneerPlaylistToMixtape } from '@renderer/composables/rekordboxDesktop/usePioneerCopyToMixtape'
@@ -72,13 +73,19 @@ const isExternalSource = computed(
 const isSeratoSource = computed(
   () => isExternalSource.value && runtime.externalDjLibrary.selectedKind === 'serato'
 )
-const isEditableSource = computed(
-  () =>
-    isDesktopSource.value ||
-    (isExternalSource.value && runtime.externalDjLibrary.selectedKind === 'serato')
+const isTraktorSource = computed(
+  () => isExternalSource.value && runtime.externalDjLibrary.selectedKind === 'traktor'
 )
+const isEditableSource = computed(() => isDesktopSource.value || isExternalSource.value)
 const sourceText = (rekordboxKey: string, seratoKey: string, values?: Record<string, unknown>) =>
-  t(isExternalSource.value ? seratoKey : rekordboxKey, values)
+  t(
+    !isExternalSource.value
+      ? rekordboxKey
+      : runtime.externalDjLibrary.selectedKind === 'traktor'
+        ? seratoKey.replaceAll('Serato', 'Traktor').replaceAll('serato', 'traktor')
+        : seratoKey,
+    values
+  )
 const isCopyableSource = computed(
   () =>
     runtime.pioneerDeviceLibrary.selectedSourceKind === 'desktop' ||
@@ -92,9 +99,23 @@ const title = computed(() => {
   if (runtime.pioneerDeviceLibrary.selectedSourceName) {
     return runtime.pioneerDeviceLibrary.selectedSourceName
   }
+  if (isTraktorSource.value) return t('library.traktorLibrary')
+  if (isSeratoSource.value) return t('library.seratoLibrary')
   return isDesktopSource.value ? t('pioneer.desktopLibraryName') : 'Pioneer USB'
 })
 const originalTreeNodes = computed(() => runtime.pioneerDeviceLibrary.treeNodes || [])
+
+const findExternalNode = (
+  nodes: IPioneerPlaylistTreeNode[],
+  externalId: string
+): IPioneerPlaylistTreeNode | null => {
+  for (const node of nodes) {
+    if (node.externalId === externalId) return node
+    const nested = findExternalNode(node.children || [], externalId)
+    if (nested) return nested
+  }
+  return null
+}
 
 const runWithDialogWriting = async <T,>(task: () => Promise<T>): Promise<T> => {
   dialogWriting.value = true
@@ -119,6 +140,12 @@ const syncRuntimeDesktopTree = (nodes: IPioneerPlaylistTreeNode[], preferredPlay
   const rootPath = String(runtime.pioneerDeviceLibrary.selectedSourceRootPath || '').trim()
   if (!sourceKey || !rootPath) return
   if (isExternalSource.value) {
+    const kind = runtime.externalDjLibrary.selectedKind
+    if (kind) {
+      setCachedRekordboxSourceTree(`external-library::${kind}::${sourceKey}`, nodes, {
+        selectedPlaylistId: preferredPlaylistId
+      })
+    }
     runtime.pioneerDeviceLibrary.treeNodes = nodes
     runtime.pioneerDeviceLibrary.selectedPlaylistId = preferredPlaylistId
     return
@@ -140,6 +167,10 @@ const syncRuntimeDesktopTree = (nodes: IPioneerPlaylistTreeNode[], preferredPlay
 
 const refreshDesktopTree = async (preferredPlaylistId = 0) => {
   if (isExternalSource.value) {
+    const selectedBefore = findNodeById(
+      originalTreeNodes.value,
+      Number(runtime.pioneerDeviceLibrary.selectedPlaylistId) || 0
+    )
     const kind = runtime.externalDjLibrary.selectedKind
     const sourcePath = runtime.externalDjLibrary.selectedSourcePath
     if (!kind || !sourcePath) return
@@ -150,15 +181,14 @@ const refreshDesktopTree = async (preferredPlaylistId = 0) => {
     const treeNodes = Array.isArray(result?.treeNodes) ? result.treeNodes : []
     const preferredNode =
       preferredPlaylistId > 0 ? findNodeById(treeNodes, preferredPlaylistId) : null
-    const currentSelectedNode =
-      Number(runtime.pioneerDeviceLibrary.selectedPlaylistId) > 0
-        ? findNodeById(treeNodes, Number(runtime.pioneerDeviceLibrary.selectedPlaylistId))
-        : null
+    const currentSelectedNode = selectedBefore?.externalId
+      ? findExternalNode(treeNodes, selectedBefore.externalId)
+      : null
     const nextSelectedId =
       preferredPlaylistId > 0 && isPlayablePlaylistNode(preferredNode)
         ? preferredPlaylistId
         : isPlayablePlaylistNode(currentSelectedNode)
-          ? Number(runtime.pioneerDeviceLibrary.selectedPlaylistId) || 0
+          ? currentSelectedNode.id
           : 0
     syncRuntimeDesktopTree(treeNodes, nextSelectedId)
     return
@@ -240,6 +270,7 @@ const showHint = computed(
 const statusText = computed(() => {
   if (runtime.pioneerDeviceLibrary.loading) {
     if (isSeratoSource.value) return t('library.seratoLoadingPlaylistTree')
+    if (isTraktorSource.value) return t('library.traktorLoadingPlaylistTree')
     if (isExternalSource.value) return t('library.externalLibraryLoadingTree')
     return isDesktopSource.value
       ? t('rekordboxDesktop.loadingPlaylistTree')
@@ -249,6 +280,7 @@ const statusText = computed(() => {
     return t('pioneer.noMatchingPlaylists')
   }
   if (isSeratoSource.value) return t('library.seratoEmptyPlaylistTree')
+  if (isTraktorSource.value) return t('library.traktorEmptyPlaylistTree')
   if (isExternalSource.value) return t('library.externalLibraryEmptyTree')
   return isDesktopSource.value
     ? t('rekordboxDesktop.emptyPlaylistTree')
@@ -408,7 +440,8 @@ const openCreateFolderDialog = async (parentId = 0) => {
 }
 
 const openRenameNodeDialog = async (node: IPioneerPlaylistTreeNode) => {
-  if (!isEditableSource.value || dialogWriting.value || node.isSmartPlaylist) return
+  if (!isEditableSource.value || dialogWriting.value || node.isSmartPlaylist || node.isAllTracks)
+    return
   await openRekordboxDesktopCreateNodeDialog({
     dialogTitle: node.isFolder
       ? sourceText('rekordboxDesktop.renameFolderTitle', 'library.renameSeratoFolderTitle')
@@ -429,7 +462,8 @@ const openRenameNodeDialog = async (node: IPioneerPlaylistTreeNode) => {
 }
 
 const confirmDeleteNode = async (node: IPioneerPlaylistTreeNode) => {
-  if (!isEditableSource.value || dialogWriting.value || node.isSmartPlaylist) return
+  if (!isEditableSource.value || dialogWriting.value || node.isSmartPlaylist || node.isAllTracks)
+    return
 
   const lines = node.isFolder
     ? (() => {
@@ -509,9 +543,8 @@ const {
   runWithDialogWriting,
   () => Number(runtime.pioneerDeviceLibrary.selectedPlaylistId) || 0,
   {
-    enabled: computed(
-      () => isExternalSource.value && runtime.externalDjLibrary.selectedKind === 'serato'
-    ),
+    enabled: computed(() => isExternalSource.value),
+    kind: computed(() => runtime.externalDjLibrary.selectedKind),
     sourcePath: computed(() => runtime.externalDjLibrary.selectedSourcePath || '')
   }
 )
@@ -529,6 +562,13 @@ const toggleFolder = (node: IPioneerPlaylistTreeNode) => {
 const selectPlaylist = (node: IPioneerPlaylistTreeNode) => {
   if (shouldSuppressClick()) return
   if (dialogWriting.value || node.isFolder || node.isSmartPlaylist) return
+  if (isEditableSource.value && runtime.pioneerDeviceLibrary.selectedPlaylistId === node.id) {
+    emitter.emit('dj-library:refresh-selected-playlist', {
+      sourceKey: runtime.pioneerDeviceLibrary.selectedSourceKey,
+      playlistId: node.id
+    })
+    return
+  }
   runtime.pioneerDeviceLibrary.selectedPlaylistId =
     runtime.pioneerDeviceLibrary.selectedPlaylistId === node.id ? 0 : node.id
 }
@@ -688,7 +728,8 @@ const handleCopyOnlyContextMenu = async (event: MouseEvent, node: IPioneerPlayli
 }
 
 const handleNodeContextmenu = async (event: MouseEvent, node: IPioneerPlaylistTreeNode) => {
-  if (dialogWriting.value || localLibraryCopying.value || node.isSmartPlaylist) return
+  if (dialogWriting.value || localLibraryCopying.value || node.isSmartPlaylist || node.isAllTracks)
+    return
   if (isExternalSource.value && !node.externalId) return
   if (!isDesktopSource.value && !isExternalSource.value) {
     if (!isCopyableSource.value) return

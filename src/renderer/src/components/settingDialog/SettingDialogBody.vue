@@ -116,6 +116,7 @@ const {
   reSelectLibrary,
   chooseRekordboxDesktopTrackStorageDir,
   chooseSeratoTrackStorageDir,
+  chooseTraktorTrackStorageDir,
   hintIcon,
   fpModeHintRefs,
   bindFpModeHintRef,
@@ -281,6 +282,9 @@ const rekordboxDesktopTrackStorageDirText = computed(
 )
 const seratoTrackStorageDirText = computed(
   () => runtime.setting.seratoTrackStorageDir || t('settings.seratoTrackStorageDir.notConfigured')
+)
+const traktorTrackStorageDirText = computed(
+  () => runtime.setting.traktorTrackStorageDir || t('settings.traktorTrackStorageDir.notConfigured')
 )
 </script>
 
@@ -628,6 +632,19 @@ const seratoTrackStorageDirText = computed(
               <div class="buttonRow">
                 <div class="button settings-inline-button" @click="chooseSeratoTrackStorageDir()">
                   {{ t('settings.seratoTrackStorageDir.chooseButton') }}
+                </div>
+              </div>
+            </div>
+
+            <div class="setting-block">{{ t('settings.traktorTrackStorageDir.title') }}：</div>
+            <div class="setting-control">
+              <bubbleBoxTrigger tag="div" class="path-display" :title="traktorTrackStorageDirText">
+                {{ traktorTrackStorageDirText }}
+              </bubbleBoxTrigger>
+              <div class="setting-hint">{{ t('settings.traktorTrackStorageDir.hint') }}</div>
+              <div class="buttonRow">
+                <div class="button settings-inline-button" @click="chooseTraktorTrackStorageDir()">
+                  {{ t('settings.traktorTrackStorageDir.chooseButton') }}
                 </div>
               </div>
             </div>

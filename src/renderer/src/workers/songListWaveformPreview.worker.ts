@@ -89,13 +89,25 @@ const renderWaveform = (payload: RenderPayload) => {
     drawSongListCompactVisualWaveform(ctx, width, height, data.data, {
       isHalf: payload.isHalf,
       progressColor: payload.progressColor,
-      playedPercent
+      playedPercent,
+      themeVariant: payload.themeVariant
     })
     return
   }
 
   if (data.kind === 'serato') {
-    drawSongListSeratoOverview(ctx, width, height, data.data, playedPercent, payload.progressColor)
+    drawSongListSeratoOverview(
+      ctx,
+      width,
+      height,
+      data.data,
+      playedPercent,
+      payload.progressColor,
+      {
+        isHalf: payload.isHalf,
+        themeVariant: payload.themeVariant
+      }
+    )
     return
   }
 

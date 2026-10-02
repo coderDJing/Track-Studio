@@ -62,6 +62,7 @@ type PlayerWaveformCacheItem = {
 
 type SurfaceCacheLoadOptions = {
   queueIfMissing?: boolean
+  manualOnly?: boolean
 }
 
 type CacheFileStatResult =
@@ -135,8 +136,14 @@ export function registerCacheHandlers() {
 
   const loadExternalUnifiedDisplayWaveform = async (
     filePath: string,
-    stat: { size: number; mtimeMs: number }
+    stat: { size: number; mtimeMs: number },
+    manualOnly = false
   ) => {
+    if (manualOnly) {
+      const entry = await LibraryCacheDb.loadExternalAnalysisCacheEntryByFilePath(filePath, stat)
+      if (entry?.info.externalWaveformPreference !== 'frkb-manual' || !entry.hasWaveform)
+        return null
+    }
     const waveform = await LibraryCacheDb.loadExternalAnalysisWaveformCacheDataByFilePath(
       filePath,
       stat
@@ -165,9 +172,14 @@ export function registerCacheHandlers() {
     if (statResult.status === 'unavailable') return null
     try {
       if (!listRoot) {
-        const unified = await loadExternalUnifiedDisplayWaveform(filePath, statResult.stat)
+        const unified = await loadExternalUnifiedDisplayWaveform(
+          filePath,
+          statResult.stat,
+          options.manualOnly
+        )
         return buildWaveformSurfaceCacheDataFromUnifiedDisplay(unified)?.listPreview || null
       }
+      if (options.manualOnly) return null
       const data = await LibraryCacheDb.loadWaveformListPreviewCacheData(
         listRoot,
         filePath,
@@ -210,9 +222,14 @@ export function registerCacheHandlers() {
     if (statResult.status === 'unavailable') return null
     try {
       if (!listRoot) {
-        const unified = await loadExternalUnifiedDisplayWaveform(filePath, statResult.stat)
+        const unified = await loadExternalUnifiedDisplayWaveform(
+          filePath,
+          statResult.stat,
+          options.manualOnly
+        )
         return buildWaveformSurfaceCacheDataFromUnifiedDisplay(unified)?.globalOverview || null
       }
+      if (options.manualOnly) return null
       const data = await LibraryCacheDb.loadWaveformGlobalOverviewCacheData(
         listRoot,
         filePath,
@@ -330,6 +347,7 @@ export function registerCacheHandlers() {
       payload: {
         listRoot?: string
         filePath?: string
+        manualOnly?: boolean
       }
     ) => {
       if (isLibraryMergeMutationLocked()) return { status: 'missing' as const, data: null }
@@ -362,11 +380,16 @@ export function registerCacheHandlers() {
       }
       try {
         if (!listRoot) {
-          const data = await loadExternalUnifiedDisplayWaveform(filePath, statResult.stat)
+          const data = await loadExternalUnifiedDisplayWaveform(
+            filePath,
+            statResult.stat,
+            payload?.manualOnly === true
+          )
           return data
             ? { status: 'ready' as const, data }
             : { status: 'missing' as const, data: null }
         }
+        if (payload?.manualOnly === true) return { status: 'missing' as const, data: null }
         const data = await LibraryCacheDb.loadUnifiedDisplayWaveformCacheData(
           listRoot,
           filePath,
@@ -478,12 +501,14 @@ export function registerCacheHandlers() {
     listRoot?: string
     filePath?: string
     queueIfMissing?: boolean
+    manualOnly?: boolean
   }) => {
     const filePath = typeof payload?.filePath === 'string' ? payload.filePath.trim() : ''
     if (!filePath) return { status: 'missing' as const, data: null }
     const listRootRaw = typeof payload?.listRoot === 'string' ? payload.listRoot.trim() : ''
     const data = await loadGlobalOverviewSurface(filePath, listRootRaw, 'medium', {
-      queueIfMissing: payload?.queueIfMissing
+      queueIfMissing: payload?.queueIfMissing,
+      manualOnly: payload?.manualOnly
     })
     return data ? { status: 'ready' as const, data } : { status: 'missing' as const, data: null }
   }
@@ -492,6 +517,7 @@ export function registerCacheHandlers() {
     listRoot?: string
     filePaths?: string[]
     queueIfMissing?: boolean
+    manualOnly?: boolean
   }) => {
     const filePaths = Array.isArray(payload?.filePaths) ? payload.filePaths : []
     const normalizedPaths = filePaths.filter(
@@ -506,7 +532,8 @@ export function registerCacheHandlers() {
       items.push({
         filePath,
         data: await loadListPreviewSurface(filePath, listRootRaw, 'low', {
-          queueIfMissing: payload?.queueIfMissing
+          queueIfMissing: payload?.queueIfMissing,
+          manualOnly: payload?.manualOnly
         })
       })
     }
@@ -540,12 +567,21 @@ export function registerCacheHandlers() {
 
   ipcMain.handle(
     'waveform-list-preview-cache:load',
-    async (_e, payload: { listRoot?: string; filePath?: string; queueIfMissing?: boolean }) => {
+    async (
+      _e,
+      payload: {
+        listRoot?: string
+        filePath?: string
+        queueIfMissing?: boolean
+        manualOnly?: boolean
+      }
+    ) => {
       const filePath = typeof payload?.filePath === 'string' ? payload.filePath.trim() : ''
       if (!filePath) return { status: 'missing' as const, data: null }
       const listRootRaw = typeof payload?.listRoot === 'string' ? payload.listRoot.trim() : ''
       const data = await loadListPreviewSurface(filePath, listRootRaw, 'medium', {
-        queueIfMissing: payload?.queueIfMissing
+        queueIfMissing: payload?.queueIfMissing,
+        manualOnly: payload?.manualOnly
       })
       return data ? { status: 'ready' as const, data } : { status: 'missing' as const, data: null }
     }
@@ -553,14 +589,30 @@ export function registerCacheHandlers() {
 
   ipcMain.handle(
     'waveform-list-preview-cache:batch',
-    async (_e, payload: { listRoot?: string; filePaths?: string[]; queueIfMissing?: boolean }) => {
+    async (
+      _e,
+      payload: {
+        listRoot?: string
+        filePaths?: string[]
+        queueIfMissing?: boolean
+        manualOnly?: boolean
+      }
+    ) => {
       return await handleListPreviewBatch(payload)
     }
   )
 
   ipcMain.handle(
     'waveform-global-overview-cache:load',
-    async (_e, payload: { listRoot?: string; filePath?: string; queueIfMissing?: boolean }) => {
+    async (
+      _e,
+      payload: {
+        listRoot?: string
+        filePath?: string
+        queueIfMissing?: boolean
+        manualOnly?: boolean
+      }
+    ) => {
       return await handleGlobalOverviewLoad(payload)
     }
   )

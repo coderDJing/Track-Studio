@@ -80,7 +80,14 @@ const showFailure = (message: string) => {
   errorMessage.value = message
 }
 
-const isEditable = computed(() => props.kind === 'serato')
+const isEditable = computed(() => props.kind === 'serato' || props.kind === 'traktor')
+const sourceText = (key: string, values?: Record<string, unknown>) =>
+  t(
+    props.kind === 'traktor'
+      ? key.replaceAll('Serato', 'Traktor').replaceAll('serato', 'traktor')
+      : key,
+    values
+  )
 
 const mutate = async (payload: Record<string, unknown>) =>
   (await window.electron.ipcRenderer.invoke('external-library:mutate', {
@@ -159,7 +166,7 @@ const createNode = async (
       name
     })
     if (!response.ok) {
-      showFailure(response.summary.errorMessage || 'Serato 歌单操作失败。')
+      showFailure(response.summary.errorMessage || '外部歌单操作失败。')
       return false
     }
     search.value = ''
@@ -180,7 +187,7 @@ const renameNode = async (node: IPioneerPlaylistTreeNode, nextName: string) => {
   const result = await runMutation(async () => {
     const response = await mutate({ operation: 'rename', externalId: node.externalId, name })
     if (!response.ok) {
-      showFailure(response.summary.errorMessage || 'Serato 歌单重命名失败。')
+      showFailure(response.summary.errorMessage || '外部歌单重命名失败。')
       return false
     }
     await loadTree(String(response.summary.playlistId || ''))
@@ -194,7 +201,7 @@ const deleteNode = async (node: IPioneerPlaylistTreeNode) => {
   const result = await runMutation(async () => {
     const response = await mutate({ operation: 'delete', externalId: node.externalId })
     if (!response.ok) {
-      showFailure(response.summary.errorMessage || 'Serato 歌单删除失败。')
+      showFailure(response.summary.errorMessage || '外部歌单删除失败。')
       return false
     }
     await loadTree()
@@ -206,8 +213,8 @@ const deleteNode = async (node: IPioneerPlaylistTreeNode) => {
 const openCreatePlaylistDialog = async (parentId = 0, defaultValue = '') => {
   if (!isEditable.value || writing.value) return
   await openRekordboxDesktopCreateNodeDialog({
-    dialogTitle: t('library.createSeratoPlaylistDialogTitle'),
-    placeholder: t('library.seratoPlaylistNamePlaceholder'),
+    dialogTitle: sourceText('library.createSeratoPlaylistDialogTitle'),
+    placeholder: sourceText('library.seratoPlaylistNamePlaceholder'),
     defaultValue,
     confirmText: t('common.confirm'),
     confirmCallback: async (value) => await createNode('create-playlist', value, parentId)
@@ -217,8 +224,8 @@ const openCreatePlaylistDialog = async (parentId = 0, defaultValue = '') => {
 const openCreateFolderDialog = async (parentId = 0) => {
   if (!isEditable.value || writing.value) return
   await openRekordboxDesktopCreateNodeDialog({
-    dialogTitle: t('library.createSeratoFolderTitle'),
-    placeholder: t('library.seratoFolderNamePlaceholder'),
+    dialogTitle: sourceText('library.createSeratoFolderTitle'),
+    placeholder: sourceText('library.seratoFolderNamePlaceholder'),
     confirmText: t('common.confirm'),
     confirmCallback: async (value) => await createNode('create-folder', value, parentId)
   })
@@ -228,11 +235,11 @@ const openRenameDialog = async (node: IPioneerPlaylistTreeNode) => {
   if (!isEditable.value || writing.value) return
   await openRekordboxDesktopCreateNodeDialog({
     dialogTitle: node.isFolder
-      ? t('library.renameSeratoFolderTitle')
-      : t('library.renameSeratoPlaylistTitle'),
+      ? sourceText('library.renameSeratoFolderTitle')
+      : sourceText('library.renameSeratoPlaylistTitle'),
     placeholder: node.isFolder
-      ? t('library.seratoFolderNamePlaceholder')
-      : t('library.seratoPlaylistNamePlaceholder'),
+      ? sourceText('library.seratoFolderNamePlaceholder')
+      : sourceText('library.seratoPlaylistNamePlaceholder'),
     defaultValue: node.name,
     confirmText: t('common.confirm'),
     confirmCallback: async (value) => await renameNode(node, value)
@@ -245,22 +252,22 @@ const confirmDeleteNode = async (node: IPioneerPlaylistTreeNode) => {
     ? (() => {
         const descendants = countNodeDescendants(node)
         const content = [
-          t('library.deleteSeratoFolderConfirmLine1', { name: node.name }),
-          t('library.deleteSeratoFolderConfirmLine2')
+          sourceText('library.deleteSeratoFolderConfirmLine1', { name: node.name }),
+          sourceText('library.deleteSeratoFolderConfirmLine2')
         ]
         if (descendants.folderCount || descendants.playlistCount) {
-          content.push(t('library.deleteSeratoFolderDescendants', descendants))
+          content.push(sourceText('library.deleteSeratoFolderDescendants', descendants))
         }
         return content
       })()
     : [
-        t('library.deleteSeratoPlaylistConfirmLine1', { name: node.name }),
-        t('library.deleteSeratoPlaylistConfirmLine2')
+        sourceText('library.deleteSeratoPlaylistConfirmLine1', { name: node.name }),
+        sourceText('library.deleteSeratoPlaylistConfirmLine2')
       ]
   const result = await confirmDialog({
     title: node.isFolder
-      ? t('library.deleteSeratoFolderTitle')
-      : t('library.deleteSeratoPlaylistTitle'),
+      ? sourceText('library.deleteSeratoFolderTitle')
+      : sourceText('library.deleteSeratoPlaylistTitle'),
     content: lines,
     innerWidth: 620,
     innerHeight: 0,
@@ -311,6 +318,7 @@ const handleDragStartNode = (event: DragEvent, node: IPioneerPlaylistTreeNode) =
     !isEditable.value ||
     writing.value ||
     normalizeKeyword(search.value) ||
+    !node.externalId ||
     !isMovableTreeNode(node)
   ) {
     event.preventDefault()
@@ -330,6 +338,7 @@ const updateDragTarget = (event: DragEvent, node: IPioneerPlaylistTreeNode) => {
     writing.value ||
     normalizeKeyword(search.value) ||
     dragSourceId.value === null ||
+    !node.externalId ||
     !isMovableTreeNode(node) ||
     node.id === dragSourceId.value ||
     isDescendantNode(nodes.value, dragSourceId.value, node.id)
@@ -360,7 +369,7 @@ const persistMove = async (moved: MoveTreeNodeResult) => {
       seq: moved.seq
     })
     if (!response.ok) {
-      showFailure(response.summary.errorMessage || 'Serato 歌单移动失败。')
+      showFailure(response.summary.errorMessage || '外部歌单移动失败。')
       return false
     }
     await loadTree(String(moved.playlistId))

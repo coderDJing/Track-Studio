@@ -200,6 +200,16 @@ export type RekordboxDesktopRemovePlaylistTracksRequest = {
   rowKeys: string[]
 }
 
+export type RekordboxDesktopAppendExistingTracksRequest = {
+  playlistId: number
+  sourcePlaylistId: number
+  rowKeys: string[]
+}
+
+export type RekordboxDesktopAppendExistingTracksResponse =
+  | { ok: true; summary: { playlistId: number; addedCount: number; skippedDuplicateCount: number } }
+  | { ok: false; summary: RekordboxDesktopPlaylistFailureSummary }
+
 type RekordboxDesktopRemovePlaylistTracksSuccessSummary = {
   playlistId: number
   requestedCount: number

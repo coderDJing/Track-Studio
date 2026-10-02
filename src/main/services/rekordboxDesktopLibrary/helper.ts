@@ -27,6 +27,7 @@ type RekordboxDesktopHelperCommand =
   | 'reorder-playlist-tracks'
   | 'create-playlist'
   | 'append-playlist'
+  | 'append-existing-playlist-tracks'
   | 'create-folder'
 
 type RekordboxDesktopHelperRequest<TPayload> = {
@@ -422,12 +423,12 @@ class RekordboxDesktopHelperSession {
     if (!value || typeof value !== 'object') return
     const waiter = this.waiter
     const maybeEvent = value as RekordboxDesktopHelperProgressEvent
-    if (maybeEvent.event === 'progress' && maybeEvent.payload && waiter?.onProgress) {
+    if (maybeEvent.event === 'progress' && maybeEvent.payload) {
       try {
-        waiter.onProgress(maybeEvent.payload)
+        waiter?.onProgress?.(maybeEvent.payload)
       } catch (error) {
         log.error('[rekordbox-desktop-library] helper progress callback failed', {
-          command: waiter.command,
+          command: waiter?.command,
           error
         })
       }

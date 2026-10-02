@@ -284,13 +284,15 @@ export const unifiedDisplayWaveformToRawData = (
 
 export const loadUnifiedDisplayWaveformData = async (
   filePath: string,
-  listRoot?: string
+  listRoot?: string,
+  manualOnly = false
 ): Promise<UnifiedDisplayWaveformDetailData | null> => {
   const response = (await window.electron.ipcRenderer.invoke(
     'unified-display-waveform-cache:load',
     {
       filePath,
-      listRoot
+      listRoot,
+      manualOnly
     }
   )) as UnifiedDisplayWaveformLoadResponse | null
   if (response?.status !== 'ready') return null
@@ -299,13 +301,15 @@ export const loadUnifiedDisplayWaveformData = async (
 
 export const loadWaveformGlobalOverviewData = async (
   filePath: string,
-  listRoot?: string
+  listRoot?: string,
+  manualOnly = false
 ): Promise<WaveformGlobalOverviewData | null> => {
   const response = (await window.electron.ipcRenderer.invoke(
     'waveform-global-overview-cache:load',
     {
       filePath,
-      listRoot
+      listRoot,
+      manualOnly
     }
   )) as WaveformGlobalOverviewLoadResponse | null
   if (response?.status !== 'ready') return null

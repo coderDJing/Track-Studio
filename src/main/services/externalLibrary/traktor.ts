@@ -27,7 +27,9 @@ const attr = (node: XmlElement | null, name: string) =>
   String(node?.getAttribute(name) || '').trim()
 
 const numberAttr = (node: XmlElement | null, name: string) => {
-  const number = Number(attr(node, name))
+  const value = attr(node, name)
+  if (!value) return undefined
+  const number = Number(value)
   return Number.isFinite(number) ? number : undefined
 }
 
@@ -64,7 +66,11 @@ const parseCue = (cue: XmlElement): ExternalLibraryCue | null => {
   const hotcue = numberAttr(cue, 'HOTCUE')
   const name = attr(cue, 'NAME')
   if (type === 4) {
-    return { kind: 'grid', positionMs, bpm: numberAttr(cue, 'BPM') }
+    return {
+      kind: 'grid',
+      positionMs,
+      bpm: numberAttr(directChildren(cue, 'GRID')[0], 'BPM') ?? numberAttr(cue, 'BPM')
+    }
   }
   if (type === 5) {
     const length = numberAttr(cue, 'LEN') || 0
@@ -103,6 +109,7 @@ const parseEntry = (
   return {
     id: `traktor-track:${normalizeKey(filePath) || index}`,
     filePath,
+    audioId: attr(entry, 'AUDIO_ID') || undefined,
     title: attr(entry, 'TITLE') || undefined,
     artist: attr(entry, 'ARTIST') || undefined,
     album: attr(album, 'TITLE') || undefined,
@@ -110,7 +117,7 @@ const parseEntry = (
     comment: attr(info, 'COMMENT') || undefined,
     key: attr(info, 'KEY') || attr(musicalKey, 'VALUE') || undefined,
     bpm: numberAttr(tempo, 'BPM'),
-    durationSec: numberAttr(entry, 'PLAYTIME'),
+    durationSec: numberAttr(info, 'PLAYTIME_FLOAT') ?? numberAttr(info, 'PLAYTIME'),
     bitrate: numberAttr(info, 'BITRATE'),
     fileFormat: path.extname(filePath).replace(/^\./, '').toUpperCase(),
     year: yearAttr(info),
@@ -118,6 +125,13 @@ const parseEntry = (
     missing: attr(entry, 'STATUS') === 'MISSING',
     cues
   }
+}
+
+export const traktorNodeId = (node: XmlElement, index: number) => {
+  const uuid = attr(directChildren(node, 'PLAYLIST')[0], 'UUID')
+  return uuid
+    ? `traktor-playlist:${uuid.toUpperCase()}`
+    : `traktor-playlist:${index}:${attr(node, 'NAME') || 'Untitled'}`
 }
 
 const playlistTree = (
@@ -129,7 +143,7 @@ const playlistTree = (
 ) => {
   const type = attr(node, 'TYPE')
   const name = attr(node, 'NAME') || 'Untitled'
-  const id = `traktor-playlist:${playlists.length}:${name}`
+  const id = traktorNodeId(node, playlists.length)
   const isSmartPlaylist = type === 'SMARTLIST'
   const playlist: ExternalLibraryPlaylist = {
     id,
@@ -141,7 +155,8 @@ const playlistTree = (
     order: playlists.length
   }
   playlists.push(playlist)
-  if (isSmartPlaylist) warnings.push(`Traktor Smartlist「${name}」只读取名称，未展开动态规则。`)
+  if (isSmartPlaylist)
+    warnings.push(`Traktor Smartlist「${name}」未展开动态规则，未在歌单树中展示。`)
 
   const playlistElement = directChildren(node, 'PLAYLIST')[0]
   for (const entry of playlistElement ? directChildren(playlistElement, 'ENTRY') : []) {
@@ -177,7 +192,13 @@ export const parseTraktorCollectionXml = (
   const playlists: ExternalLibraryPlaylist[] = []
   const playlistRoot = directChildren(root, 'PLAYLISTS')[0]
   const rootNode = playlistRoot ? directChildren(playlistRoot, 'NODE')[0] : null
-  if (rootNode) playlistTree(rootNode, null, tracksByKey, playlists, warnings)
+  if (rootNode) {
+    const topNodes =
+      attr(rootNode, 'TYPE') === 'FOLDER'
+        ? directChildren(directChildren(rootNode, 'SUBNODES')[0], 'NODE')
+        : directChildren(playlistRoot, 'NODE')
+    for (const node of topNodes) playlistTree(node, null, tracksByKey, playlists, warnings)
+  }
   return { tracks, playlists, warnings }
 }
 

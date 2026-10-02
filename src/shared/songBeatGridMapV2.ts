@@ -10,7 +10,7 @@ const BPM_DISPLAY_SCALE = 10 ** BPM_DISPLAY_DECIMALS
 const PHASE_EPSILON_BEATS = 0.0001
 const LINE_EPSILON_SEC = 0.000001
 
-export type SongBeatGridV2Source = 'analysis' | 'manual' | 'rekordbox'
+export type SongBeatGridV2Source = 'analysis' | 'manual' | 'rekordbox' | 'serato' | 'traktor'
 
 export type SongBeatGridClipV2 = {
   startSec: number
@@ -210,7 +210,11 @@ export const normalizeSongBeatGridMapV2 = (
   const record = value as Record<string, unknown>
   if (
     record.version !== SONG_BEAT_GRID_MAP_V2_VERSION ||
-    (record.source !== 'analysis' && record.source !== 'manual' && record.source !== 'rekordbox')
+    (record.source !== 'analysis' &&
+      record.source !== 'manual' &&
+      record.source !== 'rekordbox' &&
+      record.source !== 'serato' &&
+      record.source !== 'traktor')
   ) {
     return null
   }
