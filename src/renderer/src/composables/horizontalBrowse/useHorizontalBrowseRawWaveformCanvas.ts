@@ -543,11 +543,14 @@ export const useHorizontalBrowseRawWaveformCanvas = (
     const wrap = wrapRef.value
     if (!wrap || !ensureLiveCanvasMounted()) return false
     const wrapRect = wrap.getBoundingClientRect()
+    const wrapStyle = getComputedStyle(wrap)
     const waveformLayout = resolveWaveformLayout()
     const waveformRenderStyle = options.waveformRenderStyle()
     const pixelRatio = window.devicePixelRatio || 1
-    const wrapWidth = Math.max(1, wrapRect.width || wrap.clientWidth || 0)
-    const wrapHeight = Math.max(1, wrapRect.height || wrap.clientHeight || 0)
+    // 画布几何使用布局尺寸；官网预览外层的 transform 缩放不能再次计入画布尺寸。
+    // computed style 保留亚像素精度，避免 clientWidth / clientHeight 的整数取整。
+    const wrapWidth = Math.max(1, Number.parseFloat(wrapStyle.width) || 0)
+    const wrapHeight = Math.max(1, Number.parseFloat(wrapStyle.height) || 0)
     const width = resolvePixelSnappedCssSize(wrapWidth, pixelRatio)
     const height = resolvePixelSnappedCssSize(wrapHeight, pixelRatio)
     const sourcePlaybackActive = options.playing.value && !options.dragging.value
