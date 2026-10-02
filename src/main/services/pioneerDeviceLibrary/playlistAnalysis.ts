@@ -4,8 +4,8 @@ import { enqueueKeyAnalysisList } from '../keyAnalysisQueue'
 import * as LibraryCacheDb from '../../libraryCacheDb'
 import { applyLiteDefaults, buildLiteSongInfo } from '../songInfoLite'
 import { findSongListRoot } from '../cacheMaintenance'
-import { hasUsableSongEnergyAnalysis } from '../../../shared/songEnergy'
 import {
+  hasRequiredSongEnergyAnalysis,
   hasUsableKeyAnalysis,
   resolveCanonicalSongBeatGridV2
 } from '../../../shared/songAnalysisCompleteness'
@@ -43,7 +43,7 @@ const hasCompleteFrkbAnalysis = (info: Partial<ISongInfo> | null | undefined) =>
   if (!info) return false
   return (
     hasUsableKeyAnalysis(info) &&
-    hasUsableSongEnergyAnalysis(info) &&
+    hasRequiredSongEnergyAnalysis(info) &&
     resolveCanonicalSongBeatGridV2(info).kind !== 'missing'
   )
 }

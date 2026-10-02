@@ -38,8 +38,11 @@ type QueuePriority = 'visible' | 'prefetch'
 
 type QueueTask = {
   filePath: string
+  cacheKey: string
+  song: ISongInfo | null
   generation: number
   priority: QueuePriority
+  viewport: boolean
   run: () => void
   resolve: (value: string | null) => void
 }
@@ -73,6 +76,7 @@ export function useCoverThumbnails({
   const inflight = markRaw(new Map<string, InflightCover>())
   const pendingVisibleQueue: QueueTask[] = []
   const pendingPrefetchQueue: QueueTask[] = []
+  let windowSongs = new Map<string, ISongInfo>()
   const runningByGeneration = new Map<number, RunningCoverCounts>()
   let displayWorker = createCoverDisplayWorkerClient()
   const displayConversionCache = new Map<string, CoverDisplayWorkerResult>()
@@ -96,8 +100,12 @@ export function useCoverThumbnails({
   const isEnabled = () => (enabled ? enabled.value !== false : true)
   const resolveSessionIdentity = () =>
     String(sessionIdentity?.value || `${resolveRootDir() || ''}:${resolveSongs().length}`)
-  const resolveSongByFilePath = (filePath: string) => {
+  const resolveSongByFilePath = (filePath: string, useWindow = true) => {
     const cacheKey = resolveCoverCacheKey(filePath)
+    const windowSong = windowSongs.get(cacheKey)
+    if (useWindow && windowSong && resolveCoverCacheKey(windowSong.filePath) === cacheKey) {
+      return windowSong
+    }
     return resolveSongs().find((song) => resolveCoverCacheKey(song?.filePath) === cacheKey) || null
   }
   const isCurrentGeneration = (taskGeneration: number) => !disposed && taskGeneration === generation
@@ -227,6 +235,7 @@ export function useCoverThumbnails({
     clearQueues()
     for (const url of coverUrlCache.values()) revokeCoverUrl(url)
     coverUrlCache.clear()
+    windowSongs.clear()
     inflight.clear()
     displayConversionCache.clear()
     displayConversionInflight.clear()
@@ -268,6 +277,15 @@ export function useCoverThumbnails({
     filePath: string,
     priority: QueuePriority = 'visible'
   ): Promise<string | null> {
+    return enqueueCover(filePath, priority, undefined, false)
+  }
+
+  function enqueueCover(
+    filePath: string,
+    priority: QueuePriority,
+    song: ISongInfo | null | undefined,
+    viewport: boolean
+  ): Promise<string | null> {
     if (disposed || !isEnabled()) return Promise.resolve(null)
     if (!filePath) return Promise.resolve(null)
     const taskGeneration = generation
@@ -276,6 +294,10 @@ export function useCoverThumbnails({
     if (cached !== undefined) return Promise.resolve(cached)
     const existing = inflight.get(cacheKey)
     if (existing?.generation === taskGeneration) {
+      if (existing.task) {
+        if (song) existing.task.song = song
+        if (!viewport) existing.task.viewport = false
+      }
       if (priority === 'visible' && existing.task?.priority === 'prefetch') {
         const pendingIndex = pendingPrefetchQueue.indexOf(existing.task)
         if (pendingIndex >= 0) {
@@ -290,19 +312,21 @@ export function useCoverThumbnails({
 
     let queuedTask: QueueTask | undefined
     const promise = new Promise<string | null>((resolve) => {
+      const isCurrentTask = () =>
+        isCurrentGeneration(taskGeneration) && inflight.get(cacheKey)?.task === queuedTask
       const run = async () => {
         const runningPriority = queuedTask?.priority || priority
         try {
-          if (!isCurrentGeneration(taskGeneration)) {
+          if (!isCurrentTask()) {
             resolve(null)
             return
           }
-          const song = resolveSongByFilePath(filePath)
-          const requestFilePath = String(song?.filePath || filePath).trim()
-          const pioneerCoverPath = String(song?.pioneerCoverPath || '').trim()
+          const taskSong = queuedTask?.song
+          const requestFilePath = String(taskSong?.filePath || filePath).trim()
+          const pioneerCoverPath = String(taskSong?.pioneerCoverPath || '').trim()
           const sourceKind =
-            song?.externalSourceKind === 'desktop' || song?.externalSourceKind === 'usb'
-              ? song.externalSourceKind
+            taskSong?.externalSourceKind === 'desktop' || taskSong?.externalSourceKind === 'usb'
+              ? taskSong.externalSourceKind
               : 'usb'
           const rawResp: CoverThumbResponse | null = pioneerCoverPath
             ? ((await window.electron.ipcRenderer.invoke(
@@ -317,14 +341,14 @@ export function useCoverThumbnails({
                 { clientKey, generation: taskGeneration, priority: runningPriority }
               )) as CoverThumbResponse | null)
 
-          if (!isCurrentGeneration(taskGeneration)) {
+          if (!isCurrentTask()) {
             resolve(null)
             return
           }
           const resp = rawResp
             ? prepareDisplayResponse(requestFilePath, rawResp, taskGeneration, runningPriority)
             : null
-          if (!isCurrentGeneration(taskGeneration)) {
+          if (!isCurrentTask()) {
             resolve(null)
             return
           }
@@ -351,11 +375,11 @@ export function useCoverThumbnails({
           cacheCoverUrl(filePath, null, taskGeneration)
           resolve(null)
         } catch {
-          cacheCoverUrl(filePath, null, taskGeneration)
+          if (isCurrentTask()) cacheCoverUrl(filePath, null, taskGeneration)
           resolve(null)
         } finally {
           const activeInflight = inflight.get(cacheKey)
-          if (activeInflight?.generation === taskGeneration) inflight.delete(cacheKey)
+          if (activeInflight?.task === queuedTask) inflight.delete(cacheKey)
           const running = runningByGeneration.get(taskGeneration)
           if (running) {
             running[runningPriority] = Math.max(0, running[runningPriority] - 1)
@@ -371,26 +395,32 @@ export function useCoverThumbnails({
 
       queuedTask = {
         filePath,
+        cacheKey,
+        song: song === undefined ? resolveSongByFilePath(filePath) : song,
         generation: taskGeneration,
         priority,
+        viewport,
         run,
         resolve
       }
-      if (priority === 'visible') pendingVisibleQueue.push(queuedTask)
-      else pendingPrefetchQueue.push(queuedTask)
-      pump()
     })
 
     inflight.set(cacheKey, { generation: taskGeneration, promise, task: queuedTask })
+    if (queuedTask) {
+      if (priority === 'visible') pendingVisibleQueue.push(queuedTask)
+      else pendingPrefetchQueue.push(queuedTask)
+    }
+    pump()
     return promise
   }
 
   function clearPendingByPath(filePath?: string) {
     if (!filePath) return
+    const cacheKey = resolveCoverCacheKey(filePath)
     for (const queue of [pendingVisibleQueue, pendingPrefetchQueue]) {
       for (let i = queue.length - 1; i >= 0; i -= 1) {
         const task = queue[i]
-        if (resolveCoverCacheKey(task.filePath) === resolveCoverCacheKey(filePath)) {
+        if (task.cacheKey === cacheKey) {
           queue.splice(i, 1)
           task.resolve(null)
         }
@@ -414,7 +444,8 @@ export function useCoverThumbnails({
     coverUrlCache.delete(newCacheKey)
     inflight.delete(newCacheKey)
     clearPendingByPath(newPath)
-    void fetchCoverUrl(newPath)
+    // 元数据事件可能先于窗口 watcher 到达，直接查找更新后的行；这不在滚动热路径上。
+    void enqueueCover(newPath, 'visible', resolveSongByFilePath(newPath, false), false)
   }
 
   function primePrefetchWindow() {
@@ -422,16 +453,54 @@ export function useCoverThumbnails({
     const arr = resolveSongs()
     const actualStart = Math.max(0, actualStartIndex.value)
     const actualEnd = Math.min(arr.length, actualEndIndex.value)
-    for (let i = actualStart; i < actualEnd; i += 1) {
-      const fp = arr[i]?.filePath
-      if (fp && !coverUrlCache.has(resolveCoverCacheKey(fp))) void fetchCoverUrl(fp, 'visible')
-    }
     const start = Math.max(0, startIndex.value - visibleCount.value)
     const end = Math.min(arr.length, endIndex.value + visibleCount.value)
+    const visibleKeys = new Set<string>()
+    const nextWindowSongs = new Map<string, ISongInfo>()
+    // 封面任务直接携带窗口内的行，滚动时不再为每张封面扫描整份歌单。
+    for (const [rangeStart, rangeEnd] of [
+      [actualStart, actualEnd],
+      [start, end]
+    ]) {
+      for (let i = rangeStart; i < rangeEnd; i += 1) {
+        const song = arr[i]
+        if (!song?.filePath) continue
+        const cacheKey = resolveCoverCacheKey(song.filePath)
+        nextWindowSongs.set(cacheKey, song)
+        if (i >= actualStart && i < actualEnd) visibleKeys.add(cacheKey)
+      }
+    }
+    windowSongs = nextWindowSongs
+    // 丢弃已经离开窗口的排队工作，避免快速滚动后继续为旧视口加载封面。
+    const pending = [...pendingVisibleQueue, ...pendingPrefetchQueue]
+    pendingVisibleQueue.length = 0
+    pendingPrefetchQueue.length = 0
+    for (const task of pending) {
+      const song = windowSongs.get(task.cacheKey)
+      if (task.viewport && !song) {
+        if (inflight.get(task.cacheKey)?.task === task) inflight.delete(task.cacheKey)
+        task.resolve(null)
+        continue
+      }
+      if (song) task.song = song
+      if (task.viewport) task.priority = visibleKeys.has(task.cacheKey) ? 'visible' : 'prefetch'
+      if (task.priority === 'visible') pendingVisibleQueue.push(task)
+      else pendingPrefetchQueue.push(task)
+    }
+    for (let i = actualStart; i < actualEnd; i += 1) {
+      const song = arr[i]
+      const fp = song?.filePath
+      if (fp && !coverUrlCache.has(resolveCoverCacheKey(fp))) {
+        void enqueueCover(fp, 'visible', song, true)
+      }
+    }
     for (let i = start; i < end; i += 1) {
       if (i >= actualStart && i < actualEnd) continue
-      const fp = arr[i]?.filePath
-      if (fp && !coverUrlCache.has(resolveCoverCacheKey(fp))) void fetchCoverUrl(fp, 'prefetch')
+      const song = arr[i]
+      const fp = song?.filePath
+      if (fp && !coverUrlCache.has(resolveCoverCacheKey(fp))) {
+        void enqueueCover(fp, 'prefetch', song, true)
+      }
     }
   }
 
@@ -484,6 +553,7 @@ export function useCoverThumbnails({
     for (const url of coverUrlCache.values()) revokeCoverUrl(url)
     clearQueues()
     coverUrlCache.clear()
+    windowSongs.clear()
     inflight.clear()
     displayConversionCache.clear()
     displayConversionInflight.clear()

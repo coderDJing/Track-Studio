@@ -1,5 +1,5 @@
-import { hasUsableSongEnergyAnalysis } from '../../../shared/songEnergy'
 import {
+  hasRequiredSongEnergyAnalysis,
   hasRequiredSongStructureAnalysis,
   hasUsableKeyAnalysis,
   resolveCanonicalSongBeatGridV2
@@ -62,7 +62,7 @@ export const resolveMissingAnalysisReasons = (
   options: MissingAnalysisOptions = {}
 ) => {
   const reasons: string[] = []
-  if (!hasUsableSongEnergyAnalysis(song)) reasons.push('missing-energy-score')
+  if (!hasRequiredSongEnergyAnalysis(song)) reasons.push('missing-energy-score')
   if (!hasUsableKeyAnalysis(song)) reasons.push('missing-key')
   if (isWaveformMissing(song, options)) reasons.push('missing-waveform')
 

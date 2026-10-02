@@ -116,6 +116,7 @@ export function useWaveformPreview(params: {
   let drawAllVisiblePending = false
   let themeClassObserver: MutationObserver | null = null
   const pendingDrawFilePaths = new Set<string>()
+  let lastPixelRatio = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
   const previewActive = ref(false)
   const previewFilePath = ref<string | null>(null)
   const previewPercent = ref(0)
@@ -234,8 +235,13 @@ export function useWaveformPreview(params: {
     el: HTMLCanvasElement | null
   ) => {
     const result = waveformCanvasRegistry.setCanvasRef(canvasId, filePath, el)
-    if (el) {
-      if (result.attachedToWorker) {
+    const pixelRatio = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
+    if (el && pixelRatio !== lastPixelRatio) {
+      lastPixelRatio = pixelRatio
+      scheduleDraw()
+    }
+    if (el && result.bindingChanged) {
+      if (canUseAsyncWaveformWorker) {
         syncWaveformDataToWorker(filePath, dataMap.get(filePath) ?? null)
       }
       if (placeholderStateMap.get(filePath) === 'loading') {
@@ -787,10 +793,7 @@ export function useWaveformPreview(params: {
     const paths = getVisiblePaths()
     if (!paths.length) return
     const pending = paths.filter((filePath) => !dataMap.has(filePath) && !inflight.has(filePath))
-    if (!pending.length) {
-      scheduleVisibleDraw()
-      return
-    }
+    if (!pending.length) return
     const externalRequests: Array<{
       filePath: string
       analyzePath: string
@@ -948,9 +951,26 @@ export function useWaveformPreview(params: {
         resetPioneerStreamState()
       }
       scheduleLoad()
-      nextTick(() => scheduleVisibleDraw())
     },
     { immediate: true }
+  )
+  watch(
+    () =>
+      visibleSongsWithIndex.value.map(
+        ({ song }) => [song.filePath, parseDurationToSeconds(song.duration)] as const
+      ),
+    (current, previous) => {
+      if (!waveformVisible.value) return
+      const previousDurations = new Map(previous)
+      scheduleDrawForFilePaths(
+        current
+          .filter(
+            ([filePath, duration]) =>
+              previousDurations.has(filePath) && previousDurations.get(filePath) !== duration
+          )
+          .map(([filePath]) => filePath)
+      )
+    }
   )
   watch(
     () => waveformVisible.value,

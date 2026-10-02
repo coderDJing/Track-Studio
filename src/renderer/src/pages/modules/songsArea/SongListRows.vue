@@ -8,6 +8,7 @@ import { useVirtualRows } from './SongListRows/useVirtualRows'
 import { useSongRowEvents } from './SongListRows/useSongRowEvents'
 import { useCoverThumbnails } from './SongListRows/useCoverThumbnails'
 import { useRowAnalysisViewport } from './SongListRows/useRowAnalysisViewport'
+import { useSongColumnReorderAnimation } from './SongListRows/useSongColumnReorderAnimation'
 import { useKeyAnalysisProgress } from './composables/useKeyAnalysisProgress'
 import { useCoverPreview } from './SongListRows/useCoverPreview'
 import { useSongRowHoverInteractions } from './SongListRows/useSongRowHoverInteractions'
@@ -313,6 +314,8 @@ const {
   externalScrollTop: externalScrollTopRef,
   externalViewportHeight: externalViewportHeightRef
 })
+
+useSongColumnReorderAnimation(rowsRoot, toRef(props, 'visibleColumns'))
 
 const headerHeight = computed(() => {
   const header = rowsRoot.value?.previousElementSibling as HTMLElement | null
@@ -740,7 +743,7 @@ onUnmounted(() => {
             }"
             :style="{ 'min-width': `var(--songs-total-width, ${totalWidth}px)` }"
           >
-            <TransitionGroup name="song-col" tag="div" class="song-row-columns">
+            <div class="song-row-columns">
               <template v-for="col in visibleColumns" :key="col.key">
                 <div
                   v-if="col.key === 'index'"
@@ -818,7 +821,7 @@ onUnmounted(() => {
                   />
                 </div>
               </template>
-            </TransitionGroup>
+            </div>
             <RowAnalysisBar
               v-if="showAnalysisProgressBar && !item.song.fileMissing"
               :progress="getAnalysisProgress(item.song.filePath)"

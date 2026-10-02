@@ -225,6 +225,62 @@ describe('manual key analysis completeness', () => {
     ).toEqual([])
   })
 
+  it('does not repeatedly prompt for three analyzed no-bpm tracks without energy results', () => {
+    const songs = Array.from({ length: 3 }, (_, index) => ({
+      filePath: `D:\\music\\ambient-${index}.wav`,
+      key: '2A',
+      beatGridStatus: 'no-bpm'
+    }))
+    expect(
+      collectMissingAnalysisFilesFromSongs(songs, true, new Set(), {
+        includeSongStructure: true,
+        missingWaveformFilePaths: []
+      })
+    ).toEqual([])
+    expect(
+      collectFilesNeedingSelectedAnalysis(
+        songs,
+        { key: false, beatGrid: false, waveform: false, energy: true, structure: false },
+        true
+      )
+    ).toEqual([])
+  })
+
+  it('still prompts for missing key and waveform on an analyzed no-bpm track', () => {
+    const song = { filePath: 'D:\\music\\ambient-missing.wav', beatGridStatus: 'no-bpm' }
+    expect(resolveMissingAnalysisReasons(song, true)).toEqual(['missing-key'])
+    expect(
+      resolveMissingAnalysisReasons({ ...song, key: '2A' }, true, {
+        missingWaveformFilePaths: [song.filePath]
+      })
+    ).toEqual(['missing-waveform'])
+    expect(
+      resolveMissingAnalysisReasons(song, true, {
+        includeSongStructure: true,
+        missingWaveformFilePaths: [song.filePath]
+      })
+    ).toEqual(['missing-key', 'missing-waveform'])
+    expect(
+      collectMissingAnalysisFilesFromSongs([song], true, new Set(), {
+        missingWaveformFilePaths: [song.filePath]
+      })
+    ).toEqual([song.filePath])
+  })
+
+  it.each([undefined, 'no-bpm'])(
+    'requires energy for a valid grid despite status %s',
+    (beatGridStatus) => {
+      const song = {
+        filePath: 'D:\\music\\grid-missing-energy.wav',
+        key: '2A',
+        beatGridMap: FIXED_GRID_V2,
+        beatGridStatus
+      }
+      expect(resolveMissingAnalysisReasons(song, true)).toEqual(['missing-energy-score'])
+      expect(collectMissingAnalysisFilesFromSongs([song], true)).toEqual([song.filePath])
+    }
+  )
+
   it('keeps a missing Beat Grid incomplete even when the runtime is unavailable', () => {
     expect(
       resolveMissingAnalysisReasons(

@@ -10,6 +10,8 @@ export const createWaveformPreviewCanvasRegistry = (params: CanvasRegistryParams
   const canvasMap = markRaw(new Map<string, HTMLCanvasElement>())
   const workerCanvasMap = markRaw(new Map<string, HTMLCanvasElement>())
   const canvasFilePathMap = markRaw(new Map<string, string>())
+  // 暂存到延迟解绑结束，同轮 null / 原元素重绑不应把已有位图当成新画布。
+  const canvasBindings = new Map<string, { canvas: HTMLCanvasElement; filePath: string }>()
   const filePathCanvasIdsMap = markRaw(new Map<string, Set<string>>())
   const pendingCanvasDetachTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
@@ -68,6 +70,7 @@ export const createWaveformPreviewCanvasRegistry = (params: CanvasRegistryParams
     const timer = setTimeout(() => {
       pendingCanvasDetachTimers.delete(canvasId)
       if (canvasMap.has(canvasId)) return
+      canvasBindings.delete(canvasId)
       detachWorkerCanvas(canvasId)
     }, 0)
     pendingCanvasDetachTimers.set(canvasId, timer)
@@ -75,10 +78,16 @@ export const createWaveformPreviewCanvasRegistry = (params: CanvasRegistryParams
 
   const setCanvasRef = (canvasId: string, filePath: string, el: HTMLCanvasElement | null) => {
     const normalizedCanvasId = String(canvasId || filePath || '').trim()
-    if (!normalizedCanvasId || !filePath) return { attachedToWorker: false }
+    if (!normalizedCanvasId || !filePath) {
+      return { attachedToWorker: false, bindingChanged: false }
+    }
 
     if (el) {
       cancelPendingCanvasDetach(normalizedCanvasId)
+      const previousBinding = canvasBindings.get(normalizedCanvasId)
+      const bindingChanged =
+        !previousBinding || previousBinding.canvas !== el || previousBinding.filePath !== filePath
+      canvasBindings.set(normalizedCanvasId, { canvas: el, filePath })
       const previousFilePath = canvasFilePathMap.get(normalizedCanvasId)
       if (previousFilePath && previousFilePath !== filePath) {
         removeCanvasIdForFilePath(previousFilePath, normalizedCanvasId)
@@ -87,9 +96,9 @@ export const createWaveformPreviewCanvasRegistry = (params: CanvasRegistryParams
       addCanvasIdForFilePath(filePath, normalizedCanvasId)
       canvasMap.set(normalizedCanvasId, el)
 
-      if (!params.canUseAsyncWaveformWorker) return { attachedToWorker: false }
+      if (!params.canUseAsyncWaveformWorker) return { attachedToWorker: false, bindingChanged }
       const currentBoundCanvas = workerCanvasMap.get(normalizedCanvasId)
-      if (currentBoundCanvas === el) return { attachedToWorker: false }
+      if (currentBoundCanvas === el) return { attachedToWorker: false, bindingChanged }
       if (currentBoundCanvas) {
         detachWorkerCanvas(normalizedCanvasId)
       }
@@ -105,17 +114,15 @@ export const createWaveformPreviewCanvasRegistry = (params: CanvasRegistryParams
         [offscreen]
       )
       workerCanvasMap.set(normalizedCanvasId, el)
-      return { attachedToWorker: true }
+      return { attachedToWorker: true, bindingChanged }
     }
 
     const previousFilePath = canvasFilePathMap.get(normalizedCanvasId) || filePath
     canvasMap.delete(normalizedCanvasId)
     canvasFilePathMap.delete(normalizedCanvasId)
     removeCanvasIdForFilePath(previousFilePath, normalizedCanvasId)
-    if (params.canUseAsyncWaveformWorker) {
-      scheduleWorkerCanvasDetach(normalizedCanvasId)
-    }
-    return { attachedToWorker: false }
+    scheduleWorkerCanvasDetach(normalizedCanvasId)
+    return { attachedToWorker: false, bindingChanged: false }
   }
 
   const clearWorkerCanvasesForFilePath = (filePath: string) => {
@@ -146,6 +153,7 @@ export const createWaveformPreviewCanvasRegistry = (params: CanvasRegistryParams
     canvasMap.clear()
     workerCanvasMap.clear()
     canvasFilePathMap.clear()
+    canvasBindings.clear()
     filePathCanvasIdsMap.clear()
   }
 

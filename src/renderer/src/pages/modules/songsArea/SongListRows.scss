@@ -59,11 +59,6 @@
   flex: 1 0 auto;
 }
 
-// 与表头 Sortable 的 150ms ease 对齐，列序变化时格子跟着滑动
-:deep(.song-col-move) {
-  transition: transform 150ms ease;
-}
-
 .song-row-content {
   --song-harmonic-match-color: color-mix(in srgb, #63a07f 78%, var(--text) 22%);
   --song-locate-flash-rest: color-mix(in srgb, var(--accent) 14%, transparent);

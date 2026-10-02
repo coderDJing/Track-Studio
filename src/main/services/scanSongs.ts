@@ -24,6 +24,7 @@ import { isInRecordingLibraryAbsPath } from '../recordingLibraryService'
 import { hasCurrentSongEnergyAnalysis, hasUsableSongEnergyAnalysis } from '../../shared/songEnergy'
 import { normalizeSongBeatGridMapV2 } from '../../shared/songBeatGridMapV2'
 import {
+  hasRequiredSongEnergyAnalysis,
   hasUsableKeyAnalysis,
   resolveCanonicalSongBeatGridV2
 } from '../../shared/songAnalysisCompleteness'
@@ -331,7 +332,7 @@ export const scheduleSongListPostScanTasks = async (
         (info) =>
           !hasUsableKeyAnalysis(info) ||
           !hasCompleteGrid(info) ||
-          !hasUsableSongEnergyAnalysis(info)
+          !hasRequiredSongEnergyAnalysis(info)
       )
       .map((info) => info.filePath)
       .filter((filePath) => typeof filePath === 'string' && filePath.trim().length > 0)
@@ -666,7 +667,7 @@ export async function scanSongList(
       const missingAnalysis =
         !hasUsableKeyAnalysis(entry.info) ||
         !hasCompleteGrid(entry.info) ||
-        !hasUsableSongEnergyAnalysis(entry.info)
+        !hasRequiredSongEnergyAnalysis(entry.info)
       if (!missingAnalysis) continue
       perfRefreshMissing.count += 1
       missingEntries.push({ key: st.key, file: st.file, entry })

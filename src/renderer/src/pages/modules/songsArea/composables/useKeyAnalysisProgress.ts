@@ -1,7 +1,7 @@
 import { computed, ref, type Ref } from 'vue'
 import type { ISongInfo } from '../../../../../../types/globals'
-import { hasUsableSongEnergyAnalysis } from '@shared/songEnergy'
 import {
+  hasRequiredSongEnergyAnalysis,
   hasRequiredSongStructureAnalysis,
   hasUsableKeyAnalysis,
   hasUsableSongBeatGridAnalysis
@@ -241,7 +241,7 @@ bindIpcListener()
 export const hasCompleteKeyAnalysis = (song: ISongInfo | undefined): boolean => {
   if (!song) return false
   return (
-    hasUsableSongEnergyAnalysis(song) &&
+    hasRequiredSongEnergyAnalysis(song) &&
     hasUsableKeyAnalysis(song) &&
     hasUsableSongBeatGridAnalysis(song)
   )
