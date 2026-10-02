@@ -30,7 +30,7 @@ Already using FRKB? Track Studio updates the same installation and keeps your se
 - **Organize real files:** Build Filter, Curated, and SET playlists; move or merge libraries; restore deleted tracks from the recycle bin.
 - **Find and understand tracks:** Deduplicate by audio content, analyze BPM, key, energy, and sections, and fill metadata and cover art.
 - **Listen and edit:** Browse RGB waveforms, audition two decks side by side, record mixes, and edit a track’s audio without leaving the app.
-- **Work with DJ libraries:** Browse Rekordbox desktop and USB libraries and Serato crates, with playlist and cue workflows for each supported source.
+- **Work with DJ libraries:** Browse Rekordbox desktop and USB libraries, Serato crates, and Traktor collections, with playlist and cue workflows for each supported source.
 - **Sync your collection:** Keep the Curated library’s folders, playlists, and audio aligned across devices; sync fingerprints and curated artists.
 - **Prepare mixes:** Arrange Mixtape timelines, adjust transitions, and prepare or export single-track Stems.
 

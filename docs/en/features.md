@@ -32,7 +32,7 @@ A detailed reference for Track Studio’s library, playback, analysis, and prepa
 - **Visible analysis progress**: Track-level analysis status is surfaced in the song list instead of leaving background work invisible.
 - **Manual analysis control**: Playlist analysis can be confirmed, skipped, or started manually, so imported crates do not unexpectedly consume foreground playback resources.
 - **Fingerprint library scanning**: Build a reusable fingerprint library from selected libraries to make future deduplication and similar-track workflows faster and more consistent.
-- **External-source analysis cache**: Rekordbox desktop and USB libraries, Serato, and ordinary external tracks can reuse cached analysis data instead of repeatedly reprocessing the same files.
+- **External-source analysis cache**: Rekordbox desktop and USB libraries, Serato, Traktor, and ordinary external tracks can reuse cached analysis data instead of repeatedly reprocessing the same files.
 - **Metadata editing and online fill**: Edit tags and cover art, search MusicBrainz, use AcoustID/Chromaprint matching, and batch-fill metadata.
 - **Native Chromaprint fingerprinting**: AcoustID fingerprint generation runs through the native module for lower overhead during metadata matching.
 
@@ -80,7 +80,7 @@ A detailed reference for Track Studio’s library, playback, analysis, and prepa
 - **External-library context menus**: Use familiar right-click actions on Rekordbox desktop and USB tracks, including copying to Filter or Curated libraries.
 - **Keyboard multi-selection**: Select multiple songs in Rekordbox desktop and USB libraries with keyboard-style range selection.
 - **Curated artist import**: Import curated artist data from Rekordbox desktop and USB libraries to keep selection tags useful across sources.
-- **Read-only analysis for external tracks**: Analyze BPM, beat grid, energy, and sections for Rekordbox desktop and USB libraries, Serato, and ordinary external tracks. Results stay inside Track Studio and are not written back to the source library.
+- **Read-only analysis for external tracks**: Analyze BPM, beat grid, energy, and sections for Rekordbox desktop and USB libraries, Serato, Traktor, and ordinary external tracks. Results stay inside Track Studio and are not written back to the source library.
 - **Missing-file handling**: Missing source files are clearly marked, blocked from playback, and can be cleaned from Rekordbox playlist records when appropriate.
 
 ## Serato Library Integration
@@ -89,6 +89,14 @@ A detailed reference for Track Studio’s library, playback, analysis, and prepa
 - **Serato playlist editing**: Create, rename, delete, reorder, and move folders and playlists, and remove entries from playlists while keeping the audio files.
 - **Serato track writing**: Write selected Track Studio tracks to a Serato playlist. Track Studio can keep dedicated Serato copies so the Serato library remains usable when the original files move.
 - **Serato playback data**: Read Serato metadata, waveform previews, Hot Cues, Memory Cues, and Loops for browsing and auditioning.
+
+## Traktor Library Integration
+
+- **Traktor library browsing**: Detect a local Traktor library and read collection.nml directly to browse all tracks, folders, and playlists inside Track Studio.
+- **Traktor playlist editing**: Create, rename, delete, reorder, and move folders and playlists. Drag tracks to change their order or add them to another playlist in the same library; removing playlist entries keeps the audio files.
+- **Traktor track writing**: Write selected Track Studio tracks to a Traktor playlist and keep dedicated Traktor copies in a separately configured storage directory.
+- **Traktor playback data**: Read native beat grids, Cues, Loops, and existing Stripe waveform previews. Missing Stripe previews are not generated automatically for the track list. Loading a track into two-deck or audio-edit mode generates its detailed waveform in Track Studio while preserving an available native beat grid.
+- **Library refresh**: Check source files for changes, reuse snapshots when unchanged, and reread changed libraries to update the list in place.
 
 ## Mixtape And Stem Workflow
 

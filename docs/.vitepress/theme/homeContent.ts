@@ -264,7 +264,7 @@ const zhChapters: Omit<Chapter, 'cue' | 'color'>[] = [
     id: 'external',
     kicker: '外部曲库',
     title: '不替换你的 DJ 软件，而是接上它',
-    lead: '直接读取 Rekordbox 本机库、U 盘里的 Device Library 与 OneLibrary，以及 Serato 曲库。Cue 和 Loop 原样保留，分析结果留在 Track Studio 里，不改写来源。',
+    lead: '直接读取 Rekordbox 本机库、U 盘里的 Device Library 与 OneLibrary，以及 Serato 和 Traktor 曲库。Cue 和 Loop 原样保留，分析结果留在 Track Studio 里，不改写来源。',
     surface: 'external',
     surfaceCaption: 'Rekordbox U 盘曲库：在 Track Studio 里浏览、试听、复制到本地库',
     groups: [
@@ -281,11 +281,15 @@ const zhChapters: Omit<Chapter, 'cue' | 'color'>[] = [
         ]
       },
       {
-        title: 'Serato 与只读分析',
+        title: 'Serato、Traktor 与只读分析',
         items: [
           {
             name: 'Serato 曲库',
             detail: '浏览、创建、重命名、排序和移动 Crate，把曲目写入 Serato 歌单'
+          },
+          {
+            name: 'Traktor 曲库',
+            detail: '直读曲库与原生网格，编辑歌单、拖拽排序，并把曲目写入 Traktor'
           },
           { name: '只读分析', detail: '外部曲目也能做 BPM、网格、能量和段落分析，结果不写回源库' },
           { name: '失效记录处理', detail: '找不到原文件的曲目会标出并阻止播放，可清理失效记录' }
@@ -615,7 +619,7 @@ const enChapters: Omit<Chapter, 'cue' | 'color'>[] = [
     id: 'external',
     kicker: 'External libraries',
     title: 'Keeps your DJ software. Plugs into it.',
-    lead: 'Reads the Rekordbox desktop library, Device Library and OneLibrary on USB drives, and Serato. Cues and Loops come along; analysis stays inside Track Studio and never rewrites the source.',
+    lead: 'Reads the Rekordbox desktop library, Device Library and OneLibrary on USB drives, plus Serato and Traktor libraries. Cues and Loops come along; analysis stays inside Track Studio and never rewrites the source.',
     surface: 'external',
     surfaceCaption: 'Rekordbox USB library: browse, audition, and copy into your local library',
     groups: [
@@ -638,11 +642,15 @@ const enChapters: Omit<Chapter, 'cue' | 'color'>[] = [
         ]
       },
       {
-        title: 'Serato & read-only analysis',
+        title: 'Serato, Traktor & read-only analysis',
         items: [
           {
             name: 'Serato library',
             detail: 'Browse and edit crates, write Track Studio tracks into Serato'
+          },
+          {
+            name: 'Traktor library',
+            detail: 'Read native grids, edit playlists, reorder tracks, and write into Traktor'
           },
           {
             name: 'Read-only analysis',

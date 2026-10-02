@@ -165,7 +165,7 @@ registerDemoIpcHandler('waveform-global-overview-cache:load', (payload) => {
     : { status: 'missing', data: null }
 })
 
-// 外部曲库来源栏仍使用应用的 librarySelectArea；向它提供演示中的 Rekordbox 与 Serato 来源。
+// 外部曲库来源栏使用应用的 librarySelectArea，提供三个 DJ 曲库的演示来源。
 registerDemoIpcHandler('pioneer-device-library:list-removable-drives', () => [
   {
     id: 'demo-usb',
@@ -190,6 +190,13 @@ registerDemoIpcHandler('external-library:probe', () => [
     sourceKey: 'demo-serato',
     sourcePath: 'D:/Music/_Serato_',
     displayName: 'Serato'
+  },
+  {
+    kind: 'traktor',
+    available: true,
+    sourceKey: 'demo-traktor',
+    sourcePath: 'D:/Music/Native Instruments/Traktor/collection.nml',
+    displayName: 'Traktor'
   }
 ])
 registerDemoIpcHandler('pioneer-device-library:load-tree', () => ({ treeNodes: [] }))

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Rekordbox 本机 / U 盘和 Serato 来源栏与歌曲列表均直接使用应用组件。
+// Rekordbox 本机 / U 盘、Serato 和 Traktor 来源栏与歌曲列表直接使用应用组件。
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import LibrarySelectArea from '@renderer/pages/modules/librarySelectArea.vue'
