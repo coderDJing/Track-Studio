@@ -201,7 +201,7 @@ export const createHorizontalBrowseDetailPresentationActions = (
       }
       const timeScale = Math.max(
         0.25,
-        Number(params.resolveIncomingPreviewTimeScale(playbackRate)) || 1
+        Number(params.resolveIncomingPreviewTimeScale(deckState.playbackRate)) || 1
       )
       const visibleDurationSec = resolveVisibleDurationSecForTimeScale(timeScale)
       const viewportStartSec = clampPreviewStartForVisibleDuration(

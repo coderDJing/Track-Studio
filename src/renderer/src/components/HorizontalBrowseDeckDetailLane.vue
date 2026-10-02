@@ -37,6 +37,7 @@ const props = defineProps<{
   playing: boolean
   playbackActive: boolean
   playbackRate: number
+  waveformDensityPlaybackRate?: number
   liveTempoPreviewRate?: number | null
   waveformGain?: number
   playbackSyncRevision: number
@@ -139,6 +140,7 @@ defineExpose<HorizontalBrowseRawWaveformDetailExpose>({
       :playing="props.playing"
       :playback-active="props.playbackActive"
       :playback-rate="props.playbackRate"
+      :waveform-density-playback-rate="props.waveformDensityPlaybackRate"
       :live-tempo-preview-rate="props.liveTempoPreviewRate"
       :waveform-gain="props.waveformGain"
       :playback-sync-revision="props.playbackSyncRevision"

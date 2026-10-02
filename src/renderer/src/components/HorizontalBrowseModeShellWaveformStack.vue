@@ -286,6 +286,7 @@ onUnmounted(() => {
             : model.topDeckWaveformPlaybackActive.value
         "
         :playback-rate="model.topDeckPlaybackRate.value"
+        :waveform-density-playback-rate="model.resolveDeckPlaybackRateForTransport('top')"
         :waveform-gain="model.resolveDeckWaveformGain('top')"
         :playback-sync-revision="model.topDeckPlaybackSyncRevision.value"
         :grid-bpm="model.topDeckGridBpm.value"
@@ -350,6 +351,7 @@ onUnmounted(() => {
         :playing="model.bottomDeckUiPlaying.value"
         :playback-active="model.bottomDeckWaveformPlaybackActive.value"
         :playback-rate="model.bottomDeckPlaybackRate.value"
+        :waveform-density-playback-rate="model.resolveDeckPlaybackRateForTransport('bottom')"
         :waveform-gain="model.resolveDeckWaveformGain('bottom')"
         :playback-sync-revision="model.bottomDeckPlaybackSyncRevision.value"
         :grid-bpm="model.bottomDeckGridBpm.value"

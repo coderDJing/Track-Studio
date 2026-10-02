@@ -33,6 +33,7 @@ type HorizontalBrowseDetailPresentationStateParams = {
   waveformPlaybackActive: () => boolean
   resolveWaveformCurrentSeconds: () => number
   resolveWaveformPlaybackRate: () => number
+  resolveWaveformDensityPlaybackRate: () => number
   liveTempoPreviewActive: () => boolean
   previewBpm: Ref<number>
   previewFirstBeatMs: Ref<number>
@@ -87,8 +88,10 @@ export const createHorizontalBrowseDetailPresentationState = (
     visualGridTimeBasisOffsetMs.value = params.previewTimeBasisOffsetMs.value
   }
 
-  const resolveIncomingPreviewTimeScale = (playbackRate = params.resolveWaveformPlaybackRate()) =>
-    resolveHorizontalBrowseWaveformTimeScale(playbackRate)
+  // 临时推拉只改变滚动时钟；正式倍率才改变源音频与屏幕像素之间的比例。
+  const resolveIncomingPreviewTimeScale = (
+    playbackRate = params.resolveWaveformDensityPlaybackRate()
+  ) => resolveHorizontalBrowseWaveformTimeScale(playbackRate)
 
   const resolveCanvasVisualTimeScale = () =>
     params.linkedGridVisualPending() || params.liveTempoPreviewActive()

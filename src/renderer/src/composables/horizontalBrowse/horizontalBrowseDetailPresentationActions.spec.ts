@@ -19,7 +19,7 @@ describe('双轨时间标尺与 Sync 事务', () => {
       waveformPlaybackActive: () => true,
       linkedGridVisualPending: () => true,
       normalizePreviewTimelineSeconds: (seconds) => seconds,
-      // pending 时显示帧仍是一屏 12 源音频秒；native props 仍停在原速。
+      // pending 时显示帧仍是一屏 12 源音频秒；native props 带有临时加快倍率。
       resolveVisibleDurationSec: () => 12,
       resolvePreviewDurationSec: () => 300,
       resolveWaveformCurrentSeconds: () => 60,
@@ -31,7 +31,7 @@ describe('双轨时间标尺与 Sync 事务', () => {
       getLastAppliedPreviewTimeScale: () => previousScale,
       setLastAppliedPreviewTimeScale: setTimeScale,
       resolveIncomingPreviewTimeScale: (rate = 1) => resolveHorizontalBrowseWaveformTimeScale(rate),
-      resolveWaveformPlaybackRate: () => 1,
+      resolveWaveformPlaybackRate: () => 1.04,
       resolveGridTimeBasis: () => ({
         bpm: 150,
         firstBeatMs: 0,
@@ -66,5 +66,10 @@ describe('双轨时间标尺与 Sync 事务', () => {
     expect(setTimeScale).not.toHaveBeenCalled()
     expect(scheduleDraw).not.toHaveBeenCalled()
     expect(applyPlaybackPosition).not.toHaveBeenCalled()
+    // 未指定正式调速目标时，视口保留基准密度，时钟仍使用临时倍率。
+    const current = actions.commitLinkedGridVisualTransaction({}, { mutate: false })
+    expect(current.timeScale).toBe(1)
+    expect(current.visibleDurationSec).toBe(12)
+    expect(current.playbackClock?.playbackRate).toBe(1.04)
   })
 })

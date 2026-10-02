@@ -181,6 +181,8 @@ const resolveWaveformCurrentSeconds = () =>
     (Number(props.currentSeconds) || 0) + localGridShiftPhaseOffsetSec.value
   )
 const resolveWaveformPlaybackRate = () => Math.max(0.25, Number(props.playbackRate) || 1)
+const resolveWaveformDensityPlaybackRate = () =>
+  props.waveformDensityPlaybackRate ?? resolveWaveformPlaybackRate()
 
 const resolveGridEditVisibleFromSec = () =>
   gridEditingEnabled.value ? selectedDynamicGridVisibleFromSec.value : null
@@ -205,6 +207,7 @@ const presentationState = createHorizontalBrowseDetailPresentationState({
   waveformPlaybackActive: () => waveformPlaybackActive.value,
   resolveWaveformCurrentSeconds,
   resolveWaveformPlaybackRate,
+  resolveWaveformDensityPlaybackRate,
   liveTempoPreviewActive,
   previewBpm,
   previewFirstBeatMs,

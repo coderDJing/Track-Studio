@@ -87,11 +87,12 @@ export const useHorizontalBrowseDeckTempoNudge = (
       currentSession?.basePlaybackRate ??
       pendingRestorePlaybackRate[deck] ??
       normalizePlaybackRate(params.resolveTransportDeckSnapshot(deck).playbackRate)
-    pendingRestorePlaybackRate[deck] = null
+    // 先接管基准倍率再清理恢复状态，避免同步观察者短暂读到 native 的临时倍率。
     activeTempoNudge[deck] = {
       direction,
       basePlaybackRate
     }
+    pendingRestorePlaybackRate[deck] = null
     const ratio = direction === 'slow' ? 1 - TEMPO_NUDGE_RATIO : 1 + TEMPO_NUDGE_RATIO
     enqueueTempoNudgeRate(deck, clampPlaybackRate(basePlaybackRate * ratio))
   }
@@ -102,9 +103,10 @@ export const useHorizontalBrowseDeckTempoNudge = (
     if (direction && currentSession.direction !== direction) return
 
     params.touchDeckInteraction(deck)
-    activeTempoNudge[deck] = null
     const restorePlaybackRate = clampPlaybackRate(currentSession.basePlaybackRate)
+    // 松手后 native 尚未恢复，密度需要继续由待恢复的正式倍率接管。
     pendingRestorePlaybackRate[deck] = restorePlaybackRate
+    activeTempoNudge[deck] = null
     enqueueTempoNudgeRate(deck, restorePlaybackRate, () => {
       if (!activeTempoNudge[deck] && pendingRestorePlaybackRate[deck] === restorePlaybackRate) {
         pendingRestorePlaybackRate[deck] = null
@@ -119,8 +121,8 @@ export const useHorizontalBrowseDeckTempoNudge = (
 
   const resetDeckTempoNudgePlaybackRate = async (deck: DeckKey, playbackRate = 1) => {
     const restorePlaybackRate = clampPlaybackRate(normalizePlaybackRate(playbackRate))
-    activeTempoNudge[deck] = null
     pendingRestorePlaybackRate[deck] = restorePlaybackRate
+    activeTempoNudge[deck] = null
     operationQueue[deck] = operationQueue[deck]
       .catch(() => {})
       .then(async () => {

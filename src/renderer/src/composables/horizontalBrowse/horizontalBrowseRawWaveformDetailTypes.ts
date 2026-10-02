@@ -49,6 +49,8 @@ export type HorizontalBrowseRawWaveformDetailProps = {
   playing?: boolean
   playbackActive?: boolean
   playbackRate?: number
+  // 排除临时推拉后的正式倍率，仅用于波形/网格密度。
+  waveformDensityPlaybackRate?: number
   liveTempoPreviewRate?: number | null
   waveformGain?: number
   playbackSyncRevision?: number
