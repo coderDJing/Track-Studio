@@ -450,6 +450,18 @@ jobs:
           if brew list --formula | grep -Fxq 'openssl@1.1'; then
             brew unlink openssl@1.1
           fi
+          # Runner-created links can remain after `brew unlink` reports zero
+          # removals. Remove only an openssl executable link owned by 1.1.
+          brew_prefix="$(brew --prefix)"
+          openssl_bin="${brew_prefix}/bin/openssl"
+          if [ -L "$openssl_bin" ]; then
+            case "$(readlink "$openssl_bin")" in
+              "${brew_prefix}/opt/openssl@1.1/bin/openssl"|../opt/openssl@1.1/bin/openssl|\
+              "${brew_prefix}/Cellar/openssl@1.1/"*/bin/openssl|../Cellar/openssl@1.1/*/bin/openssl)
+                rm -- "$openssl_bin"
+                ;;
+            esac
+          fi
           brew install ffmpeg
           mkdir -p dist/ffmpeg-x64-dev/lib dist/ffmpeg-x64-dev/include
           for lib in libavcodec libavformat libavutil libswresample; do
