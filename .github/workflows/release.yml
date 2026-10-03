@@ -445,6 +445,11 @@ jobs:
             brew untap --force hashicorp/tap
           fi
           brew update
+          # The Intel runner links OpenSSL 1.1 into /usr/local. Unlink it
+          # before FFmpeg upgrades OpenSSL 3, so bin/openssl does not conflict.
+          if brew list --formula | grep -Fxq 'openssl@1.1'; then
+            brew unlink openssl@1.1
+          fi
           brew install ffmpeg
           mkdir -p dist/ffmpeg-x64-dev/lib dist/ffmpeg-x64-dev/include
           for lib in libavcodec libavformat libavutil libswresample; do
