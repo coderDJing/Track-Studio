@@ -22,6 +22,7 @@ const normalizeDriveRoot = (value) => {
 async function listWindowsRemovableDrives() {
   const script = [
     "$ErrorActionPreference = 'Stop'",
+    '[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)',
     "$usbLetters = New-Object 'System.Collections.Generic.HashSet[string]'",
     'Get-CimInstance Win32_DiskDrive | Where-Object {',
     "  $_.InterfaceType -eq 'USB' -or ($_.PNPDeviceID -like 'USBSTOR*')",
@@ -58,7 +59,7 @@ async function listWindowsRemovableDrives() {
   const { stdout } = await execFileAsync(
     'powershell.exe',
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
-    { windowsHide: true, maxBuffer: 1024 * 1024 * 8 }
+    { windowsHide: true, encoding: 'utf8', maxBuffer: 1024 * 1024 * 8 }
   )
   const rows = JSON.parse(String(stdout || '[]'))
   return Array.isArray(rows) ? rows : rows ? [rows] : []

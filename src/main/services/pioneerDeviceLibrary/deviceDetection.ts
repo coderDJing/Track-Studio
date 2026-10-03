@@ -343,6 +343,8 @@ const runMacPlistCommand = async (command: string, args: string[]) => {
 async function listWindowsRemovableDrives(): Promise<BaseDriveRow[]> {
   const script = [
     "$ErrorActionPreference = 'Stop'",
+    // PowerShell 输出与 Node 解码统一使用 UTF-8，避免卷标受系统代码页影响。
+    '[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)',
     "$usbLetters = New-Object 'System.Collections.Generic.HashSet[string]'",
     'try {',
     '  Get-CimInstance Win32_DiskDrive -ErrorAction Stop | Where-Object {',
@@ -401,6 +403,7 @@ async function listWindowsRemovableDrives(): Promise<BaseDriveRow[]> {
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
       {
         windowsHide: true,
+        encoding: 'utf8',
         timeout: WINDOWS_DRIVE_LIST_TIMEOUT_MS,
         maxBuffer: 1024 * 1024 * 8
       }
