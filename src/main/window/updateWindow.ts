@@ -22,6 +22,7 @@ import { GITHUB_RELEASES_URL } from '@shared/productBrand'
 import { isLibraryMergeActive } from '../services/libraryMerge'
 import { installResumableAutoUpdaterDownload } from '../services/resumableAutoUpdaterDownload'
 import { updateDownloadDiagnosticLogger } from '../services/updateDownloadDiagnostic'
+import { installPublishedReleaseUpdateProvider } from '../services/publishedReleaseUpdateProvider'
 import { openSafeExternalUrl, restrictExternalNavigation } from './externalNavigation'
 import type { ReleaseNotesRangePayload } from '../../shared/releaseNotes'
 const autoUpdater = electronUpdater.autoUpdater
@@ -218,6 +219,7 @@ const registerAutoUpdaterListeners = () => {
   autoUpdaterListenersRegistered = true
   autoUpdater.logger = updateDownloadDiagnosticLogger
   installResumableAutoUpdaterDownload(autoUpdater)
+  installPublishedReleaseUpdateProvider(autoUpdater)
 
   autoUpdater.on('update-available', (info) => {
     const currentIsPrerelease = app.getVersion().includes('-')
