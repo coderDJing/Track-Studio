@@ -25,6 +25,7 @@ import { importCuratedArtistsFromPioneerSource } from '@renderer/composables/rek
 import { usePioneerDeviceTreeDrag } from '@renderer/composables/rekordboxDesktop/usePioneerDeviceTreeDrag'
 import { filterPlaylistTreeByName } from '@renderer/composables/rekordboxDesktop/filterPlaylistTree'
 import { useExternalPlaylistActions } from '@renderer/composables/externalLibrary/useExternalPlaylistActions'
+import { useExternalPlaylistContextMenu } from '@renderer/composables/externalLibrary/useExternalPlaylistContextMenu'
 import { openSetDurationForRekordboxPlaylist } from '@renderer/utils/rekordboxPlaylistSetDuration'
 import {
   collectRekordboxSimilarTracksSeeds,
@@ -64,6 +65,7 @@ useSearchFocusTarget({
 const expandedFolderIds = ref<Set<number>>(new Set())
 const dialogWriting = ref(false)
 const localLibraryCopying = ref(false)
+const { contextMenuNodeId, showNodeContextMenu } = useExternalPlaylistContextMenu()
 const isDesktopSource = computed(
   () => runtime.pioneerDeviceLibrary.selectedSourceKind === 'desktop'
 )
@@ -709,7 +711,7 @@ const usbPlaylistDelete = usePioneerUsbPlaylistDelete(runtime, () => isExternalS
 
 const handleCopyOnlyContextMenu = async (event: MouseEvent, node: IPioneerPlaylistTreeNode) => {
   const deleteRequest = usbPlaylistDelete.createRequest(node)
-  const result = await rightClickMenu({
+  const result = await showNodeContextMenu(node.id, {
     menuArr: [
       [{ menuName: 'pioneer.copyToFilter' }, { menuName: 'pioneer.copyToCurated' }],
       [{ menuName: 'pioneer.importArtistsToCurated' }],
@@ -773,7 +775,7 @@ const handleNodeContextmenu = async (event: MouseEvent, node: IPioneerPlaylistTr
         : []),
       [{ menuName: renameMenuKey }, { menuName: deleteFolderMenuKey }]
     ]
-    const result = await rightClickMenu({ menuArr, clickEvent: event })
+    const result = await showNodeContextMenu(node.id, { menuArr, clickEvent: event })
     if (result === 'cancel') return
     if (result.menuName === 'library.createPlaylist') {
       await openCreatePlaylistDialog(Number(node.id) || 0)
@@ -822,7 +824,7 @@ const handleNodeContextmenu = async (event: MouseEvent, node: IPioneerPlaylistTr
     [{ menuName: renameMenuKey }, { menuName: deletePlaylistMenuKey }],
     ...(isDesktopSource.value ? [[{ menuName: 'pioneer.cleanMissingFiles' }]] : [])
   ]
-  const result = await rightClickMenu({ menuArr, clickEvent: event })
+  const result = await showNodeContextMenu(node.id, { menuArr, clickEvent: event })
   if (result === 'cancel') return
   if (result.menuName === 'pioneer.copyToFilter') {
     await copyPlaylistToLibrary(node, 'FilterLibrary')
@@ -1025,6 +1027,7 @@ watch(
               :depth="0"
               :expanded-ids="expandedFolderIds"
               :filter-text="playlistSearch"
+              :context-menu-node-id="contextMenuNodeId"
               :interaction-disabled="dialogWriting || usbPlaylistDrop.pending.value"
               :draggable-nodes="isEditableSource && !normalizeKeyword(playlistSearch)"
               :contextmenu-enabled="

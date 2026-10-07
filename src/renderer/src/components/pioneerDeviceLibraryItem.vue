@@ -39,6 +39,10 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  contextMenuNodeId: {
+    type: Number,
+    default: undefined
+  },
   dragTargetNodeId: {
     type: Number,
     default: null
@@ -146,6 +150,7 @@ const handleChildDragEnd = (event: DragEvent, node: IPioneerPlaylistTreeNode) =>
       :style="{ paddingLeft }"
       :class="{
         selectedDir: isSelected,
+        rightClickBorder: contextMenuNodeId === node.id,
         borderTop: dragApproach === 'top',
         borderBottom: dragApproach === 'bottom',
         borderCenter: dragApproach === 'center',
@@ -213,6 +218,7 @@ const handleChildDragEnd = (event: DragEvent, node: IPioneerPlaylistTreeNode) =>
           :interaction-disabled="interactionDisabled"
           :draggable-nodes="draggableNodes"
           :contextmenu-enabled="contextmenuEnabled"
+          :context-menu-node-id="contextMenuNodeId"
           :drag-target-node-id="dragTargetNodeId"
           :drag-target-approach="dragTargetApproach"
           :drag-source-id="dragSourceId"
@@ -298,6 +304,10 @@ const handleChildDragEnd = (event: DragEvent, node: IPioneerPlaylistTreeNode) =>
 }
 
 .borderCenter {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.rightClickBorder {
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
