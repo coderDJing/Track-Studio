@@ -18,7 +18,7 @@ import type {
   HorizontalBrowseModeShellWaveformStackExpose,
   HorizontalBrowseModeShellWaveformStackModel
 } from '@renderer/components/horizontalBrowseModeShellWaveformStackTypes'
-import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
+import { canEditSongCues } from '@renderer/utils/pioneerUsbEditing'
 
 type DeckKey = HorizontalBrowseDeckKey
 
@@ -455,12 +455,17 @@ onUnmounted(() => {
       :top-hot-cue-editable="
         model.isEditMode.value
           ? model.audioEdit.writable.value
-          : !isRekordboxExternalPlaybackSource('', model.topDeckSong.value)
+          : canEditSongCues(model.topDeckSong.value)
       "
-      :bottom-hot-cue-editable="!isRekordboxExternalPlaybackSource('', model.bottomDeckSong.value)"
+      :bottom-hot-cue-editable="canEditSongCues(model.bottomDeckSong.value)"
       :top-memory-cues="topDisplayMemoryCues"
       :bottom-memory-cues="bottomDisplayMemoryCues"
-      :top-memory-cue-editable="!model.isEditMode.value || model.audioEdit.writable.value"
+      :top-memory-cue-editable="
+        model.isEditMode.value
+          ? model.audioEdit.writable.value
+          : canEditSongCues(model.topDeckSong.value)
+      "
+      :bottom-memory-cue-editable="canEditSongCues(model.bottomDeckSong.value)"
       @hotcue-press="void handleCuePanelHotCuePress($event)"
       @hotcue-delete="void handleCuePanelHotCueDelete($event)"
       @memorycue-press="void handleCuePanelMemoryCuePress($event)"

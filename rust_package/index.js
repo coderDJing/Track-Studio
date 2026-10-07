@@ -365,3 +365,5 @@ module.exports.generateChromaprintFingerprint = generateChromaprintFingerprint
 module.exports.computeMixxxWaveform = computeMixxxWaveform
 module.exports.computeMixxxWaveformWithRate = computeMixxxWaveformWithRate
 module.exports.analyzeKeyFromPcm = analyzeKeyFromPcm
+module.exports.probeWindowsUsbWriteRoot = nativeBinding.probeWindowsUsbWriteRoot
+module.exports.isWindowsProcessRunning = nativeBinding.isWindowsProcessRunning

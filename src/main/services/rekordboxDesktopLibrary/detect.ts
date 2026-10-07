@@ -202,33 +202,15 @@ export async function requireRekordboxDesktopLibraryProbe() {
   return probe
 }
 
-export async function probeRekordboxDesktopLibraryWriteAvailability(
-  forceRefresh = true
-): Promise<RekordboxDesktopWriteAvailability> {
-  const probe = await probeRekordboxDesktopLibrary(forceRefresh)
-  if (!probe.available) {
-    return normalizeWriteAvailability(probe.writeStatus, {
-      writable: false,
-      status: 'unavailable',
-      errorCode: probe.errorCode,
-      errorMessage: probe.errorMessage
-    })
-  }
-
+export async function probeRekordboxDesktopLibraryWriteAvailability(): Promise<RekordboxDesktopWriteAvailability> {
   try {
+    // The helper resolves the current config and process on every request. A write check
+    // does not need to decrypt master.db and count the entire collection first.
     const payload = await runRekordboxDesktopHelper<
       RekordboxDesktopHelperWriteAvailabilityPayload,
-      {
-        dbPath: string
-        dbDir: string
-        shareDir: string
-      }
-    >('probe-write', {
-      dbPath: probe.dbPath,
-      dbDir: probe.dbDir,
-      shareDir: probe.shareDir
-    })
-    return normalizeWriteAvailability(payload, probe.writeStatus)
+      Record<string, never>
+    >('probe-write', {})
+    return normalizeWriteAvailability(payload)
   } catch (error) {
     const code = toErrorCode((error as { code?: unknown } | null)?.code)
     const message =

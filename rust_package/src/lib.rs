@@ -57,6 +57,8 @@ mod pioneer_cues;
 mod pioneer_export;
 mod playlist_scan;
 mod qm_key;
+mod windows_device_probe;
+pub use crate::windows_device_probe::*;
 
 pub use crate::horizontal_browse_transport::*;
 pub use crate::playlist_scan::*;

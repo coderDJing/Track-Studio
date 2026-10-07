@@ -20,6 +20,7 @@ const props = defineProps({
     type: Boolean,
     default: true
   },
+  showDownbeatLine: { type: Boolean, default: true },
   bpmInputValue: {
     type: String,
     default: ''
@@ -390,6 +391,7 @@ onBeforeUnmount(() => {
         :disabled="controlsDisabled"
         :title="t('mixtape.gridAdjustSetDownbeatLineAtPlayhead')"
         :aria-label="t('mixtape.gridAdjustSetDownbeatLineAtPlayhead')"
+        v-if="props.showDownbeatLine"
         @click="emit('set-downbeat-line')"
       >
         <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">

@@ -1,0 +1,15 @@
+{
+  "pioneerUsb": {
+    "reorder": "Save playlist track order",
+    "selectionChanged": "The selection or playlist contents have changed. Select the tracks again and retry.",
+    "incompleteOrder": "Saving the order requires the complete playlist. Clear all filters and retry.",
+    "previewDevice": "Target USB drive: {path}",
+    "previewTracks": "{count} tracks will be deleted from the USB.",
+    "previewShared": "{count} shared files will be preserved.",
+    "deleteWarning": "Deletion changes the contents of this USB drive. Please confirm.",
+    "keepConnected": "Keep the USB connected until writing finishes. Close rekordbox and other apps accessing it.",
+    "failureTitle": "USB write failed",
+    "refreshFailureTitle": "USB refresh failed",
+    "refreshFailed": "Writing completed, but reloading the USB failed. Reopen the USB to check the result."
+  }
+}

@@ -1,5 +1,6 @@
 import type { ISongHotCue } from '../types/globals'
 import { resolveNearestUnifiedSongBeatGridLine } from './songBeatGridRuntime'
+import { normalizePioneerUsbLoopBeatFields } from './pioneerUsbLoopBeats'
 
 export const HOT_CUE_SLOT_COUNT = 8
 const HOT_CUE_SLOT_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const
@@ -81,6 +82,8 @@ const buildNormalizedSongHotCue = (value: unknown, durationSec?: number): ISongH
     color?: unknown
     isLoop?: unknown
     loopEndSec?: unknown
+    loopNumerator?: unknown
+    loopDenominator?: unknown
     source?: unknown
   }
   const slot = normalizeSongHotCueSlot(item.slot)
@@ -99,6 +102,7 @@ const buildNormalizedSongHotCue = (value: unknown, durationSec?: number): ISongH
     color: normalizeCueColor(item.color),
     isLoop,
     loopEndSec: isLoop ? (loopEndSec ?? undefined) : undefined,
+    ...normalizePioneerUsbLoopBeatFields(item, isLoop),
     source: normalizeCueSource(item.source)
   }
 }
@@ -180,6 +184,15 @@ export const upsertSongHotCueDefinition = (
     color: normalizeCueColor(input?.color) ?? existing?.color,
     isLoop,
     loopEndSec: isLoop ? (normalizedLoopEndSec ?? undefined) : undefined,
+    ...normalizePioneerUsbLoopBeatFields(
+      input.loopNumerator === undefined &&
+        input.loopDenominator === undefined &&
+        existing?.sec === normalizedSec &&
+        existing?.loopEndSec === normalizedLoopEndSec
+        ? existing
+        : input,
+      isLoop
+    ),
     source: normalizeCueSource(input?.source) ?? existing?.source
   }
   if (nextIndex >= 0) {
@@ -208,6 +221,8 @@ export const areSongHotCuesEqual = (left: unknown, right: unknown, durationSec?:
       Math.abs(next.sec - item.sec) <= HOT_CUE_EPSILON_SEC &&
       Math.abs((next.loopEndSec || 0) - (item.loopEndSec || 0)) <= HOT_CUE_EPSILON_SEC &&
       Boolean(next.isLoop) === Boolean(item.isLoop) &&
+      next.loopNumerator === item.loopNumerator &&
+      next.loopDenominator === item.loopDenominator &&
       (next.label || '') === (item.label || '') &&
       (next.comment || '') === (item.comment || '') &&
       (next.color || '') === (item.color || '') &&

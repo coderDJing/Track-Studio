@@ -1,4 +1,5 @@
 import type { ISongMemoryCue } from '../types/globals'
+import { normalizePioneerUsbLoopBeatFields } from './pioneerUsbLoopBeats'
 
 const REKORDBOX_DEFAULT_MEMORY_CUE_COLOR = '#df4d4d'
 
@@ -43,6 +44,9 @@ const buildNormalizedSongMemoryCue = (
     color?: unknown
     isLoop?: unknown
     loopEndSec?: unknown
+    loopNumerator?: unknown
+    loopDenominator?: unknown
+    activeLoop?: unknown
     source?: unknown
   }
   const sec = normalizeSongMemoryCueSec(item.sec, durationSec)
@@ -59,6 +63,8 @@ const buildNormalizedSongMemoryCue = (
     color: normalizeCueText(item.color),
     isLoop,
     loopEndSec: isLoop ? (loopEndSec ?? undefined) : undefined,
+    ...normalizePioneerUsbLoopBeatFields(item, isLoop),
+    activeLoop: typeof item.activeLoop === 'boolean' ? isLoop && item.activeLoop : undefined,
     source: normalizeCueText(item.source)
   }
 }
@@ -128,9 +134,19 @@ export const upsertSongMemoryCueDefinition = (
     color: normalizeCueText(input?.color),
     isLoop,
     loopEndSec: isLoop ? (normalizedLoopEndSec ?? undefined) : undefined,
+    ...normalizePioneerUsbLoopBeatFields(input, isLoop),
+    activeLoop: typeof input.activeLoop === 'boolean' ? isLoop && input.activeLoop : undefined,
     source: normalizeCueText(input?.source)
   }
-  if (next.some((item) => isSameMemoryCueIdentity(item, nextCue))) {
+  const matchingIndex = next.findIndex((item) => isSameMemoryCueIdentity(item, nextCue))
+  if (matchingIndex >= 0) {
+    const previous = next[matchingIndex]
+    if (nextCue.activeLoop !== undefined || nextCue.loopNumerator !== undefined)
+      next[matchingIndex] = {
+        ...previous,
+        ...(nextCue.activeLoop === undefined ? {} : { activeLoop: nextCue.activeLoop }),
+        ...normalizePioneerUsbLoopBeatFields(nextCue, isLoop)
+      }
     return next
   }
   next.push(nextCue)
@@ -156,6 +172,9 @@ export const areSongMemoryCuesEqual = (left: unknown, right: unknown, durationSe
       Math.abs(next.sec - item.sec) <= MEMORY_CUE_EPSILON_SEC &&
       Math.abs((next.loopEndSec || 0) - (item.loopEndSec || 0)) <= MEMORY_CUE_EPSILON_SEC &&
       Boolean(next.isLoop) === Boolean(item.isLoop) &&
+      next.activeLoop === item.activeLoop &&
+      next.loopNumerator === item.loopNumerator &&
+      next.loopDenominator === item.loopDenominator &&
       Number(next.order ?? -1) === Number(item.order ?? -1) &&
       (next.comment || '') === (item.comment || '') &&
       (next.color || '') === (item.color || '') &&

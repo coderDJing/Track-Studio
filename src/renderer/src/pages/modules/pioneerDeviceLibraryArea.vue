@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePioneerUsbPlaylistDrop } from '@renderer/composables/rekordboxDesktop/usePioneerUsbPlaylistDrop'
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { useRuntimeStore } from '@renderer/stores/runtime'
@@ -15,6 +16,7 @@ import {
   setCachedRekordboxSourceTree
 } from '@renderer/utils/rekordboxLibraryCache'
 import { t } from '@renderer/utils/translate'
+import { usePioneerUsbPlaylistDelete } from '@renderer/composables/rekordboxDesktop/usePioneerUsbPlaylistDelete'
 import emitter from '@renderer/utils/mitt'
 import { buildRekordboxSourceChannel } from '@shared/rekordboxSources'
 import { copyPioneerNodeToLibrary } from '@renderer/composables/rekordboxDesktop/usePioneerCopyToLibrary'
@@ -558,6 +560,20 @@ const toggleFolder = (node: IPioneerPlaylistTreeNode) => {
   else next.add(node.id)
   expandedFolderIds.value = next
 }
+const usbPlaylistDrop = usePioneerUsbPlaylistDrop({
+  runtime,
+  enabled: computed(
+    () => runtime.pioneerDeviceLibrary.selectedSourceKind === 'usb' && !isExternalSource.value
+  ),
+  rootPath: computed(() => runtime.pioneerDeviceLibrary.selectedSourceRootPath || ''),
+  libraryType: computed(() => runtime.pioneerDeviceLibrary.selectedLibraryType || '')
+})
+const handlePlaylistDragOver = (event: DragEvent, node: IPioneerPlaylistTreeNode) => {
+  if (!usbPlaylistDrop.dragOver(event, node)) handleDragOverNode(event, node)
+}
+const handlePlaylistDrop = async (event: DragEvent, node: IPioneerPlaylistTreeNode) => {
+  if (!(await usbPlaylistDrop.drop(event, node))) await handleDropNode(event, node)
+}
 
 const selectPlaylist = (node: IPioneerPlaylistTreeNode) => {
   if (shouldSuppressClick()) return
@@ -689,18 +705,26 @@ const calculateSetDuration = async (node: IPioneerPlaylistTreeNode) => {
   })
 }
 
+const usbPlaylistDelete = usePioneerUsbPlaylistDelete(runtime, () => isExternalSource.value)
+
 const handleCopyOnlyContextMenu = async (event: MouseEvent, node: IPioneerPlaylistTreeNode) => {
+  const deleteRequest = usbPlaylistDelete.createRequest(node)
   const result = await rightClickMenu({
     menuArr: [
       [{ menuName: 'pioneer.copyToFilter' }, { menuName: 'pioneer.copyToCurated' }],
       [{ menuName: 'pioneer.importArtistsToCurated' }],
       [{ menuName: 'similarTracks.menu' }],
       ...(node.isFolder ? [] : [[{ menuName: 'playlist.calculateSetDuration' }]]),
-      ...(node.isFolder ? [] : [[{ menuName: 'library.addToMixtapeByCopy' }]])
+      ...(node.isFolder ? [] : [[{ menuName: 'library.addToMixtapeByCopy' }]]),
+      ...(deleteRequest ? [[{ menuName: 'common.delete' }]] : [])
     ],
     clickEvent: event
   })
   if (result === 'cancel') return
+  if (result.menuName === 'common.delete') {
+    await usbPlaylistDelete.open(deleteRequest, node.id)
+    return
+  }
   if (result.menuName === 'pioneer.copyToFilter') {
     await copyPlaylistToLibrary(node, 'FilterLibrary')
     return
@@ -846,6 +870,7 @@ const { cleanMissingFilesFromPlaylist } = useCleanMissingFiles({
 })
 
 const lastTreeSignature = ref('')
+const lastExpandedSourceKey = ref('')
 const buildTreeSignature = (nodes: IPioneerPlaylistTreeNode[]) =>
   nodes.map((node) => `${node.id}:${node.order}:${node.children?.length || 0}`).join('|')
 
@@ -864,10 +889,26 @@ const hasPlaylistInTree = (nodes: IPioneerPlaylistTreeNode[], playlistId: number
 }
 
 const syncExpandedWhenTreeChanges = () => {
-  const signature = buildTreeSignature(originalTreeNodes.value)
+  const sourceKey = `${runtime.pioneerDeviceLibrary.selectedSourceKey}:${runtime.pioneerDeviceLibrary.selectedLibraryType}`
+  const signature = `${sourceKey}::${buildTreeSignature(originalTreeNodes.value)}`
   if (signature === lastTreeSignature.value) return
   lastTreeSignature.value = signature
-  expandedFolderIds.value = new Set()
+  if (sourceKey !== lastExpandedSourceKey.value) {
+    expandedFolderIds.value = new Set()
+    lastExpandedSourceKey.value = sourceKey
+  } else {
+    const folderIds = new Set<number>()
+    const collect = (items: IPioneerPlaylistTreeNode[]) => {
+      for (const node of items) {
+        if (node.isFolder) folderIds.add(node.id)
+        if (node.children) collect(node.children)
+      }
+    }
+    collect(originalTreeNodes.value)
+    expandedFolderIds.value = new Set(
+      [...expandedFolderIds.value].filter((id) => folderIds.has(id))
+    )
+  }
   const currentSelectedPlaylistId = Number(runtime.pioneerDeviceLibrary.selectedPlaylistId) || 0
   if (
     currentSelectedPlaylistId > 0 &&
@@ -984,23 +1025,39 @@ watch(
               :depth="0"
               :expanded-ids="expandedFolderIds"
               :filter-text="playlistSearch"
-              :interaction-disabled="dialogWriting"
+              :interaction-disabled="dialogWriting || usbPlaylistDrop.pending.value"
               :draggable-nodes="isEditableSource && !normalizeKeyword(playlistSearch)"
               :contextmenu-enabled="
-                isEditableSource && !localLibraryCopying && !normalizeKeyword(playlistSearch)
+                (isEditableSource || isCopyableSource) &&
+                !localLibraryCopying &&
+                !normalizeKeyword(playlistSearch)
               "
-              :drag-target-node-id="dragTarget?.nodeId || undefined"
-              :drag-target-approach="dragTarget?.approach || ''"
+              :drag-target-node-id="
+                usbPlaylistDrop.targetId.value || dragTarget?.nodeId || undefined
+              "
+              :drag-target-approach="
+                usbPlaylistDrop.targetId.value ? 'center' : dragTarget?.approach || ''
+              "
               :drag-source-id="dragSourceId || undefined"
               @toggle-folder="toggleFolder"
               @select-playlist="selectPlaylist"
               @contextmenu-node="handleNodeContextmenu"
               @dragstart-node="handleDragStartNode"
-              @dragover-node="handleDragOverNode"
-              @dragenter-node="handleDragEnterNode"
-              @dragleave-node="handleDragLeaveNode"
-              @drop-node="handleDropNode"
-              @dragend-node="handleDragEndNode"
+              @dragover-node="handlePlaylistDragOver"
+              @dragenter-node="handlePlaylistDragOver"
+              @dragleave-node="
+                (event, node) => {
+                  usbPlaylistDrop.targetId.value = null
+                  handleDragLeaveNode(event, node)
+                }
+              "
+              @drop-node="handlePlaylistDrop"
+              @dragend-node="
+                () => {
+                  usbPlaylistDrop.targetId.value = null
+                  handleDragEndNode()
+                }
+              "
             />
           </template>
 

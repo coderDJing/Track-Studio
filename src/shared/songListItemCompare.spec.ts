@@ -33,6 +33,15 @@ const comparator = createSongListItemComparator({
 })
 
 describe('song list item comparator', () => {
+  it('updates the row when its USB write identity changes', () => {
+    const left = createSong()
+    const right = {
+      ...left,
+      pioneerUsbSource: { rootPath: 'D:\\', libraryType: 'oneLibrary' as const, trackId: 7 }
+    }
+    expect(comparator.isEquivalentSongInfo(left, right)).toBe(false)
+    expect(comparator.getSongInfoDiffFields(left, right)).toContain('pioneerUsbSource')
+  })
   it('detects analysis and playback fields that change row behavior', () => {
     const left = createSong()
     const right = {

@@ -3,6 +3,11 @@
   position: relative;
 }
 
+:global(html.internal-song-mouse-drag),
+:global(html.internal-song-mouse-drag *) {
+  cursor: grabbing !important;
+}
+
 .song-row-item.drag-over-before::before,
 .song-row-item.drag-over-after::after {
   content: '';

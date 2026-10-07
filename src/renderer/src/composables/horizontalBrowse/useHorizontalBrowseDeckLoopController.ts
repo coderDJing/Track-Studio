@@ -23,7 +23,7 @@ export type HorizontalBrowseLoopRange = {
 
 type HorizontalBrowseStoredCueDefinition = Pick<
   ISongMemoryCue,
-  'sec' | 'isLoop' | 'loopEndSec' | 'source'
+  'sec' | 'isLoop' | 'loopEndSec' | 'source' | 'loopNumerator' | 'loopDenominator'
 >
 
 type ToggleDeckLoopStateResult = {
@@ -306,7 +306,9 @@ export const useHorizontalBrowseDeckLoopController = (
       return {
         sec: loopRange.startSec,
         isLoop: true,
-        loopEndSec: loopRange.endSec
+        loopEndSec: loopRange.endSec,
+        loopNumerator: loopRange.beatValue >= 1 ? loopRange.beatValue : 1,
+        loopDenominator: loopRange.beatValue >= 1 ? 1 : 1 / loopRange.beatValue
       }
     }
     return {

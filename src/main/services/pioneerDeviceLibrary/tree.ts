@@ -1,5 +1,5 @@
-import path from 'node:path'
-import { normalizePioneerCueDump } from './cues'
+import { enrichPioneerTracksWithCueData, normalizePioneerCueDump } from './cues'
+import { resolvePioneerDevicePath } from './devicePath'
 import { reconcileDeviceLibraryPlaylistTracks } from './deviceLibraryTrackReconciliation'
 import { applyMissingFileFlags, markMissingFiles } from '../fileExistenceCheck'
 import { probePioneerDeviceLibraryRoot } from './deviceDetection'
@@ -324,27 +324,6 @@ const deriveFileFormat = (fileName: string, filePath: string) => {
   return ext.trim().toUpperCase()
 }
 
-const isTrueAbsolutePath = (value: string) => {
-  const normalized = String(value || '').trim()
-  if (!normalized) return false
-  if (process.platform === 'win32') {
-    return /^[a-zA-Z]:[\\/]/.test(normalized) || /^\\\\[^\\]/.test(normalized)
-  }
-  return normalized.startsWith('/')
-}
-
-const resolvePioneerDevicePath = (rootPath: string, devicePath: string) => {
-  const normalizedRoot = String(rootPath || '').trim()
-  const normalizedDevicePath = String(devicePath || '').trim()
-  if (!normalizedDevicePath) return ''
-  if (isTrueAbsolutePath(normalizedDevicePath)) {
-    return path.normalize(normalizedDevicePath)
-  }
-  if (!normalizedRoot) return ''
-  const sanitized = normalizedDevicePath.replace(/^[/\\]+/, '')
-  return path.join(normalizedRoot, sanitized)
-}
-
 const normalizePioneerBeatGridEntries = (value: RustPioneerBeatGridEntry[] | undefined) => {
   if (!Array.isArray(value) || value.length === 0) return []
   const entries = value
@@ -463,11 +442,20 @@ export async function attachPioneerAnlzRuntime(
 export async function attachPioneerPlaylistRuntime(
   rootPath: string,
   tracks: IPioneerPlaylistTrack[],
-  options?: { includeCues?: boolean }
+  options?: { includeCues?: boolean; requireCues?: boolean }
 ): Promise<IPioneerPlaylistTrack[]> {
   if (!tracks.length) return tracks
-  await markMissingFiles(tracks)
-  const tracksWithRuntime = await attachPioneerAnlzRuntime(rootPath, tracks, options)
+  const existencePromise = markMissingFiles(tracks)
+  const cueTracks =
+    options?.requireCues === true
+      ? await enrichPioneerTracksWithCueData(rootPath, tracks, { requireCues: true })
+      : tracks
+  const tracksWithRuntime = await attachPioneerAnlzRuntime(
+    rootPath,
+    cueTracks,
+    options?.requireCues === true ? { includeCues: false } : options
+  )
+  await existencePromise
   return applyMissingFileFlags(tracksWithRuntime, tracks)
 }
 

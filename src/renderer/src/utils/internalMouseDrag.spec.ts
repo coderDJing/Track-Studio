@@ -1,0 +1,162 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createInternalMouseDrag } from './internalMouseDrag'
+
+class TestElement extends EventTarget {
+  isConnected = true
+  interactive = false
+  closest() {
+    return this.interactive ? this : null
+  }
+}
+class TestTransfer {
+  get dropEffect() {
+    return 'none'
+  }
+  set dropEffect(effect: string) {
+    void effect
+  }
+  get effectAllowed() {
+    return 'none'
+  }
+  set effectAllowed(effect: string) {
+    void effect
+  }
+}
+class TestMouseEvent extends Event {
+  clientX: number
+  clientY: number
+  screenX = 0
+  screenY = 0
+  button = 0
+  buttons: number
+  constructor(type: string, x: number, y: number, buttons = 1) {
+    super(type, { cancelable: true })
+    this.clientX = x
+    this.clientY = y
+    this.buttons = buttons
+  }
+}
+class TestDragEvent extends TestMouseEvent {
+  dataTransfer: TestTransfer
+  constructor(type: string, init: DragEventInit) {
+    super(type, init.clientX || 0, init.clientY || 0, init.buttons)
+    this.dataTransfer = init.dataTransfer as unknown as TestTransfer
+  }
+}
+
+let windowTarget: EventTarget
+let documentTarget: EventTarget
+let target: TestElement | null
+let source: TestElement
+let controller: ReturnType<typeof createInternalMouseDrag>
+let events: string[]
+
+const send = (type: string, x: number, y: number, buttons = 1) =>
+  windowTarget.dispatchEvent(new TestMouseEvent(type, x, y, buttons))
+const start = () =>
+  controller.start(
+    new TestMouseEvent('mousedown', 10, 10) as unknown as MouseEvent,
+    source as unknown as HTMLElement
+  )
+const acceptingTarget = (effect = 'copy') => {
+  const element = new TestElement()
+  element.addEventListener('dragover', (event) => {
+    event.preventDefault()
+    ;(event as TestDragEvent).dataTransfer.dropEffect = effect
+  })
+  element.addEventListener('drop', (event) => {
+    events.push(`drop:${(event as TestDragEvent).clientX}`)
+  })
+  return element
+}
+
+beforeEach(() => {
+  windowTarget = new EventTarget()
+  documentTarget = new EventTarget()
+  Object.assign(documentTarget, {
+    hidden: false,
+    elementFromPoint: () => target,
+    documentElement: { classList: { add: vi.fn(), remove: vi.fn() } }
+  })
+  vi.stubGlobal('window', windowTarget)
+  vi.stubGlobal('document', documentTarget)
+  vi.stubGlobal('Element', TestElement)
+  vi.stubGlobal('DataTransfer', TestTransfer)
+  vi.stubGlobal('DragEvent', TestDragEvent)
+  vi.stubGlobal(
+    'requestAnimationFrame',
+    vi.fn(() => 1)
+  )
+  vi.stubGlobal('cancelAnimationFrame', vi.fn())
+  events = []
+  source = new TestElement()
+  source.addEventListener('dragstart', () => events.push('start'))
+  source.addEventListener('dragend', () => events.push('end'))
+  target = acceptingTarget()
+  controller = createInternalMouseDrag()
+})
+afterEach(() => {
+  controller.dispose()
+  vi.unstubAllGlobals()
+})
+
+describe('internal mouse drag release', () => {
+  it('delivers a fast gesture even when release is the only changed coordinate', () => {
+    start()
+    send('mouseup', 100, 80, 0)
+    expect(events).toEqual(['start', 'drop:100', 'end'])
+  })
+  it('rechecks the release target rather than dropping into the last hover target', () => {
+    start()
+    send('mousemove', 40, 40)
+    target = new TestElement()
+    send('mouseup', 100, 80, 0)
+    expect(events).toEqual(['start', 'end'])
+  })
+  it('does not accept preventDefault without an allowed drop effect', () => {
+    target = acceptingTarget('none')
+    start()
+    send('mouseup', 100, 80, 0)
+    expect(events).toEqual(['start', 'end'])
+  })
+  it('preserves an ordinary click below the drag threshold', () => {
+    start()
+    send('mouseup', 12, 11, 0)
+    expect(events).toEqual([])
+  })
+  it('keeps hover events flowing for edge scrolling and cancels the frame on release', () => {
+    const over = vi.fn()
+    target?.addEventListener('dragover', over)
+    start()
+    send('mousemove', 40, 40)
+    vi.mocked(requestAnimationFrame).mock.calls[0][0](0)
+    expect(over).toHaveBeenCalledTimes(2)
+    send('mouseup', 100, 80, 0)
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(1)
+  })
+  it.each(['blur', 'escape', 'unmount', 'lost-button', 'detached-source'])(
+    'cancels %s without writing a drop and releases its listeners',
+    (reason) => {
+      start()
+      send('mousemove', 40, 40)
+      if (reason === 'blur') windowTarget.dispatchEvent(new Event('blur'))
+      if (reason === 'escape') {
+        const event = new Event('keydown', { cancelable: true })
+        Object.assign(event, { key: 'Escape' })
+        windowTarget.dispatchEvent(event)
+      }
+      if (reason === 'unmount') controller.dispose()
+      if (reason === 'lost-button') send('mousemove', 50, 50, 0)
+      if (reason === 'detached-source') source.isConnected = false
+      send('mouseup', 100, 80, 0)
+      expect(events).toEqual(['start', 'end'])
+    }
+  )
+  it('suppresses the click generated by releasing a drag on a playlist', () => {
+    start()
+    send('mouseup', 100, 80, 0)
+    const click = new TestMouseEvent('click', 100, 80, 0)
+    windowTarget.dispatchEvent(click)
+    expect(click.defaultPrevented).toBe(true)
+  })
+})

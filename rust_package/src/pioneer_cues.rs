@@ -14,6 +14,8 @@ pub struct PioneerHotCueRecord {
   pub time_sec: f64,
   pub is_loop: bool,
   pub loop_time_sec: Option<f64>,
+  pub loop_numerator: Option<u32>,
+  pub loop_denominator: Option<u32>,
   pub comment: Option<String>,
   pub color_index: Option<u32>,
   pub color_name: Option<String>,
@@ -27,6 +29,9 @@ pub struct PioneerMemoryCueRecord {
   pub time_sec: f64,
   pub is_loop: bool,
   pub loop_time_sec: Option<f64>,
+  pub loop_numerator: Option<u32>,
+  pub loop_denominator: Option<u32>,
+  pub active_loop: Option<bool>,
   pub order: u32,
   pub comment: Option<String>,
   pub color_index: Option<u32>,
@@ -56,6 +61,7 @@ struct ScoredMemoryCue {
   score: u32,
   time_ms: u32,
   loop_time_ms: Option<u32>,
+  active_state_score: Option<u32>,
 }
 
 const REKORDBOX_DEFAULT_HOT_CUE_HEX: &str = "#30d26e";
@@ -202,11 +208,10 @@ fn seconds_from_millis(value: u32) -> f64 {
 }
 
 fn normalize_comment(value: &str) -> Option<String> {
-  let trimmed = value.trim();
-  if trimmed.is_empty() {
+  if value.is_empty() {
     None
   } else {
-    Some(trimmed.to_string())
+    Some(value.to_string())
   }
 }
 
@@ -295,14 +300,51 @@ fn hot_cue_color_triplet(
   } else {
     Some(u32::from(color_index))
   };
-  let resolved_hex = if usize::from(color_index) < REKORDBOX_HOT_CUE_COLORS.len() {
-    Some(REKORDBOX_HOT_CUE_COLORS[usize::from(color_index)].to_string())
-  } else if rgb != (0, 0, 0) {
+  let resolved_hex = if rgb != (0, 0, 0) {
     Some(format!("#{:02x}{:02x}{:02x}", rgb.0, rgb.1, rgb.2))
+  } else if usize::from(color_index) < REKORDBOX_HOT_CUE_COLORS.len() {
+    Some(REKORDBOX_HOT_CUE_COLORS[usize::from(color_index)].to_string())
   } else {
     Some(REKORDBOX_DEFAULT_HOT_CUE_HEX.to_string())
   };
   (resolved_index, resolved_hex.clone(), resolved_hex)
+}
+
+fn extended_cue_style(content: &[u8]) -> Result<(Option<String>, u8, (u8, u8, u8)), String> {
+  // Native older PCP2 entries can be 40/44 bytes, ending before an RGB block.
+  // Their fixed payload is 24 bytes after the sixteen-byte entry header.
+  if content.len() < 24 || (content.len() > 24 && content.len() < 28) {
+    return Err("extended cue fixed payload is truncated".to_string());
+  }
+  if content.len() == 24 {
+    return Ok((None, 0, (0, 0, 0)));
+  }
+  let len_comment = pioneer_anlz_raw::read_be_u32(&content[24..28])? as usize;
+  if len_comment % 2 != 0 || len_comment > content.len() - 28 {
+    return Err("extended cue comment is truncated or has invalid UTF16 length".to_string());
+  }
+  let comment_end = 28 + len_comment;
+  let comment = decode_utf16be_string(&content[28..comment_end]);
+  let suffix = &content[comment_end..];
+  if suffix.is_empty() {
+    return Ok((comment, 0, (0, 0, 0)));
+  }
+  if suffix.len() < 4 {
+    return Err("extended cue RGB payload is truncated".to_string());
+  }
+  Ok((comment, suffix[0], (suffix[1], suffix[2], suffix[3])))
+}
+
+fn extended_loop_beats(content: &[u8], is_loop: bool) -> (Option<u32>, Option<u32>) {
+  if !is_loop {
+    return (None, None);
+  }
+  // PCP2 offsets 36/38 are BE u16 beat counts, including native 0/0 manual loops.
+  // The parser has already checked its fixed 24-byte content before calling this.
+  (
+    Some(u32::from(u16::from_be_bytes([content[20], content[21]]))),
+    Some(u32::from(u16::from_be_bytes([content[22], content[23]]))),
+  )
 }
 
 fn score_hot_cue(record: &PioneerHotCueRecord, base_priority: u32, extended: bool) -> u32 {
@@ -361,15 +403,41 @@ fn merge_hot_cue(
 
 fn merge_memory_cue(
   target: &mut HashMap<String, ScoredMemoryCue>,
-  candidate: PioneerMemoryCueRecord,
+  mut candidate: PioneerMemoryCueRecord,
   time_ms: u32,
   loop_time_ms: Option<u32>,
   score: u32,
 ) {
   let key = format!("{time_ms}:{}", loop_time_ms.unwrap_or(0));
-  match target.get(&key) {
-    Some(existing) if existing.score >= score => {}
+  let active_state_score = candidate.active_loop.map(|_| score);
+  match target.get_mut(&key) {
+    Some(existing) if existing.score >= score => {
+      // PCP2 has comments/colors but no active-loop status. A later PCPT record
+      // must still enrich that selected extended record with its native status.
+      if candidate.active_loop.is_some()
+        && existing
+          .active_state_score
+          .map_or(true, |priority| score > priority)
+      {
+        existing.record.active_loop = candidate.active_loop;
+        existing.active_state_score = active_state_score;
+      }
+    }
     _ => {
+      let retained_state_score = target
+        .get(&key)
+        .and_then(|existing| existing.active_state_score);
+      if let Some(existing) = target.get(&key) {
+        if candidate.active_loop.is_none()
+          || retained_state_score.is_some_and(|priority| priority >= score)
+        {
+          candidate.active_loop = existing.record.active_loop;
+        }
+      }
+      let chosen_state_score = match (active_state_score, retained_state_score) {
+        (Some(left), Some(right)) => Some(left.max(right)),
+        (left, right) => left.or(right),
+      };
       target.insert(
         key,
         ScoredMemoryCue {
@@ -377,6 +445,7 @@ fn merge_memory_cue(
           score,
           time_ms,
           loop_time_ms,
+          active_state_score: chosen_state_score,
         },
       );
     }
@@ -429,6 +498,8 @@ fn parse_cues_from_file(
             time_sec: seconds_from_millis(time_ms),
             is_loop: loop_time_ms.is_some(),
             loop_time_sec: loop_time_ms.map(seconds_from_millis),
+            loop_numerator: None,
+            loop_denominator: None,
             comment: None,
             color_index: None,
             color_name: None,
@@ -442,6 +513,12 @@ fn parse_cues_from_file(
             time_sec: seconds_from_millis(time_ms),
             is_loop: loop_time_ms.is_some(),
             loop_time_sec: loop_time_ms.map(seconds_from_millis),
+            loop_numerator: None,
+            loop_denominator: None,
+            active_loop: Some(
+              loop_time_ms.is_some()
+                && pioneer_anlz_raw::read_be_u32(&cue_section.header_data[4..8])? == 4,
+            ),
             order: u32::try_from(index).unwrap_or(u32::MAX),
             comment: None,
             color_index: None,
@@ -467,7 +544,7 @@ fn parse_cues_from_file(
         if !pioneer_anlz_raw::section_kind_eq(cue_section, b"PCP2") {
           continue;
         }
-        if cue_section.header_data.len() < 4 || cue_section.content.len() < 32 {
+        if cue_section.header_data.len() < 4 || cue_section.content.len() < 24 {
           continue;
         }
         let hot_cue = pioneer_anlz_raw::read_be_u32(&cue_section.header_data[0..4])?;
@@ -479,20 +556,10 @@ fn parse_cues_from_file(
         } else {
           None
         };
-        let len_comment = pioneer_anlz_raw::read_be_u32(&cue_section.content[24..28])? as usize;
-        let comment_start = 28usize;
-        let comment_end = comment_start.saturating_add(len_comment);
-        if cue_section.content.len() < comment_end + 4 {
-          continue;
-        }
-        let comment = decode_utf16be_string(&cue_section.content[comment_start..comment_end]);
-        let hot_color_index_offset = comment_end;
-        let hot_cue_color_index = cue_section.content[hot_color_index_offset];
-        let hot_cue_color_rgb = (
-          cue_section.content[hot_color_index_offset + 1],
-          cue_section.content[hot_color_index_offset + 2],
-          cue_section.content[hot_color_index_offset + 3],
-        );
+        let (comment, hot_cue_color_index, hot_cue_color_rgb) =
+          extended_cue_style(&cue_section.content)?;
+        let (loop_numerator, loop_denominator) =
+          extended_loop_beats(&cue_section.content, loop_time_ms.is_some());
         if list_type == 1 {
           if hot_cue == 0 {
             continue;
@@ -506,6 +573,8 @@ fn parse_cues_from_file(
             time_sec: seconds_from_millis(time_ms),
             is_loop: loop_time_ms.is_some(),
             loop_time_sec: loop_time_ms.map(seconds_from_millis),
+            loop_numerator,
+            loop_denominator,
             comment,
             color_index,
             color_name,
@@ -531,6 +600,9 @@ fn parse_cues_from_file(
             time_sec: seconds_from_millis(time_ms),
             is_loop: loop_time_ms.is_some(),
             loop_time_sec: loop_time_ms.map(seconds_from_millis),
+            loop_numerator,
+            loop_denominator,
+            active_loop: None,
             order: u32::try_from(index).unwrap_or(u32::MAX),
             comment,
             color_index,
@@ -620,5 +692,297 @@ pub fn read_pioneer_cues(analyze_file_path: String) -> PioneerCueDump {
       .map(|entry| entry.record)
       .collect(),
     error: None,
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn preserves_cue_comment_whitespace_for_editing() {
+    assert_eq!(
+      normalize_comment("  Native comment  ").as_deref(),
+      Some("  Native comment  ")
+    );
+    assert_eq!(normalize_comment("  ").as_deref(), Some("  "));
+    assert_eq!(normalize_comment(""), None);
+    let encoded: Vec<u8> = "  中文  \0"
+      .encode_utf16()
+      .flat_map(u16::to_be_bytes)
+      .collect();
+    assert_eq!(decode_utf16be_string(&encoded).as_deref(), Some("  中文  "));
+  }
+
+  #[test]
+  fn reads_native_rgb_before_palette_and_retains_zero_rgb_display_color() {
+    let (index, _, color) = hot_cue_color_triplet(21, (0, 255, 0));
+    assert_eq!(index, Some(21));
+    assert_eq!(color.as_deref(), Some("#00ff00"));
+    assert_eq!(
+      hot_cue_color_triplet(21, (0, 0, 0)).2.as_deref(),
+      Some("#3ceb50")
+    );
+    assert_eq!(
+      hot_cue_color_triplet(0, (0, 0, 0)).2.as_deref(),
+      Some(REKORDBOX_DEFAULT_HOT_CUE_HEX)
+    );
+  }
+
+  #[test]
+  fn accepts_compact_extended_entries_and_rejects_partial_optional_fields() {
+    for length in [24, 28] {
+      assert_eq!(
+        extended_cue_style(&vec![0u8; length]).unwrap(),
+        (None, 0, (0, 0, 0))
+      );
+    }
+    for length in [23, 25, 26, 27, 29, 30, 31] {
+      assert!(extended_cue_style(&vec![0u8; length]).is_err());
+    }
+    let mut comment_only = vec![0u8; 28];
+    comment_only[24..28].copy_from_slice(&4u32.to_be_bytes());
+    comment_only.extend("中\0".encode_utf16().flat_map(u16::to_be_bytes));
+    assert_eq!(
+      extended_cue_style(&comment_only).unwrap(),
+      (Some("中".to_string()), 0, (0, 0, 0))
+    );
+    comment_only[24..28].copy_from_slice(&3u32.to_be_bytes());
+    assert!(extended_cue_style(&comment_only).is_err());
+  }
+
+  #[test]
+  fn compact_extended_cues_are_not_dropped_by_the_file_reader() {
+    let entry = |hot_cue: u32, size: usize, start: u32, end: u32, memory_color: u8| {
+      let mut data = vec![0u8; size];
+      data[0..4].copy_from_slice(b"PCP2");
+      data[4..8].copy_from_slice(&16u32.to_be_bytes());
+      data[8..12].copy_from_slice(&(size as u32).to_be_bytes());
+      data[12..16].copy_from_slice(&hot_cue.to_be_bytes());
+      data[16] = if end > start && end != u32::MAX { 2 } else { 1 };
+      data[18..20].copy_from_slice(&1000u16.to_be_bytes());
+      data[20..24].copy_from_slice(&start.to_be_bytes());
+      data[24..28].copy_from_slice(&end.to_be_bytes());
+      data[28] = memory_color;
+      data[36..38].copy_from_slice(&8u16.to_be_bytes());
+      data[38..40].copy_from_slice(&1u16.to_be_bytes());
+      data
+    };
+    let list = |hot: u32, point: Vec<u8>| {
+      let mut data = vec![0u8; 20];
+      data[0..4].copy_from_slice(b"PCO2");
+      data[4..8].copy_from_slice(&20u32.to_be_bytes());
+      data[8..12].copy_from_slice(&((20 + point.len()) as u32).to_be_bytes());
+      data[12..16].copy_from_slice(&hot.to_be_bytes());
+      data[16..18].copy_from_slice(&1u16.to_be_bytes());
+      data.extend(point);
+      data
+    };
+    let memory_list = list(0, entry(0, 44, 1000, 2000, 2));
+    // Native point entries can retain a former loop's 8/1 fraction at offsets 36/38.
+    let memory_point_list = list(0, entry(0, 44, 236, u32::MAX, 0));
+    let hot_list = list(1, entry(1, 40, 3000, u32::MAX, 0));
+    let hot_loop_list = list(1, entry(2, 40, 30029, 33340, 0));
+    let mut document = vec![0u8; 12];
+    document[0..4].copy_from_slice(b"PMAI");
+    document[4..8].copy_from_slice(&12u32.to_be_bytes());
+    document[8..12].copy_from_slice(
+      &((12 + memory_list.len() + memory_point_list.len() + hot_list.len() + hot_loop_list.len())
+        as u32)
+        .to_be_bytes(),
+    );
+    document.extend(memory_list);
+    document.extend(memory_point_list);
+    document.extend(hot_list);
+    document.extend(hot_loop_list);
+    let temp_root = std::env::temp_dir();
+    let unique = std::time::SystemTime::now()
+      .duration_since(std::time::UNIX_EPOCH)
+      .unwrap()
+      .as_nanos();
+    let file = temp_root.join(format!(
+      "frkb-compact-cue-{}-{unique}.EXT",
+      std::process::id()
+    ));
+    assert!(file.starts_with(&temp_root));
+    std::fs::write(&file, document).unwrap();
+    let mut hot = HashMap::new();
+    let mut memory = HashMap::new();
+    let result = parse_cues_from_file(&file, &mut hot, &mut memory);
+    std::fs::remove_file(&file).unwrap();
+    assert!(result.unwrap());
+    assert_eq!(memory.len(), 2);
+    let memory_point = &memory["236:0"].record;
+    assert_eq!(memory_point.time_sec, 0.236);
+    assert!(!memory_point.is_loop);
+    assert_eq!(memory_point.loop_time_sec, None);
+    assert_eq!(memory_point.loop_numerator, None);
+    assert_eq!(memory_point.loop_denominator, None);
+    assert_eq!(memory["1000:2000"].record.loop_numerator, Some(8));
+    assert_eq!(memory["1000:2000"].record.loop_denominator, Some(1));
+    assert_eq!(memory["1000:2000"].record.color_index, Some(2));
+    assert_eq!(
+      memory["1000:2000"].record.color_hex.as_deref(),
+      Some("#ff4b57")
+    );
+    assert_eq!(hot.len(), 2);
+    assert_eq!(
+      hot[&0].record.color_hex.as_deref(),
+      Some(REKORDBOX_DEFAULT_HOT_CUE_HEX)
+    );
+    assert_eq!(hot[&0].record.time_sec, 3.0);
+    assert!(!hot[&0].record.is_loop);
+    assert_eq!(hot[&0].record.loop_time_sec, None);
+    assert_eq!(hot[&0].record.loop_numerator, None);
+    assert_eq!(hot[&0].record.loop_denominator, None);
+    assert_eq!(hot[&1].record.time_sec, 30.029);
+    assert_eq!(hot[&1].record.loop_time_sec, Some(33.34));
+    assert_eq!(hot[&1].record.loop_numerator, Some(8));
+    assert_eq!(hot[&1].record.loop_denominator, Some(1));
+    let extended = hot.remove(&1).unwrap();
+    for extended_first in [false, true] {
+      let mut records = HashMap::new();
+      let mut legacy = extended.record.clone();
+      legacy.loop_numerator = None;
+      legacy.loop_denominator = None;
+      let ordered = if extended_first {
+        [(extended.record.clone(), extended.score), (legacy, 200)]
+      } else {
+        [(legacy, 200), (extended.record.clone(), extended.score)]
+      };
+      for (record, score) in ordered {
+        merge_hot_cue(&mut records, record, score);
+      }
+      assert_eq!(records[&1].record.loop_numerator, Some(8));
+      assert_eq!(records[&1].record.loop_denominator, Some(1));
+    }
+  }
+
+  #[test]
+  fn extended_manual_loops_preserve_zero_fraction_and_points_omit_it() {
+    let mut content = vec![0u8; 24];
+    assert_eq!(extended_loop_beats(&content, true), (Some(0), Some(0)));
+    content[20..22].copy_from_slice(&8u16.to_be_bytes());
+    content[22..24].copy_from_slice(&1u16.to_be_bytes());
+    assert_eq!(extended_loop_beats(&content, true), (Some(8), Some(1)));
+    assert_eq!(extended_loop_beats(&content, false), (None, None));
+  }
+
+  fn memory_record(active_loop: Option<bool>, comment: Option<&str>) -> PioneerMemoryCueRecord {
+    PioneerMemoryCueRecord {
+      time_sec: 1.0,
+      is_loop: true,
+      loop_time_sec: Some(2.0),
+      loop_numerator: None,
+      loop_denominator: None,
+      active_loop,
+      order: 0,
+      comment: comment.map(str::to_string),
+      color_index: Some(2),
+      color_name: Some("Red".to_string()),
+      color_hex: Some("#ff0000".to_string()),
+      source: Some("rekordbox".to_string()),
+    }
+  }
+
+  #[test]
+  fn memory_active_status_survives_extended_metadata_in_both_parse_orders() {
+    for extended_first in [false, true] {
+      let mut records = HashMap::new();
+      let legacy = memory_record(Some(true), None);
+      let mut extended = memory_record(None, Some("Native comment"));
+      extended.loop_numerator = Some(8);
+      extended.loop_denominator = Some(1);
+      let ordered = if extended_first {
+        [(extended, 1200), (legacy, 200)]
+      } else {
+        [(legacy, 200), (extended, 1200)]
+      };
+      for (record, score) in ordered {
+        merge_memory_cue(&mut records, record, 1000, Some(2000), score);
+      }
+      let selected = &records["1000:2000"].record;
+      assert_eq!(selected.active_loop, Some(true));
+      assert_eq!(selected.comment.as_deref(), Some("Native comment"));
+      assert_eq!(selected.color_hex.as_deref(), Some("#ff0000"));
+      assert_eq!(selected.loop_numerator, Some(8));
+      assert_eq!(selected.loop_denominator, Some(1));
+    }
+  }
+
+  #[test]
+  fn active_status_uses_native_source_priority_independently_of_metadata_score() {
+    let mut records = HashMap::new();
+    merge_memory_cue(
+      &mut records,
+      memory_record(Some(false), None),
+      1000,
+      Some(2000),
+      200,
+    );
+    merge_memory_cue(
+      &mut records,
+      memory_record(None, Some("Extended")),
+      1000,
+      Some(2000),
+      1200,
+    );
+    merge_memory_cue(
+      &mut records,
+      memory_record(Some(true), None),
+      1000,
+      Some(2000),
+      100,
+    );
+    assert_eq!(records["1000:2000"].record.active_loop, Some(false));
+    assert_eq!(
+      records["1000:2000"].record.comment.as_deref(),
+      Some("Extended")
+    );
+  }
+
+  #[test]
+  fn legacy_pcpt_status_is_read_from_native_offset_16() {
+    let mut entry = vec![0u8; 56];
+    entry[0..4].copy_from_slice(b"PCPT");
+    entry[4..8].copy_from_slice(&28u32.to_be_bytes());
+    entry[8..12].copy_from_slice(&56u32.to_be_bytes());
+    entry[16..20].copy_from_slice(&4u32.to_be_bytes());
+    entry[20..24].copy_from_slice(&0x10000u32.to_be_bytes());
+    entry[24..28].fill(0xff);
+    entry[28] = 2;
+    entry[30..32].copy_from_slice(&1000u16.to_be_bytes());
+    entry[32..36].copy_from_slice(&1000u32.to_be_bytes());
+    entry[36..40].copy_from_slice(&2000u32.to_be_bytes());
+    let mut list = vec![0u8; 24];
+    list[0..4].copy_from_slice(b"PCOB");
+    list[4..8].copy_from_slice(&24u32.to_be_bytes());
+    list[8..12].copy_from_slice(&80u32.to_be_bytes());
+    list[18..20].copy_from_slice(&1u16.to_be_bytes());
+    list.extend(entry);
+    let mut document = vec![0u8; 12];
+    document[0..4].copy_from_slice(b"PMAI");
+    document[4..8].copy_from_slice(&12u32.to_be_bytes());
+    document[8..12].copy_from_slice(&92u32.to_be_bytes());
+    document.extend(list);
+    let temp_root = std::env::temp_dir();
+    let unique = std::time::SystemTime::now()
+      .duration_since(std::time::UNIX_EPOCH)
+      .unwrap()
+      .as_nanos();
+    let file = temp_root.join(format!(
+      "frkb-native-memory-cue-{}-{unique}.DAT",
+      std::process::id()
+    ));
+    assert!(file.starts_with(&temp_root));
+    std::fs::write(&file, document).unwrap();
+    let mut hot = HashMap::new();
+    let mut memory = HashMap::new();
+    let result = parse_cues_from_file(&file, &mut hot, &mut memory);
+    std::fs::remove_file(&file).unwrap();
+    assert!(result.unwrap());
+    assert_eq!(memory["1000:2000"].record.active_loop, Some(true));
+    assert_eq!(memory["1000:2000"].record.loop_numerator, None);
+    assert_eq!(memory["1000:2000"].record.loop_denominator, None);
   }
 }

@@ -10,6 +10,7 @@ import confirm from '@renderer/components/confirmDialog'
 import selectSongListDialog from '@renderer/components/selectSongListDialog.vue'
 import RekordboxDesktopWritingOverlay from '@renderer/components/RekordboxDesktopWritingOverlay.vue'
 import emitter from '@renderer/utils/mitt'
+import { matchesPioneerUsbPlaylistDeleteRequest } from '@renderer/utils/pioneerUsbPlaylistRequest'
 import { sendHorizontalBrowseInteractionTrace } from '@renderer/composables/horizontalBrowse/horizontalBrowseInteractionTrace'
 import { beginHorizontalBrowseDeckInteraction } from '@renderer/composables/horizontalBrowse/horizontalBrowseInteractionTimeline'
 import { t } from '@renderer/utils/translate'
@@ -27,6 +28,7 @@ import { useSongLocateFlash } from '@renderer/pages/modules/songsArea/composable
 import type { ISongsAreaPaneRuntimeState, SongsAreaPaneKey } from '@renderer/stores/runtime'
 import { useParentRafSampler } from '@renderer/pages/modules/songsArea/composables/useParentRafSampler'
 import { usePioneerDesktopPlaylistActions } from './pioneerSongsArea/usePioneerDesktopPlaylistActions'
+import { usePioneerUsbPlaylistActions } from './pioneerSongsArea/usePioneerUsbPlaylistActions'
 import { usePioneerPlaylistTracks } from './pioneerSongsArea/usePioneerPlaylistTracks'
 import { usePioneerSongDrag } from './pioneerSongsArea/usePioneerSongDrag'
 import { usePioneerSongContextMenu } from './pioneerSongsArea/usePioneerSongContextMenu'
@@ -101,7 +103,11 @@ const { songClick, cancelPendingRepeatSingleClickDeselect, cancelPendingShiftSel
     runtime,
     songsAreaState: pioneerSongsAreaState,
     externalViewportHeight,
-    readOnly: true
+    readOnly: true,
+    onDeleteSelection: async () => {
+      if (canEditUsbPlaylist.value && !playlistMutationPending.value)
+        await deleteUsbTracks(resolveSelectedTracks())
+    }
   })
 const selectedRowKeysForTemplate = computed(() => [...selectedRowKeys.value])
 
@@ -153,6 +159,15 @@ const selectedPlaylistNode = computed(() => {
   }
   return walk(runtime.pioneerDeviceLibrary.treeNodes || [])
 })
+const canEditUsbPlaylist = computed(
+  () =>
+    selectedSourceKind.value === 'usb' &&
+    !isExternalSource.value &&
+    Boolean(selectedPlaylistNode.value) &&
+    !selectedPlaylistNode.value?.isFolder &&
+    !selectedPlaylistNode.value?.isSmartPlaylist &&
+    (selectedLibraryType.value === 'deviceLibrary' || selectedLibraryType.value === 'oneLibrary')
+)
 const currentPlaybackListKey = computed(() => {
   if (!selectedPlaylistId.value) return ''
   const sourceKey = selectedSourceKey.value || selectedSourceRootPath.value || 'rekordbox'
@@ -239,6 +254,7 @@ const {
   isExternalSource,
   getKeyDisplayStyle: () => runtime.setting.keyDisplayStyle || '',
   getCurrentPlaybackListKey: () => currentPlaybackListKey.value,
+  selectedLibraryType,
   getPlayingSongListUUID: () => runtime.playingData.playingSongListUUID,
   setPlayingSongListData: (songs) => {
     runtime.playingData.playingSongListData = songs
@@ -311,7 +327,7 @@ const hasActiveTrackFilters = computed(() =>
 const sortedTrackColumn = computed(() => columnData.value.find((col) => Boolean(col.order)) || null)
 const canReorderDesktopTracks = computed(
   () =>
-    canRemoveTracksFromDesktopPlaylist.value &&
+    (canRemoveTracksFromDesktopPlaylist.value || canEditUsbPlaylist.value) &&
     !loading.value &&
     !playlistMutationPending.value &&
     !hasActiveTrackFilters.value &&
@@ -320,12 +336,13 @@ const canReorderDesktopTracks = computed(
 )
 const canRenumberDesktopTracks = computed(
   () =>
-    canRemoveTracksFromDesktopPlaylist.value &&
+    (canRemoveTracksFromDesktopPlaylist.value || canEditUsbPlaylist.value) &&
     !loading.value &&
     !playlistMutationPending.value &&
     visibleSongs.value.length > 1 &&
     Boolean(sortedTrackColumn.value) &&
-    sortedTrackColumn.value?.key !== 'index'
+    sortedTrackColumn.value?.key !== 'index' &&
+    (!canEditUsbPlaylist.value || !hasActiveTrackFilters.value)
 )
 
 const showFileMissingHint = async (missingTracks: ISongInfo[]) => {
@@ -446,8 +463,9 @@ const handleColumnClick = (column: ISongsAreaColumn) => {
 const isCurrentPlaylistLoadTarget = (sourceCacheKey: string, playlistId: number) =>
   selectedSourceCacheKey.value === sourceCacheKey && selectedPlaylistId.value === playlistId
 
-const { loadPlaylistTracks } = usePioneerPlaylistTracks({
+const { loadPlaylistTracks, refreshPlaylistTracks } = usePioneerPlaylistTracks({
   selectedSourceCacheKey,
+  currentPlaybackListKey,
   selectedPlaylistId,
   selectedSourceKind,
   selectedExternalKind,
@@ -472,7 +490,7 @@ const handleDjPlaylistRefresh = (payload?: { sourceKey: string; playlistId: numb
 emitter.on('dj-library:refresh-selected-playlist', handleDjPlaylistRefresh)
 
 const {
-  playlistMutationPending,
+  playlistMutationPending: desktopPlaylistMutationPending,
   removeTracksFromDesktopPlaylist,
   reorderTracksInDesktopPlaylist,
   renumberTracksInDesktopPlaylist
@@ -484,15 +502,41 @@ const {
   selectedSourceCacheKey,
   currentPlaybackListKey,
   visibleSongs,
-  selectedRowKeys,
-  loadPlaylistTracks
+  refreshPlaylistTracks
 })
+
+const {
+  usbWriting,
+  removeUsbTracks,
+  deleteUsbTracks,
+  deleteUsbPlaylist,
+  saveUsbOrder,
+  reorderUsbTracks
+} = usePioneerUsbPlaylistActions({
+  runtime,
+  enabled: canEditUsbPlaylist,
+  originalTracks,
+  selectedRowKeys,
+  selectedPlaylistId,
+  selectedSourceRootPath,
+  selectedLibraryType,
+  selectedSourceCacheKey,
+  selectedPlaylistNode,
+  refreshPlaylistTracks
+})
+const playlistMutationPending = computed(
+  () => desktopPlaylistMutationPending.value || usbWriting.value
+)
 
 const { handleSongContextMenu } = usePioneerSongContextMenu({
   runtime,
   selectedRowKeys,
   playlistMutationPending,
   canRemoveTracksFromDesktopPlaylist,
+  canEditUsbPlaylist,
+  selectedSourceCacheKey,
+  removeUsbTracks,
+  deleteUsbTracks,
   currentPlaybackListKey,
   cancelPendingRepeatSingleClickDeselect,
   resolveSelectedTracks,
@@ -573,6 +617,25 @@ const handlePreviewMoveRequest = (
   openCopyTargetDialog(targetLibraryName)
 }
 emitter.on('preview-transfer:open-dialog', handlePreviewMoveRequest)
+const handleUsbDeletePlaylistRequest = (payload: unknown) => {
+  if (
+    !canEditUsbPlaylist.value ||
+    !matchesPioneerUsbPlaylistDeleteRequest(
+      payload,
+      {
+        sourceKind: selectedSourceKind.value,
+        sourceKey: selectedSourceKey.value,
+        rootPath: selectedSourceRootPath.value,
+        libraryType: selectedLibraryType.value,
+        external: isExternalSource.value
+      },
+      selectedPlaylistId.value
+    )
+  )
+    return
+  void deleteUsbPlaylist()
+}
+emitter.on('pioneerUsb/open-delete-playlist', handleUsbDeletePlaylistRequest)
 
 // 播放器标记文件缺失时，同步更新原始数据使 UI 立即变色
 const handleSongFileMissing = (payload: { listUUID?: string; filePath?: string }) => {
@@ -600,6 +663,11 @@ const handleSongFileRestored = (payload: { listUUID?: string; filePath?: string 
 emitter.on('songFileRestored', handleSongFileRestored)
 
 const handlePlaylistReorder = async (payload: { sourceItemIds: string[]; targetIndex: number }) => {
+  if (canEditUsbPlaylist.value) {
+    if (canReorderDesktopTracks.value)
+      await reorderUsbTracks(payload.sourceItemIds, payload.targetIndex, visibleSongs.value)
+    return
+  }
   await reorderTracksInDesktopPlaylist(
     payload.sourceItemIds,
     payload.targetIndex,
@@ -608,6 +676,10 @@ const handlePlaylistReorder = async (payload: { sourceItemIds: string[]; targetI
 }
 
 const handleRenumberTracksByVisibleOrder = async () => {
+  if (canEditUsbPlaylist.value) {
+    if (canRenumberDesktopTracks.value) await saveUsbOrder(visibleSongs.value)
+    return
+  }
   await renumberTracksInDesktopPlaylist(visibleSongs.value, canRenumberDesktopTracks.value)
 }
 
@@ -705,6 +777,7 @@ onUnmounted(() => {
   emitter.off('songsArea/focus-song', handleFocusSongRequest)
   emitter.off('dj-library:refresh-selected-playlist', handleDjPlaylistRefresh)
   emitter.off('preview-transfer:open-dialog', handlePreviewMoveRequest)
+  emitter.off('pioneerUsb/open-delete-playlist', handleUsbDeletePlaylistRequest)
   emitter.off('songFileMissing', handleSongFileMissing)
   emitter.off('songFileRestored', handleSongFileRestored)
 })
@@ -731,7 +804,7 @@ onUnmounted(() => {
         } as const
       }"
       element="div"
-      style="height: 100%; width: 100%; position: relative"
+      style="flex: 1; min-height: 0; width: 100%; position: relative"
       @click="handleOverlayClick"
     >
       <SongListHeader
@@ -774,6 +847,7 @@ onUnmounted(() => {
         :allow-dblclick-when-read-only="true"
         :allow-waveform-preview-when-read-only="true"
         :allow-song-drag-when-read-only="true"
+        :internal-mouse-drag="canEditUsbPlaylist"
         :reorder-mode="canReorderDesktopTracks ? 'playlist' : 'none'"
         song-list-root-dir="library/PioneerDeviceLibrary"
         :enable-cover-thumbnails="true"
@@ -791,7 +865,7 @@ onUnmounted(() => {
       :columns="columnData"
       @toggle-column-visibility="handleToggleColumnVisibility"
     />
-    <RekordboxDesktopWritingOverlay v-if="playlistMutationPending" />
+    <RekordboxDesktopWritingOverlay v-if="desktopPlaylistMutationPending" />
     <Teleport to="body">
       <selectSongListDialog
         v-if="selectSongListDialogVisible"
@@ -816,7 +890,8 @@ onUnmounted(() => {
 
 .songsAreaPlaceholder {
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;

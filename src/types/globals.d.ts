@@ -85,6 +85,7 @@ interface ISongInfo {
   pioneerCoverPath?: string | null
   pioneerAnalyzePath?: string | null
   pioneerDeviceRootPath?: string | null
+  pioneerUsbSource?: import('../shared/pioneerUsbEditing').PioneerUsbSongSource
   deletedAtMs?: number
   originalPlaylistPath?: string | null
   recycleBinSourceType?: string | null
@@ -101,6 +102,8 @@ export interface ISongHotCue {
   color?: string
   isLoop?: boolean
   loopEndSec?: number
+  loopNumerator?: number
+  loopDenominator?: number
   source?: string
 }
 
@@ -113,6 +116,9 @@ export interface ISongMemoryCue {
   color?: string
   isLoop?: boolean
   loopEndSec?: number
+  loopNumerator?: number
+  loopDenominator?: number
+  activeLoop?: boolean
   source?: string
 }
 

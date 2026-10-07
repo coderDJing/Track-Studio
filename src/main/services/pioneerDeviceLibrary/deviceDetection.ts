@@ -12,6 +12,7 @@ import type {
   PioneerRemovableDriveInfo
 } from './types'
 import { ensurePioneerUsbIdentity } from './usbIdentity'
+import { probeWindowsUsbWriteRoot } from './windowsUsbWriteProbe'
 
 const execFileAsync = promisify(execFile)
 
@@ -799,6 +800,17 @@ async function ejectLinuxRemovableDrive(rootPath: string): Promise<PioneerDriveE
   }
 
   return createDriveEjectSuccess(normalizedRoot)
+}
+
+/** Write preflight must not create/hide identity markers while enumerating volumes. */
+export async function isPioneerUsbWriteRoot(rootPath: string): Promise<boolean> {
+  if (process.platform !== 'win32' && process.platform !== 'darwin') return false
+  const normalizedRoot = normalizeDriveRoot(rootPath)
+  if (process.platform === 'win32') return (await probeWindowsUsbWriteRoot(normalizedRoot)).eligible
+  const rows = await listPlatformRemovableDrives()
+  return rows.some(
+    (row) => normalizeDriveRoot(row.path) === normalizedRoot && (row.isUsb || row.isRemovable)
+  )
 }
 
 export async function listPioneerRemovableDrives(

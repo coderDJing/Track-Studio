@@ -161,6 +161,10 @@ export function createSongListItemComparator(
       normalizeComparableText(right.pioneerAnalyzePath) &&
     normalizeComparableText(left.pioneerDeviceRootPath) ===
       normalizeComparableText(right.pioneerDeviceRootPath) &&
+    left.pioneerUsbSource?.trackId === right.pioneerUsbSource?.trackId &&
+    left.pioneerUsbSource?.libraryType === right.pioneerUsbSource?.libraryType &&
+    normalizeComparableText(left.pioneerUsbSource?.rootPath) ===
+      normalizeComparableText(right.pioneerUsbSource?.rootPath) &&
     normalizeComparableNumber(left.deletedAtMs) === normalizeComparableNumber(right.deletedAtMs) &&
     normalizeComparableText(left.originalPlaylistPath) ===
       normalizeComparableText(right.originalPlaylistPath) &&
@@ -277,6 +281,13 @@ export function createSongListItemComparator(
     pushIfTextDiff('pioneerCoverPath')
     pushIfTextDiff('pioneerAnalyzePath')
     pushIfTextDiff('pioneerDeviceRootPath')
+    if (
+      left.pioneerUsbSource?.trackId !== right.pioneerUsbSource?.trackId ||
+      left.pioneerUsbSource?.libraryType !== right.pioneerUsbSource?.libraryType ||
+      normalizeComparableText(left.pioneerUsbSource?.rootPath) !==
+        normalizeComparableText(right.pioneerUsbSource?.rootPath)
+    )
+      fields.push('pioneerUsbSource')
     pushIfNumberDiff('deletedAtMs')
     pushIfTextDiff('originalPlaylistPath')
     pushIfTextDiff('recycleBinSourceType')

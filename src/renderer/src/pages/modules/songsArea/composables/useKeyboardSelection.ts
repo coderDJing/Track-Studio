@@ -39,6 +39,7 @@ interface UseKeyboardSelectionParams {
   externalViewportHeight: { value: number }
   scheduleSweepCovers?: () => void
   readOnly?: boolean
+  onDeleteSelection?: () => Promise<void>
 }
 
 export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
@@ -584,6 +585,13 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
 
       return false
     })
+    if (readOnly && params.onDeleteSelection) {
+      hotkeys('delete', 'windowGlobal', () => {
+        if (!windowPreviewHotkeysLocked && runtime.focusArea === 'songsArea')
+          void params.onDeleteSelection?.()
+        return false
+      })
+    }
     if (!readOnly) {
       hotkeys('delete', 'windowGlobal', () => {
         if (windowPreviewHotkeysLocked) return false
@@ -645,8 +653,8 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
     hotkeys.unbind('shift+end', 'windowGlobal')
     hotkeys.unbind('shift+pageup', 'windowGlobal')
     hotkeys.unbind('shift+pagedown', 'windowGlobal')
+    if (!readOnly || params.onDeleteSelection) hotkeys.unbind('delete', 'windowGlobal')
     if (!readOnly) {
-      hotkeys.unbind('delete', 'windowGlobal')
       hotkeys.unbind('ctrl+c, command+c', 'windowGlobal')
       hotkeys.unbind('ctrl+x, command+x', 'windowGlobal')
       stopCutPolling()

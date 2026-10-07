@@ -1,4 +1,9 @@
 import type { ISongInfo, ISongMemoryCue } from 'src/types/globals'
+import {
+  editPioneerUsbSong,
+  isEditablePioneerUsbSong,
+  canEditSongCues
+} from '@renderer/utils/pioneerUsbEditing'
 import { mergeHorizontalBrowseSongWithMemoryCues } from '@renderer/composables/horizontalBrowse/horizontalBrowseShellSongs'
 import type { HorizontalBrowseDeckKey } from '@renderer/composables/horizontalBrowse/horizontalBrowseNativeTransport'
 
@@ -35,25 +40,43 @@ export const useHorizontalBrowseDeckMemoryCues = (
 
   const handleDeckMemoryCueCreate = async (deck: DeckKey) => {
     const song = params.resolveDeckSong(deck)
-    if (!song) return
+    if (!song || !canEditSongCues(song)) return
     const cueDefinition = params.buildDeckStoredCueDefinition(deck)
     if (!cueDefinition) return
-    const result = (await window.electron.ipcRenderer.invoke('song:add-memory-cue', {
-      filePath: song.filePath,
-      sec: cueDefinition.sec,
-      isLoop: cueDefinition.isLoop,
-      loopEndSec: cueDefinition.loopEndSec
-    })) as { memoryCues?: ISongMemoryCue[] } | null
+    const result = isEditablePioneerUsbSong(song)
+      ? await editPioneerUsbSong(song, {
+          kind: 'add-memory-cue',
+          cue: {
+            ...cueDefinition,
+            sec: Math.round(cueDefinition.sec * 1000) / 1000,
+            loopEndSec:
+              cueDefinition.loopEndSec === undefined
+                ? undefined
+                : Math.round(cueDefinition.loopEndSec * 1000) / 1000
+          }
+        })
+      : ((await window.electron.ipcRenderer.invoke('song:add-memory-cue', {
+          filePath: song.filePath,
+          sec: cueDefinition.sec,
+          isLoop: cueDefinition.isLoop,
+          loopEndSec: cueDefinition.loopEndSec
+        })) as { memoryCues?: ISongMemoryCue[] } | null)
+    if (isEditablePioneerUsbSong(song) && !result) return
+    if (params.resolveDeckSong(deck)?.filePath !== song.filePath) return
     patchDeckSongMemoryCues(deck, Array.isArray(result?.memoryCues) ? result.memoryCues : [])
   }
 
   const handleDeckMemoryCueDelete = async (deck: DeckKey, sec: number) => {
     const song = params.resolveDeckSong(deck)
-    if (!song) return
-    const result = (await window.electron.ipcRenderer.invoke('song:delete-memory-cue', {
-      filePath: song.filePath,
-      sec
-    })) as { memoryCues?: ISongMemoryCue[] } | null
+    if (!song || !canEditSongCues(song)) return
+    const result = isEditablePioneerUsbSong(song)
+      ? await editPioneerUsbSong(song, { kind: 'delete-memory-cue', sec })
+      : ((await window.electron.ipcRenderer.invoke('song:delete-memory-cue', {
+          filePath: song.filePath,
+          sec
+        })) as { memoryCues?: ISongMemoryCue[] } | null)
+    if (isEditablePioneerUsbSong(song) && !result) return
+    if (params.resolveDeckSong(deck)?.filePath !== song.filePath) return
     patchDeckSongMemoryCues(deck, Array.isArray(result?.memoryCues) ? result.memoryCues : [])
   }
 

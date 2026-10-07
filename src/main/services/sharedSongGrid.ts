@@ -19,6 +19,7 @@ type SharedGridInfo = Pick<
 >
 
 export type SharedSongGridDefinition = {
+  rekordboxGridEntries?: ISongInfo['rekordboxGridEntries']
   filePath: string
   bpm?: number
   firstBeatMs?: number

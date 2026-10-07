@@ -11,6 +11,8 @@ import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
 import { copySongCueDefinitionsToTargets } from '@renderer/utils/songCueTransfer'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
+import { isEditablePioneerUsbSong, deletePioneerUsbSong } from '@renderer/utils/pioneerUsbEditing'
+import { usePioneerUsbPlaybackDeletion } from '@renderer/composables/rekordboxDesktop/usePioneerUsbPlaybackDeletion'
 import { projectSongBeatGridMapV2ToFixedGrid } from '@shared/songBeatGridMapV2'
 import {
   resolveLibraryTransferActionModeForPlayback,
@@ -245,6 +247,17 @@ export function usePlayerControlsLogic({
     runtime.playingData.playingSongListData = []
   }
   // 取消长按抑制方案，改由 playerReady 门槛保障
+  usePioneerUsbPlaybackDeletion({
+    runtime,
+    skipMain: () => isFileOperationInProgress.value,
+    onMainDeleted: ({ listUUID, nextList, nextSong }) => {
+      if (nextSong) switchPlaybackToSong({ listUUID, listData: nextList, song: nextSong })
+      else {
+        clearPlayerStateForDelete()
+        finalizeDestroyedPlayerState()
+      }
+    }
+  })
 
   const play = () => {
     if (!audioPlayer.value) return
@@ -395,6 +408,26 @@ export function usePlayerControlsLogic({
 
   const delSong = async () => {
     if (isFileOperationInProgress.value || !runtime.playingData.playingSong) {
+      return
+    }
+    const usbSong = runtime.playingData.playingSong
+    if (isEditablePioneerUsbSong(usbSong)) {
+      isFileOperationInProgress.value = true
+      const listUUID = runtime.playingData.playingSongListUUID
+      const playbackAfterDelete = resolvePlaybackAfterRemovingSong(usbSong.filePath)
+      try {
+        if (!(await deletePioneerUsbSong(usbSong))) return
+        if (runtime.playingData.playingSong?.filePath !== usbSong.filePath) return
+        if (playbackAfterDelete.nextSong?.filePath)
+          switchPlaybackToSong({
+            listUUID,
+            listData: playbackAfterDelete.nextList,
+            song: playbackAfterDelete.nextSong
+          })
+        else clearPlayerStateForDelete()
+      } finally {
+        isFileOperationInProgress.value = false
+      }
       return
     }
     if (isReadOnlyPlaybackSource()) {

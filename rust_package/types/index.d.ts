@@ -69,6 +69,46 @@ export interface PioneerExportDebugDump {
   /** 错误描述（失败时） */
   error?: string
 }
+/** Native ANLZ Hot Cue metadata merged from legacy and extended cue banks. */
+export interface PioneerHotCueRecord {
+  slot: number
+  label: string
+  timeSec: number
+  isLoop: boolean
+  loopTimeSec?: number
+  /** Native PCP2 loop beat fraction; 0/0 is a manual loop. Absent for points and PCPT. */
+  loopNumerator?: number
+  loopDenominator?: number
+  comment?: string
+  colorIndex?: number
+  colorName?: string
+  colorHex?: string
+  source?: string
+}
+/** Active Loop status comes from PCPT; extended PCP2 has no such status field. */
+export interface PioneerMemoryCueRecord {
+  timeSec: number
+  isLoop: boolean
+  loopTimeSec?: number
+  /** Native PCP2 loop beat fraction; 0/0 is a manual loop. Absent for points and PCPT. */
+  loopNumerator?: number
+  loopDenominator?: number
+  activeLoop?: boolean
+  order: number
+  comment?: string
+  colorIndex?: number
+  colorName?: string
+  colorHex?: string
+  source?: string
+}
+export interface PioneerCueDump {
+  analyzeFilePath: string
+  cueFilePath: string
+  hotCues: PioneerHotCueRecord[]
+  memoryCues: PioneerMemoryCueRecord[]
+  error?: string
+}
+export declare function readPioneerCues(analyzeFilePath: string): PioneerCueDump
 /** Mixxx 波形频段数据 */
 export interface MixxxWaveformBand {
   left: Buffer
@@ -454,5 +494,14 @@ export interface NativeAudioFileScanResult {
 }
 /** 递归枚举目录下命中后缀的音频文件，同时带回 size / mtimeMs；顺序与 JS 侧 collectFilesWithExtensions 一致 */
 export declare function listAudioFilesWithStat(dir: string, audioExts: Array<string>): Promise<NativeAudioFileScanResult>
+
+export interface WindowsUsbWriteDevice {
+  eligible: boolean
+  identity: string
+}
+/** Fresh Windows drive/bus/volume query; read only. */
+export declare function probeWindowsUsbWriteRoot(root: string): Promise<WindowsUsbWriteDevice>
+/** Fresh Windows process snapshot; exact executable name. */
+export declare function isWindowsProcessRunning(name: string): Promise<boolean>
 
 export {}

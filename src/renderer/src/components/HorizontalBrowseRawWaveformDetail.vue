@@ -57,6 +57,8 @@ import { createHorizontalBrowseDetailGridPersistence } from '@renderer/composabl
 import { createHorizontalBrowseDetailPresentationConsumer } from '@renderer/composables/horizontalBrowse/horizontalBrowseDetailPresentationConsumer'
 import { useHorizontalBrowseDynamicBeatGridEdit } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseDynamicBeatGridEdit'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
+import { usePioneerUsbGridEditing } from '@renderer/composables/horizontalBrowse/usePioneerUsbGridEditing'
+import { useHorizontalBrowseGridCapabilities } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseGridCapabilities'
 import { createHorizontalBrowseNativeMetronomeSync } from '@renderer/composables/horizontalBrowse/horizontalBrowseNativeMetronome'
 import {
   createHorizontalBrowseRawWaveformDynamicGridSelectionState,
@@ -105,17 +107,26 @@ const waveformPlaybackActive = computed(() => Boolean(props.playbackActive ?? pr
 const resolveCanvasStableWaveformSource = () =>
   compactVisualWaveformActive.value &&
   (runtime.setting.platform !== 'darwin' || !waveformPlaybackActive.value)
-const isRekordboxReadOnlySong = computed(() => isRekordboxExternalPlaybackSource('', props.song))
-const externalDetailWaveformUnavailable = computed(
-  () => isRekordboxReadOnlySong.value && !rawData.value && !previewLoading.value
-)
-
-const gridEditingEnabled = computed(
-  () =>
-    props.gridEditMode === true &&
-    props.interactionDisabled !== true &&
-    !isRekordboxReadOnlySong.value
-)
+const {
+  isRekordboxReadOnlySong,
+  externalDetailWaveformUnavailable,
+  gridEditingEnabled,
+  canAdjustGrid,
+  canAdjustBpmInput,
+  previewFirstBeatMsComputed,
+  metronomePlaybackRate,
+  metronomeResetKey
+} = useHorizontalBrowseGridCapabilities({
+  song: () => props.song,
+  previewLoading,
+  previewFirstBeatMs,
+  durationSec: () => resolvePreviewDurationSec(),
+  gridEditMode: () => props.gridEditMode === true,
+  interactionDisabled: () => props.interactionDisabled === true,
+  hasWaveform: () => Boolean(rawData.value),
+  playbackRate: () => props.playbackRate,
+  seekRevision: () => props.seekRevision
+})
 const presentationLinkedDragActive = computed(
   () => Boolean(props.linkedDragActive) || props.presentationState?.owner === 'linked-drag'
 )
@@ -202,6 +213,18 @@ const {
   syncVisualGridStateFromPreview,
   publishLinkedGridVisualPhaseSample
 } = presentationState
+
+const usbGridEditing = usePioneerUsbGridEditing({
+  song: () => props.song,
+  previewBpm,
+  previewFirstBeatMs,
+  previewDownbeatBeatOffset,
+  previewBeatGridMap,
+  draw: () => {
+    syncVisualGridStateFromPreview()
+    scheduleGridOverlayDraw()
+  }
+})
 
 const resolveDetailBeatGridMap = () =>
   resolveAudioEditDisplayBeatGridMap({
@@ -301,9 +324,10 @@ const {
   previewDownbeatBeatOffset: visualGridDownbeatBeatOffset,
   beatGridMap: resolveDetailBeatGridMap,
   rekordboxGridEntries: () =>
-    isRekordboxExternalPlaybackSource('', props.song)
+    usbGridEditing.previewEntries() ??
+    (isRekordboxExternalPlaybackSource('', props.song)
       ? props.song?.rekordboxGridEntries
-      : undefined,
+      : undefined),
   beatGridEditMode: () => gridEditingEnabled.value,
   beatGridVisibleFromSec: resolveGridEditVisibleFromSec,
   beatGridSelectedBoundarySec: () => selectedDynamicGridBoundarySec.value,
@@ -434,21 +458,6 @@ const applyPresentationSeekTarget = (targetSeconds: number, revision: number) =>
   applyPreviewPlaybackPosition(safeTargetSeconds, true, true)
 }
 
-const canAdjustGrid = computed(() => {
-  if (previewLoading.value) return false
-  if (isRekordboxReadOnlySong.value) return false
-  return !!props.song?.filePath && resolvePreviewDurationSec() > 0
-})
-const canAdjustBpmInput = computed(() => {
-  if (previewLoading.value) return false
-  if (props.gridEditMode === true) return canAdjustGrid.value
-  return !!props.song?.filePath && resolvePreviewDurationSec() > 0
-})
-const previewFirstBeatMsComputed = computed(() => Number(previewFirstBeatMs.value) || 0)
-const metronomePlaybackRate = computed(() => Math.max(0.25, Number(props.playbackRate) || 1))
-const metronomeResetKey = computed(
-  () => `${String(props.song?.filePath || '')}:${Number(props.seekRevision) || 0}`
-)
 const syncNativeMetronomeState = createHorizontalBrowseNativeMetronomeSync(() => props.direction)
 
 const {
@@ -591,11 +600,13 @@ const {
   resolveSongTimeBasisOffsetMs: () => Number(props.song?.timeBasisOffsetMs) || 0,
   scheduleDraw: scheduleGridOverlayDraw,
   schedulePreviewBpmTapReset,
-  persistGridDefinition,
-  schedulePersistGridDefinition,
+  ...usbGridEditing.bindToolbar({
+    persistGridDefinition,
+    schedulePersistGridDefinition,
+    handleGridShift
+  }),
   resetPreviewBpmTap,
   handleSetDownbeatLineAtPlayhead,
-  handleGridShift,
   handleMetronomeStateCycle: cycleMetronomeRuntimeState,
   resolveGridControlsDisabled: () => dynamicBeatGridEdit.gridControlsDisabled.value,
   resolveShowSplitAfterPlayhead: () => gridEditingEnabled.value && canAdjustGrid.value,
@@ -862,7 +873,8 @@ useHorizontalBrowseRawWaveformDetailLifecycle({
   resolveDetailDeck,
   loadWaveform,
   buildSongGridSignature,
-  shouldDeferSongGridSync,
+  shouldDeferSongGridSync: (signature) =>
+    usbGridEditing.hasPending() || shouldDeferSongGridSync(signature),
   syncGridStateFromSongForDisplay,
   emitToolbarState,
   scheduleGridOverlayDraw,
@@ -990,7 +1002,8 @@ defineExpose(
     commitLinkedGridVisualTransaction,
     resolveVisibleDurationSec,
     resolveWrapWidth: () => Number(wrapRef.value?.getBoundingClientRect().width || 0),
-    persistGridDefinition,
+    persistGridDefinition: (filePath) =>
+      usbGridEditing.flushFile(filePath) ?? persistGridDefinition(filePath),
     syncGridStateFromSongForDisplay,
     clearGridHistory: dynamicBeatGridEdit.clearHistory
   })

@@ -1,0 +1,15 @@
+{
+  "pioneerUsb": {
+    "reorder": "保存歌单歌曲顺序",
+    "selectionChanged": "歌曲选择或歌单内容已改变，请重新选择后重试。",
+    "incompleteOrder": "保存顺序需要完整歌单，请先清除筛选后重试。",
+    "previewDevice": "目标 U 盘：{path}",
+    "previewTracks": "将彻底删除 {count} 首歌曲。",
+    "previewShared": "将保留 {count} 个仍被共享的文件。",
+    "deleteWarning": "删除将直接修改 U 盘中的内容，请确认。",
+    "keepConnected": "写入完成前请保持 U 盘连接，并关闭正在访问它的 rekordbox 或其他应用。",
+    "failureTitle": "U 盘写入失败",
+    "refreshFailureTitle": "U 盘刷新失败",
+    "refreshFailed": "写入已完成，但重新读取 U 盘失败。请重新打开此 U 盘核对结果。"
+  }
+}

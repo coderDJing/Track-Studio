@@ -18,8 +18,38 @@ import {
 } from '../services/pioneerDeviceLibrary/waveform'
 import { loadPioneerDetailWaveformsByDrivePath } from '../services/pioneerDeviceLibrary/detailWaveform'
 import type { IPioneerPlaylistTrack } from '../../types/globals'
+import {
+  applyPioneerUsbWrite,
+  preparePioneerUsbWrite,
+  withPioneerUsbExclusive,
+  withPioneerUsbRead
+} from '../services/pioneerDeviceLibrary/usbWrite'
+import type { PioneerUsbWriteRequest } from '../../shared/pioneerUsbWrite'
+import {
+  editPioneerUsbSong,
+  writePioneerUsbOperation,
+  waitForPioneerUsbEdits
+} from '../services/pioneerDeviceLibrary/usbSongEditing'
+import type { PioneerUsbSongEditRequest } from '../../shared/pioneerUsbEditing'
 
 export function registerPioneerDeviceLibraryHandlers() {
+  ipcMain.handle('pioneer-device-library:wait-for-writes', (_event, rootPath: string) =>
+    waitForPioneerUsbEdits(rootPath)
+  )
+  ipcMain.handle('pioneer-device-library:write', (event, request: PioneerUsbWriteRequest) =>
+    writePioneerUsbOperation(request, event.sender.id)
+  )
+  ipcMain.handle('pioneer-device-library:edit-song', (event, request: PioneerUsbSongEditRequest) =>
+    editPioneerUsbSong(request, event.sender.id)
+  )
+  ipcMain.handle(
+    'pioneer-device-library:prepare-write',
+    async (event, request: PioneerUsbWriteRequest) =>
+      preparePioneerUsbWrite(request, event.sender.id)
+  )
+  ipcMain.handle('pioneer-device-library:apply-write', async (event, token: string) =>
+    applyPioneerUsbWrite(token, event.sender.id)
+  )
   const mimeFromExt = (ext: string) =>
     ext === '.png'
       ? 'image/png'
@@ -39,13 +69,15 @@ export function registerPioneerDeviceLibraryHandlers() {
   )
 
   ipcMain.handle('pioneer-device-library:eject-drive', async (_event, rootPath: string) => {
-    return await ejectPioneerRemovableDrive(rootPath)
+    return await withPioneerUsbExclusive(rootPath, () => ejectPioneerRemovableDrive(rootPath))
   })
 
   ipcMain.handle(
     'pioneer-device-library:load-tree',
     async (_event, rootPath: string, libraryType?: PioneerLibraryKind) => {
-      const loaded = await loadPioneerPlaylistTreeByDrivePath(rootPath, libraryType)
+      const loaded = await withPioneerUsbRead(rootPath, () =>
+        loadPioneerPlaylistTreeByDrivePath(rootPath, libraryType)
+      )
       return {
         ...loaded,
         treeNodes: buildPioneerPlaylistTree(loaded.nodes)
@@ -56,33 +88,41 @@ export function registerPioneerDeviceLibraryHandlers() {
   ipcMain.handle(
     'pioneer-device-library:get-detail-waveforms',
     async (_event, rootPath: string, analyzePaths: string[]) => {
-      return await loadPioneerDetailWaveformsByDrivePath(rootPath, analyzePaths)
+      return await withPioneerUsbRead(rootPath, () =>
+        loadPioneerDetailWaveformsByDrivePath(rootPath, analyzePaths)
+      )
     }
   )
 
   ipcMain.handle(
     'pioneer-device-library:load-playlist-tracks',
     async (_event, rootPath: string, playlistId: number, libraryType?: PioneerLibraryKind) => {
-      return await loadPioneerPlaylistTracksByDrivePath(rootPath, playlistId, libraryType)
+      return await withPioneerUsbRead(rootPath, () =>
+        loadPioneerPlaylistTracksByDrivePath(rootPath, playlistId, libraryType)
+      )
     }
   )
 
   ipcMain.handle(
     'pioneer-device-library:load-playlist-tracks-meta',
     async (_event, rootPath: string, playlistId: number, libraryType?: PioneerLibraryKind) => {
-      return await loadPioneerPlaylistTracksByDrivePath(rootPath, playlistId, libraryType, {
-        includeRuntime: false
-      })
+      return await withPioneerUsbRead(rootPath, () =>
+        loadPioneerPlaylistTracksByDrivePath(rootPath, playlistId, libraryType, {
+          includeRuntime: false
+        })
+      )
     }
   )
 
   ipcMain.handle(
     'pioneer-device-library:attach-playlist-tracks-runtime',
-    async (_event, rootPath: string, tracks: unknown) => {
-      const nextTracks = await attachPioneerPlaylistRuntime(
-        String(rootPath || '').trim(),
-        Array.isArray(tracks) ? (tracks as IPioneerPlaylistTrack[]) : [],
-        { includeCues: true }
+    async (_event, rootPath: string, tracks: unknown, options?: { requireCues?: boolean }) => {
+      const nextTracks = await withPioneerUsbRead(rootPath, () =>
+        attachPioneerPlaylistRuntime(
+          String(rootPath || '').trim(),
+          Array.isArray(tracks) ? (tracks as IPioneerPlaylistTrack[]) : [],
+          { includeCues: true, requireCues: options?.requireCues === true }
+        )
       )
       return { tracks: nextTracks }
     }
@@ -91,7 +131,9 @@ export function registerPioneerDeviceLibraryHandlers() {
   ipcMain.handle(
     'pioneer-device-library:get-preview-waveforms',
     async (_event, rootPath: string, analyzePaths: string[]) => {
-      return await loadPioneerPreviewWaveformsByDrivePath(rootPath, analyzePaths)
+      return await withPioneerUsbRead(rootPath, () =>
+        loadPioneerPreviewWaveformsByDrivePath(rootPath, analyzePaths)
+      )
     }
   )
 
@@ -111,17 +153,15 @@ export function registerPioneerDeviceLibraryHandlers() {
       const analyzePaths = Array.isArray(payload?.analyzePaths) ? payload.analyzePaths : []
 
       try {
-        const result = await streamPioneerPreviewWaveformsByDrivePath(
-          rootPath,
-          analyzePaths,
-          (item) => {
+        const result = await withPioneerUsbRead(rootPath, () =>
+          streamPioneerPreviewWaveformsByDrivePath(rootPath, analyzePaths, (item) => {
             try {
               event.sender.send('pioneer-device-library:preview-waveform-item', {
                 requestId,
                 ...item
               })
             } catch {}
-          }
+          })
         )
         try {
           event.sender.send('pioneer-device-library:preview-waveform-done', {

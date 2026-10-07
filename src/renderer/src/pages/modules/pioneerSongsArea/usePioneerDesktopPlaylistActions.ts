@@ -20,8 +20,7 @@ export const usePioneerDesktopPlaylistActions = (params: {
   selectedSourceCacheKey: Ref<string>
   currentPlaybackListKey: Ref<string>
   visibleSongs: Ref<ISongInfo[]>
-  selectedRowKeys: Ref<string[]>
-  loadPlaylistTracks: () => Promise<void>
+  refreshPlaylistTracks: (options?: { reuseRuntime?: boolean }) => Promise<void>
 }) => {
   const {
     runtime,
@@ -31,8 +30,7 @@ export const usePioneerDesktopPlaylistActions = (params: {
     selectedSourceCacheKey,
     currentPlaybackListKey,
     visibleSongs,
-    selectedRowKeys,
-    loadPlaylistTracks
+    refreshPlaylistTracks
   } = params
 
   const isExternalLibrary = () => Boolean(selectedExternalKind.value)
@@ -106,7 +104,23 @@ export const usePioneerDesktopPlaylistActions = (params: {
 
   const syncPlaybackListFromVisibleSongs = () => {
     if (runtime.playingData.playingSongListUUID !== currentPlaybackListKey.value) return
+    const previous = runtime.playingData.playingSongListData
+    if (
+      previous.length === visibleSongs.value.length &&
+      previous.every((song, index) => song === visibleSongs.value[index])
+    )
+      return
     runtime.playingData.playingSongListData = [...visibleSongs.value]
+  }
+
+  const isCurrentTarget = (sourceCacheKey: string, playlistId: number) =>
+    selectedSourceCacheKey.value === sourceCacheKey && selectedPlaylistId.value === playlistId
+
+  const refreshAfterWrite = async (sourceCacheKey: string, playlistId: number) => {
+    clearRekordboxSourceCache(sourceCacheKey)
+    if (!isCurrentTarget(sourceCacheKey, playlistId)) return false
+    await refreshPlaylistTracks({ reuseRuntime: !selectedExternalKind.value })
+    return isCurrentTarget(sourceCacheKey, playlistId)
   }
 
   const sortRowKeysByVisibleSongs = (rowKeys: string[]) => {
@@ -127,8 +141,9 @@ export const usePioneerDesktopPlaylistActions = (params: {
   }
 
   const removeTracksFromDesktopPlaylist = async (selectedTracks: ISongInfo[], enabled: boolean) => {
-    if (!enabled) return
+    if (!enabled || playlistMutationPending.value) return
     const playlistId = selectedPlaylistId.value
+    const sourceCacheKey = selectedSourceCacheKey.value
     const rowKeys = selectedTracks
       .map((item) => String(item.mixtapeItemId || '').trim())
       .filter(Boolean)
@@ -171,6 +186,7 @@ export const usePioneerDesktopPlaylistActions = (params: {
       textAlign: 'left'
     })
     if (confirmResult !== 'confirm') return
+    if (!isCurrentTarget(sourceCacheKey, playlistId) || playlistMutationPending.value) return
 
     await runWithPlaylistMutationPending(async () => {
       try {
@@ -194,19 +210,7 @@ export const usePioneerDesktopPlaylistActions = (params: {
           return
         }
 
-        const removedKeySet = new Set(rowKeys)
-        selectedRowKeys.value = []
-        if (selectedSourceCacheKey.value) {
-          clearRekordboxSourceCache(selectedSourceCacheKey.value)
-        }
-
-        if (runtime.playingData.playingSongListUUID === currentPlaybackListKey.value) {
-          runtime.playingData.playingSongListData = runtime.playingData.playingSongListData.filter(
-            (item) => !removedKeySet.has(String(item.mixtapeItemId || '').trim())
-          )
-        }
-
-        await loadPlaylistTracks()
+        if (!(await refreshAfterWrite(sourceCacheKey, playlistId))) return
         syncPlaybackListFromVisibleSongs()
       } catch (error) {
         await showRekordboxFailureDialog(
@@ -221,8 +225,9 @@ export const usePioneerDesktopPlaylistActions = (params: {
     targetIndex: number,
     enabled: boolean
   ) => {
-    if (!enabled) return
+    if (!enabled || playlistMutationPending.value) return
     const playlistId = selectedPlaylistId.value
+    const sourceCacheKey = selectedSourceCacheKey.value
     const rowKeys = sortRowKeysByVisibleSongs(
       sourceItemIds.map((item) => String(item || '').trim()).filter(Boolean)
     )
@@ -254,12 +259,7 @@ export const usePioneerDesktopPlaylistActions = (params: {
           return
         }
 
-        if (selectedSourceCacheKey.value) {
-          clearRekordboxSourceCache(selectedSourceCacheKey.value)
-        }
-
-        await loadPlaylistTracks()
-        selectedRowKeys.value = rowKeys
+        if (!(await refreshAfterWrite(sourceCacheKey, playlistId))) return
         syncPlaybackListFromVisibleSongs()
       } catch (error) {
         await showRekordboxFailureDialog(
@@ -270,8 +270,9 @@ export const usePioneerDesktopPlaylistActions = (params: {
   }
 
   const renumberTracksInDesktopPlaylist = async (orderedSongs: ISongInfo[], enabled: boolean) => {
-    if (!enabled) return
+    if (!enabled || playlistMutationPending.value) return
     const playlistId = selectedPlaylistId.value
+    const sourceCacheKey = selectedSourceCacheKey.value
     const rowKeys = orderedSongs
       .map((item) => String(item.mixtapeItemId || '').trim())
       .filter(Boolean)
@@ -303,12 +304,7 @@ export const usePioneerDesktopPlaylistActions = (params: {
           return
         }
 
-        if (selectedSourceCacheKey.value) {
-          clearRekordboxSourceCache(selectedSourceCacheKey.value)
-        }
-
-        await loadPlaylistTracks()
-        selectedRowKeys.value = rowKeys
+        if (!(await refreshAfterWrite(sourceCacheKey, playlistId))) return
         syncPlaybackListFromVisibleSongs()
       } catch (error) {
         await showRekordboxFailureDialog(

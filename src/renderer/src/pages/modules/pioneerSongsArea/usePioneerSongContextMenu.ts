@@ -28,6 +28,10 @@ type UsePioneerSongContextMenuParams = {
   selectedRowKeys: Ref<string[]>
   playlistMutationPending: Ref<boolean>
   canRemoveTracksFromDesktopPlaylist: ComputedRef<boolean>
+  canEditUsbPlaylist: ComputedRef<boolean>
+  selectedSourceCacheKey: ComputedRef<string>
+  removeUsbTracks: (songs: ISongInfo[]) => Promise<void>
+  deleteUsbTracks: (songs: ISongInfo[]) => Promise<void>
   currentPlaybackListKey: ComputedRef<string>
   cancelPendingRepeatSingleClickDeselect: () => void
   resolveSelectedTracks: (fallback?: ISongInfo) => ISongInfo[]
@@ -37,8 +41,15 @@ type UsePioneerSongContextMenuParams = {
   removeTracksFromDesktopPlaylist: (selectedTracks: ISongInfo[], enabled: boolean) => Promise<void>
 }
 
-const buildPioneerSongMenuGroups = (canRemoveTracksFromDesktopPlaylist: boolean): IMenu[][] => {
+const buildPioneerSongMenuGroups = (
+  canRemoveTracksFromDesktopPlaylist: boolean,
+  canEditUsbPlaylist: boolean
+): IMenu[][] => {
   const groups: IMenu[][] = []
+  if (canEditUsbPlaylist) {
+    groups.push([{ menuName: 'rekordboxDesktop.removeTracksFromPlaylistAction' }])
+    groups.push([{ menuName: 'common.delete' }])
+  }
   if (canRemoveTracksFromDesktopPlaylist) {
     groups.push([{ menuName: 'rekordboxDesktop.removeTracksFromPlaylistAction' }])
   }
@@ -79,12 +90,24 @@ export const usePioneerSongContextMenu = (params: UsePioneerSongContextMenuParam
     if (!params.selectedRowKeys.value.includes(key)) {
       params.selectedRowKeys.value = [key]
     }
+    const menuSourceKey = params.selectedSourceCacheKey.value
+    const menuPlaylistKey = params.currentPlaybackListKey.value
+    const usbMenu = params.canEditUsbPlaylist.value
 
     const result = await rightClickMenu({
-      menuArr: buildPioneerSongMenuGroups(params.canRemoveTracksFromDesktopPlaylist.value),
+      menuArr: buildPioneerSongMenuGroups(
+        params.canRemoveTracksFromDesktopPlaylist.value,
+        params.canEditUsbPlaylist.value
+      ),
       clickEvent: event
     })
     if (result === 'cancel') return
+    if (
+      usbMenu &&
+      (menuSourceKey !== params.selectedSourceCacheKey.value ||
+        menuPlaylistKey !== params.currentPlaybackListKey.value)
+    )
+      return
 
     const musicSearchAction = resolveMusicSearchMenuAction(result.menuName, song)
     if (musicSearchAction) {
@@ -105,6 +128,17 @@ export const usePioneerSongContextMenu = (params: UsePioneerSongContextMenuParam
 
     const selectedTracks = params.resolveSelectedTracks(song)
     if (!selectedTracks.length) return
+    if (
+      params.canEditUsbPlaylist.value &&
+      result.menuName === 'rekordboxDesktop.removeTracksFromPlaylistAction'
+    ) {
+      await params.removeUsbTracks(selectedTracks)
+      return
+    }
+    if (params.canEditUsbPlaylist.value && result.menuName === 'common.delete') {
+      await params.deleteUsbTracks(selectedTracks)
+      return
+    }
 
     const { updatedTracks, missingTracks, existingTracks } =
       await params.resolveExistingOperationTracks(selectedTracks)

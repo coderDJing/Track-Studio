@@ -8,6 +8,7 @@ import {
 } from '@renderer/composables/horizontalBrowse/horizontalBrowseModeShellTypes'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
 import { t } from '@renderer/utils/translate'
+import { isEditablePioneerUsbSong } from '@renderer/utils/pioneerUsbEditing'
 
 export const resolveHorizontalBrowseDeckToolbarPresentation = (input: {
   toolbarState: ReturnType<typeof createDefaultDeckToolbarState>
@@ -34,16 +35,19 @@ export const resolveHorizontalBrowseDeckToolbarPresentation = (input: {
     }
   )
   const externalSong = isRekordboxExternalPlaybackSource('', input.song)
+  const usbSong = isEditablePioneerUsbSong(input.song)
   return {
     ...toolbarState,
     disabled: toolbarState.disabled || input.editSaving,
-    bpmInputDisabled: input.editSaving
-      ? true
-      : input.editMode
-        ? toolbarState.bpmInputDisabled
-        : !input.song?.filePath,
+    bpmInputDisabled:
+      usbSong || input.editSaving
+        ? true
+        : input.editMode
+          ? toolbarState.bpmInputDisabled
+          : !input.song?.filePath,
     gridControlsDisabled: toolbarState.gridControlsDisabled || input.editSaving,
-    showGridControls: input.editMode ? input.editSubMode === 'grid' : !externalSong,
-    showMetronome: input.editMode || !externalSong
+    showGridControls: input.editMode ? input.editSubMode === 'grid' : !externalSong || usbSong,
+    gridShiftOnly: usbSong,
+    showMetronome: input.editMode || !externalSong || usbSong
   }
 }

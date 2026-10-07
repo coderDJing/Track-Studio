@@ -21,6 +21,7 @@ const props = defineProps<{
   showTapButton?: boolean
   tapBpmTitle?: string
   gridControlsDisabled?: boolean
+  gridShiftOnly?: boolean
   showSplitAfterPlayhead?: boolean
   showDeleteBoundary?: boolean
   gridAdjustScope?: 'whole' | 'after'
@@ -123,6 +124,7 @@ const handleTempoNudgeKeyUp = (direction: HorizontalBrowseTempoNudgeDirection) =
           :disabled="props.disabled"
           :bpm-input-disabled="props.bpmInputDisabled"
           :grid-controls-disabled="props.gridControlsDisabled"
+          :show-downbeat-line="!props.gridShiftOnly"
           :show-grid-controls="props.showGridControls"
           :bpm-input-value="props.bpmInputValue"
           :bpm-step="props.bpmStep"

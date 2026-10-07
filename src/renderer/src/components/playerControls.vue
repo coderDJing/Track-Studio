@@ -15,6 +15,7 @@ import { t } from '@renderer/utils/translate'
 import confirm from '@renderer/components/confirmDialog'
 import { analyzeFingerprintsForPaths } from '@renderer/utils/fingerprintActions'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
+import { isEditablePioneerUsbSong } from '@renderer/utils/pioneerUsbEditing'
 import type { LibraryTransferActionMode } from '@renderer/utils/libraryTransfer'
 import {
   getMusicSearchOpenFailedMessageKey,
@@ -847,7 +848,9 @@ onUnmounted(() => {
           </div>
         </div>
         <div
-          v-if="!isReadOnlyPlaybackSource"
+          v-if="
+            !isReadOnlyPlaybackSource || isEditablePioneerUsbSong(runtime.playingData.playingSong)
+          "
           style="padding: 5px 5px; border-bottom: 1px solid var(--border)"
         >
           <div class="menuButton" @click="delSong()">

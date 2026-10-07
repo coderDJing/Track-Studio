@@ -26,6 +26,7 @@ type DeckToolbarState = {
   metronomeVolumeLevel: 1 | 2 | 3
   canToggleMetronome: boolean
   gridControlsDisabled: boolean
+  gridShiftOnly?: boolean
   showSplitAfterPlayhead: boolean
   showDeleteBoundary: boolean
   gridAdjustScope: 'whole' | 'after'
@@ -195,6 +196,7 @@ const isTop = props.position === 'top'
         :show-tap-button="props.toolbarState.showTapButton"
         :tap-bpm-title="props.toolbarState.tapBpmTitle"
         :grid-controls-disabled="props.toolbarState.gridControlsDisabled"
+        :grid-shift-only="props.toolbarState.gridShiftOnly"
         :show-split-after-playhead="props.toolbarState.showSplitAfterPlayhead"
         :show-delete-boundary="props.toolbarState.showDeleteBoundary"
         :grid-adjust-scope="props.toolbarState.gridAdjustScope"

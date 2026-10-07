@@ -11,6 +11,7 @@ const normalizeSongGridUpdate = (
   return {
     filePath,
     timeBasisOffsetMs: payload?.timeBasisOffsetMs,
+    rekordboxGridEntries: payload?.rekordboxGridEntries,
     beatGridMap: Object.prototype.hasOwnProperty.call(payload, 'beatGridMap')
       ? payload?.beatGridMap
       : undefined,

@@ -4,6 +4,7 @@ import type { SongsAreaPaneKey } from '@renderer/stores/runtime'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import emitter from '@renderer/utils/mitt'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
+import { isEditablePioneerUsbSong } from '@renderer/utils/pioneerUsbEditing'
 import { resolveSeekPercentHotkeyRatio } from '@shared/playerSeekHotkeyRatio'
 import type { ISongInfo } from '../../../../../types/globals'
 
@@ -218,10 +219,19 @@ export function usePlayerHotkeys(
         return
       }
       // 检查是否是 Delete 键触发，并且歌曲列表区有选中的歌曲
+      if (
+        handler.key === 'delete' &&
+        runtime.focusArea === 'songsArea' &&
+        runtime.libraryAreaSelected === 'PioneerDeviceLibrary'
+      )
+        return
       if (handler.key === 'delete' && state.songsAreaSelectedCount.value > 0) {
         return // 如果列表区有选中，则此快捷键不响应，让列表区的删除逻辑处理
       }
-      if (isReadOnlyPlaybackSource()) {
+      if (
+        isReadOnlyPlaybackSource() &&
+        !isEditablePioneerUsbSong(runtime.playingData.playingSong)
+      ) {
         return
       }
       // 防止重复触发确认框

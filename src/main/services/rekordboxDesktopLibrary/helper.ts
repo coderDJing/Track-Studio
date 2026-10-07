@@ -242,7 +242,9 @@ const createHelperError = (
   return error
 }
 
-const HELPER_IDLE_TIMEOUT_MS = 60_000
+// Human editing often pauses for more than a minute between writes. Keep the
+// interpreter warm without keeping database sessions open between commands.
+const HELPER_IDLE_TIMEOUT_MS = 5 * 60_000
 const HELPER_PROBE_TIMEOUT_MS = 15_000
 const HELPER_COMMAND_TIMEOUT_MS = 120_000
 

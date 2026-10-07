@@ -96,7 +96,7 @@ export function registerRekordboxDesktopLibraryHandlers() {
   )
 
   ipcMain.handle('rekordbox-desktop-library:probe-write', async () => {
-    return await probeRekordboxDesktopLibraryWriteAvailability(true)
+    return await probeRekordboxDesktopLibraryWriteAvailability()
   })
 
   ipcMain.handle('rekordbox-desktop-library:load-tree', async () => {

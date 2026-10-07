@@ -22,6 +22,7 @@ import CuratedArtistCellContent from './SongListRows/CuratedArtistCellContent.vu
 import RowAnalysisBar from './SongListRows/RowAnalysisBar.vue'
 import WaveformPreviewCell from './SongListRows/WaveformPreviewCell.vue'
 import { createTouchLongPressDrag } from '@renderer/utils/touchLongPressDrag'
+import { createInternalMouseDrag } from '@renderer/utils/internalMouseDrag'
 
 const props = defineProps({
   songs: {
@@ -101,6 +102,7 @@ const props = defineProps({
     default: () => []
   },
   allowSongDragWhenReadOnly: { type: Boolean, default: false },
+  internalMouseDrag: { type: Boolean, default: false },
   allowContextMenuWhenReadOnly: { type: Boolean, default: false },
   allowDblclickWhenReadOnly: { type: Boolean, default: false },
   allowWaveformPreviewWhenReadOnly: { type: Boolean, default: false },
@@ -185,6 +187,7 @@ const draggingItemIds = vRef<string[]>([])
 const draggingSourceListUUID = vRef('')
 const lastAutoScrollAt = vRef(0)
 const touchSongDrag = createTouchLongPressDrag()
+const mouseSongDrag = createInternalMouseDrag()
 const AUTO_SCROLL_EDGE_PX = 36
 const AUTO_SCROLL_STEP_PX = 22
 const AUTO_SCROLL_MIN_INTERVAL = 16
@@ -633,6 +636,10 @@ const handleRowDragEnd = (event: DragEvent) => {
 }
 
 const handleRowDragStart = (event: DragEvent, item: { song: ISongInfo }) => {
+  if (props.internalMouseDrag && event.isTrusted) {
+    event.preventDefault()
+    return
+  }
   if (!canStartSongDrag.value) return
   if (isInternalReorderEnabled.value) {
     const rowKey = getRowKey(item.song)
@@ -663,6 +670,11 @@ const handleRowTouchStart = (event: TouchEvent) => {
   touchSongDrag.handleTouchStart(event, sourceElement)
 }
 
+const handleRowMouseDown = (event: MouseEvent) => {
+  if (!props.internalMouseDrag || !canStartSongDrag.value) return
+  if (event.currentTarget instanceof HTMLElement) mouseSongDrag.start(event, event.currentTarget)
+}
+
 const {
   onRowsMouseOver,
   onRowsMouseLeave,
@@ -680,6 +692,7 @@ const {
 })
 
 onUnmounted(() => {
+  mouseSongDrag.dispose()
   touchSongDrag.cancel()
   coverCellRefMap.clear()
 })
@@ -715,7 +728,8 @@ onUnmounted(() => {
           }"
           :data-filepath="item.song.filePath"
           :data-rowkey="getRowKey(item.song)"
-          :draggable="canStartSongDrag"
+          :draggable="canStartSongDrag && !internalMouseDrag"
+          @mousedown="handleRowMouseDown"
           @touchstart="handleRowTouchStart"
           @dragstart.stop="canStartSongDrag && handleRowDragStart($event, item)"
           @dragend.stop="canStartSongDrag && handleRowDragEnd($event)"

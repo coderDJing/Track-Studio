@@ -29,6 +29,14 @@ fn emit_rerun_if_changed_recursive(path: &Path) {
 
 fn main() {
   let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+  #[cfg(target_os = "windows")]
+  {
+    let probe_source = manifest_dir.join("native/windows_device_probe/frkb_windows_device_probe.cpp");
+    println!("cargo:rerun-if-changed={}", probe_source.display());
+    cc::Build::new().cpp(true).file(probe_source).flag_if_supported("/std:c++17")
+      .flag_if_supported("/EHsc").warnings(true).compile("frkb_windows_device_probe");
+    println!("cargo:rustc-link-lib=kernel32");
+  }
   let qm_root = manifest_dir.join("native/qm");
   println!(
     "cargo:rerun-if-changed={}",

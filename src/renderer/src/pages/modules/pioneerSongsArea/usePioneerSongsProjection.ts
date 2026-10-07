@@ -49,6 +49,7 @@ type UsePioneerSongsProjectionParams = {
   selectedRowKeys: Ref<string[]>
   selectedSourceRootPath: ComputedRef<string>
   selectedSourceKind: ComputedRef<IRekordboxSourceKind | ''>
+  selectedLibraryType: ComputedRef<string>
   selectedExternalKind: ComputedRef<ExternalLibraryKind | null>
   isExternalSource: ComputedRef<boolean>
   getKeyDisplayStyle: () => string
@@ -184,7 +185,17 @@ export const usePioneerSongsProjection = (params: UsePioneerSongsProjectionParam
           pioneerDeviceRootPath:
             params.selectedSourceKind.value === 'usb'
               ? params.selectedSourceRootPath.value || null
-              : null
+              : null,
+          pioneerUsbSource:
+            params.selectedSourceKind.value === 'usb' &&
+            (params.selectedLibraryType.value === 'deviceLibrary' ||
+              params.selectedLibraryType.value === 'oneLibrary')
+              ? {
+                  rootPath: params.selectedSourceRootPath.value,
+                  libraryType: params.selectedLibraryType.value,
+                  trackId: track.trackId
+                }
+              : undefined
         }),
     mixtapeItemId: track.rowKey,
     addedAtMs: normalizeAddedAtMs(track.dateAdded),
@@ -236,6 +247,8 @@ export const usePioneerSongsProjection = (params: UsePioneerSongsProjectionParam
       memoryCues: Array.isArray(song.memoryCues) ? song.memoryCues.map((cue) => ({ ...cue })) : []
     }
   }
+
+  let projectionRevision = 0
 
   const buildProjectedSongs = (tracks: IPioneerPlaylistTrack[]) => {
     let filtered = tracks.map((track) => toSongInfo(track))
@@ -370,13 +383,20 @@ export const usePioneerSongsProjection = (params: UsePioneerSongsProjectionParam
   }
 
   const applyFiltersAndSortingMerged = async (tracks: IPioneerPlaylistTrack[]) => {
+    const revision = ++projectionRevision
+    const playbackListKey = params.getCurrentPlaybackListKey()
     const filtered = buildProjectedSongs(tracks)
     const merged = await planSongListMerge({
       current: params.visibleSongs.value,
       next: filtered,
       comparator
     })
-    if (!merged.changed) return false
+    if (
+      revision !== projectionRevision ||
+      playbackListKey !== params.getCurrentPlaybackListKey() ||
+      !merged.changed
+    )
+      return false
     params.visibleSongs.value = merged.items
     if (
       params.getCurrentPlaybackListKey() &&
@@ -387,10 +407,11 @@ export const usePioneerSongsProjection = (params: UsePioneerSongsProjectionParam
     return true
   }
 
-  const applyFiltersAndSorting = (reason = 'unspecified') => {
-    const filtered = buildProjectedSongs(params.originalTracks.value)
+  const applyFiltersAndSorting = async (reason = 'unspecified') => {
+    const changed = await applyFiltersAndSortingMerged(params.originalTracks.value)
+    if (!changed) return
+    const filtered = params.visibleSongs.value
     const beforeCount = params.originalTracks.value.length
-    params.visibleSongs.value = filtered
 
     if (
       params.getCurrentPlaybackListKey() &&

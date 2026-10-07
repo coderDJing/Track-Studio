@@ -4,6 +4,8 @@ import type { HorizontalBrowseDeckKey } from '@renderer/composables/horizontalBr
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import emitter from '@renderer/utils/mitt'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
+import { isEditablePioneerUsbSong, deletePioneerUsbSong } from '@renderer/utils/pioneerUsbEditing'
+import { usePioneerUsbPlaybackDeletion } from '@renderer/composables/rekordboxDesktop/usePioneerUsbPlaybackDeletion'
 import libraryUtils from '@renderer/utils/libraryUtils'
 import { t } from '@renderer/utils/translate'
 import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
@@ -27,6 +29,13 @@ const normalizePath = (value: string | null | undefined) =>
 
 export const useHorizontalBrowseDeckDelete = (params: UseHorizontalBrowseDeckDeleteParams) => {
   const deletingDecks = new Set<HorizontalBrowseDeckKey>()
+  usePioneerUsbPlaybackDeletion({
+    runtime: params.runtime,
+    onDeckDeleted: async (deck, song) => {
+      if (!deletingDecks.has(deck) && params.getDeckSong(deck)?.filePath === song.filePath)
+        await params.ejectDeckSong(deck)
+    }
+  })
 
   const showDeleteSummaryIfNeeded = async (summary: DeleteSummary) => {
     const total = Number(summary.total || 0)
@@ -50,6 +59,17 @@ export const useHorizontalBrowseDeckDelete = (params: UseHorizontalBrowseDeckDel
     const song = params.getDeckSong(deck)
     const filePath = String(song?.filePath || '').trim()
     if (!filePath || deletingDecks.has(deck)) return
+    if (song && isEditablePioneerUsbSong(song)) {
+      deletingDecks.add(deck)
+      try {
+        if (await deletePioneerUsbSong(song)) {
+          if (params.getDeckSong(deck)?.filePath === filePath) await params.ejectDeckSong(deck)
+        }
+      } finally {
+        deletingDecks.delete(deck)
+      }
+      return
+    }
 
     if (isRekordboxExternalPlaybackSource('', song)) {
       await confirm({

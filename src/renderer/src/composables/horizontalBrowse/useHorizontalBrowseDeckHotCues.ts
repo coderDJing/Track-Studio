@@ -6,6 +6,7 @@ import type {
 } from '@renderer/composables/horizontalBrowse/horizontalBrowseNativeTransport'
 import type { HorizontalBrowseRenderSyncOptions } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseRenderSync'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
+import { editPioneerUsbSong, isEditablePioneerUsbSong } from '@renderer/utils/pioneerUsbEditing'
 
 type DeckKey = HorizontalBrowseDeckKey
 
@@ -73,7 +74,7 @@ export const useHorizontalBrowseDeckHotCues = (params: UseHorizontalBrowseDeckHo
       await params.handleDeckHotCueRecall(deck, existingHotCue)
       return
     }
-    if (isRekordboxExternalPlaybackSource('', song)) return
+    if (isRekordboxExternalPlaybackSource('', song) && !isEditablePioneerUsbSong(song)) return
 
     const storedCueDefinition = params.buildDeckStoredCueDefinition(deck)
     if (!storedCueDefinition) return
@@ -84,14 +85,29 @@ export const useHorizontalBrowseDeckHotCues = (params: UseHorizontalBrowseDeckHo
           sec: params.resolveDeckMarkerPlacementSec(deck)
         }
 
-    const result = (await window.electron.ipcRenderer.invoke('song:set-hot-cue', {
-      filePath: song.filePath,
-      slot,
-      sec: cueDefinition.sec,
-      isLoop: cueDefinition.isLoop,
-      loopEndSec: cueDefinition.loopEndSec,
-      durationSec: params.resolveDeckDurationSeconds(deck)
-    })) as { hotCues?: ISongHotCue[] } | null
+    const result = isEditablePioneerUsbSong(song)
+      ? await editPioneerUsbSong(song, {
+          kind: 'set-hot-cue',
+          cue: {
+            slot,
+            ...cueDefinition,
+            sec: Math.round(cueDefinition.sec * 1000) / 1000,
+            loopEndSec:
+              cueDefinition.loopEndSec === undefined
+                ? undefined
+                : Math.round(cueDefinition.loopEndSec * 1000) / 1000
+          }
+        })
+      : ((await window.electron.ipcRenderer.invoke('song:set-hot-cue', {
+          filePath: song.filePath,
+          slot,
+          sec: cueDefinition.sec,
+          isLoop: cueDefinition.isLoop,
+          loopEndSec: cueDefinition.loopEndSec,
+          durationSec: params.resolveDeckDurationSeconds(deck)
+        })) as { hotCues?: ISongHotCue[] } | null)
+    if (isEditablePioneerUsbSong(song) && !result) return
+    if (params.resolveDeckSong(deck)?.filePath !== song.filePath) return
     const nextHotCues = Array.isArray(result?.hotCues)
       ? result.hotCues
       : [{ slot, sec: cueDefinition.sec }]
@@ -109,13 +125,17 @@ export const useHorizontalBrowseDeckHotCues = (params: UseHorizontalBrowseDeckHo
       ? song.hotCues.find((item) => item.slot === slot)
       : null
     if (!existingHotCue) return
-    if (isRekordboxExternalPlaybackSource('', song)) return
+    if (isRekordboxExternalPlaybackSource('', song) && !isEditablePioneerUsbSong(song)) return
 
-    const result = (await window.electron.ipcRenderer.invoke('song:delete-hot-cue', {
-      filePath: song.filePath,
-      slot,
-      durationSec: params.resolveDeckDurationSeconds(deck)
-    })) as { hotCues?: ISongHotCue[] } | null
+    const result = isEditablePioneerUsbSong(song)
+      ? await editPioneerUsbSong(song, { kind: 'delete-hot-cue', slot })
+      : ((await window.electron.ipcRenderer.invoke('song:delete-hot-cue', {
+          filePath: song.filePath,
+          slot,
+          durationSec: params.resolveDeckDurationSeconds(deck)
+        })) as { hotCues?: ISongHotCue[] } | null)
+    if (isEditablePioneerUsbSong(song) && !result) return
+    if (params.resolveDeckSong(deck)?.filePath !== song.filePath) return
     patchDeckSongHotCues(deck, Array.isArray(result?.hotCues) ? result.hotCues : [])
     params.syncDeckRenderState({ force: deck })
   }
