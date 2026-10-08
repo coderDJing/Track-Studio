@@ -151,7 +151,7 @@ const zhChapters: Omit<Chapter, 'cue' | 'color'>[] = [
           },
           { name: '区间播放', detail: '只播放指定片段，也可以按分析出的段落区间试听' },
           { name: '小窗播放器', detail: '浏览器模式可弹出小窗，支持区间播放、波形跳转和封面操作' },
-          { name: '多格式播放', detail: '内置媒体工具链，18 种常见和专业格式导入即可试听' }
+          { name: '多格式播放', detail: '内置媒体工具链，常见和专业音频格式导入即可试听' }
         ]
       },
       {
@@ -264,7 +264,7 @@ const zhChapters: Omit<Chapter, 'cue' | 'color'>[] = [
     id: 'external',
     kicker: '外部曲库',
     title: '不替换你的 DJ 软件，而是接上它',
-    lead: '直接读取 Rekordbox 本机库、U 盘里的 Device Library 与 OneLibrary，以及 Serato 和 Traktor 曲库。Cue 和 Loop 原样保留，分析结果留在 Track Studio 里，不改写来源。',
+    lead: '直接读取 Rekordbox 本机库、U 盘里的 Device Library 与 OneLibrary，以及 Serato 和 Traktor 曲库。支持编辑 U 盘歌单、Cue 与网格；曲目分析结果留在 Track Studio 里。',
     surface: 'external',
     surfaceCaption: 'Rekordbox U 盘曲库：在 Track Studio 里浏览、试听、复制到本地库',
     groups: [
@@ -275,6 +275,10 @@ const zhChapters: Omit<Chapter, 'cue' | 'color'>[] = [
           {
             name: 'U 盘曲库',
             detail: 'Device Library 与 OneLibrary，包含歌单树、预览波形和多盘识别'
+          },
+          {
+            name: 'U 盘编辑',
+            detail: '关闭 rekordbox 后，可调整歌单曲序、增删曲目、修改 Cue 和网格位置'
           },
           { name: 'Cue 与 Loop', detail: '读取 Hot Cue、Memory Cue 与 Loop，复制到本地库时保留' },
           { name: 'XML 导出', detail: '整理好的歌单导出为 Rekordbox XML' }
@@ -457,7 +461,7 @@ const enChapters: Omit<Chapter, 'cue' | 'color'>[] = [
           },
           {
             name: 'Wide format support',
-            detail: 'Built-in media tooling plays 18 common and pro formats'
+            detail: 'Built-in media tooling plays common and professional audio formats'
           }
         ]
       },
@@ -619,7 +623,7 @@ const enChapters: Omit<Chapter, 'cue' | 'color'>[] = [
     id: 'external',
     kicker: 'External libraries',
     title: 'Keeps your DJ software. Plugs into it.',
-    lead: 'Reads the Rekordbox desktop library, Device Library and OneLibrary on USB drives, plus Serato and Traktor libraries. Cues and Loops come along; analysis stays inside Track Studio and never rewrites the source.',
+    lead: 'Reads the Rekordbox desktop library, Device Library and OneLibrary on USB drives, plus Serato and Traktor libraries. Edit USB playlists, cues, and beat grids; track analysis results stay inside Track Studio.',
     surface: 'external',
     surfaceCaption: 'Rekordbox USB library: browse, audition, and copy into your local library',
     groups: [
@@ -633,6 +637,11 @@ const enChapters: Omit<Chapter, 'cue' | 'color'>[] = [
           {
             name: 'USB libraries',
             detail: 'Device Library and OneLibrary with trees, previews, multi-drive'
+          },
+          {
+            name: 'USB editing',
+            detail:
+              'With rekordbox closed, reorder tracks, add or remove songs, and edit cues and grids'
           },
           {
             name: 'Cues & Loops',
@@ -729,7 +738,7 @@ export const zhContent: HomeContent = {
     subtitle:
       '从真实文件整理、指纹去重、波形试听，到双轨横推、SET 编排、Mixtape 录制和 Stem 分离。演出前要做的事，在一个键盘优先的桌面应用里做完。',
     platforms: 'Windows 10+ · macOS 12+',
-    formats: '18 种音频格式',
+    formats: '支持多种音频格式',
     scrollHint: '往下滚，整页就是一首歌'
   },
   chapters: withCues(zhChapters),
@@ -766,7 +775,7 @@ export const enContent: HomeContent = {
     subtitle:
       'Real file organization, fingerprint dedup, and waveform auditioning, through dual-deck browsing, SET programming, Mixtape recording, and stem separation. Everything before a gig, in one keyboard-first desktop app.',
     platforms: 'Windows 10+ · macOS 12+',
-    formats: '18 audio formats',
+    formats: 'Multiple audio formats',
     scrollHint: 'Scroll down: this page plays like a track'
   },
   chapters: withCues(enChapters),

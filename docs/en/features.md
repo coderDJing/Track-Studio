@@ -77,10 +77,11 @@ A detailed reference for Track Studio’s library, playback, analysis, and prepa
 - **Cue and Loop support**: Read Hot Cues, Memory Cues, and Loop data from Rekordbox desktop and USB libraries and preserve them when copying into local Track Studio libraries.
 - **Rekordbox playlist operations**: Browse playlists, reorder tracks, create or move playlist nodes where supported, and export Rekordbox XML.
 - **USB library support**: Read Device Library and OneLibrary structures, including playlist trees, waveform previews, multiple drives, and track playback.
+- **USB library editing**: On Windows or macOS, close rekordbox before changing a detected USB drive. Reorder tracks in playlists, add or remove tracks, delete playlists or tracks, and edit Hot Cues, Memory Cues, Loops, and beat-grid positions in Device Library and OneLibrary.
 - **External-library context menus**: Use familiar right-click actions on Rekordbox desktop and USB tracks, including copying to Filter or Curated libraries.
 - **Keyboard multi-selection**: Select multiple songs in Rekordbox desktop and USB libraries with keyboard-style range selection.
 - **Curated artist import**: Import curated artist data from Rekordbox desktop and USB libraries to keep selection tags useful across sources.
-- **Read-only analysis for external tracks**: Analyze BPM, beat grid, energy, and sections for Rekordbox desktop and USB libraries, Serato, Traktor, and ordinary external tracks. Results stay inside Track Studio and are not written back to the source library.
+- **Read-only analysis for external tracks**: Analyze BPM, beat grid, energy, and sections for Rekordbox desktop and USB libraries, Serato, Traktor, and ordinary external tracks. These analysis results stay inside Track Studio and are not automatically written back to the source library.
 - **Missing-file handling**: Missing source files are clearly marked, blocked from playback, and can be cleaned from Rekordbox playlist records when appropriate.
 
 ## Serato Library Integration

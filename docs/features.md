@@ -77,10 +77,11 @@ description: 了解 Track Studio 的真实文件管理、指纹去重、双轨�
 - **Cue 与 Loop 支持**：可从 Rekordbox 本机库与 U 盘曲库读取 Hot Cue、Memory Cue 与 Loop，并在复制到 Track Studio 本地库时保留。
 - **Rekordbox 歌单操作**：可浏览歌单、拖拽排序曲目，在支持范围内创建或移动歌单节点，并可导出 Rekordbox XML。
 - **U 盘曲库支持**：支持读取 Device Library 与 OneLibrary，包含歌单树、预览波形、多盘识别和曲目播放。
+- **U 盘曲库编辑**：在 Windows 或 macOS 上，关闭 rekordbox 后可对已识别的 U 盘歌单调整曲序、添加或移除曲目、删除歌单或曲目，并编辑 Hot Cue、Memory Cue、Loop 与节拍网格位置。支持 Device Library 与 OneLibrary。
 - **外部库右键菜单**：Rekordbox 本机库与 U 盘曲库支持常用右键操作，包括复制到筛选库或精选库。
 - **键盘多选**：Rekordbox 本机库与 U 盘曲库支持类似本地列表的键盘范围多选。
 - **精选表演者导入**：可从 Rekordbox 本机库与 U 盘曲库导入精选表演者数据，让跨来源选曲标签继续可用。
-- **外部曲目只读分析**：Rekordbox 本机库与 U 盘曲库、Serato、Traktor 和普通外部曲目可做 BPM、网格、能量和段落分析，结果留在 Track Studio 内，不改写源库。
+- **外部曲目只读分析**：Rekordbox 本机库与 U 盘曲库、Serato、Traktor 和普通外部曲目可做 BPM、网格、能量和段落分析；这些分析结果留在 Track Studio 内，不会自动写回源库。
 - **缺失文件处理**：找不到原文件的曲目会标红并阻止播放，必要时可清理 Rekordbox 歌单里的失效记录。
 
 ## Serato 曲库集成
