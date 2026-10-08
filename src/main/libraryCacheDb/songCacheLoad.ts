@@ -1,8 +1,8 @@
 import { getLibraryDb } from '../libraryDb'
 import type { SqliteDatabase } from '../libraryDb'
 import { log } from '../log'
-import { isPackagedRcMainProcess } from '../services/rcDiagnosticEnvironment'
-import { runTracedSync } from '../services/mainProcessActivityTraceState'
+import { readSongCacheOffMainThread } from '../services/songCacheReadWorker'
+import type { SongCacheDbRow } from './songCacheRead'
 import type { ISongInfo } from '../../types/globals'
 import type { SongCacheEntry } from './types'
 import {
@@ -12,13 +12,6 @@ import {
   resolveAbsoluteListRoot,
   resolveAbsoluteFilePath
 } from './pathResolvers'
-
-type SongCacheDbRow = {
-  file_path?: string
-  size?: unknown
-  mtime_ms?: unknown
-  info_json?: unknown
-}
 
 type SongCacheLoadHelpers = {
   ensureMigrated: (db: SqliteDatabase, listRoot: string) => Promise<void>
@@ -35,12 +28,6 @@ type SongCacheLoadHelpers = {
   ) => number
 }
 
-const SLOW_SONG_CACHE_LOAD_MS = 500
-
-/**
- * 全量 song_cache 读取。RC 只在超过阈值时记录阶段耗时、根目录和行数；
- * 确认慢加载根因并连续验证不再超阈值后，删除下面的诊断日志。
- */
 export async function loadSongCacheWithHelpers(
   listRoot: string,
   helpers: SongCacheLoadHelpers
@@ -55,82 +42,51 @@ export async function loadSongCacheWithHelpers(
     resolvedRoot.legacyAbs && resolvedRoot.legacyAbs !== listRootKey
       ? resolvedRoot.legacyAbs
       : undefined
-  const startedAt = performance.now()
-  let migrationMs = 0
-  let selectMs = 0
-  let appendMs = 0
-  let looseRootsMs = 0
-  let legacyMigrationMs = 0
-  let selectedRows = 0
-  let legacyRowsCount = 0
-  let looseRootCount = 0
   try {
-    const migrationStartedAt = performance.now()
     await helpers.ensureMigrated(db, listRoot)
-    migrationMs = performance.now() - migrationStartedAt
-    // 迁移 await 后的 SQLite 读取与 JSON.parse 都是同步操作，保留主线程活动埋点。
-    const syncStartedAt = performance.now()
-    const map = runTracedSync('sqlite:song-cache-load', () => {
+    // 主进程只做路径映射；可能等待磁盘/锁的全量 SELECT 在只读 worker 中执行。
+    const map = await (async () => {
       const loaded = new Map<string, SongCacheEntry>()
       const appendRows = (rowsToUse: SongCacheDbRow[], rootKey: string, legacyRelRoot?: string) => {
-        const appendStartedAt = performance.now()
-        try {
-          for (const row of rowsToUse) {
-            if (!row || !row.file_path || row.info_json === undefined) continue
-            let info: ISongInfo | null = null
-            try {
-              info = JSON.parse(String(row.info_json)) as ISongInfo
-            } catch {
-              info = null
-            }
-            const size = toNumber(row.size)
-            const mtimeMs = toNumber(row.mtime_ms)
-            if (!info || size === null || mtimeMs === null) continue
-            let absFilePath = resolveAbsoluteFilePath(rootKey, String(row.file_path))
-            if (legacyRelRoot) {
-              const resolvedLegacy = resolveFilePathInput(legacyRelRoot, String(row.file_path))
-              if (resolvedLegacy && resolvedLegacy.isRelativeKey) {
-                absFilePath = resolveAbsoluteFilePath(listRootKey, resolvedLegacy.key)
-              }
-            }
-            info.filePath = absFilePath
-            loaded.set(absFilePath, { size, mtimeMs, info })
+        for (const row of rowsToUse) {
+          if (!row || !row.file_path || row.info_json === undefined) continue
+          let info: ISongInfo | null = null
+          try {
+            info = JSON.parse(String(row.info_json)) as ISongInfo
+          } catch {
+            info = null
           }
-        } finally {
-          appendMs += performance.now() - appendStartedAt
+          const size = toNumber(row.size)
+          const mtimeMs = toNumber(row.mtime_ms)
+          if (!info || size === null || mtimeMs === null) continue
+          let absFilePath = resolveAbsoluteFilePath(rootKey, String(row.file_path))
+          if (legacyRelRoot) {
+            const resolvedLegacy = resolveFilePathInput(legacyRelRoot, String(row.file_path))
+            if (resolvedLegacy && resolvedLegacy.isRelativeKey) {
+              absFilePath = resolveAbsoluteFilePath(listRootKey, resolvedLegacy.key)
+            }
+          }
+          info.filePath = absFilePath
+          loaded.set(absFilePath, { size, mtimeMs, info })
         }
       }
-      const selectStartedAt = performance.now()
-      const rows = db
-        .prepare<SongCacheDbRow>(
-          'SELECT file_path, size, mtime_ms, info_json FROM song_cache WHERE list_root = ?'
-        )
-        .all(listRootKey)
-      const legacyRows = legacyListRoot
-        ? db
-            .prepare<SongCacheDbRow>(
-              'SELECT file_path, size, mtime_ms, info_json FROM song_cache WHERE list_root = ?'
-            )
-            .all(legacyListRoot)
-        : []
-      selectMs = performance.now() - selectStartedAt
-      selectedRows = rows.length
-      legacyRowsCount = legacyRows.length
-      const looseStartedAt = performance.now()
-      const appendBeforeLoose = appendMs
+      const [rows, legacyRows = []] = await readSongCacheOffMainThread(
+        db,
+        legacyListRoot ? [listRootKey, legacyListRoot] : [listRootKey]
+      )
+      // await 期间允许用户切库，不能把旧库结果按新库根目录映射或迁移。
+      if (getLibraryDb() !== db) return null
       const looseRoots =
         rows.length === 0 && legacyRows.length === 0
           ? helpers
               .findLooseRoots(db, [listRoot, listRootAbs, listRootKey], listRootKey)
               .filter((root) => root !== listRootKey && root !== legacyListRoot)
           : []
-      looseRootCount = looseRoots.length
       if (looseRoots.length > 0) {
-        const extraStmt = db.prepare<SongCacheDbRow>(
-          'SELECT file_path, size, mtime_ms, info_json FROM song_cache WHERE list_root = ?'
-        )
-        for (const root of looseRoots) {
-          const extraRows = extraStmt.all(root)
+        const extraBatches = await readSongCacheOffMainThread(db, looseRoots)
+        if (getLibraryDb() !== db) return null
+        for (const [index, root] of looseRoots.entries()) {
+          const extraRows = extraBatches[index]
           if (extraRows && extraRows.length > 0) {
             appendRows(extraRows, root, listRootAbs)
             if (resolvedRoot.isRelativeKey && listRootAbs) {
@@ -139,39 +95,15 @@ export async function loadSongCacheWithHelpers(
           }
         }
       }
-      looseRootsMs = Math.max(
-        0,
-        performance.now() - looseStartedAt - (appendMs - appendBeforeLoose)
-      )
       appendRows(rows, listRootKey)
       if (legacyRows && legacyRows.length > 0 && legacyListRoot && listRootAbs) {
         appendRows(legacyRows, legacyListRoot, legacyListRoot)
         if (resolvedRoot.isRelativeKey) {
-          const legacyMigrationStartedAt = performance.now()
           helpers.migrateRows(db, legacyListRoot, listRootKey, listRootAbs)
-          legacyMigrationMs = performance.now() - legacyMigrationStartedAt
         }
       }
       return loaded
-    })
-    const syncMs = performance.now() - syncStartedAt
-    const elapsedMs = performance.now() - startedAt
-    if (elapsedMs >= SLOW_SONG_CACHE_LOAD_MS && isPackagedRcMainProcess()) {
-      log.warn('[sqlite] slow song cache load', {
-        listRoot: listRootKey,
-        elapsedMs: Math.round(elapsedMs),
-        migrationMs: Math.round(migrationMs),
-        syncMs: Math.round(syncMs),
-        selectMs: Math.round(selectMs),
-        appendMs: Math.round(appendMs),
-        looseRootsMs: Math.round(looseRootsMs),
-        legacyMigrationMs: Math.round(legacyMigrationMs),
-        selectedRows,
-        legacyRows: legacyRowsCount,
-        looseRoots: looseRootCount,
-        entries: map.size
-      })
-    }
+    })()
     return map
   } catch (error) {
     log.error('[sqlite] song cache load failed', error)

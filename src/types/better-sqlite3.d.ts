@@ -22,6 +22,9 @@ declare module 'better-sqlite3' {
     }
 
     interface Database {
+      readonly name: string
+      readonly memory: boolean
+      readonly inTransaction: boolean
       prepare<TResult = Record<string, unknown>>(source: string): Statement<TResult>
       transaction<T extends (...args: unknown[]) => unknown>(fn: T): Transaction<T>
       pragma(source: string, options: { simple: true }): unknown

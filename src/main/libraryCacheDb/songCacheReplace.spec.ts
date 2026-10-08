@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -8,6 +8,12 @@ import store from '../store'
 import { loadPlaylistViewSnapshotMeta, savePlaylistViewSnapshot } from './playlistViewSnapshot'
 import { loadSongCache, replaceSongCache } from './songCache'
 import type { SongCacheEntry } from './types'
+
+// Worker 集成测试使用构建产物：先 pnpm run build，再运行本测试。
+vi.mock('../workerPath', () => ({
+  resolveMainWorkerPath: (_dirname: string, filename: string) =>
+    path.resolve('out/main/workers', filename)
+}))
 
 const temporaryRoots: string[] = []
 const previousDatabaseDir = store.databaseDir

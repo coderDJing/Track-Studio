@@ -6,6 +6,16 @@ import fs = require('fs-extra')
 const execFileAsync = promisify(execFile)
 const ATTRIB_TIMEOUT_MS = 3_000
 
+// 目录读取/创建无需先清除隐藏属性，直接设置即可，避免每次读缓存启动两次 attrib。
+export const setFileHidden = async (filePath: string): Promise<void> => {
+  if (os.platform() !== 'win32') return
+  await execFileAsync('attrib', ['+h', filePath], {
+    windowsHide: true,
+    timeout: ATTRIB_TIMEOUT_MS,
+    killSignal: 'SIGKILL'
+  })
+}
+
 export type HiddenFileOperationStep =
   | 'checking-existing-before'
   | 'clearing-hidden'

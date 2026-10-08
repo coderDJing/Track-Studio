@@ -1,11 +1,7 @@
 import { app } from 'electron'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
 import type { ExternalLibrarySourceProbe } from '../../../shared/externalLibrary'
-
-const execFileAsync = promisify(execFile)
 
 const pathExists = async (targetPath: string) => {
   try {
@@ -19,39 +15,33 @@ const pathExists = async (targetPath: string) => {
 const uniquePaths = (values: string[]) =>
   Array.from(new Set(values.map((value) => path.normalize(value)).filter(Boolean)))
 
-const listWindowsDriveRoots = async () => {
+const listWindowsDriveRoots = () => {
   if (process.platform !== 'win32') return []
-  try {
-    const { stdout } = await execFileAsync('powershell.exe', [
-      '-NoProfile',
-      '-NonInteractive',
-      '-Command',
-      'Get-CimInstance Win32_LogicalDisk | Select-Object -ExpandProperty DeviceID'
-    ])
-    return String(stdout || '')
-      .split(/\r?\n/)
-      .map((value) => value.trim())
-      .filter((value) => /^[A-Za-z]:$/.test(value))
-      .map((value) => `${value}${path.sep}`)
-  } catch {
-    return []
-  }
+  // 只探测明确的 Serato 文件路径，不为定时图标刷新启动 PowerShell/CIM 进程。
+  return Array.from({ length: 26 }, (_, index) => `${String.fromCharCode(65 + index)}:${path.sep}`)
 }
 
 const findSeratoRoot = async () => {
-  const driveRoots = await listWindowsDriveRoots()
-  const candidates = uniquePaths([
+  const localCandidates = uniquePaths([
     path.join(app.getPath('music'), '_Serato_'),
     path.join(app.getPath('home'), 'Music', '_Serato_'),
-    path.join(app.getPath('home'), '_Serato_'),
-    ...driveRoots.map((root) => path.join(root, '_Serato_'))
+    path.join(app.getPath('home'), '_Serato_')
   ])
-  for (const candidate of candidates) {
-    const hasDatabase = await pathExists(path.join(candidate, 'database V2'))
-    const hasSubcrates = await pathExists(path.join(candidate, 'Subcrates'))
-    if (hasDatabase || hasSubcrates) return candidate
+  const findAvailable = async (candidates: string[]) => {
+    const available = await Promise.all(
+      candidates.map(async (candidate) => {
+        const [hasDatabase, hasSubcrates] = await Promise.all([
+          pathExists(path.join(candidate, 'database V2')),
+          pathExists(path.join(candidate, 'Subcrates'))
+        ])
+        return hasDatabase || hasSubcrates
+      })
+    )
+    return candidates.find((_candidate, index) => available[index]) || ''
   }
-  return ''
+  const localRoot = await findAvailable(localCandidates)
+  if (localRoot) return localRoot
+  return findAvailable(listWindowsDriveRoots().map((root) => path.join(root, '_Serato_')))
 }
 
 const findTraktorCollection = async () => {
@@ -79,9 +69,11 @@ const findTraktorCollection = async () => {
   return candidates.sort((left, right) => right.modifiedAt - left.modifiedAt)[0]?.filePath || ''
 }
 
-export const probeExternalLibraries = async (): Promise<ExternalLibrarySourceProbe[]> => {
-  const seratoRoot = await findSeratoRoot()
-  const traktorCollection = await findTraktorCollection()
+const probeSources = async (): Promise<ExternalLibrarySourceProbe[]> => {
+  const [seratoRoot, traktorCollection] = await Promise.all([
+    findSeratoRoot(),
+    findTraktorCollection()
+  ])
   return [
     {
       kind: 'serato',
@@ -98,6 +90,15 @@ export const probeExternalLibraries = async (): Promise<ExternalLibrarySourcePro
       displayName: 'Traktor'
     }
   ]
+}
+
+let probeInflight: Promise<ExternalLibrarySourceProbe[]> | null = null
+export const probeExternalLibraries = (): Promise<ExternalLibrarySourceProbe[]> => {
+  if (probeInflight) return probeInflight
+  probeInflight = probeSources().finally(() => {
+    probeInflight = null
+  })
+  return probeInflight
 }
 
 export const __externalLibraryDetectTestUtils = {

@@ -45,6 +45,7 @@ export default defineConfig({
           ),
           songListScanWorker: resolve(__dirname, 'src/main/workers/songListScanWorker.ts'),
           coverExtractionWorker: resolve(__dirname, 'src/main/workers/coverExtractionWorker.ts'),
+          songCacheReadWorker: resolve(__dirname, 'src/main/workers/songCacheReadWorker.ts'),
           recycleBinDeleteWorker: resolve(__dirname, 'src/main/workers/recycleBinDeleteWorker.ts'),
           recycleBinCacheTransferWorker: resolve(
             __dirname,
@@ -84,6 +85,9 @@ export default defineConfig({
             }
             if (chunk.name === 'coverExtractionWorker') {
               return 'workers/coverExtractionWorker.js'
+            }
+            if (chunk.name === 'songCacheReadWorker') {
+              return 'workers/songCacheReadWorker.js'
             }
             if (chunk.name === 'recycleBinDeleteWorker') {
               return 'workers/recycleBinDeleteWorker.js'

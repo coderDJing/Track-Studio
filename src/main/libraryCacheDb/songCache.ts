@@ -352,7 +352,7 @@ export async function ensureSongCacheMigrated(db: SqliteDatabase, listRoot: stri
   migratedSongRoots.add(listRootKey)
   try {
     const countRow = db
-      .prepare('SELECT COUNT(1) as count FROM song_cache WHERE list_root = ?')
+      .prepare('SELECT 1 as count FROM song_cache WHERE list_root = ? LIMIT 1')
       .get(listRootKey)
     if (countRow && Number(countRow.count) > 0) return
     if (!listRootAbs) return
