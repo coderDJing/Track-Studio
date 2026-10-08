@@ -13,6 +13,7 @@ import type { IAudioMetadata, IPicture } from 'music-metadata'
 import { updateSetItemFilePathReferences } from '../setListDb'
 import { notifyCuratedFilePathChanged } from '../curatedLibrarySync/identityDb'
 import { registerChildProcess } from './childProcessRegistry'
+import { createStageDiagnostics } from './stageDiagnostics'
 
 async function parseMetadata(filePath: string) {
   const mm = await import('music-metadata')
@@ -346,6 +347,9 @@ export async function updateTrackMetadata(
 ): Promise<{ songInfo: ISongInfo; detail: ITrackMetadataDetail; renamedFrom?: string }> {
   let filePath = payload.filePath
   const originalFilePath = filePath
+  const diagnostics = createStageDiagnostics('metadata-editor-perf', {
+    fileName: path.basename(filePath)
+  })
   const ext = path.extname(filePath)
   const lowerExt = ext.toLowerCase()
   const ffmpegPath = resolveBundledFfmpegPath()
@@ -360,7 +364,7 @@ export async function updateTrackMetadata(
   let originalMetadata: IAudioMetadata | null = null
   try {
     try {
-      originalMetadata = await parseMetadata(filePath)
+      originalMetadata = await diagnostics.measure('read-original', () => parseMetadata(filePath))
     } catch {
       originalMetadata = null
     }
@@ -391,29 +395,37 @@ export async function updateTrackMetadata(
     if (coverAllowed) {
       const { buffer, mime } = dataUrlToBuffer(coverDataUrl)
       const extension = mime.includes('png') ? '.png' : mime.includes('webp') ? '.webp' : '.jpg'
-      coverTempPath = await writeTempFile(buffer, extension)
+      coverTempPath = await diagnostics.measure('write-cover-temp', () =>
+        writeTempFile(buffer, extension)
+      )
     }
 
     const args = buildFfmpegArgs(filePath, tempOutput, payload, coverTempPath)
-    await new Promise<void>((resolve, reject) => {
-      const child = child_process.spawn(ffmpegPath, args, { windowsHide: true })
-      registerChildProcess(child, 'metadata-editor:ffmpeg')
-      let stderrOutput = ''
-      child.stderr?.on('data', (chunk) => {
-        if (stderrOutput.length < 8000) {
-          stderrOutput += chunk.toString()
-        }
-      })
-      child.on('error', (err) => {
-        reject(createFfmpegError(null, stderrOutput || err?.message))
-      })
-      child.on('exit', (code) => {
-        if (code === 0) resolve()
-        else reject(createFfmpegError(code ?? null, stderrOutput))
-      })
-    })
+    await diagnostics.measure(
+      'ffmpeg-remux',
+      () =>
+        new Promise<void>((resolve, reject) => {
+          const child = child_process.spawn(ffmpegPath, args, { windowsHide: true })
+          registerChildProcess(child, 'metadata-editor:ffmpeg')
+          let stderrOutput = ''
+          child.stderr?.on('data', (chunk) => {
+            if (stderrOutput.length < 8000) {
+              stderrOutput += chunk.toString()
+            }
+          })
+          child.on('error', (err) => {
+            reject(createFfmpegError(null, stderrOutput || err?.message))
+          })
+          child.on('exit', (code) => {
+            if (code === 0) resolve()
+            else reject(createFfmpegError(code ?? null, stderrOutput))
+          })
+        })
+    )
 
-    await fs.move(tempOutput, filePath, { overwrite: true })
+    await diagnostics.measure('replace-audio-file', () =>
+      fs.move(tempOutput, filePath, { overwrite: true })
+    )
 
     // Windows: WAV 写入 LIST/INFO（GBK），与 ID3v2.3 同步
     try {
@@ -493,7 +505,7 @@ export async function updateTrackMetadata(
       } catch {}
     }
 
-    const metadata = await parseMetadata(filePath)
+    const metadata = await diagnostics.measure('read-updated', () => parseMetadata(filePath))
     // 构造返回给列表的简要信息时，也应用与读取时相同的 WAV INFO 合并逻辑，避免出现 '0!0!0!'
     let songInfoMeta = metadata
     if (process.platform === 'win32' && lowerExt === '.wav') {
@@ -506,8 +518,12 @@ export async function updateTrackMetadata(
     }
     const songInfo = buildSongInfo(filePath, songInfoMeta)
     const renamedFrom = originalFilePath === filePath ? undefined : originalFilePath
-    await updateSongCacheEntry(filePath, songInfo, renamedFrom)
-    await purgeCoverCacheForTrack(filePath, renamedFrom)
+    await diagnostics.measure('update-song-cache', () =>
+      updateSongCacheEntry(filePath, songInfo, renamedFrom)
+    )
+    await diagnostics.measure('purge-cover-cache', () =>
+      purgeCoverCacheForTrack(filePath, renamedFrom)
+    )
     if (renamedFrom) {
       updateSetItemFilePathReferences(renamedFrom, filePath)
       notifyCuratedFilePathChanged(renamedFrom, filePath)
@@ -529,7 +545,7 @@ export async function updateTrackMetadata(
 
     return {
       songInfo,
-      detail: buildDetail(filePath, metadata),
+      detail: diagnostics.measureSync('build-detail', () => buildDetail(filePath, metadata)),
       renamedFrom
     }
   } finally {

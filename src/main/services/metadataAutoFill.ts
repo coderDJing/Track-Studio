@@ -21,9 +21,10 @@ import {
   fetchMusicBrainzSuggestion,
   cancelMusicBrainzRequests
 } from './musicBrainz'
-import { purgeCoverCacheForTrack, findSongListRoot } from './cacheMaintenance'
+import { findSongListRoot } from './cacheMaintenance'
 import * as LibraryCacheDb from '../libraryCacheDb'
 import store from '../store'
+import { createStageDiagnostics } from './stageDiagnostics'
 
 type ProgressEmitter = (
   titleKey: string,
@@ -253,8 +254,14 @@ export async function autoFillTrackMetadata(
         status: 'skipped'
       }
       summary.items.push(item)
+      const diagnostics = createStageDiagnostics('metadata-auto-perf', {
+        progressId,
+        itemIndex: idx + 1,
+        itemCount: uniquePaths.length,
+        fileName: path.basename(filePath)
+      })
       try {
-        const detail = await readTrackMetadata(filePath)
+        const detail = await diagnostics.measure('read-metadata', () => readTrackMetadata(filePath))
         if (!detail) {
           item.status = 'error'
           item.messageCode = 'READ_FAILED'
@@ -268,9 +275,13 @@ export async function autoFillTrackMetadata(
         const skipCompleted = store.settingConfig?.autoFillSkipCompleted !== false
         if (skipCompleted) {
           try {
-            const listRoot = await findSongListRoot(path.dirname(filePath))
+            const listRoot = await diagnostics.measure('resolve-cache-root', () =>
+              findSongListRoot(path.dirname(filePath))
+            )
             if (listRoot) {
-              const cached = await LibraryCacheDb.loadSongCacheEntry(listRoot, filePath)
+              const cached = await diagnostics.measure('read-completed-flag', () =>
+                LibraryCacheDb.loadSongCacheEntry(listRoot, filePath)
+              )
               if (cached?.info?.autoFilled) {
                 item.status = 'skipped'
                 item.messageCode = 'ALREADY_FILLED'
@@ -286,10 +297,11 @@ export async function autoFillTrackMetadata(
 
         if (fingerprintDisabledCode === null) {
           try {
-            const matches = await matchTrackWithAcoustId({
-              filePath,
-              durationSeconds: detail.durationSeconds
-            })
+            const matches = await diagnostics.measure(
+              'acoustid-match',
+              () => matchTrackWithAcoustId({ filePath, durationSeconds: detail.durationSeconds }),
+              15_000
+            )
             if (matches && matches.length > 0) {
               match = matches[0]
               method = 'fingerprint'
@@ -319,7 +331,11 @@ export async function autoFillTrackMetadata(
             continue
           }
           try {
-            const matches = await searchMusicBrainz(searchPayload)
+            const matches = await diagnostics.measure(
+              'musicbrainz-search',
+              () => searchMusicBrainz(searchPayload),
+              15_000
+            )
             if (matches && matches.length > 0) {
               match = matches[0]
               method = 'search'
@@ -350,12 +366,18 @@ export async function autoFillTrackMetadata(
 
         let suggestion: IMusicBrainzSuggestionResult | null = null
         try {
-          suggestion = await fetchMusicBrainzSuggestion({
-            recordingId: match.recordingId,
-            releaseId: match.releaseId,
-            allowFallback: true,
-            cancelToken
-          })
+          const matchedTrack = match
+          suggestion = await diagnostics.measure(
+            'fetch-suggestion',
+            () =>
+              fetchMusicBrainzSuggestion({
+                recordingId: matchedTrack.recordingId,
+                releaseId: matchedTrack.releaseId,
+                allowFallback: true,
+                cancelToken
+              }),
+            15_000
+          )
         } catch (err: unknown) {
           if (isCancelledError(err)) {
             markItemCancelled(item)
@@ -386,7 +408,9 @@ export async function autoFillTrackMetadata(
         }
 
         try {
-          const result = await updateTrackMetadata(updatePayload)
+          const result = await diagnostics.measure('update-metadata', () =>
+            updateTrackMetadata(updatePayload)
+          )
           item.status = 'applied'
           item.method = method
           item.updatedSongInfo = result.songInfo
@@ -404,20 +428,19 @@ export async function autoFillTrackMetadata(
           // If cover is missing, don't mark as auto-filled so it will be retried next time
           const hasCover = !!suggestion.suggestion.coverDataUrl
           try {
-            const listRoot = await findSongListRoot(path.dirname(result.songInfo.filePath))
+            const listRoot = await diagnostics.measure('resolve-updated-cache-root', () =>
+              findSongListRoot(path.dirname(result.songInfo.filePath))
+            )
             if (listRoot) {
-              const cached = await LibraryCacheDb.loadSongCacheEntry(
-                listRoot,
-                result.songInfo.filePath
+              const cached = await diagnostics.measure('read-updated-cache', () =>
+                LibraryCacheDb.loadSongCacheEntry(listRoot, result.songInfo.filePath)
               )
               if (cached?.info) {
                 // Only mark as auto-filled if cover was successfully fetched
                 // This ensures tracks without covers will be retried on next auto-fill
                 cached.info.autoFilled = hasCover
-                await LibraryCacheDb.upsertSongCacheEntry(
-                  listRoot,
-                  result.songInfo.filePath,
-                  cached
+                await diagnostics.measure('mark-completed', () =>
+                  LibraryCacheDb.upsertSongCacheEntry(listRoot, result.songInfo.filePath, cached)
                 )
               }
             }
@@ -466,15 +489,7 @@ export async function autoFillTrackMetadata(
       }
     }
 
-    // Only purge cover cache for updated tracks, NOT waveform cache
-    // Waveform data is expensive to regenerate and unrelated to metadata changes
-    for (const item of summary.items) {
-      if (item.status === 'applied' && item.updatedSongInfo) {
-        try {
-          await purgeCoverCacheForTrack(item.updatedSongInfo.filePath, item.oldFilePath)
-        } catch {}
-      }
-    }
+    // updateTrackMetadata 已逐首清理封面缓存，整批结束时无需再次遍历清理。
 
     summary.durationMs = Date.now() - startedAt
     pushProgress('metadata.autoFillProgressFinished', uniquePaths.length, uniquePaths.length, {

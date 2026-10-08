@@ -45,6 +45,25 @@ describe('summarizeIpcArgHint', () => {
 })
 
 describe('getMainThreadActivitySnapshot', () => {
+  it('整批 IPC 持续很久时仍显示当前最内层阶段（包括同毫秒开始的阶段）', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1000)
+    beginMainThreadActivity({ kind: 'ipc-handle', name: 'metadata:autoFill' })
+    vi.setSystemTime(100_000)
+    beginMainThreadActivity({ kind: 'async-phase', name: 'metadata-auto:update-metadata' })
+    const id = beginMainThreadActivity({
+      kind: 'async-phase',
+      name: 'metadata-editor:ffmpeg-remux'
+    })
+    expect(getMainThreadActivitySnapshot(100_000).currentPhase?.name).toBe(
+      'metadata-editor:ffmpeg-remux'
+    )
+    endMainThreadActivity(id)
+    expect(getMainThreadActivitySnapshot(100_000).currentPhase?.name).toBe(
+      'metadata-auto:update-metadata'
+    )
+  })
+
   it('把仍在进行的任务标成 pending，并按耗时排序', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
@@ -93,6 +112,7 @@ describe('getMainThreadActivitySnapshot', () => {
       return 1
     })
     const snapshot = getMainThreadActivitySnapshot(10_000)
+    expect(snapshot.longestSync?.name).toBe('sqlite:createDatabase')
     expect(snapshot.slowest[0]).toMatchObject({
       kind: 'sync',
       name: 'sqlite:createDatabase',

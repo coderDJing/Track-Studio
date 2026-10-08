@@ -51,6 +51,7 @@ import type {
   IBatchRenameTrackInput
 } from '../../types/globals'
 import { assertLibraryMergeMutationAllowed } from '../services/libraryMerge/runtime'
+import { createStageDiagnostics } from '../services/stageDiagnostics'
 
 type DeduplicateSongListPayload =
   | string
@@ -116,6 +117,7 @@ export function registerPlaylistHandlers() {
     const source = normalizeDiagnosticText(diagnosticContext?.source, 40) || 'unknown'
     const startedAtMs = Date.now()
     const pathSummary = summarizeScanPaths(scanPath)
+    const stageDiagnostics = createStageDiagnostics('playlist-scan-perf', { traceId, songListUUID })
     const activity = beginPlaylistScanDiagnostic(traceId, {
       source,
       songListUUID,
@@ -144,10 +146,19 @@ export function registerPlaylistHandlers() {
 
       // 扫完立刻落视图快照：下次打开这张歌单就只剩"一次主键查询 + 一次 JSON.parse"。
       // 放在这里而不是 renderer，是因为只有主进程知道真实的 list_root。
-      savePlaylistViewSnapshotFromScan(songListUUID, scanPath, result)
+      stage = 'snapshot-save'
+      const snapshotStartedAtMs = Date.now()
+      stageDiagnostics.measureSync('snapshot-save', () =>
+        savePlaylistViewSnapshotFromScan(songListUUID, scanPath, result)
+      )
+      const snapshotSaveMs = Date.now() - snapshotStartedAtMs
 
       stage = 'time-basis-plan'
-      const preparedRepair = preparePlaylistTimeBasisRepair(result.scanData)
+      const repairPlanStartedAtMs = Date.now()
+      const preparedRepair = stageDiagnostics.measureSync('time-basis-plan', () =>
+        preparePlaylistTimeBasisRepair(result.scanData)
+      )
+      const repairPlanMs = Date.now() - repairPlanStartedAtMs
       activity.update('time-basis-background-queued', {
         trackCount: result.scanData.length,
         ...preparedRepair.plan
@@ -179,7 +190,15 @@ export function registerPlaylistHandlers() {
       }
       stage = 'post-scan-schedule'
       activity.update('post-scan-schedule')
-      void scheduleSongListPostScanTasks(scanPath, result.scanData)
+      const postScanStartedAtMs = Date.now()
+      void stageDiagnostics
+        .measure('post-scan-schedule', () =>
+          scheduleSongListPostScanTasks(scanPath, result.scanData)
+        )
+        .catch((error) =>
+          log.error('[playlist-scan-diagnostic] post-scan schedule failed', { traceId, error })
+        )
+      const postScanLaunchMs = Date.now() - postScanStartedAtMs
 
       const responseReadyAtMs = Date.now()
       const mainDurationMs = responseReadyAtMs - startedAtMs
@@ -193,6 +212,10 @@ export function registerPlaylistHandlers() {
         songListUUID,
         details: {
           workerDurationMs,
+          workerOverheadMs: Math.max(0, workerDurationMs - (result.perf?.totalMs || 0)),
+          snapshotSaveMs,
+          repairPlanMs,
+          postScanLaunchMs,
           listFilesMs: result.perf?.listFilesMs,
           listMode: result.perf?.listMode,
           cacheLoadMs: result.perf?.cacheLoadMs,

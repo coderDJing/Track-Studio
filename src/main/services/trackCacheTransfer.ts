@@ -6,6 +6,7 @@ import { replaceMixtapeStemAssetFilePath } from '../mixtapeStemDb'
 import store from '../store'
 import { operateHiddenFile } from './hiddenFileOperation'
 import { isPackagedRcMainProcess } from './rcDiagnosticEnvironment'
+import { createStageDiagnostics } from './stageDiagnostics'
 
 export type CacheFileStat = {
   size: number
@@ -140,19 +141,22 @@ export async function transferTrackDerivedCaches(
   const context = preparedContext || (await transferTrackCoreCache(params))
   if (!context) return
   const { toStat, waveformLoadStat, removeSource } = context
+  const diagnostics = createStageDiagnostics(
+    'track-cache-transfer-perf',
+    {
+      fileName: path.basename(fromPath),
+      mode: params.mode || 'move'
+    },
+    1000
+  )
 
   try {
-    const unified = await LibraryCacheDb.loadUnifiedDisplayWaveformCacheData(
-      fromRoot,
-      fromPath,
-      waveformLoadStat
+    const unified = await diagnostics.measure('read-display-waveform', () =>
+      LibraryCacheDb.loadUnifiedDisplayWaveformCacheData(fromRoot, fromPath, waveformLoadStat)
     )
     if (unified) {
-      const updated = await LibraryCacheDb.upsertUnifiedDisplayWaveformCacheEntry(
-        toRoot,
-        toPath,
-        toStat,
-        unified
+      const updated = await diagnostics.measure('write-display-waveform', () =>
+        LibraryCacheDb.upsertUnifiedDisplayWaveformCacheEntry(toRoot, toPath, toStat, unified)
       )
       if (updated) {
         if (removeSource) {
@@ -164,21 +168,19 @@ export async function transferTrackDerivedCaches(
     }
   } catch {}
   try {
-    const listPreview = await LibraryCacheDb.loadWaveformListPreviewCacheData(
-      fromRoot,
-      fromPath,
-      waveformLoadStat
+    const listPreview = await diagnostics.measure('read-list-waveform', () =>
+      LibraryCacheDb.loadWaveformListPreviewCacheData(fromRoot, fromPath, waveformLoadStat)
     )
-    const globalOverview = await LibraryCacheDb.loadWaveformGlobalOverviewCacheData(
-      fromRoot,
-      fromPath,
-      waveformLoadStat
+    const globalOverview = await diagnostics.measure('read-overview-waveform', () =>
+      LibraryCacheDb.loadWaveformGlobalOverviewCacheData(fromRoot, fromPath, waveformLoadStat)
     )
     if (listPreview && globalOverview) {
-      const updated = await LibraryCacheDb.upsertWaveformSurfaceCacheEntry(toRoot, toPath, toStat, {
-        listPreview,
-        globalOverview
-      })
+      const updated = await diagnostics.measure('write-waveform-surfaces', () =>
+        LibraryCacheDb.upsertWaveformSurfaceCacheEntry(toRoot, toPath, toStat, {
+          listPreview,
+          globalOverview
+        })
+      )
       if (updated && removeSource) {
         await LibraryCacheDb.removeWaveformSurfaceCacheEntry(fromRoot, fromPath)
       }

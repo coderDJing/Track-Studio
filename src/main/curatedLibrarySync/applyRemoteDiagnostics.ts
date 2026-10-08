@@ -28,7 +28,8 @@ const TRACED_ACTIVITY_NAMES = new Set([
   'node-tombstones',
   'delete-extras',
   'live-cache-before-track-numbers',
-  'track-numbers'
+  'track-numbers',
+  'node-apply'
 ])
 
 const toMs = (microseconds: number): number => Math.round(microseconds / 1000)
@@ -57,7 +58,7 @@ export const createCuratedApplyDiagnostics = (
     const stepStartedAtMs = performance.now()
     const activityId = TRACED_ACTIVITY_NAMES.has(name)
       ? beginMainThreadActivity({
-          kind: 'sync',
+          kind: 'async-phase',
           name: `curated-apply:${name}`,
           argHint: buildHint(stepDetails)
         })

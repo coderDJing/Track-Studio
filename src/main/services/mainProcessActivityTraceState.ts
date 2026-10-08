@@ -1,4 +1,4 @@
-export type MainThreadActivityKind = 'ipc-handle' | 'ipc-on' | 'sync'
+export type MainThreadActivityKind = 'ipc-handle' | 'ipc-on' | 'sync' | 'async-phase'
 
 export type MainThreadActivityRecord = {
   kind: MainThreadActivityKind
@@ -123,6 +123,8 @@ export const getMainThreadActivitySnapshot = (
   pendingTotal: number
   pending: MainThreadActivityRecord[]
   slowest: MainThreadActivityRecord[]
+  currentPhase?: MainThreadActivityRecord
+  longestSync?: MainThreadActivityRecord
   longest?: Pick<MainThreadActivityRecord, 'kind' | 'name' | 'durationMs' | 'pending'>
 } => {
   const now = Date.now()
@@ -130,6 +132,11 @@ export const getMainThreadActivitySnapshot = (
     .map((record) => toPublicRecord(record, now))
     .sort((left, right) => right.durationMs - left.durationMs)
   const pending = allPending.slice(0, MAX_PENDING_SNAPSHOT_RECORDS)
+  // 整批异步 IPC 可持续数分钟，当前最内层阶段比整批总时长更有定位价值。
+  const currentPhase = allPending
+    .filter((record) => record.kind === 'async-phase')
+    .reverse()
+    .sort((left, right) => right.startedAtMs - left.startedAtMs)[0]
   const slowest = completedRecords
     .filter((record) => overlapsWindow(record, sinceMs, now))
     .map((record) => toPublicRecord(record, now))
@@ -142,6 +149,10 @@ export const getMainThreadActivitySnapshot = (
     pendingTotal: allPending.length,
     pending,
     slowest,
+    currentPhase,
+    longestSync: [...allPending, ...slowest]
+      .filter((record) => record.kind === 'sync')
+      .sort((left, right) => right.durationMs - left.durationMs)[0],
     longest: longest
       ? {
           kind: longest.kind,

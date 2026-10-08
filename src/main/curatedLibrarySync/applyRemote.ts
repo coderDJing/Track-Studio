@@ -666,7 +666,9 @@ export const applyRemoteSnapshot = async (
           }
           continue
         }
-        await ensureCloudNodeLocal(node, scope, options)
+        await diagnostics.measure('node-apply', { nodeUuid: node.uuid }, () =>
+          ensureCloudNodeLocal(node, scope, options)
+        )
       }
     } finally {
       endNodeApply()

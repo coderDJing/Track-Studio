@@ -8,25 +8,11 @@ import { IMusicBrainzAcoustIdPayload, IMusicBrainzMatch } from '../../types/glob
 import store from '../store'
 import { getSystemProxy } from '../utils'
 import { buildProductUserAgent } from '../../shared/productBrand'
-
-// 原生 Chromaprint（进程内调用，无子进程开销）
-let nativeChromaprintAvailable = false
-let generateChromaprintFingerprint:
-  | ((
-      filePath: string,
-      maxLengthSeconds?: number
-    ) => { fingerprint: string; duration: number; error?: string })
-  | undefined
-try {
-  const rustPkg = require('rust_package') as Record<string, unknown>
-  if (typeof rustPkg.generateChromaprintFingerprint === 'function') {
-    generateChromaprintFingerprint =
-      rustPkg.generateChromaprintFingerprint as typeof generateChromaprintFingerprint
-    nativeChromaprintAvailable = true
-  }
-} catch {
-  nativeChromaprintAvailable = false
-}
+import {
+  cancelFingerprintRequests,
+  generateFingerprintOffMainThread
+} from './acoustIdFingerprintWorker'
+import { createStageDiagnostics } from './stageDiagnostics'
 
 const MAX_ANALYSIS_SECONDS = 120
 const LOOKUP_TIMEOUT = 12_000
@@ -201,11 +187,7 @@ async function generateFingerprint(
   const targetLength =
     maxLengthSeconds && maxLengthSeconds > 0 ? maxLengthSeconds : MAX_ANALYSIS_SECONDS
 
-  if (!nativeChromaprintAvailable || !generateChromaprintFingerprint) {
-    throw new Error('ACOUSTID_CHROMAPRINT_UNAVAILABLE')
-  }
-
-  const result = generateChromaprintFingerprint(filePath, targetLength)
+  const result = await generateFingerprintOffMainThread(filePath, targetLength)
 
   if (result.error || !result.fingerprint || result.duration <= 0) {
     throw new Error('ACOUSTID_NO_FINGERPRINT')
@@ -448,17 +430,23 @@ async function ensureFingerprint(
   payload: IMusicBrainzAcoustIdPayload
 ): Promise<{ cacheKey: string; entry: FingerprintCacheEntry }> {
   const resolved = path.resolve(payload.filePath)
-  const { key } = await buildCacheKey(resolved)
-  let entry = await readFingerprintCache(key)
+  const diagnostics = createStageDiagnostics('acoustid-audio-perf', {
+    fileName: path.basename(resolved)
+  })
+  const { key } = await diagnostics.measure('file-identity', () => buildCacheKey(resolved))
+  let entry = await diagnostics.measure('cache-read', () => readFingerprintCache(key))
   if (!entry || !entry.fingerprint) {
-    const result = await generateFingerprint(resolved, payload.maxLengthSeconds)
+    const result = await diagnostics.measure('fingerprint-worker', () =>
+      generateFingerprint(resolved, payload.maxLengthSeconds)
+    )
     entry = {
       fingerprint: result.fingerprint,
       duration: result.duration,
       acoustIdResults: null,
       createdAt: Date.now()
     }
-    await writeFingerprintCache(key, entry)
+    const nextEntry = entry
+    await diagnostics.measure('cache-write', () => writeFingerprintCache(key, nextEntry))
   }
   return { cacheKey: key, entry }
 }
@@ -499,6 +487,7 @@ export async function matchTrackWithAcoustId(
 }
 
 export function cancelAcoustIdRequests() {
+  cancelFingerprintRequests()
   requestQueue.length = 0
   if (currentLookupAbort) {
     try {

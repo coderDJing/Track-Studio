@@ -226,7 +226,12 @@ export const attachMainWindowResponsivenessDiagnostics = (
           finishStallIncident()
           return
         }
-        const overlappingActivity = snapshot.activity.longest
+        // 已记录到超过卡顿阈值的同步调用时优先显示它；长时间等待的异步阶段仅表示重叠。
+        const syncActivity = snapshot.activity.longestSync
+        const overlappingActivity =
+          syncActivity && syncActivity.durationMs >= MAIN_PROCESS_STALL_THRESHOLD_MS
+            ? syncActivity
+            : snapshot.activity.currentPhase || snapshot.activity.longest
         const meaningfulOverlappingActivity =
           overlappingActivity &&
           (overlappingActivity.pending ||
@@ -235,7 +240,10 @@ export const attachMainWindowResponsivenessDiagnostics = (
             : undefined
         const stallClassification = meaningfulOverlappingActivity
           ? {
-              kind: 'tracked-main-thread-activity-overlap',
+              kind:
+                meaningfulOverlappingActivity.kind === 'async-phase'
+                  ? 'tracked-async-phase-overlap'
+                  : 'tracked-main-thread-activity-overlap',
               activity: meaningfulOverlappingActivity
             }
           : processCpuRatio >= 0.7
