@@ -7,6 +7,7 @@ import { hydrateSeratoTracks } from '../services/externalLibrary/serato'
 import { loadTraktorStripePreviews } from '../services/externalLibrary/traktorStripe'
 import { hydrateTraktorTrackTimeBases } from '../services/externalLibrary/traktorAudioTimeBasis'
 import { probeExternalLibraries } from '../services/externalLibrary/detect'
+import { isSeratoV4SourcePath } from '../services/externalLibrary/seratoV4'
 import {
   buildExternalLibraryBrowserTracks,
   buildExternalLibraryBrowserTree,
@@ -66,6 +67,15 @@ const getOptionalFileStamp = async (filePath: string) => {
 }
 
 const getSeratoSourceStamp = async (sourcePath: string) => {
+  if (isSeratoV4SourcePath(sourcePath)) {
+    const files = ['master.sqlite', 'master.sqlite-wal', 'root.sqlite', 'root.sqlite-wal']
+    const stamps = await Promise.all(
+      files.map(
+        async (name) => `${name}:${await getOptionalFileStamp(path.join(sourcePath, name))}`
+      )
+    )
+    return createHash('sha256').update(stamps.join('|')).digest('hex')
+  }
   const root =
     path.basename(path.normalize(sourcePath)).toLowerCase() === '_serato_'
       ? sourcePath
@@ -304,7 +314,9 @@ export function registerExternalLibraryHandlers() {
   ipcMain.handle(
     'external-library:check-write',
     async (_event, request: { kind?: ExternalLibraryKind; path?: string }) => {
-      const { kind } = parseRequest(request)
+      const { kind, sourcePath } = parseRequest(request)
+      if (kind === 'serato' && isSeratoV4SourcePath(sourcePath))
+        throw new Error('Serato 4 曲库目前只支持读取。')
       if (kind === 'traktor') await assertTraktorClosed()
       return true
     }
@@ -351,6 +363,8 @@ export function registerExternalLibraryHandlers() {
     ): Promise<ExternalLibraryMutationResponse> => {
       const { kind, sourcePath } = parseRequest(request)
       try {
+        if (kind === 'serato' && isSeratoV4SourcePath(sourcePath))
+          throw new Error('Serato 4 曲库目前只支持读取。')
         const operation =
           request.operation === 'append-existing-tracks'
             ? 'write-tracks'

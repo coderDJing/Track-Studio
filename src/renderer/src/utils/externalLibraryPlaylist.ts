@@ -64,6 +64,20 @@ export const openExternalLibraryPlaylistForSelectedTracks = async (params: {
   }
   if (!trackPaths.length) return null
 
+  try {
+    await window.electron.ipcRenderer.invoke('external-library:check-write', {
+      kind,
+      path: sourcePath
+    })
+  } catch (error) {
+    await confirm({
+      title: failureTitle,
+      content: [error instanceof Error ? error.message : String(error)],
+      confirmShow: false
+    })
+    return null
+  }
+
   const target = await externalLibraryTargetDialog({
     kind,
     sourcePath,
@@ -74,22 +88,6 @@ export const openExternalLibraryPlaylistForSelectedTracks = async (params: {
     trackCount: trackPaths.length
   })
   if (target === 'cancel') return null
-
-  if (kind === 'traktor') {
-    try {
-      await window.electron.ipcRenderer.invoke('external-library:check-write', {
-        kind,
-        path: sourcePath
-      })
-    } catch (error) {
-      await confirm({
-        title: failureTitle,
-        content: [error instanceof Error ? error.message : String(error)],
-        confirmShow: false
-      })
-      return null
-    }
-  }
 
   const storageDir = await (kind === 'serato'
     ? ensureSeratoTrackStorageDirConfigured()

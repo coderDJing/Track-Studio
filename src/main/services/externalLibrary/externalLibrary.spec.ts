@@ -58,6 +58,12 @@ describe('Serato external library parser', () => {
     )
     expect(resolveTrackPath(seratoRoot, '/D:/Music/Track.mp3')).toBe('D:\\Music\\Track.mp3')
     expect(resolveTrackPath(seratoRoot, 'D:/Music/Track.mp3')).toBe('D:\\Music\\Track.mp3')
+    expect(resolveTrackPath('/Volumes/DJ SSD/_Serato_', 'Music/Track.mp3')).toBe(
+      '/Volumes/DJ SSD/Music/Track.mp3'
+    )
+    expect(resolveTrackPath('/Volumes/DJ SSD/_Serato_', '/Volumes/DJ SSD/Music/Track.mp3')).toBe(
+      '/Volumes/DJ SSD/Music/Track.mp3'
+    )
   })
 
   it('parses the version header and 16-row native overview pixels', () => {

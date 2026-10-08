@@ -112,14 +112,15 @@ export function useExternalDjSourceIcons(options: Options) {
         .map((probe) => {
           const iconSrc =
             probe.kind === 'serato' ? options.seratoIconAsset : options.traktorIconAsset
-          const tooltip = t(
+          const label = t(
             probe.kind === 'serato' ? 'library.seratoLibrary' : 'library.traktorLibrary'
           )
+          const tooltip = `${label}\n${probe.sourcePath}`
           return {
             key: probe.sourceKey,
             kind: probe.kind,
             sourcePath: probe.sourcePath,
-            name: tooltip,
+            name: label,
             tooltip,
             grey: iconSrc,
             white: iconSrc,

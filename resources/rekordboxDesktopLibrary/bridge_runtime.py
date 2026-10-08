@@ -697,7 +697,8 @@ def _resolve_rekordbox_config() -> Dict[str, Any]:
     config = {}
     for key in ("rekordbox7", "rekordbox6"):
         current = get_config(key) or {}
-        if current.get("db_path"):
+        current_db_path = _normalize_path(current.get("db_path"))
+        if current_db_path and os.path.isfile(current_db_path):
             config = current
             break
 
@@ -707,7 +708,7 @@ def _resolve_rekordbox_config() -> Dict[str, Any]:
             options = read_rekordbox6_options(pioneer_app_dir)
             db_path = _normalize_path(options.get("db-path"))
             db_dir = os.path.dirname(db_path) if db_path else ""
-            if db_path and os.path.exists(db_path):
+            if db_path and os.path.isfile(db_path):
                 config = {
                     "version": "",
                     "db_path": db_path,
@@ -719,7 +720,7 @@ def _resolve_rekordbox_config() -> Dict[str, Any]:
     db_path = _normalize_path(config.get("db_path"))
     db_dir = _normalize_path(config.get("db_dir") or os.path.dirname(db_path))
     share_dir = _normalize_path(os.path.join(db_dir, "share")) if db_dir else ""
-    if not db_path or not os.path.exists(db_path):
+    if not db_path or not os.path.isfile(db_path):
         return {
             "available": False,
             "supported": True,

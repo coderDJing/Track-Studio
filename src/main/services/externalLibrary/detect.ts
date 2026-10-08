@@ -2,6 +2,8 @@ import { app } from 'electron'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { ExternalLibrarySourceProbe } from '../../../shared/externalLibrary'
+import { readTraktorConfiguredRoots } from './traktorConfig'
+import { getSeratoV4LibraryDir, isSeratoV4Library } from './seratoV4'
 
 const pathExists = async (targetPath: string) => {
   try {
@@ -12,39 +14,77 @@ const pathExists = async (targetPath: string) => {
   }
 }
 
-const uniquePaths = (values: string[]) =>
-  Array.from(new Set(values.map((value) => path.normalize(value)).filter(Boolean)))
+const uniquePaths = (values: string[]) => {
+  const seen = new Set<string>()
+  return values
+    .map((value) => path.normalize(value.trim()))
+    .filter((value) => {
+      if (!value || value === '.') return false
+      const key = process.platform === 'win32' ? value.toLocaleLowerCase() : value
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+}
+const sourcePathKey = (value: string) =>
+  process.platform === 'win32' ? value.toLocaleLowerCase() : value
 
-const listWindowsDriveRoots = () => {
-  if (process.platform !== 'win32') return []
-  // 只探测明确的 Serato 文件路径，不为定时图标刷新启动 PowerShell/CIM 进程。
-  return Array.from({ length: 26 }, (_, index) => `${String.fromCharCode(65 + index)}:${path.sep}`)
+const listMountedVolumeRoots = async (): Promise<string[]> => {
+  if (process.platform === 'win32') {
+    // Probe only the known Serato directory at each drive root; do not traverse drives.
+    return Array.from(
+      { length: 26 },
+      (_, index) => `${String.fromCharCode(65 + index)}:${path.sep}`
+    )
+  }
+  if (process.platform !== 'darwin') return []
+  try {
+    const entries = await fs.readdir('/Volumes', { withFileTypes: true })
+    return entries
+      .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+      .map((entry) => path.join('/Volumes', entry.name))
+  } catch {
+    return []
+  }
 }
 
-const findSeratoRoot = async () => {
-  const localCandidates = uniquePaths([
+const findSeratoRoots = async (): Promise<string[]> => {
+  const currentLibrary = getSeratoV4LibraryDir()
+  const localCandidates = [
     path.join(app.getPath('music'), '_Serato_'),
     path.join(app.getPath('home'), 'Music', '_Serato_'),
     path.join(app.getPath('home'), '_Serato_')
+  ]
+  const volumeRoots = await listMountedVolumeRoots()
+  const candidates = uniquePaths([
+    ...localCandidates,
+    ...volumeRoots.map((root) => path.join(root, '_Serato_'))
   ])
-  const findAvailable = async (candidates: string[]) => {
-    const available = await Promise.all(
-      candidates.map(async (candidate) => {
-        const [hasDatabase, hasSubcrates] = await Promise.all([
-          pathExists(path.join(candidate, 'database V2')),
-          pathExists(path.join(candidate, 'Subcrates'))
-        ])
-        return hasDatabase || hasSubcrates
-      })
+  const available = await Promise.all(
+    candidates.map(
+      async (candidate) =>
+        (await pathExists(path.join(candidate, 'database V2'))) ||
+        (await pathExists(path.join(candidate, 'Subcrates')))
     )
-    return candidates.find((_candidate, index) => available[index]) || ''
-  }
-  const localRoot = await findAvailable(localCandidates)
-  if (localRoot) return localRoot
-  return findAvailable(listWindowsDriveRoots().map((root) => path.join(root, '_Serato_')))
+  )
+  const crateRoots = candidates.filter((_candidate, index) => available[index])
+  if (crateRoots.length) return crateRoots
+  return (await isSeratoV4Library(currentLibrary)) ? [currentLibrary] : []
 }
 
-const findTraktorCollection = async () => {
+const findTraktorCollections = async (): Promise<string[]> => {
+  const configuredRoots = await readTraktorConfiguredRoots()
+  const configuredCollections = uniquePaths(
+    configuredRoots.map((root) => path.join(root, 'collection.nml'))
+  )
+  const availableConfigured = await Promise.all(
+    configuredCollections.map(async (filePath) => await pathExists(filePath))
+  )
+  const activeCollections = configuredCollections.filter(
+    (_filePath, index) => availableConfigured[index]
+  )
+  if (activeCollections.length) return activeCollections
+
   const nativeInstrumentsRoots = uniquePaths([
     path.join(app.getPath('documents'), 'Native Instruments'),
     path.join(app.getPath('home'), 'Documents', 'Native Instruments')
@@ -66,42 +106,44 @@ const findTraktorCollection = async () => {
       } catch {}
     }
   }
-  return candidates.sort((left, right) => right.modifiedAt - left.modifiedAt)[0]?.filePath || ''
+  candidates.sort((left, right) => right.modifiedAt - left.modifiedAt)
+  return uniquePaths(candidates.map((candidate) => candidate.filePath))
 }
 
 const probeSources = async (): Promise<ExternalLibrarySourceProbe[]> => {
-  const [seratoRoot, traktorCollection] = await Promise.all([
-    findSeratoRoot(),
-    findTraktorCollection()
+  const [seratoRoots, traktorCollections] = await Promise.all([
+    findSeratoRoots(),
+    findTraktorCollections()
   ])
   return [
-    {
-      kind: 'serato',
-      available: Boolean(seratoRoot),
-      sourceKey: seratoRoot ? `serato:${seratoRoot.toLocaleLowerCase()}` : 'serato',
-      sourcePath: seratoRoot,
+    ...(seratoRoots.length ? seratoRoots : ['']).map((sourcePath) => ({
+      kind: 'serato' as const,
+      available: Boolean(sourcePath),
+      sourceKey: sourcePath ? `serato:${sourcePathKey(sourcePath)}` : 'serato',
+      sourcePath,
       displayName: 'Serato'
-    },
-    {
-      kind: 'traktor',
-      available: Boolean(traktorCollection),
-      sourceKey: traktorCollection ? `traktor:${traktorCollection.toLocaleLowerCase()}` : 'traktor',
-      sourcePath: traktorCollection,
+    })),
+    ...(traktorCollections.length ? traktorCollections : ['']).map((sourcePath) => ({
+      kind: 'traktor' as const,
+      available: Boolean(sourcePath),
+      sourceKey: sourcePath ? `traktor:${sourcePathKey(sourcePath)}` : 'traktor',
+      sourcePath,
       displayName: 'Traktor'
-    }
+    }))
   ]
 }
 
 let probeInflight: Promise<ExternalLibrarySourceProbe[]> | null = null
 export const probeExternalLibraries = (): Promise<ExternalLibrarySourceProbe[]> => {
   if (probeInflight) return probeInflight
-  probeInflight = probeSources().finally(() => {
-    probeInflight = null
+  const request = probeSources().finally(() => {
+    if (probeInflight === request) probeInflight = null
   })
-  return probeInflight
+  probeInflight = request
+  return request
 }
 
 export const __externalLibraryDetectTestUtils = {
-  findSeratoRoot,
-  findTraktorCollection
+  findSeratoRoots,
+  findTraktorCollections
 }

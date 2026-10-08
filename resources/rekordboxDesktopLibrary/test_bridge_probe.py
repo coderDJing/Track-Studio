@@ -8,6 +8,16 @@ import bridge_runtime
 
 
 class ProbeTests(unittest.TestCase):
+    def test_stale_rekordbox7_config_does_not_hide_valid_rekordbox6(self):
+        config7 = {"db_path": "D:/stale/master.db", "version": "7"}
+        config6 = {"db_path": "E:/live/master.db", "version": "6"}
+        with patch.object(bridge_runtime, "update_config"), \
+             patch.object(bridge_runtime, "get_config", side_effect=[config7, config6]), \
+             patch.object(bridge_runtime.os.path, "isfile", side_effect=lambda p: p == bridge_runtime._normalize_path(config6["db_path"])):
+            result = bridge_runtime._resolve_rekordbox_config()
+            self.assertTrue(result["available"])
+            self.assertEqual(result["dbPath"], bridge_runtime._normalize_path(config6["db_path"]))
+
     def test_source_path_probe_does_not_open_database(self):
         config = {"available": True, "dbPath": "D:/PIONEER/Master/master.db"}
         with patch.object(bridge_runtime, "_resolve_rekordbox_config", return_value=config), \

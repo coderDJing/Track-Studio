@@ -142,6 +142,43 @@ describe('Serato crate snapshot', () => {
     vi.mocked(mutateSeratoCrate).mockClear()
   })
 
+  it('does not send legacy crate writes into a Serato 4 SQLite source', async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'frkb-serato-v4-write-'))
+    const libraryPath = path.join(tempDir, 'Serato', 'Library')
+    await fs.mkdir(libraryPath, { recursive: true })
+    await fs.writeFile(path.join(libraryPath, 'master.sqlite'), '')
+    registerExternalLibraryHandlers()
+    const request = { kind: 'serato', path: libraryPath, operation: 'create-playlist', name: 'Set' }
+    await expect(
+      handlers.get('external-library:check-write')?.(undefined, request)
+    ).rejects.toThrow('只支持读取')
+    const response = (await handlers.get('external-library:mutate')?.(undefined, request)) as {
+      ok: boolean
+    }
+    expect(response.ok).toBe(false)
+    expect(mutateSeratoCrate).not.toHaveBeenCalled()
+  })
+
+  it('keeps Serato 4 crate sources writable through the existing playlist actions', async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'frkb-serato-v4-crates-'))
+    const sourcePath = path.join(tempDir, '_Serato_')
+    const cratePath = path.join(sourcePath, 'Subcrates', '4444.crate')
+    await fs.mkdir(path.dirname(cratePath), { recursive: true })
+    await fs.writeFile(cratePath, 'with-track')
+    registerExternalLibraryHandlers()
+    const request = { kind: 'serato', path: sourcePath, operation: 'create-playlist', name: 'Set' }
+    await expect(handlers.get('external-library:check-write')?.(undefined, request)).resolves.toBe(
+      true
+    )
+    const response = (await handlers.get('external-library:mutate')?.(undefined, request)) as {
+      ok: boolean
+    }
+    expect(response.ok).toBe(true)
+    expect(mutateSeratoCrate).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: 'create-playlist', sourcePath })
+    )
+  })
+
   it('reconciles source tracks from disk before a drop and rejects a stale source without writing', async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'frkb-serato-drop-'))
     const sourcePath = path.join(tempDir, '_Serato_')

@@ -7,6 +7,7 @@ import {
   parseMarkers2FromGeob
 } from 'serato-connect'
 import { readSeratoCrateOrder } from './seratoCrateOrder'
+import { isSeratoV4SourcePath, readSeratoV4Library } from './seratoV4'
 import type {
   ExternalLibraryCue,
   ExternalLibraryPlaylist,
@@ -109,7 +110,10 @@ const resolveTrackPath = (seratoRoot: string, value: string) => {
     return path.win32.normalize(path.win32.join(volumeRoot, normalized.replace(/^\/+/, '')))
   }
 
-  return path.posix.normalize(path.posix.join('/', normalized.replace(/^\/+/, '')))
+  if (normalized.startsWith('/Volumes/')) return path.posix.normalize(normalized)
+  const volumeMatch = seratoRoot.replaceAll('\\', '/').match(/^(\/Volumes\/[^/]+)\/_Serato_\/?$/i)
+  const volumeRoot = volumeMatch?.[1] || '/'
+  return path.posix.normalize(path.posix.join(volumeRoot, normalized.replace(/^\/+/, '')))
 }
 
 const readFrkbFolderNames = async (seratoRoot: string): Promise<string[]> => {
@@ -328,6 +332,16 @@ export const readSeratoLibrary = async (
   inputPath: string,
   options?: { hydrateTracks?: boolean }
 ): Promise<ExternalLibrarySnapshot> => {
+  if (isSeratoV4SourcePath(inputPath)) {
+    const snapshot = await readSeratoV4Library(inputPath)
+    if (options?.hydrateTracks === false) return snapshot
+    const hydrated = await hydrateSeratoTracks(snapshot.tracks)
+    return {
+      ...snapshot,
+      tracks: hydrated.tracks,
+      warnings: [...snapshot.warnings, ...hydrated.warnings]
+    }
+  }
   const seratoRoot = resolveSeratoRoot(inputPath)
   const warnings: string[] = []
   const trackByPath = new Map<string, ExternalLibraryTrack>()
