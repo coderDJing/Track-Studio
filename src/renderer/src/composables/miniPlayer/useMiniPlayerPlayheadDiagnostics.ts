@@ -25,8 +25,9 @@ export const useMiniPlayerPlayheadDiagnostics = (hostState: Ref<MiniPlayerHostSt
   let lastUpdateSequence: number | null = null
   let lastUpdatePublishedAtMs: number | null = null
   let lastUpdateReceivedAtMs: number | null = null
+  let lastWatchFiredAtMs = 0
 
-  const reportDelayedPlayhead = (nowMs: number, state: PlayheadState) => {
+  const reportDelayedPlayhead = (nowMs: number, state: PlayheadState, watchLateMs = 0) => {
     const delayedMs = nowMs - lastPlayheadAtMs
     if (
       delayedMs < PLAYHEAD_DELAY_THRESHOLD_MS ||
@@ -43,7 +44,11 @@ export const useMiniPlayerPlayheadDiagnostics = (hostState: Ref<MiniPlayerHostSt
       lastUpdateSource,
       lastUpdateSequence,
       lastUpdatePublishedAtMs,
-      lastUpdateReceivedAtMs
+      lastUpdateReceivedAtMs,
+      visibilityState: document.visibilityState,
+      documentHidden: document.hidden,
+      documentHasFocus: document.hasFocus(),
+      watchLateMs: Math.round(watchLateMs)
     })
   }
 
@@ -63,10 +68,17 @@ export const useMiniPlayerPlayheadDiagnostics = (hostState: Ref<MiniPlayerHostSt
   }
 
   onMounted(() => {
+    lastWatchFiredAtMs = Date.now()
     watchTimer = window.setInterval(() => {
+      const nowMs = Date.now()
+      const watchLateMs =
+        lastWatchFiredAtMs > 0
+          ? Math.max(0, nowMs - lastWatchFiredAtMs - PLAYHEAD_DELAY_WATCH_INTERVAL_MS)
+          : 0
+      lastWatchFiredAtMs = nowMs
       const state = hostState.value
       if (!state?.isPlaying || !wasPlaying || lastPlayheadAtMs === 0) return
-      reportDelayedPlayhead(Date.now(), state)
+      reportDelayedPlayhead(nowMs, state, watchLateMs)
     }, PLAYHEAD_DELAY_WATCH_INTERVAL_MS)
   })
 

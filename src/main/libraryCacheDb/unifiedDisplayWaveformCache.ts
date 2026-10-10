@@ -245,6 +245,19 @@ const resolveCacheKeys = (listRoot: string, filePath: string) => {
   }
 }
 
+const META_COLUMNS = `list_root, file_path, size, mtime_ms, cache_version, parameter_version, duration,
+            detail_rate, overview_rate, frame_count`
+
+const cacheIdentityMatches = (
+  meta: UnifiedDisplayWaveformMeta,
+  stat: { size: number; mtimeMs: number }
+) =>
+  meta.size === stat.size &&
+  Math.abs(meta.mtimeMs - stat.mtimeMs) <= 1 &&
+  meta.cacheVersion === UNIFIED_DISPLAY_WAVEFORM_CACHE_VERSION &&
+  Number.isFinite(meta.parameterVersion) &&
+  meta.parameterVersion > 0
+
 const loadRow = (
   listRoot: string,
   filePath: string
@@ -253,8 +266,7 @@ const loadRow = (
   const keys = resolveCacheKeys(listRoot, filePath)
   if (!db || !keys) return null
   const stmt = db.prepare<UnifiedDisplayWaveformRow>(
-    `SELECT list_root, file_path, size, mtime_ms, cache_version, parameter_version, duration,
-            detail_rate, overview_rate, frame_count, payload
+    `SELECT ${META_COLUMNS}, payload
        FROM ${TABLE} WHERE list_root = ? AND file_path = ? LIMIT 1`
   )
   const candidates: Array<[string, string | undefined]> = [
@@ -480,6 +492,126 @@ export async function moveUnifiedDisplayWaveformCacheEntry(
     return true
   } catch (error) {
     log.error('[sqlite] unified display waveform cache move failed', error)
+    return false
+  }
+}
+
+const loadMetaRow = (
+  listRoot: string,
+  filePath: string
+): { hitListRoot: string; hitFilePath: string; meta: UnifiedDisplayWaveformMeta } | null => {
+  const db = getLibraryDb()
+  const keys = resolveCacheKeys(listRoot, filePath)
+  if (!db || !keys) return null
+  const stmt = db.prepare<UnifiedDisplayWaveformRow>(
+    `SELECT ${META_COLUMNS} FROM ${TABLE} WHERE list_root = ? AND file_path = ? LIMIT 1`
+  )
+  const candidates: Array<[string, string | undefined]> = [
+    [keys.listRootKey, keys.fileKey],
+    [keys.listRootKey, keys.fileKeyRaw],
+    [keys.legacyListRoot || '', keys.legacyFilePath]
+  ]
+  for (const [root, file] of candidates) {
+    if (!root || !file) continue
+    const meta = normalizeMeta(stmt.get(root, file))
+    if (meta) return { hitListRoot: root, hitFilePath: file, meta }
+  }
+  return null
+}
+
+const collectCacheKeys = (
+  keys: NonNullable<ReturnType<typeof resolveCacheKeys>>
+): Array<[string, string]> => {
+  const pairs: Array<[string, string]> = [[keys.listRootKey, keys.fileKey]]
+  if (keys.fileKeyRaw && keys.fileKeyRaw !== keys.fileKey) {
+    pairs.push([keys.listRootKey, keys.fileKeyRaw])
+  }
+  if (keys.legacyListRoot && keys.legacyFilePath) {
+    pairs.push([keys.legacyListRoot, keys.legacyFilePath])
+  }
+  return pairs
+}
+
+/**
+ * 跨目录移动只改主键和文件身份。波形载荷留在 SQLite 里，避免整段解压再压缩。
+ * 身份或版本对不上时删掉来源行，和读取展示波形的失效行为一致。
+ */
+export async function relocateUnifiedDisplayWaveformCacheEntry(params: {
+  fromRoot: string
+  fromPath: string
+  toRoot: string
+  toPath: string
+  loadStat: { size: number; mtimeMs: number }
+  toStat: { size: number; mtimeMs: number }
+  removeSource: boolean
+}): Promise<boolean> {
+  const db = getLibraryDb()
+  const fromKeys = resolveCacheKeys(params.fromRoot, params.fromPath)
+  const toKeys = resolveCacheKeys(params.toRoot, params.toPath)
+  if (!db || !fromKeys || !toKeys) return false
+  const hit = loadMetaRow(params.fromRoot, params.fromPath)
+  if (!hit) return false
+  if (!cacheIdentityMatches(hit.meta, params.loadStat)) {
+    await removeUnifiedDisplayWaveformCacheEntry(params.fromRoot, params.fromPath)
+    return false
+  }
+  const destRoot = toKeys.listRootKey
+  const destFile = toKeys.fileKey
+  const sameRow = hit.hitListRoot === destRoot && hit.hitFilePath === destFile
+  try {
+    const del = db.prepare(`DELETE FROM ${TABLE} WHERE list_root = ? AND file_path = ?`)
+    const update = db.prepare(
+      `UPDATE ${TABLE}
+         SET list_root = ?, file_path = ?, size = ?, mtime_ms = ?, updated_at_ms = ?
+       WHERE list_root = ? AND file_path = ?`
+    )
+    const copy = db.prepare(
+      `INSERT INTO ${TABLE} (
+        list_root, file_path, size, mtime_ms, cache_version, parameter_version, duration,
+        detail_rate, overview_rate, frame_count, payload, updated_at_ms
+      )
+      SELECT ?, ?, ?, ?, cache_version, parameter_version, duration,
+             detail_rate, overview_rate, frame_count, payload, ?
+        FROM ${TABLE}
+       WHERE list_root = ? AND file_path = ?`
+    )
+    const changed = db.transaction(() => {
+      for (const [root, file] of collectCacheKeys(toKeys)) {
+        if (root === hit.hitListRoot && file === hit.hitFilePath) continue
+        del.run(root, file)
+      }
+      if (params.removeSource || sameRow) {
+        const result = update.run(
+          destRoot,
+          destFile,
+          params.toStat.size,
+          params.toStat.mtimeMs,
+          Date.now(),
+          hit.hitListRoot,
+          hit.hitFilePath
+        )
+        if (params.removeSource) {
+          for (const [root, file] of collectCacheKeys(fromKeys)) {
+            if (root === destRoot && file === destFile) continue
+            del.run(root, file)
+          }
+        }
+        return Number(result?.changes) || 0
+      }
+      const result = copy.run(
+        destRoot,
+        destFile,
+        params.toStat.size,
+        params.toStat.mtimeMs,
+        Date.now(),
+        hit.hitListRoot,
+        hit.hitFilePath
+      )
+      return Number(result?.changes) || 0
+    })()
+    return changed > 0
+  } catch (error) {
+    log.error('[sqlite] unified display waveform cache relocate failed', error)
     return false
   }
 }

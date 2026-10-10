@@ -1,4 +1,5 @@
 import path = require('path')
+import { performance } from 'node:perf_hooks'
 import fs = require('fs-extra')
 import { getLibraryDb, isSqliteRow } from '../libraryDb'
 import { log } from '../log'
@@ -11,6 +12,7 @@ import {
 } from './pathResolvers'
 import type { SqliteDatabase } from '../libraryDb'
 import { runTracedSync } from '../services/mainProcessActivityTraceState'
+import { isPackagedRcMainProcess } from '../services/rcDiagnosticEnvironment'
 
 const migratedCoverRoots = new Set<string>()
 const coverIndexMigrationTasks = new Map<string, Promise<void>>()
@@ -130,11 +132,13 @@ async function ensureCoverIndexMigratedInternal(
   const task = (async () => {
     let shouldMarkMigrated = true
     try {
-      const countRow = db
-        .prepare<{
-          count?: number | string
-        }>('SELECT COUNT(1) as count FROM cover_index WHERE list_root = ?')
-        .get(listRootKey)
+      const countRow = runTracedSync('sqlite:cover-index-migrate-count', () =>
+        db
+          .prepare<{
+            count?: number | string
+          }>('SELECT COUNT(1) as count FROM cover_index WHERE list_root = ?')
+          .get(listRootKey)
+      )
       if (countRow && Number(countRow.count) > 0) return
       if (!listRootAbs) return
       const indexPath = path.join(listRootAbs, '.frkb_covers', '.index.json')
@@ -406,17 +410,29 @@ export async function loadCoverIndexEntries(listRoot: string): Promise<CoverInde
       : undefined
   try {
     return await enqueueCoverIndexDbTask('load-entries', async () => {
+      const startedAt = performance.now()
+      const migrateStartedAt = performance.now()
       await ensureCoverIndexMigratedInternal(db, listRoot)
-      const rows = db
-        .prepare<CoverIndexRow>('SELECT file_path, hash, ext FROM cover_index WHERE list_root = ?')
-        .all(listRootKey)
+      const migrateMs = performance.now() - migrateStartedAt
+      const queryStartedAt = performance.now()
+      const rows = runTracedSync('sqlite:cover-index-load-entries', () =>
+        db
+          .prepare<CoverIndexRow>(
+            'SELECT file_path, hash, ext FROM cover_index WHERE list_root = ?'
+          )
+          .all(listRootKey)
+      )
       const legacyRows = legacyListRoot
-        ? db
-            .prepare<CoverIndexRow>(
-              'SELECT file_path, hash, ext FROM cover_index WHERE list_root = ?'
-            )
-            .all(legacyListRoot)
+        ? runTracedSync('sqlite:cover-index-load-legacy', () =>
+            db
+              .prepare<CoverIndexRow>(
+                'SELECT file_path, hash, ext FROM cover_index WHERE list_root = ?'
+              )
+              .all(legacyListRoot)
+          )
         : []
+      const queryMs = performance.now() - queryStartedAt
+      const mapStartedAt = performance.now()
       const toEntries = (rowsToUse: CoverIndexRow[], rootKey: string, legacyRelRoot?: string) =>
         (rowsToUse || [])
           .filter((row) => row && row.file_path && row.hash)
@@ -438,11 +454,27 @@ export async function loadCoverIndexEntries(listRoot: string): Promise<CoverInde
         ...toEntries(rows, listRootKey),
         ...toEntries(legacyRows, legacyListRoot || '', legacyListRoot)
       ]
+      const mapMs = performance.now() - mapStartedAt
+      let legacyMigrateMs = 0
       if (legacyRows && legacyRows.length > 0 && legacyListRoot && resolvedRoot.isRelativeKey) {
         const listRootAbs = resolvedRoot.abs || resolveAbsoluteListRoot(listRootKey)
         if (listRootAbs) {
+          const legacyMigrateStartedAt = performance.now()
           migrateCoverIndexRows(db, legacyListRoot, listRootKey, listRootAbs)
+          legacyMigrateMs = performance.now() - legacyMigrateStartedAt
         }
+      }
+      const elapsedMs = performance.now() - startedAt
+      if (isPackagedRcMainProcess() && elapsedMs >= 1000) {
+        log.warn('[cover-index] slow load-entries', {
+          elapsedMs: Math.round(elapsedMs),
+          migrateMs: Math.round(migrateMs),
+          queryMs: Math.round(queryMs),
+          mapMs: Math.round(mapMs),
+          legacyMigrateMs: Math.round(legacyMigrateMs),
+          rowCount: rows.length,
+          legacyRowCount: legacyRows.length
+        })
       }
       return result
     })

@@ -78,6 +78,21 @@ export type MiniPlayerPlayheadGapDiagnostic = {
   lastUpdateSequence?: number | null
   lastUpdatePublishedAtMs?: number | null
   lastUpdateReceivedAtMs?: number | null
+  visibilityState?: string
+  documentHidden?: boolean
+  documentHasFocus?: boolean
+  watchLateMs?: number
+}
+
+export type MiniPlayerHostPlayheadStallDiagnostic = {
+  stalledMs: number
+  intervalLateMs: number
+  visibilityState: string
+  documentHidden: boolean
+  documentHasFocus: boolean
+  currentSeconds: number
+  detectedAtMs: number
+  lastPublishAtMs: number
 }
 
 export type MiniPlayerSession = {
@@ -223,6 +238,7 @@ export const MINI_PLAYER_CHANNELS = {
   hostState: 'mini-player:host-state',
   playhead: 'mini-player:playhead',
   playheadGap: 'mini-player:playhead-gap',
+  hostPlayheadStall: 'mini-player:host-playhead-stall',
   taskProgress: 'mini-player:task-progress',
   command: 'mini-player:command',
   rendererReady: 'mini-player:renderer-ready',

@@ -54,6 +54,7 @@ export { removeCompactVisualWaveformCacheEntry } from './libraryCacheDb/compactV
 
 export {
   loadUnifiedDisplayWaveformCacheData,
+  relocateUnifiedDisplayWaveformCacheEntry,
   upsertUnifiedDisplayWaveformCacheEntry,
   updateUnifiedDisplayWaveformCacheStat,
   moveUnifiedDisplayWaveformCacheEntry,

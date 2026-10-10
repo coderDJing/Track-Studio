@@ -151,20 +151,22 @@ export async function transferTrackDerivedCaches(
   )
 
   try {
-    const unified = await diagnostics.measure('read-display-waveform', () =>
-      LibraryCacheDb.loadUnifiedDisplayWaveformCacheData(fromRoot, fromPath, waveformLoadStat)
+    const relocated = await diagnostics.measure('retarget-display-waveform', () =>
+      LibraryCacheDb.relocateUnifiedDisplayWaveformCacheEntry({
+        fromRoot,
+        fromPath,
+        toRoot,
+        toPath,
+        loadStat: waveformLoadStat,
+        toStat,
+        removeSource
+      })
     )
-    if (unified) {
-      const updated = await diagnostics.measure('write-display-waveform', () =>
-        LibraryCacheDb.upsertUnifiedDisplayWaveformCacheEntry(toRoot, toPath, toStat, unified)
-      )
-      if (updated) {
-        if (removeSource) {
-          await LibraryCacheDb.removeUnifiedDisplayWaveformCacheEntry(fromRoot, fromPath)
-          await LibraryCacheDb.removeMixtapeRawWaveformCacheEntry(fromRoot, fromPath)
-        }
-        await LibraryCacheDb.removeMixtapeRawWaveformCacheEntry(toRoot, toPath)
+    if (relocated) {
+      if (removeSource) {
+        await LibraryCacheDb.removeMixtapeRawWaveformCacheEntry(fromRoot, fromPath)
       }
+      await LibraryCacheDb.removeMixtapeRawWaveformCacheEntry(toRoot, toPath)
     }
   } catch {}
   try {

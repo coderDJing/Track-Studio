@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { performance } from 'node:perf_hooks'
 import { getLibraryDb } from '../libraryDb'
 import { loadLibraryNodes, type LibraryNodeRow } from '../libraryTreeDb'
 import { resolveCacheListRootAbs } from '../libraryCacheDb'
@@ -6,6 +7,8 @@ import store from '../store'
 import { getCoreFsDirName } from '../utils'
 import type { ISongInfo } from '../../types/globals'
 import { log } from '../log'
+import { isPackagedRcMainProcess } from './rcDiagnosticEnvironment'
+import { beginMainThreadActivity, endMainThreadActivity } from './mainProcessActivityTraceState'
 import { normalizeSongHotCues } from '../../shared/hotCues'
 import { normalizeSongMemoryCues } from '../../shared/memoryCues'
 import { normalizePlaylistTrackNumber } from './playlistTrackNumbers'
@@ -700,122 +703,179 @@ class GlobalSongSearchEngine {
 
     let processedRows = 0
     let lastRowId = 0
-    while (true) {
-      const songCacheRows = songCachePageQuery.all(lastRowId, SEARCH_REBUILD_DB_PAGE_ROWS)
-      if (songCacheRows.length === 0) break
-
-      for (const row of songCacheRows) {
-        processedRows += 1
-        const rowId = Number(row?.row_id)
-        if (Number.isFinite(rowId) && rowId > lastRowId) {
-          lastRowId = rowId
+    const rcDiagnostics = isPackagedRcMainProcess()
+    const rebuildStartedAt = performance.now()
+    let lastRebuildProgressLogAt = rebuildStartedAt
+    let pageActivityId: number | null = null
+    const endPageActivity = () => {
+      if (pageActivityId === null) return
+      endMainThreadActivity(pageActivityId)
+      pageActivityId = null
+    }
+    try {
+      while (true) {
+        pageActivityId = beginMainThreadActivity({
+          kind: 'sync',
+          name: 'song-search:rebuild-page'
+        })
+        const queryStartedAt = performance.now()
+        const songCacheRows = songCachePageQuery.all(lastRowId, SEARCH_REBUILD_DB_PAGE_ROWS)
+        const queryMs = performance.now() - queryStartedAt
+        if (songCacheRows.length === 0) {
+          endPageActivity()
+          break
         }
-        if (!row || !row.list_root || row.info_json === undefined) continue
 
-        const listRootAbs = resolveListRootAbsolute(String(row.list_root))
-        const normalizedListRoot = normalizePathForCompare(listRootAbs)
-        let playlist = playlistInfo.byAbsPath.get(normalizedListRoot)
-        if (!playlist) {
-          playlist = this.findPlaylistByPrefix(playlistInfo.byAbsPath, normalizedListRoot)
-        }
+        for (const row of songCacheRows) {
+          processedRows += 1
+          const rowId = Number(row?.row_id)
+          if (Number.isFinite(rowId) && rowId > lastRowId) {
+            lastRowId = rowId
+          }
+          if (!row || !row.list_root || row.info_json === undefined) continue
 
-        const parsedInfo = tryParseSongInfo(row.info_json)
-        const fallbackAbsPath = (() => {
-          const filePathRaw = String(row.file_path || '').trim()
-          if (!filePathRaw) return ''
-          if (path.isAbsolute(filePathRaw)) return filePathRaw
-          if (!listRootAbs) return filePathRaw
-          return path.join(listRootAbs, filePathRaw)
-        })()
-        const filePath = String(parsedInfo?.filePath || fallbackAbsPath).trim()
-        if (!filePath) continue
+          const listRootAbs = resolveListRootAbsolute(String(row.list_root))
+          const normalizedListRoot = normalizePathForCompare(listRootAbs)
+          let playlist = playlistInfo.byAbsPath.get(normalizedListRoot)
+          if (!playlist) {
+            playlist = this.findPlaylistByPrefix(playlistInfo.byAbsPath, normalizedListRoot)
+          }
 
-        const songInfo = toSongInfo(parsedInfo, filePath)
-        const songListUUID = playlist?.uuid || ''
-        const songListName = playlist?.dirName || ''
-        const songListPath = playlist?.relPath ? playlist.relPath.replace(/\\/g, '/') : ''
-        const libraryName = playlist?.libraryName || 'FilterLibrary'
-        const extendedTerms = collectExtendedSearchTerms(parsedInfo)
+          const parsedInfo = tryParseSongInfo(row.info_json)
+          const fallbackAbsPath = (() => {
+            const filePathRaw = String(row.file_path || '').trim()
+            if (!filePathRaw) return ''
+            if (path.isAbsolute(filePathRaw)) return filePathRaw
+            if (!listRootAbs) return filePathRaw
+            return path.join(listRootAbs, filePathRaw)
+          })()
+          const filePath = String(parsedInfo?.filePath || fallbackAbsPath).trim()
+          if (!filePath) continue
 
-        const searchText = normalizeText(
-          [
-            songInfo.title,
-            songInfo.artist,
-            songInfo.album,
-            songInfo.genre,
-            songInfo.label,
-            songInfo.fileName,
-            songInfo.fileFormat,
-            songInfo.container,
-            songInfo.duration,
-            songInfo.bitrate,
-            songInfo.key,
-            songInfo.bpm,
-            libraryName,
+          const songInfo = toSongInfo(parsedInfo, filePath)
+          const songListUUID = playlist?.uuid || ''
+          const songListName = playlist?.dirName || ''
+          const songListPath = playlist?.relPath ? playlist.relPath.replace(/\\/g, '/') : ''
+          const libraryName = playlist?.libraryName || 'FilterLibrary'
+          const extendedTerms = collectExtendedSearchTerms(parsedInfo)
+
+          const searchText = normalizeText(
+            [
+              songInfo.title,
+              songInfo.artist,
+              songInfo.album,
+              songInfo.genre,
+              songInfo.label,
+              songInfo.fileName,
+              songInfo.fileFormat,
+              songInfo.container,
+              songInfo.duration,
+              songInfo.bitrate,
+              songInfo.key,
+              songInfo.bpm,
+              libraryName,
+              songListUUID,
+              songListName,
+              songListPath,
+              songInfo.filePath,
+              ...extendedTerms
+            ]
+              .filter(
+                (item) => item !== undefined && item !== null && String(item).trim().length > 0
+              )
+              .join(' ')
+          )
+          if (!searchText) continue
+
+          const searchCompact = compactText(searchText)
+          const docIndex = docs.length
+          const doc: SearchDoc = {
+            id: `${songListUUID || 'unknown'}|${songInfo.filePath}|${docIndex}`,
+            filePath: songInfo.filePath,
+            fileName: songInfo.fileName || path.basename(songInfo.filePath),
+            title: String(songInfo.title || ''),
+            artist: String(songInfo.artist || ''),
+            album: String(songInfo.album || ''),
+            genre: String(songInfo.genre || ''),
+            label: String(songInfo.label || ''),
+            duration: String(songInfo.duration || ''),
+            keyText: String(songInfo.key || ''),
+            bpm: songInfo.bpm,
+            container: String(songInfo.container || ''),
             songListUUID,
             songListName,
             songListPath,
-            songInfo.filePath,
-            ...extendedTerms
-          ]
-            .filter((item) => item !== undefined && item !== null && String(item).trim().length > 0)
-            .join(' ')
-        )
-        if (!searchText) continue
+            libraryName,
+            searchText,
+            searchCompact,
+            titleNorm: normalizeText(songInfo.title),
+            artistNorm: normalizeText(songInfo.artist),
+            albumNorm: normalizeText(songInfo.album),
+            genreNorm: normalizeText(songInfo.genre),
+            labelNorm: normalizeText(songInfo.label),
+            keyNorm: normalizeText(songInfo.key),
+            containerNorm: normalizeText(songInfo.container),
+            fileNameNorm: normalizeText(songInfo.fileName),
+            songListNameNorm: normalizeText(songListName),
+            pathNorm: normalizeText(songInfo.filePath)
+          }
+          docs.push(doc)
 
-        const searchCompact = compactText(searchText)
-        const docIndex = docs.length
-        const doc: SearchDoc = {
-          id: `${songListUUID || 'unknown'}|${songInfo.filePath}|${docIndex}`,
-          filePath: songInfo.filePath,
-          fileName: songInfo.fileName || path.basename(songInfo.filePath),
-          title: String(songInfo.title || ''),
-          artist: String(songInfo.artist || ''),
-          album: String(songInfo.album || ''),
-          genre: String(songInfo.genre || ''),
-          label: String(songInfo.label || ''),
-          duration: String(songInfo.duration || ''),
-          keyText: String(songInfo.key || ''),
-          bpm: songInfo.bpm,
-          container: String(songInfo.container || ''),
-          songListUUID,
-          songListName,
-          songListPath,
-          libraryName,
-          searchText,
-          searchCompact,
-          titleNorm: normalizeText(songInfo.title),
-          artistNorm: normalizeText(songInfo.artist),
-          albumNorm: normalizeText(songInfo.album),
-          genreNorm: normalizeText(songInfo.genre),
-          labelNorm: normalizeText(songInfo.label),
-          keyNorm: normalizeText(songInfo.key),
-          containerNorm: normalizeText(songInfo.container),
-          fileNameNorm: normalizeText(songInfo.fileName),
-          songListNameNorm: normalizeText(songListName),
-          pathNorm: normalizeText(songInfo.filePath)
-        }
-        docs.push(doc)
+          const charTerms = new Set(searchCompact.split('').filter(Boolean))
+          const bigramTerms = buildNgramSet(searchCompact, 2)
+          const trigramTerms = buildNgramSet(searchCompact, 3)
+          addToInvertedIndex(charIndex, charTerms, docIndex)
+          addToInvertedIndex(bigramIndex, bigramTerms, docIndex)
+          addToInvertedIndex(trigramIndex, trigramTerms, docIndex)
 
-        const charTerms = new Set(searchCompact.split('').filter(Boolean))
-        const bigramTerms = buildNgramSet(searchCompact, 2)
-        const trigramTerms = buildNgramSet(searchCompact, 3)
-        addToInvertedIndex(charIndex, charTerms, docIndex)
-        addToInvertedIndex(bigramIndex, bigramTerms, docIndex)
-        addToInvertedIndex(trigramIndex, trigramTerms, docIndex)
+          if (songListUUID) {
+            const bucket = playlistSongsMap.get(songListUUID) || new Map<string, ISongInfo>()
+            bucket.set(normalizePathForCompare(songInfo.filePath), songInfo)
+            playlistSongsMap.set(songListUUID, bucket)
+          }
 
-        if (songListUUID) {
-          const bucket = playlistSongsMap.get(songListUUID) || new Map<string, ISongInfo>()
-          bucket.set(normalizePathForCompare(songInfo.filePath), songInfo)
-          playlistSongsMap.set(songListUUID, bucket)
+          if (processedRows % SEARCH_REBUILD_YIELD_EVERY_ROWS === 0) {
+            endPageActivity()
+            await yieldToNodeMainLoop()
+            pageActivityId = beginMainThreadActivity({
+              kind: 'sync',
+              name: 'song-search:rebuild-page'
+            })
+          }
         }
 
-        if (processedRows % SEARCH_REBUILD_YIELD_EVERY_ROWS === 0) {
-          await yieldToNodeMainLoop()
+        endPageActivity()
+        if (rcDiagnostics && queryMs >= 1000) {
+          const infoJsonBytes = songCacheRows.reduce(
+            (total, row) => total + (typeof row.info_json === 'string' ? row.info_json.length : 0),
+            0
+          )
+          log.warn('[song-search] slow rebuild page', {
+            queryMs: Math.round(queryMs),
+            rowCount: songCacheRows.length,
+            infoJsonBytes,
+            lastRowId,
+            processedRows
+          })
         }
+        const rebuildElapsedMs = performance.now() - rebuildStartedAt
+        if (
+          rcDiagnostics &&
+          rebuildElapsedMs >= 5000 &&
+          performance.now() - lastRebuildProgressLogAt >= 5000
+        ) {
+          lastRebuildProgressLogAt = performance.now()
+          log.warn('[song-search] rebuild still running', {
+            elapsedMs: Math.round(rebuildElapsedMs),
+            processedRows,
+            lastQueryMs: Math.round(queryMs),
+            lastRowId
+          })
+        }
+        await yieldToNodeMainLoop()
       }
-
-      await yieldToNodeMainLoop()
+    } finally {
+      endPageActivity()
     }
 
     const playlistSongs = new Map<string, ISongInfo[]>()

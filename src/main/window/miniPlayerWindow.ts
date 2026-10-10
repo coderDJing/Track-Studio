@@ -27,6 +27,7 @@ import {
   MINI_PLAYER_WINDOW_MIN_WIDTH,
   type MiniPlayerCommand,
   type MiniPlayerHostState,
+  type MiniPlayerHostPlayheadStallDiagnostic,
   type MiniPlayerPlayhead,
   type MiniPlayerPlayheadGapDiagnostic,
   type MiniPlayerSession
@@ -549,6 +550,38 @@ const ensureIpcHandlers = () => {
         mainLastPlayheadSequence: lastHostPlayheadSequence,
         mainLastPlayheadPublishedAtMs: lastHostPlayheadPublishedAtMs,
         hostWebContentsId: lastHostPlayheadSenderId,
+        focused: miniPlayerWindow?.isFocused() === true,
+        visible: true,
+        visibilityState:
+          typeof payload?.visibilityState === 'string' ? payload.visibilityState : null,
+        documentHidden: payload?.documentHidden === true,
+        documentHasFocus: payload?.documentHasFocus === true,
+        watchLateMs: Math.max(0, Math.round(Number(payload?.watchLateMs) || 0))
+      })
+    }
+  )
+  ipcMain.on(
+    MINI_PLAYER_CHANNELS.hostPlayheadStall,
+    (_event, payload: MiniPlayerHostPlayheadStallDiagnostic) => {
+      if (!isPackagedRcBuild() || !isVisible()) return
+      const stalledMs = Number(payload?.stalledMs)
+      if (!Number.isFinite(stalledMs) || stalledMs < 1500) return
+      const now = Date.now()
+      log.error('[mini-player] host playhead stalled', {
+        stalledMs: Math.round(stalledMs),
+        intervalLateMs: Math.max(0, Math.round(Number(payload?.intervalLateMs) || 0)),
+        currentSeconds: Math.max(0, Number(payload?.currentSeconds) || 0),
+        detectedAtMs: toNullableFiniteNumber(payload?.detectedAtMs) ?? now,
+        lastPublishAtMs: toNullableFiniteNumber(payload?.lastPublishAtMs),
+        visibilityState:
+          typeof payload?.visibilityState === 'string' ? payload.visibilityState : null,
+        documentHidden: payload?.documentHidden === true,
+        documentHasFocus: payload?.documentHasFocus === true,
+        mainProcessReceivedGapMs:
+          lastHostPlayheadReceivedAtMs === null
+            ? null
+            : Math.max(0, now - lastHostPlayheadReceivedAtMs),
+        mainLastPlayheadSequence: lastHostPlayheadSequence,
         focused: miniPlayerWindow?.isFocused() === true,
         visible: true
       })

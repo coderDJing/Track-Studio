@@ -64,6 +64,13 @@ export function useMiniPlayerHost(params: {
   const session = computed(() => params.runtime.miniPlayerSession)
   const isMiniPlayerOpen = computed(() => session.value.open)
   let playheadSequence = 0
+  const HOST_PLAYHEAD_STALL_THRESHOLD_MS = 1500
+  const HOST_PLAYHEAD_STALL_COOLDOWN_MS = 15_000
+  const HOST_PLAYHEAD_WATCH_INTERVAL_MS = 500
+  let lastHostPublishAtMs = 0
+  let lastHostWatchFiredAtMs = 0
+  let lastHostStallReportAtMs = 0
+  let hostWatchTimer: number | null = null
 
   const resolveIsPlaying = () => params.audioPlayer.value?.isPlaying() ?? params.isPlaying.value
 
@@ -117,6 +124,7 @@ export function useMiniPlayerHost(params: {
 
   const publishPlayhead = () => {
     if (!isMiniPlayerOpen.value) return
+    lastHostPublishAtMs = Date.now()
     const payload: MiniPlayerPlayhead = {
       currentSeconds: params.playerCurrentSeconds.value,
       durationSeconds: params.playerWaveformDurationSec.value,
@@ -285,6 +293,51 @@ export function useMiniPlayerHost(params: {
     () => publishPlayhead()
   )
 
+  const stopHostPlayheadWatch = () => {
+    if (hostWatchTimer === null) return
+    window.clearInterval(hostWatchTimer)
+    hostWatchTimer = null
+  }
+
+  watch(
+    isMiniPlayerOpen,
+    (open) => {
+      stopHostPlayheadWatch()
+      if (!open) return
+      const nowMs = Date.now()
+      lastHostPublishAtMs = nowMs
+      lastHostWatchFiredAtMs = nowMs
+      hostWatchTimer = window.setInterval(() => {
+        const now = Date.now()
+        const intervalLateMs = Math.max(
+          0,
+          now - lastHostWatchFiredAtMs - HOST_PLAYHEAD_WATCH_INTERVAL_MS
+        )
+        lastHostWatchFiredAtMs = now
+        if (!isMiniPlayerOpen.value || !resolveIsPlaying() || lastHostPublishAtMs === 0) return
+        const stalledMs = now - lastHostPublishAtMs
+        if (
+          stalledMs < HOST_PLAYHEAD_STALL_THRESHOLD_MS ||
+          now - lastHostStallReportAtMs < HOST_PLAYHEAD_STALL_COOLDOWN_MS
+        ) {
+          return
+        }
+        lastHostStallReportAtMs = now
+        window.electron.ipcRenderer.send(MINI_PLAYER_CHANNELS.hostPlayheadStall, {
+          stalledMs: Math.round(stalledMs),
+          intervalLateMs: Math.round(intervalLateMs),
+          visibilityState: document.visibilityState,
+          documentHidden: document.hidden,
+          documentHasFocus: document.hasFocus(),
+          currentSeconds: Math.max(0, Number(params.playerCurrentSeconds.value) || 0),
+          detectedAtMs: now,
+          lastPublishAtMs: lastHostPublishAtMs
+        })
+      }, HOST_PLAYHEAD_WATCH_INTERVAL_MS)
+    },
+    { immediate: true }
+  )
+
   watch(
     () => params.runtime.playingData.playingSong,
     (song) => {
@@ -329,6 +382,7 @@ export function useMiniPlayerHost(params: {
   })
 
   onUnmounted(() => {
+    stopHostPlayheadWatch()
     window.electron.ipcRenderer.removeListener(MINI_PLAYER_CHANNELS.session, handleSession)
     window.electron.ipcRenderer.removeListener(
       MINI_PLAYER_CHANNELS.rendererReady,
