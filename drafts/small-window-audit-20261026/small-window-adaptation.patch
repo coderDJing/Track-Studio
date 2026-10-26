@@ -1,0 +1,988 @@
+diff --git a/src/renderer/src/components/BaseSelect.vue b/src/renderer/src/components/BaseSelect.vue
+index e509eea8..5a0a5844 100644
+--- a/src/renderer/src/components/BaseSelect.vue
++++ b/src/renderer/src/components/BaseSelect.vue
+@@ -23,39 +23,49 @@
+         <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" />
+       </svg>
+     </div>
+-    <transition name="base-select-fade">
+-      <OverlayScrollbarsComponent
+-        v-if="isOpen"
+-        class="base-select__dropdown"
+-        :options="scrollbarOptions"
+-        element="div"
+-        :style="{ maxHeight: `${maxHeight}px` }"
+-        @click.stop
+-      >
+-        <ul class="base-select__dropdown-list" role="listbox">
+-          <li
+-            v-for="(option, index) in normalizedOptions"
+-            :key="getOptionKey(option, index)"
+-            class="base-select__option"
+-            :class="{
+-              'is-selected': option.value === modelValue,
+-              'is-highlighted': index === highlightIndex,
+-              'is-disabled': option.disabled
+-            }"
+-            role="option"
+-            :aria-selected="option.value === modelValue"
+-            @click.stop="selectOption(option)"
++    <Teleport to="body">
++      <transition name="base-select-fade">
++        <div
++          v-if="isOpen"
++          ref="panelRef"
++          class="base-select__floating"
++          :style="panelStyle"
++          @keydown.stop="handleKeydown"
++        >
++          <OverlayScrollbarsComponent
++            v-if="isOpen"
++            class="base-select__dropdown"
++            :options="scrollbarOptions"
++            element="div"
++            :style="{ maxHeight: panelStyle.maxHeight }"
++            @click.stop
+           >
+-            <slot name="option" :option="option">
+-              {{ option.label }}
+-            </slot>
+-          </li>
+-          <li v-if="!normalizedOptions.length" class="base-select__empty">
+-            {{ emptyText }}
+-          </li>
+-        </ul>
+-      </OverlayScrollbarsComponent>
+-    </transition>
++            <ul class="base-select__dropdown-list" role="listbox">
++              <li
++                v-for="(option, index) in normalizedOptions"
++                :key="getOptionKey(option, index)"
++                class="base-select__option"
++                :class="{
++                  'is-selected': option.value === modelValue,
++                  'is-highlighted': index === highlightIndex,
++                  'is-disabled': option.disabled
++                }"
++                role="option"
++                :aria-selected="option.value === modelValue"
++                @click.stop="selectOption(option)"
++              >
++                <slot name="option" :option="option">
++                  {{ option.label }}
++                </slot>
++              </li>
++              <li v-if="!normalizedOptions.length" class="base-select__empty">
++                {{ emptyText }}
++              </li>
++            </ul>
++          </OverlayScrollbarsComponent>
++        </div>
++      </transition>
++    </Teleport>
+   </div>
+   <bubbleBox
+     v-if="showBubble"
+@@ -65,8 +75,9 @@
+ </template>
+ 
+ <script setup lang="ts">
+-import { computed, onBeforeUnmount, onMounted, ref, type PropType } from 'vue'
++import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue'
+ import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
++import { useAnchoredPopover } from '@renderer/composables/useAnchoredPopover'
+ import bubbleBox from '@renderer/components/bubbleBox.vue'
+ 
+ type SelectValue = string | number | boolean | null | undefined
+@@ -121,6 +132,22 @@ const isOpen = ref(false)
+ const highlightIndex = ref(-1)
+ const triggerRef = ref<HTMLElement | null>(null)
+ 
++const panelRef = ref<HTMLElement | null>(null)
++const panelStyle = useAnchoredPopover(isOpen, triggerRef, panelRef, {
++  maxHeight: () => props.maxHeight,
++  contentHeight: () => (panelRef.value?.querySelector('ul')?.scrollHeight ?? 0) + 2
++})
++watch(highlightIndex, async () => {
++  await nextTick()
++  panelRef.value?.querySelector('.is-highlighted')?.scrollIntoView({ block: 'nearest' })
++})
++watch(
++  () => props.disabled,
++  (disabled) => {
++    if (disabled) closeDropdown()
++  }
++)
++
+ const normalizedOptions = computed(() => props.options ?? [])
+ 
+ const selectedOption = computed(() =>
+@@ -220,6 +247,7 @@ const selectOption = (option: SelectOption) => {
+     emit('change', option.value)
+   }
+   closeDropdown()
++  triggerRef.value?.focus()
+ }
+ 
+ const selectByIndex = (index: number) => {
+@@ -285,7 +313,7 @@ const handleKeydown = (event: KeyboardEvent) => {
+     return
+   }
+ 
+-  if (event.key === 'Escape') {
++  if (event.key === 'Escape' || event.key === 'Tab') {
+     closeDropdown()
+   }
+ }
+@@ -295,7 +323,7 @@ const handleClickOutside = (event: MouseEvent) => {
+     return
+   }
+   const target = event.target as Node | null
+-  if (target && triggerRef.value.contains(target)) {
++  if (target && (triggerRef.value.contains(target) || panelRef.value?.contains(target))) {
+     return
+   }
+   closeDropdown()
+@@ -384,12 +412,13 @@ onBeforeUnmount(() => {
+   transform: translateY(-50%) rotate(180deg);
+ }
+ 
++.base-select__floating {
++  z-index: 79;
++  box-sizing: border-box;
++}
++
+ .base-select__dropdown {
+-  position: absolute;
+-  left: 0;
+-  right: 0;
+-  top: calc(100% + 4px);
+-  z-index: 20;
++  box-sizing: border-box;
+   border-radius: 6px;
+   border: 1px solid var(--border);
+   background-color: var(--bg-elev);
+diff --git a/src/renderer/src/components/ColorPicker.vue b/src/renderer/src/components/ColorPicker.vue
+index f58cf146..ae923575 100644
+--- a/src/renderer/src/components/ColorPicker.vue
++++ b/src/renderer/src/components/ColorPicker.vue
+@@ -9,42 +9,52 @@
+     >
+       <span class="color-picker__trigger-fill" :style="{ backgroundColor: normalizedValue }" />
+     </button>
+-    <transition name="color-picker-fade">
+-      <div v-if="isOpen" class="color-picker__panel" @click.stop>
++    <Teleport to="body">
++      <transition name="color-picker-fade">
+         <div
+-          ref="svRef"
+-          class="color-picker__sv"
+-          :style="{ backgroundColor: hueColor }"
+-          @pointerdown="onSvPointerDown"
++          v-if="isOpen"
++          ref="panelRef"
++          class="color-picker__panel"
++          :style="panelStyle"
++          @click.stop
++          @keydown.esc.stop="closePanel"
+         >
+-          <div class="color-picker__sv-white" />
+-          <div class="color-picker__sv-black" />
+-          <div class="color-picker__sv-cursor" :style="svCursorStyle" />
++          <div
++            ref="svRef"
++            class="color-picker__sv"
++            :style="{ backgroundColor: hueColor }"
++            @pointerdown="onSvPointerDown"
++          >
++            <div class="color-picker__sv-white" />
++            <div class="color-picker__sv-black" />
++            <div class="color-picker__sv-cursor" :style="svCursorStyle" />
++          </div>
++          <div ref="hueRef" class="color-picker__hue" @pointerdown="onHuePointerDown">
++            <div class="color-picker__hue-cursor" :style="{ left: `${(hsv.h / 360) * 100}%` }" />
++          </div>
++          <div class="color-picker__row">
++            <span class="color-picker__preview" :style="{ backgroundColor: normalizedValue }" />
++            <input
++              class="color-picker__hex"
++              :value="hexDraft"
++              spellcheck="false"
++              maxlength="7"
++              @input="onHexInput"
++              @focus="hexFocused = true"
++              @blur="onHexBlur"
++              @keydown.enter.prevent="commitHex"
++              @keydown.esc.stop="closePanel"
++            />
++          </div>
+         </div>
+-        <div ref="hueRef" class="color-picker__hue" @pointerdown="onHuePointerDown">
+-          <div class="color-picker__hue-cursor" :style="{ left: `${(hsv.h / 360) * 100}%` }" />
+-        </div>
+-        <div class="color-picker__row">
+-          <span class="color-picker__preview" :style="{ backgroundColor: normalizedValue }" />
+-          <input
+-            class="color-picker__hex"
+-            :value="hexDraft"
+-            spellcheck="false"
+-            maxlength="7"
+-            @input="onHexInput"
+-            @focus="hexFocused = true"
+-            @blur="onHexBlur"
+-            @keydown.enter.prevent="commitHex"
+-            @keydown.esc.stop="closePanel"
+-          />
+-        </div>
+-      </div>
+-    </transition>
++      </transition>
++    </Teleport>
+   </div>
+ </template>
+ 
+ <script setup lang="ts">
+ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
++import { useAnchoredPopover } from '@renderer/composables/useAnchoredPopover'
+ import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from '@renderer/utils/accentColor'
+ 
+ const props = defineProps({
+@@ -131,6 +141,13 @@ watch(normalizedValue, (color) => {
+   }
+ })
+ 
++const panelRef = ref<HTMLElement | null>(null)
++const panelStyle = useAnchoredPopover(isOpen, rootRef, panelRef, {
++  width: 242,
++  maxHeight: () => window.innerHeight - 51,
++  center: true
++})
++
+ const hueColor = computed(() => hsvToHex({ h: hsv.h, s: 1, v: 1 }))
+ 
+ const svCursorStyle = computed(() => ({
+@@ -255,7 +272,7 @@ const togglePanel = () => {
+ const handleClickOutside = (event: MouseEvent) => {
+   if (!isOpen.value || !rootRef.value) return
+   const target = event.target as Node | null
+-  if (target && rootRef.value.contains(target)) return
++  if (target && (rootRef.value.contains(target) || panelRef.value?.contains(target))) return
+   closePanel()
+ }
+ 
+@@ -314,12 +331,10 @@ onBeforeUnmount(() => {
+ }
+ 
+ .color-picker__panel {
+-  position: absolute;
+-  left: 50%;
+-  top: calc(100% + 8px);
+-  transform: translateX(-50%);
+-  z-index: 30;
+-  width: 216px;
++  position: fixed;
++  z-index: 79;
++  box-sizing: border-box;
++  overflow-y: auto;
+   padding: 12px;
+   border-radius: 8px;
+   border: 1px solid var(--border);
+@@ -333,6 +348,7 @@ onBeforeUnmount(() => {
+ .color-picker__sv {
+   position: relative;
+   height: 128px;
++  flex-shrink: 0;
+   border-radius: 6px;
+   overflow: hidden;
+   cursor: crosshair;
+diff --git a/src/renderer/src/components/addSongFingerprintFinishedDialog.vue b/src/renderer/src/components/addSongFingerprintFinishedDialog.vue
+index dcf6afc0..d6e9c586 100644
+--- a/src/renderer/src/components/addSongFingerprintFinishedDialog.vue
++++ b/src/renderer/src/components/addSongFingerprintFinishedDialog.vue
+@@ -95,6 +95,8 @@ const formatDurationSec = (ms: number) => {
+   color: var(--text);
+ }
+ .stats-body {
++  overflow-y: auto;
++  overflow-wrap: anywhere;
+   padding: 20px;
+   flex: 1;
+   min-height: 0;
+diff --git a/src/renderer/src/components/cloudSyncSummaryDialog.vue b/src/renderer/src/components/cloudSyncSummaryDialog.vue
+index d2e87130..7cb4ed3f 100644
+--- a/src/renderer/src/components/cloudSyncSummaryDialog.vue
++++ b/src/renderer/src/components/cloudSyncSummaryDialog.vue
+@@ -178,12 +178,14 @@ const curatedArtistSummaryView = computed(() => {
+   color: var(--text);
+ }
+ .body {
++  min-height: 0;
++  overflow-y: auto;
++  overflow-wrap: anywhere;
+   padding: 20px;
+   display: flex;
+   flex-direction: column;
+   gap: 14px;
+   flex: 1;
+-  min-height: 0;
+ }
+ .summary-body {
+   gap: 12px;
+diff --git a/src/renderer/src/components/cloudSyncSyncDialog.vue b/src/renderer/src/components/cloudSyncSyncDialog.vue
+index 993b8a3d..d15e6a25 100644
+--- a/src/renderer/src/components/cloudSyncSyncDialog.vue
++++ b/src/renderer/src/components/cloudSyncSyncDialog.vue
+@@ -176,12 +176,14 @@ onUnmounted(() => {
+   color: var(--text);
+ }
+ .body {
++  min-height: 0;
++  overflow-y: auto;
++  overflow-wrap: anywhere;
+   padding: 20px;
+   display: flex;
+   flex-direction: column;
+   gap: 14px;
+   flex: 1;
+-  min-height: 0;
+ }
+ .stages {
+   display: flex;
+diff --git a/src/renderer/src/components/conversionFinishedSummaryDialog.vue b/src/renderer/src/components/conversionFinishedSummaryDialog.vue
+index 3eac5e85..e2b6e3de 100644
+--- a/src/renderer/src/components/conversionFinishedSummaryDialog.vue
++++ b/src/renderer/src/components/conversionFinishedSummaryDialog.vue
+@@ -117,6 +117,8 @@ const getFileName = (filePath?: string) => {
+   color: var(--text);
+ }
+ .stats-body {
++  overflow-y: auto;
++  overflow-wrap: anywhere;
+   padding: 20px;
+   flex: 1;
+   min-height: 0;
+diff --git a/src/renderer/src/components/curatedLibrarySyncDialog.vue b/src/renderer/src/components/curatedLibrarySyncDialog.vue
+index 85e5daa0..c3ed8cb2 100644
+--- a/src/renderer/src/components/curatedLibrarySyncDialog.vue
++++ b/src/renderer/src/components/curatedLibrarySyncDialog.vue
+@@ -241,6 +241,9 @@ onUnmounted(() => utils.delHotkeysScope(uuid))
+ }
+ 
+ .body {
++  min-height: 0;
++  overflow-y: auto;
++  overflow-wrap: anywhere;
+   padding: 20px;
+   display: flex;
+   flex-direction: column;
+diff --git a/src/renderer/src/components/importFinishedSummaryDialog.vue b/src/renderer/src/components/importFinishedSummaryDialog.vue
+index 9574c03d..af2b5a50 100644
+--- a/src/renderer/src/components/importFinishedSummaryDialog.vue
++++ b/src/renderer/src/components/importFinishedSummaryDialog.vue
+@@ -122,6 +122,8 @@ const showOverviewSection = computed(() => {
+   color: var(--text);
+ }
+ .stats-body {
++  overflow-y: auto;
++  overflow-wrap: anywhere;
+   padding: 20px;
+   flex: 1;
+   min-height: 0;
+diff --git a/src/renderer/src/components/playlistBatchRename/PlaylistBatchRenameDialog.vue b/src/renderer/src/components/playlistBatchRename/PlaylistBatchRenameDialog.vue
+index d8421717..bc854b5d 100644
+--- a/src/renderer/src/components/playlistBatchRename/PlaylistBatchRenameDialog.vue
++++ b/src/renderer/src/components/playlistBatchRename/PlaylistBatchRenameDialog.vue
+@@ -170,7 +170,7 @@ const handleGeneratePreview = async () => {
+   max-width: calc(100vw - 20px);
+   height: min(620px, calc(100vh - 40px));
+   max-height: calc(100vh - 20px);
+-  min-height: min(540px, calc(100vh - 20px));
++  min-height: min(540px, var(--dialog-available-height));
+   padding: 0;
+   display: flex;
+   flex-direction: column;
+diff --git a/src/renderer/src/components/playlistBatchRename/PresetManagerDialog.vue b/src/renderer/src/components/playlistBatchRename/PresetManagerDialog.vue
+index 7a20b22d..b1dacd71 100644
+--- a/src/renderer/src/components/playlistBatchRename/PresetManagerDialog.vue
++++ b/src/renderer/src/components/playlistBatchRename/PresetManagerDialog.vue
+@@ -438,7 +438,7 @@ onUnmounted(() => {
+   max-width: calc(100vw - 20px);
+   height: min(640px, calc(100vh - 40px));
+   max-height: calc(100vh - 20px);
+-  min-height: min(560px, calc(100vh - 20px));
++  min-height: min(560px, var(--dialog-available-height));
+   padding: 0;
+   display: flex;
+   flex-direction: column;
+diff --git a/src/renderer/src/components/playlistBatchRename/PreviewDialog.vue b/src/renderer/src/components/playlistBatchRename/PreviewDialog.vue
+index 900a85b3..a35dc153 100644
+--- a/src/renderer/src/components/playlistBatchRename/PreviewDialog.vue
++++ b/src/renderer/src/components/playlistBatchRename/PreviewDialog.vue
+@@ -360,7 +360,7 @@ const handleClose = async () => {
+   max-width: calc(100vw - 20px);
+   height: min(700px, calc(100vh - 40px));
+   max-height: calc(100vh - 20px);
+-  min-height: min(620px, calc(100vh - 20px));
++  min-height: min(620px, var(--dialog-available-height));
+   padding: 0;
+   display: flex;
+   flex-direction: column;
+diff --git a/src/renderer/src/components/settingDialog/SettingDialogBody.scss b/src/renderer/src/components/settingDialog/SettingDialogBody.scss
+index 49a06538..016b6c24 100644
+--- a/src/renderer/src/components/settingDialog/SettingDialogBody.scss
++++ b/src/renderer/src/components/settingDialog/SettingDialogBody.scss
+@@ -6,6 +6,8 @@
+ }
+ 
+ .dialog-scroll {
++  flex: 1;
++  min-height: 0;
+   height: 100%;
+   width: 100%;
+ }
+diff --git a/src/renderer/src/components/welcomePage.vue b/src/renderer/src/components/welcomePage.vue
+index ec47e10f..1d52d8fa 100644
+--- a/src/renderer/src/components/welcomePage.vue
++++ b/src/renderer/src/components/welcomePage.vue
+@@ -510,18 +510,19 @@ onUnmounted(() => {
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+-  justify-content: center;
++  justify-content: safe center;
+   color: var(--text-weak);
+   flex: 1 1 auto;
+   min-width: 0;
+   min-height: 0;
+-  overflow: hidden;
++  overflow: auto;
++  overscroll-behavior: contain;
+ }
+ 
+ .welcome-container--horizontal {
+   padding: 10px 14px;
+   align-items: center;
+-  justify-content: center;
++  justify-content: safe center;
+   --horizontal-content-gap: 4px;
+   --horizontal-grid-column-gap: 14px;
+   --horizontal-grid-row-gap: 4px;
+diff --git a/src/renderer/src/directives/dialogDrag.ts b/src/renderer/src/directives/dialogDrag.ts
+index b5cfa62d..03c8a07e 100644
+--- a/src/renderer/src/directives/dialogDrag.ts
++++ b/src/renderer/src/directives/dialogDrag.ts
+@@ -1,180 +1,117 @@
+ import type { Directive, DirectiveBinding } from 'vue'
+-
+-type BindingValue = string | undefined | null
+-
+-interface DragMeta {
+-  handle: HTMLElement
+-  pointerDownHandler: (event: PointerEvent) => void
+-  remove: () => void
+-  state?: {
+-    pointerId: number
+-    startClientX: number
+-    startClientY: number
+-    baseTranslateX: number
+-    baseTranslateY: number
+-    initialTop: number
+-  }
+-  overlay?: HTMLElement
+-}
+-
+-const contexts = new WeakMap<HTMLElement, DragMeta>()
+-
+-const shouldIgnoreDrag = (event: PointerEvent): boolean => {
+-  const target = event.target
+-  if (!(target instanceof HTMLElement)) return false
+-  if (target.closest('[data-dialog-drag-ignore]')) return true
+-  if (target.closest('button, a, input, textarea, select, [contenteditable="true"]')) return true
+-  return false
+-}
+-
+-const getHandleElement = (el: HTMLElement, binding: DirectiveBinding<BindingValue>) => {
+-  if (!binding.value) return el
+-  try {
+-    return (el.querySelector(binding.value) as HTMLElement) || el
+-  } catch {
+-    return el
+-  }
+-}
+-
+-const mountDialogDrag = (el: HTMLElement, binding: DirectiveBinding<BindingValue>) => {
+-  const handle = getHandleElement(el, binding)
+-
+-  const pointerMoveHandler = (event: PointerEvent) => {
+-    const context = contexts.get(el)
+-    if (!context || context.handle !== handle) return
+-    const state = context.state
+-    if (!state || event.pointerId !== state.pointerId) return
+-
+-    event.preventDefault()
+-
+-    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0
+-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0
+-    if (
+-      event.clientX < 0 ||
+-      event.clientX > viewportWidth ||
+-      event.clientY < 0 ||
+-      event.clientY > viewportHeight
+-    ) {
+-      pointerUpHandler(event)
+-      return
+-    }
+-
+-    const deltaX = event.clientX - state.startClientX
+-    const deltaY = event.clientY - state.startClientY
+-
+-    const nextX = state.baseTranslateX + deltaX
+-    let nextY = state.baseTranslateY + deltaY
+-
+-    const TITLE_BAR_SAFE_ZONE = 35
+-    const currentTop = state.initialTop + nextY
+-    if (currentTop < TITLE_BAR_SAFE_ZONE) {
+-      nextY = TITLE_BAR_SAFE_ZONE - state.initialTop
+-    }
+-
++import { constrainDialog } from '../utils/overlayLayout'
++
++const contexts = new WeakMap<HTMLElement, { handle: HTMLElement; remove: () => void }>()
++const getHandle = (el: HTMLElement, binding: DirectiveBinding<string | undefined | null>) =>
++  (binding.value ? el.querySelector<HTMLElement>(binding.value) : null) || el
++
++const mount = (el: HTMLElement, binding: DirectiveBinding<string | undefined | null>) => {
++  const handle = getHandle(el, binding)
++  let drag: { id: number; x: number; y: number; tx: number; ty: number } | null = null
++  let frame = 0
++  let previousUserSelect = ''
++  const overlay = el.closest('.dialog')
++  const translate = () => ({
++    x: Number(el.dataset.dragTranslateX || 0),
++    y: Number(el.dataset.dragTranslateY || 0)
++  })
++  const place = (x: number, y: number) => {
++    const current = translate()
++    const rect = el.getBoundingClientRect()
++    const left = rect.left - current.x
++    const top = rect.top - current.y
++    const position = constrainDialog(
++      left + x,
++      top + y,
++      rect.width,
++      rect.height,
++      window.innerWidth,
++      window.innerHeight
++    )
++    const nextX = position.left - left
++    const nextY = position.top - top
+     el.style.transform = `translate(${nextX}px, ${nextY}px)`
+     el.dataset.dragTranslateX = String(nextX)
+     el.dataset.dragTranslateY = String(nextY)
+   }
+-
+-  const clearDragState = () => {
+-    document.removeEventListener('pointermove', pointerMoveHandler)
+-    document.removeEventListener('pointerup', pointerUpHandler)
+-    document.removeEventListener('pointercancel', pointerUpHandler)
+-    document.body.style.userSelect = handle.dataset.dragPrevUserSelect || ''
+-    delete handle.dataset.dragPrevUserSelect
+-    contexts.get(el)?.overlay?.classList.remove('dialog--dragging')
++  const stop = () => {
++    if (!drag) return
++    if (handle.hasPointerCapture(drag.id)) handle.releasePointerCapture(drag.id)
++    drag = null
++    document.body.style.userSelect = previousUserSelect
++    overlay?.classList.remove('dialog--dragging')
++    document.removeEventListener('pointermove', move)
++    document.removeEventListener('pointerup', stop)
++    document.removeEventListener('pointercancel', stop)
+   }
+-
+-  const pointerUpHandler = (event: PointerEvent) => {
+-    const context = contexts.get(el)
+-    if (!context) return
+-    const state = context.state
+-    if (!state || event.pointerId !== state.pointerId) return
+-
+-    clearDragState()
+-    try {
+-      handle.releasePointerCapture(state.pointerId)
+-    } catch {}
++  const move = (event: PointerEvent) => {
++    if (!drag || event.pointerId !== drag.id) return
++    event.preventDefault()
++    place(drag.tx + event.clientX - drag.x, drag.ty + event.clientY - drag.y)
+   }
+-
+-  const pointerDownHandler = (event: PointerEvent) => {
+-    if (event.button !== 0) return
+-    if (shouldIgnoreDrag(event)) return
+-    const overlayCandidate = el.closest('.dialog') as HTMLElement | null
+-    if (!overlayCandidate) return
+-    let overlay = overlayCandidate
+-    if (overlay.parentElement?.classList.contains('dialog')) {
+-      overlay = overlay.parentElement as HTMLElement
+-    }
+-    const elRect = el.getBoundingClientRect()
+-    const currentX = Number(el.dataset.dragTranslateX || 0)
+-    const currentY = Number(el.dataset.dragTranslateY || 0)
+-
+-    const state = {
+-      pointerId: event.pointerId,
+-      startClientX: event.clientX,
+-      startClientY: event.clientY,
+-      baseTranslateX: currentX,
+-      baseTranslateY: currentY,
+-      initialTop: elRect.top - currentY
+-    }
+-
+-    const context = contexts.get(el)
+-    if (context) {
+-      context.state = state
+-      context.overlay = overlay
+-    }
+-
+-    handle.dataset.dragPrevUserSelect = document.body.style.userSelect || ''
++  const start = (event: PointerEvent) => {
++    if (event.button !== 0 || !overlay) return
++    const target = event.target
++    if (
++      target instanceof Element &&
++      target.closest(
++        '[data-dialog-drag-ignore], button, a, input, textarea, select, [contenteditable="true"]'
++      )
++    )
++      return
++    stop()
++    const current = translate()
++    drag = { id: event.pointerId, x: event.clientX, y: event.clientY, tx: current.x, ty: current.y }
++    previousUserSelect = document.body.style.userSelect
+     document.body.style.userSelect = 'none'
+-
+     overlay.classList.add('dialog--dragging')
+-
+-    document.addEventListener('pointermove', pointerMoveHandler)
+-    document.addEventListener('pointerup', pointerUpHandler)
+-    document.addEventListener('pointercancel', pointerUpHandler)
+-
+-    try {
+-      handle.setPointerCapture(event.pointerId)
+-    } catch {}
++    el.classList.add('dialog-positioned')
++    handle.setPointerCapture(event.pointerId)
++    document.addEventListener('pointermove', move)
++    document.addEventListener('pointerup', stop)
++    document.addEventListener('pointercancel', stop)
+     event.preventDefault()
+   }
+-
+-  handle.style.userSelect = 'none'
+-  handle.style.touchAction = 'none'
+-
+-  const remove = () => {
+-    clearDragState()
+-    handle.removeEventListener('pointerdown', pointerDownHandler)
++  const reflow = () => {
++    // Untouched dialogs are centered by CSS. Do not replace their entrance animation.
++    if (!el.dataset.dragTranslateX) return
++    stop()
++    cancelAnimationFrame(frame)
++    frame = requestAnimationFrame(() => {
++      const current = translate()
++      place(current.x, current.y)
++    })
+   }
+-
+-  handle.addEventListener('pointerdown', pointerDownHandler)
+-
++  const observer = new ResizeObserver(reflow)
++  observer.observe(el)
++  window.addEventListener('resize', reflow)
++  window.addEventListener('blur', stop)
++  handle.addEventListener('pointerdown', start)
++  handle.style.touchAction = 'none'
+   contexts.set(el, {
+     handle,
+-    pointerDownHandler,
+-    remove
++    remove: () => {
++      stop()
++      observer.disconnect()
++      cancelAnimationFrame(frame)
++      window.removeEventListener('resize', reflow)
++      window.removeEventListener('blur', stop)
++      handle.removeEventListener('pointerdown', start)
++    }
+   })
+ }
+ 
+-const dialogDrag: Directive<HTMLElement, BindingValue> = {
+-  mounted: mountDialogDrag,
++const dialogDrag: Directive<HTMLElement, string | undefined | null> = {
++  mounted: mount,
+   updated(el, binding) {
+     const context = contexts.get(el)
+-    if (!context) return
+-    const nextHandle = getHandleElement(el, binding)
+-    if (nextHandle === context.handle) return
+-
+-    context.remove()
+-    contexts.delete(el)
+-    mountDialogDrag(el, binding)
++    if (context?.handle === getHandle(el, binding)) return
++    context?.remove()
++    mount(el, binding)
+   },
+   unmounted(el) {
+-    const context = contexts.get(el)
+-    if (!context) return
+-    context.remove()
++    contexts.get(el)?.remove()
+     contexts.delete(el)
+   }
+ }
+-
+ export default dialogDrag
+diff --git a/src/renderer/src/styles/main.scss b/src/renderer/src/styles/main.scss
+index 1b74be57..fe3d2df0 100644
+--- a/src/renderer/src/styles/main.scss
++++ b/src/renderer/src/styles/main.scss
+@@ -133,6 +133,9 @@ body,
+ }
+ 
+ .dialog {
++  --dialog-available-height: calc(100vh - 51px);
++  box-sizing: border-box;
++  padding: 43px 8px 8px;
+   width: 100vw;
+   height: 100vh;
+   position: fixed;
+@@ -151,6 +154,10 @@ body,
+   transition: opacity 0.24s ease;
+ 
+   .inner {
++    box-sizing: border-box;
++    // Viewport safety must also constrain component-specific and inline dimensions.
++    max-height: var(--dialog-available-height) !important;
++    max-width: calc(100vw - 16px) !important;
+     border: 1px solid var(--border);
+     background-color: var(--bg-elev);
+     border-radius: 5px;
+@@ -173,6 +180,10 @@ body,
+   }
+ }
+ 
++.dialog .inner.dialog-positioned {
++  transition: opacity 0.24s ease;
++}
++
+ .dialog--dragging {
+   .inner {
+     transition: none !important;
+@@ -185,6 +196,8 @@ body,
+   touch-action: none;
+ }
+ .dialog-header {
++  flex-shrink: 0;
++  overflow-wrap: anywhere;
+   min-height: 32px;
+   padding: 0 16px;
+   display: flex;
+@@ -198,6 +211,8 @@ body,
+ }
+ 
+ .dialog-footer {
++  flex-shrink: 0;
++  flex-wrap: wrap;
+   display: flex;
+   justify-content: flex-end;
+   gap: 12px;
+diff --git a/src/renderer/src/composables/useAnchoredPopover.ts b/src/renderer/src/composables/useAnchoredPopover.ts
+new file mode 100644
+index 00000000..7c2b6a8c
+--- /dev/null
++++ b/src/renderer/src/composables/useAnchoredPopover.ts
+@@ -0,0 +1,72 @@
++import { onBeforeUnmount, ref, watch, type CSSProperties, type Ref } from 'vue'
++import { positionPopover } from '../utils/overlayLayout'
++
++/** Body-teleported panels follow their anchor even while a dialog is dragged. */
++export function useAnchoredPopover(
++  open: Ref<boolean>,
++  anchor: Ref<HTMLElement | null>,
++  panel: Ref<HTMLElement | null>,
++  options: {
++    width?: number
++    maxHeight: () => number
++    center?: boolean
++    contentHeight?: () => number
++  }
++) {
++  const style = ref<CSSProperties>({ visibility: 'hidden' })
++  let frame = 0
++  let previous = ''
++  const update = () => {
++    if (!open.value) return
++    const trigger = anchor.value
++    const element = panel.value
++    if (trigger && element) {
++      const dialog = trigger.closest('.dialog')
++      if (!trigger.isConnected || (dialog && !dialog.classList.contains('dialog-visible'))) {
++        open.value = false
++        return
++      }
++      const rect = trigger.getBoundingClientRect()
++      const scrollViewport = trigger.closest('[data-overlayscrollbars-viewport]')
++      const clip = scrollViewport?.getBoundingClientRect()
++      if (clip && (rect.bottom <= clip.top || rect.top >= clip.bottom)) {
++        open.value = false
++        return
++      }
++      const { left, top, width, maxHeight } = positionPopover({
++        anchor: rect,
++        width: options.width ?? rect.width,
++        contentHeight: options.contentHeight?.() ?? element.scrollHeight + 2,
++        maxHeight: options.maxHeight(),
++        center: options.center,
++        viewportWidth: window.innerWidth,
++        viewportHeight: window.innerHeight
++      })
++      const next = `${left},${top},${width},${maxHeight}`
++      if (next !== previous) {
++        previous = next
++        style.value = {
++          position: 'fixed',
++          left: `${left}px`,
++          top: `${top}px`,
++          width: `${width}px`,
++          maxHeight: `${maxHeight}px`,
++          visibility: 'visible'
++        }
++      }
++    }
++    frame = requestAnimationFrame(update)
++  }
++  watch(
++    open,
++    (visible) => {
++      cancelAnimationFrame(frame)
++      previous = ''
++      style.value = { visibility: 'hidden' }
++      if (visible) frame = requestAnimationFrame(update)
++    },
++    { flush: 'post' }
++  )
++  onBeforeUnmount(() => cancelAnimationFrame(frame))
++  return style
++}
+diff --git a/src/renderer/src/utils/overlayLayout.ts b/src/renderer/src/utils/overlayLayout.ts
+new file mode 100644
+index 00000000..67f082bc
+--- /dev/null
++++ b/src/renderer/src/utils/overlayLayout.ts
+@@ -0,0 +1,50 @@
++// Shared with .dialog padding in main.scss: 35px title bar + 8px edge gap.
++export const OVERLAY_TOP = 43
++export const OVERLAY_GAP = 8
++
++export function constrainDialog(
++  left: number,
++  top: number,
++  width: number,
++  height: number,
++  viewportWidth: number,
++  viewportHeight: number
++) {
++  return {
++    left: Math.max(OVERLAY_GAP, Math.min(left, viewportWidth - OVERLAY_GAP - width)),
++    top: Math.max(OVERLAY_TOP, Math.min(top, viewportHeight - OVERLAY_GAP - height))
++  }
++}
++
++export function positionPopover(input: {
++  anchor: { left: number; top: number; bottom: number; width: number }
++  width: number
++  contentHeight: number
++  maxHeight: number
++  viewportWidth: number
++  viewportHeight: number
++  center?: boolean
++}) {
++  const { anchor, viewportWidth, viewportHeight } = input
++  const width = Math.max(0, Math.min(input.width, viewportWidth - 2 * OVERLAY_GAP))
++  const below = Math.max(0, viewportHeight - OVERLAY_GAP - anchor.bottom - 4)
++  const above = Math.max(0, anchor.top - OVERLAY_TOP - 4)
++  const desired = Math.min(input.contentHeight, input.maxHeight)
++  const upwards = below < desired && above > below
++  const maxHeight = Math.max(0, Math.min(input.maxHeight, upwards ? above : below))
++  return {
++    left: Math.max(
++      OVERLAY_GAP,
++      Math.min(
++        input.center ? anchor.left + (anchor.width - width) / 2 : anchor.left,
++        viewportWidth - width - OVERLAY_GAP
++      )
++    ),
++    top: Math.max(
++      OVERLAY_TOP,
++      upwards ? anchor.top - 4 - Math.min(input.contentHeight, maxHeight) : anchor.bottom + 4
++    ),
++    width,
++    maxHeight
++  }
++}
+diff --git a/src/renderer/src/utils/overlayLayout.spec.ts b/src/renderer/src/utils/overlayLayout.spec.ts
+new file mode 100644
+index 00000000..5744fe7d
+--- /dev/null
++++ b/src/renderer/src/utils/overlayLayout.spec.ts
+@@ -0,0 +1,47 @@
++import { describe, expect, it } from 'vitest'
++import { constrainDialog, positionPopover } from './overlayLayout'
++
++describe('small-window overlay boundaries', () => {
++  it('recovers the entire settings dialog after shrinking from a dragged position', () => {
++    expect(constrainDialog(250, 730, 756, 455, 1260, 650)).toEqual({ left: 250, top: 187 })
++  })
++  it('keeps a dialog below the title bar and inside both horizontal edges', () => {
++    expect(constrainDialog(-200, -100, 756, 455, 1260, 650)).toEqual({ left: 8, top: 43 })
++    expect(constrainDialog(1200, 100, 756, 455, 1260, 650)).toEqual({ left: 496, top: 100 })
++  })
++  it('opens a bottom-edge panel upwards and keeps its right edge visible', () => {
++    expect(
++      positionPopover({
++        anchor: { left: 1200, top: 550, bottom: 578, width: 50 },
++        width: 242,
++        contentHeight: 214,
++        maxHeight: 220,
++        viewportWidth: 1260,
++        viewportHeight: 650
++      })
++    ).toEqual({ left: 1010, top: 332, width: 242, maxHeight: 220 })
++  })
++  it('keeps a short list below the anchor when it fits', () => {
++    expect(
++      positionPopover({
++        anchor: { left: 100, top: 480, bottom: 508, width: 200 },
++        width: 200,
++        contentHeight: 80,
++        maxHeight: 220,
++        viewportWidth: 1260,
++        viewportHeight: 650
++      })
++    ).toEqual({ left: 100, top: 512, width: 200, maxHeight: 130 })
++  })
++  it('limits a long list to the available side of a short viewport', () => {
++    const result = positionPopover({
++      anchor: { left: 100, top: 130, bottom: 158, width: 200 },
++      width: 200,
++      contentHeight: 1000,
++      maxHeight: 500,
++      viewportWidth: 1260,
++      viewportHeight: 300
++    })
++    expect(result.top + result.maxHeight).toBe(292)
++  })
++})

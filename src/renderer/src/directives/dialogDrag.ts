@@ -1,180 +1,117 @@
 import type { Directive, DirectiveBinding } from 'vue'
+import { constrainDialog } from '../utils/overlayLayout'
 
-type BindingValue = string | undefined | null
+const contexts = new WeakMap<HTMLElement, { handle: HTMLElement; remove: () => void }>()
+const getHandle = (el: HTMLElement, binding: DirectiveBinding<string | undefined | null>) =>
+  (binding.value ? el.querySelector<HTMLElement>(binding.value) : null) || el
 
-interface DragMeta {
-  handle: HTMLElement
-  pointerDownHandler: (event: PointerEvent) => void
-  remove: () => void
-  state?: {
-    pointerId: number
-    startClientX: number
-    startClientY: number
-    baseTranslateX: number
-    baseTranslateY: number
-    initialTop: number
-  }
-  overlay?: HTMLElement
-}
-
-const contexts = new WeakMap<HTMLElement, DragMeta>()
-
-const shouldIgnoreDrag = (event: PointerEvent): boolean => {
-  const target = event.target
-  if (!(target instanceof HTMLElement)) return false
-  if (target.closest('[data-dialog-drag-ignore]')) return true
-  if (target.closest('button, a, input, textarea, select, [contenteditable="true"]')) return true
-  return false
-}
-
-const getHandleElement = (el: HTMLElement, binding: DirectiveBinding<BindingValue>) => {
-  if (!binding.value) return el
-  try {
-    return (el.querySelector(binding.value) as HTMLElement) || el
-  } catch {
-    return el
-  }
-}
-
-const mountDialogDrag = (el: HTMLElement, binding: DirectiveBinding<BindingValue>) => {
-  const handle = getHandleElement(el, binding)
-
-  const pointerMoveHandler = (event: PointerEvent) => {
-    const context = contexts.get(el)
-    if (!context || context.handle !== handle) return
-    const state = context.state
-    if (!state || event.pointerId !== state.pointerId) return
-
-    event.preventDefault()
-
-    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0
-    if (
-      event.clientX < 0 ||
-      event.clientX > viewportWidth ||
-      event.clientY < 0 ||
-      event.clientY > viewportHeight
-    ) {
-      pointerUpHandler(event)
-      return
-    }
-
-    const deltaX = event.clientX - state.startClientX
-    const deltaY = event.clientY - state.startClientY
-
-    const nextX = state.baseTranslateX + deltaX
-    let nextY = state.baseTranslateY + deltaY
-
-    const TITLE_BAR_SAFE_ZONE = 35
-    const currentTop = state.initialTop + nextY
-    if (currentTop < TITLE_BAR_SAFE_ZONE) {
-      nextY = TITLE_BAR_SAFE_ZONE - state.initialTop
-    }
-
+const mount = (el: HTMLElement, binding: DirectiveBinding<string | undefined | null>) => {
+  const handle = getHandle(el, binding)
+  let drag: { id: number; x: number; y: number; tx: number; ty: number } | null = null
+  let frame = 0
+  let previousUserSelect = ''
+  const overlay = el.closest('.dialog')
+  const translate = () => ({
+    x: Number(el.dataset.dragTranslateX || 0),
+    y: Number(el.dataset.dragTranslateY || 0)
+  })
+  const place = (x: number, y: number) => {
+    const current = translate()
+    const rect = el.getBoundingClientRect()
+    const left = rect.left - current.x
+    const top = rect.top - current.y
+    const position = constrainDialog(
+      left + x,
+      top + y,
+      rect.width,
+      rect.height,
+      window.innerWidth,
+      window.innerHeight
+    )
+    const nextX = position.left - left
+    const nextY = position.top - top
     el.style.transform = `translate(${nextX}px, ${nextY}px)`
     el.dataset.dragTranslateX = String(nextX)
     el.dataset.dragTranslateY = String(nextY)
   }
-
-  const clearDragState = () => {
-    document.removeEventListener('pointermove', pointerMoveHandler)
-    document.removeEventListener('pointerup', pointerUpHandler)
-    document.removeEventListener('pointercancel', pointerUpHandler)
-    document.body.style.userSelect = handle.dataset.dragPrevUserSelect || ''
-    delete handle.dataset.dragPrevUserSelect
-    contexts.get(el)?.overlay?.classList.remove('dialog--dragging')
+  const stop = () => {
+    if (!drag) return
+    if (handle.hasPointerCapture(drag.id)) handle.releasePointerCapture(drag.id)
+    drag = null
+    document.body.style.userSelect = previousUserSelect
+    overlay?.classList.remove('dialog--dragging')
+    document.removeEventListener('pointermove', move)
+    document.removeEventListener('pointerup', stop)
+    document.removeEventListener('pointercancel', stop)
   }
-
-  const pointerUpHandler = (event: PointerEvent) => {
-    const context = contexts.get(el)
-    if (!context) return
-    const state = context.state
-    if (!state || event.pointerId !== state.pointerId) return
-
-    clearDragState()
-    try {
-      handle.releasePointerCapture(state.pointerId)
-    } catch {}
+  const move = (event: PointerEvent) => {
+    if (!drag || event.pointerId !== drag.id) return
+    event.preventDefault()
+    place(drag.tx + event.clientX - drag.x, drag.ty + event.clientY - drag.y)
   }
-
-  const pointerDownHandler = (event: PointerEvent) => {
-    if (event.button !== 0) return
-    if (shouldIgnoreDrag(event)) return
-    const overlayCandidate = el.closest('.dialog') as HTMLElement | null
-    if (!overlayCandidate) return
-    let overlay = overlayCandidate
-    if (overlay.parentElement?.classList.contains('dialog')) {
-      overlay = overlay.parentElement as HTMLElement
-    }
-    const elRect = el.getBoundingClientRect()
-    const currentX = Number(el.dataset.dragTranslateX || 0)
-    const currentY = Number(el.dataset.dragTranslateY || 0)
-
-    const state = {
-      pointerId: event.pointerId,
-      startClientX: event.clientX,
-      startClientY: event.clientY,
-      baseTranslateX: currentX,
-      baseTranslateY: currentY,
-      initialTop: elRect.top - currentY
-    }
-
-    const context = contexts.get(el)
-    if (context) {
-      context.state = state
-      context.overlay = overlay
-    }
-
-    handle.dataset.dragPrevUserSelect = document.body.style.userSelect || ''
+  const start = (event: PointerEvent) => {
+    if (event.button !== 0 || !overlay) return
+    const target = event.target
+    if (
+      target instanceof Element &&
+      target.closest(
+        '[data-dialog-drag-ignore], button, a, input, textarea, select, [contenteditable="true"]'
+      )
+    )
+      return
+    stop()
+    const current = translate()
+    drag = { id: event.pointerId, x: event.clientX, y: event.clientY, tx: current.x, ty: current.y }
+    previousUserSelect = document.body.style.userSelect
     document.body.style.userSelect = 'none'
-
     overlay.classList.add('dialog--dragging')
-
-    document.addEventListener('pointermove', pointerMoveHandler)
-    document.addEventListener('pointerup', pointerUpHandler)
-    document.addEventListener('pointercancel', pointerUpHandler)
-
-    try {
-      handle.setPointerCapture(event.pointerId)
-    } catch {}
+    el.classList.add('dialog-positioned')
+    handle.setPointerCapture(event.pointerId)
+    document.addEventListener('pointermove', move)
+    document.addEventListener('pointerup', stop)
+    document.addEventListener('pointercancel', stop)
     event.preventDefault()
   }
-
-  handle.style.userSelect = 'none'
-  handle.style.touchAction = 'none'
-
-  const remove = () => {
-    clearDragState()
-    handle.removeEventListener('pointerdown', pointerDownHandler)
+  const reflow = () => {
+    // Untouched dialogs are centered by CSS. Do not replace their entrance animation.
+    if (!el.dataset.dragTranslateX) return
+    stop()
+    cancelAnimationFrame(frame)
+    frame = requestAnimationFrame(() => {
+      const current = translate()
+      place(current.x, current.y)
+    })
   }
-
-  handle.addEventListener('pointerdown', pointerDownHandler)
-
+  const observer = new ResizeObserver(reflow)
+  observer.observe(el)
+  window.addEventListener('resize', reflow)
+  window.addEventListener('blur', stop)
+  handle.addEventListener('pointerdown', start)
+  handle.style.touchAction = 'none'
   contexts.set(el, {
     handle,
-    pointerDownHandler,
-    remove
+    remove: () => {
+      stop()
+      observer.disconnect()
+      cancelAnimationFrame(frame)
+      window.removeEventListener('resize', reflow)
+      window.removeEventListener('blur', stop)
+      handle.removeEventListener('pointerdown', start)
+    }
   })
 }
 
-const dialogDrag: Directive<HTMLElement, BindingValue> = {
-  mounted: mountDialogDrag,
+const dialogDrag: Directive<HTMLElement, string | undefined | null> = {
+  mounted: mount,
   updated(el, binding) {
     const context = contexts.get(el)
-    if (!context) return
-    const nextHandle = getHandleElement(el, binding)
-    if (nextHandle === context.handle) return
-
-    context.remove()
-    contexts.delete(el)
-    mountDialogDrag(el, binding)
+    if (context?.handle === getHandle(el, binding)) return
+    context?.remove()
+    mount(el, binding)
   },
   unmounted(el) {
-    const context = contexts.get(el)
-    if (!context) return
-    context.remove()
+    contexts.get(el)?.remove()
     contexts.delete(el)
   }
 }
-
 export default dialogDrag

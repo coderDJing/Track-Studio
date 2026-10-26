@@ -241,6 +241,9 @@ onUnmounted(() => utils.delHotkeysScope(uuid))
 }
 
 .body {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
   padding: 20px;
   display: flex;
   flex-direction: column;

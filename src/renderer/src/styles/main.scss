@@ -133,6 +133,9 @@ body,
 }
 
 .dialog {
+  --dialog-available-height: calc(100vh - 51px);
+  box-sizing: border-box;
+  padding: 43px 8px 8px;
   width: 100vw;
   height: 100vh;
   position: fixed;
@@ -151,6 +154,10 @@ body,
   transition: opacity 0.24s ease;
 
   .inner {
+    box-sizing: border-box;
+    // Viewport safety must also constrain component-specific and inline dimensions.
+    max-height: var(--dialog-available-height) !important;
+    max-width: calc(100vw - 16px) !important;
     border: 1px solid var(--border);
     background-color: var(--bg-elev);
     border-radius: 5px;
@@ -173,6 +180,10 @@ body,
   }
 }
 
+.dialog .inner.dialog-positioned {
+  transition: opacity 0.24s ease;
+}
+
 .dialog--dragging {
   .inner {
     transition: none !important;
@@ -185,6 +196,8 @@ body,
   touch-action: none;
 }
 .dialog-header {
+  flex-shrink: 0;
+  overflow-wrap: anywhere;
   min-height: 32px;
   padding: 0 16px;
   display: flex;
@@ -198,6 +211,8 @@ body,
 }
 
 .dialog-footer {
+  flex-shrink: 0;
+  flex-wrap: wrap;
   display: flex;
   justify-content: flex-end;
   gap: 12px;

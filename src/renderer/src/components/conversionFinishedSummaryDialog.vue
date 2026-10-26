@@ -117,6 +117,8 @@ const getFileName = (filePath?: string) => {
   color: var(--text);
 }
 .stats-body {
+  overflow-y: auto;
+  overflow-wrap: anywhere;
   padding: 20px;
   flex: 1;
   min-height: 0;

@@ -23,39 +23,49 @@
         <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" />
       </svg>
     </div>
-    <transition name="base-select-fade">
-      <OverlayScrollbarsComponent
-        v-if="isOpen"
-        class="base-select__dropdown"
-        :options="scrollbarOptions"
-        element="div"
-        :style="{ maxHeight: `${maxHeight}px` }"
-        @click.stop
-      >
-        <ul class="base-select__dropdown-list" role="listbox">
-          <li
-            v-for="(option, index) in normalizedOptions"
-            :key="getOptionKey(option, index)"
-            class="base-select__option"
-            :class="{
-              'is-selected': option.value === modelValue,
-              'is-highlighted': index === highlightIndex,
-              'is-disabled': option.disabled
-            }"
-            role="option"
-            :aria-selected="option.value === modelValue"
-            @click.stop="selectOption(option)"
+    <Teleport to="body">
+      <transition name="base-select-fade">
+        <div
+          v-if="isOpen"
+          ref="panelRef"
+          class="base-select__floating"
+          :style="panelStyle"
+          @keydown.stop="handleKeydown"
+        >
+          <OverlayScrollbarsComponent
+            v-if="isOpen"
+            class="base-select__dropdown"
+            :options="scrollbarOptions"
+            element="div"
+            :style="{ maxHeight: panelStyle.maxHeight }"
+            @click.stop
           >
-            <slot name="option" :option="option">
-              {{ option.label }}
-            </slot>
-          </li>
-          <li v-if="!normalizedOptions.length" class="base-select__empty">
-            {{ emptyText }}
-          </li>
-        </ul>
-      </OverlayScrollbarsComponent>
-    </transition>
+            <ul class="base-select__dropdown-list" role="listbox">
+              <li
+                v-for="(option, index) in normalizedOptions"
+                :key="getOptionKey(option, index)"
+                class="base-select__option"
+                :class="{
+                  'is-selected': option.value === modelValue,
+                  'is-highlighted': index === highlightIndex,
+                  'is-disabled': option.disabled
+                }"
+                role="option"
+                :aria-selected="option.value === modelValue"
+                @click.stop="selectOption(option)"
+              >
+                <slot name="option" :option="option">
+                  {{ option.label }}
+                </slot>
+              </li>
+              <li v-if="!normalizedOptions.length" class="base-select__empty">
+                {{ emptyText }}
+              </li>
+            </ul>
+          </OverlayScrollbarsComponent>
+        </div>
+      </transition>
+    </Teleport>
   </div>
   <bubbleBox
     v-if="showBubble"
@@ -65,8 +75,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, type PropType } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+import { useAnchoredPopover } from '@renderer/composables/useAnchoredPopover'
 import bubbleBox from '@renderer/components/bubbleBox.vue'
 
 type SelectValue = string | number | boolean | null | undefined
@@ -120,6 +131,22 @@ const emit = defineEmits<{
 const isOpen = ref(false)
 const highlightIndex = ref(-1)
 const triggerRef = ref<HTMLElement | null>(null)
+
+const panelRef = ref<HTMLElement | null>(null)
+const panelStyle = useAnchoredPopover(isOpen, triggerRef, panelRef, {
+  maxHeight: () => props.maxHeight,
+  contentHeight: () => (panelRef.value?.querySelector('ul')?.scrollHeight ?? 0) + 2
+})
+watch(highlightIndex, async () => {
+  await nextTick()
+  panelRef.value?.querySelector('.is-highlighted')?.scrollIntoView({ block: 'nearest' })
+})
+watch(
+  () => props.disabled,
+  (disabled) => {
+    if (disabled) closeDropdown()
+  }
+)
 
 const normalizedOptions = computed(() => props.options ?? [])
 
@@ -220,6 +247,7 @@ const selectOption = (option: SelectOption) => {
     emit('change', option.value)
   }
   closeDropdown()
+  triggerRef.value?.focus()
 }
 
 const selectByIndex = (index: number) => {
@@ -285,7 +313,7 @@ const handleKeydown = (event: KeyboardEvent) => {
     return
   }
 
-  if (event.key === 'Escape') {
+  if (event.key === 'Escape' || event.key === 'Tab') {
     closeDropdown()
   }
 }
@@ -295,7 +323,7 @@ const handleClickOutside = (event: MouseEvent) => {
     return
   }
   const target = event.target as Node | null
-  if (target && triggerRef.value.contains(target)) {
+  if (target && (triggerRef.value.contains(target) || panelRef.value?.contains(target))) {
     return
   }
   closeDropdown()
@@ -384,12 +412,13 @@ onBeforeUnmount(() => {
   transform: translateY(-50%) rotate(180deg);
 }
 
+.base-select__floating {
+  z-index: 79;
+  box-sizing: border-box;
+}
+
 .base-select__dropdown {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 4px);
-  z-index: 20;
+  box-sizing: border-box;
   border-radius: 6px;
   border: 1px solid var(--border);
   background-color: var(--bg-elev);

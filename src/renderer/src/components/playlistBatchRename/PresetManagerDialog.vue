@@ -438,7 +438,7 @@ onUnmounted(() => {
   max-width: calc(100vw - 20px);
   height: min(640px, calc(100vh - 40px));
   max-height: calc(100vh - 20px);
-  min-height: min(560px, calc(100vh - 20px));
+  min-height: min(560px, var(--dialog-available-height));
   padding: 0;
   display: flex;
   flex-direction: column;

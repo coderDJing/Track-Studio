@@ -510,18 +510,19 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
   color: var(--text-weak);
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .welcome-container--horizontal {
   padding: 10px 14px;
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
   --horizontal-content-gap: 4px;
   --horizontal-grid-column-gap: 14px;
   --horizontal-grid-row-gap: 4px;

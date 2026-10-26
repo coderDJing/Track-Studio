@@ -170,7 +170,7 @@ const handleGeneratePreview = async () => {
   max-width: calc(100vw - 20px);
   height: min(620px, calc(100vh - 40px));
   max-height: calc(100vh - 20px);
-  min-height: min(540px, calc(100vh - 20px));
+  min-height: min(540px, var(--dialog-available-height));
   padding: 0;
   display: flex;
   flex-direction: column;

@@ -9,42 +9,52 @@
     >
       <span class="color-picker__trigger-fill" :style="{ backgroundColor: normalizedValue }" />
     </button>
-    <transition name="color-picker-fade">
-      <div v-if="isOpen" class="color-picker__panel" @click.stop>
+    <Teleport to="body">
+      <transition name="color-picker-fade">
         <div
-          ref="svRef"
-          class="color-picker__sv"
-          :style="{ backgroundColor: hueColor }"
-          @pointerdown="onSvPointerDown"
+          v-if="isOpen"
+          ref="panelRef"
+          class="color-picker__panel"
+          :style="panelStyle"
+          @click.stop
+          @keydown.esc.stop="closePanel"
         >
-          <div class="color-picker__sv-white" />
-          <div class="color-picker__sv-black" />
-          <div class="color-picker__sv-cursor" :style="svCursorStyle" />
+          <div
+            ref="svRef"
+            class="color-picker__sv"
+            :style="{ backgroundColor: hueColor }"
+            @pointerdown="onSvPointerDown"
+          >
+            <div class="color-picker__sv-white" />
+            <div class="color-picker__sv-black" />
+            <div class="color-picker__sv-cursor" :style="svCursorStyle" />
+          </div>
+          <div ref="hueRef" class="color-picker__hue" @pointerdown="onHuePointerDown">
+            <div class="color-picker__hue-cursor" :style="{ left: `${(hsv.h / 360) * 100}%` }" />
+          </div>
+          <div class="color-picker__row">
+            <span class="color-picker__preview" :style="{ backgroundColor: normalizedValue }" />
+            <input
+              class="color-picker__hex"
+              :value="hexDraft"
+              spellcheck="false"
+              maxlength="7"
+              @input="onHexInput"
+              @focus="hexFocused = true"
+              @blur="onHexBlur"
+              @keydown.enter.prevent="commitHex"
+              @keydown.esc.stop="closePanel"
+            />
+          </div>
         </div>
-        <div ref="hueRef" class="color-picker__hue" @pointerdown="onHuePointerDown">
-          <div class="color-picker__hue-cursor" :style="{ left: `${(hsv.h / 360) * 100}%` }" />
-        </div>
-        <div class="color-picker__row">
-          <span class="color-picker__preview" :style="{ backgroundColor: normalizedValue }" />
-          <input
-            class="color-picker__hex"
-            :value="hexDraft"
-            spellcheck="false"
-            maxlength="7"
-            @input="onHexInput"
-            @focus="hexFocused = true"
-            @blur="onHexBlur"
-            @keydown.enter.prevent="commitHex"
-            @keydown.esc.stop="closePanel"
-          />
-        </div>
-      </div>
-    </transition>
+      </transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useAnchoredPopover } from '@renderer/composables/useAnchoredPopover'
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from '@renderer/utils/accentColor'
 
 const props = defineProps({
@@ -129,6 +139,13 @@ watch(normalizedValue, (color) => {
   if (!hexFocused.value) {
     hexDraft.value = color
   }
+})
+
+const panelRef = ref<HTMLElement | null>(null)
+const panelStyle = useAnchoredPopover(isOpen, rootRef, panelRef, {
+  width: 242,
+  maxHeight: () => window.innerHeight - 51,
+  center: true
 })
 
 const hueColor = computed(() => hsvToHex({ h: hsv.h, s: 1, v: 1 }))
@@ -255,7 +272,7 @@ const togglePanel = () => {
 const handleClickOutside = (event: MouseEvent) => {
   if (!isOpen.value || !rootRef.value) return
   const target = event.target as Node | null
-  if (target && rootRef.value.contains(target)) return
+  if (target && (rootRef.value.contains(target) || panelRef.value?.contains(target))) return
   closePanel()
 }
 
@@ -314,12 +331,10 @@ onBeforeUnmount(() => {
 }
 
 .color-picker__panel {
-  position: absolute;
-  left: 50%;
-  top: calc(100% + 8px);
-  transform: translateX(-50%);
-  z-index: 30;
-  width: 216px;
+  position: fixed;
+  z-index: 79;
+  box-sizing: border-box;
+  overflow-y: auto;
   padding: 12px;
   border-radius: 8px;
   border: 1px solid var(--border);
@@ -333,6 +348,7 @@ onBeforeUnmount(() => {
 .color-picker__sv {
   position: relative;
   height: 128px;
+  flex-shrink: 0;
   border-radius: 6px;
   overflow: hidden;
   cursor: crosshair;

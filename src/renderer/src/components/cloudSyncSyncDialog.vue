@@ -176,12 +176,14 @@ onUnmounted(() => {
   color: var(--text);
 }
 .body {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 14px;
   flex: 1;
-  min-height: 0;
 }
 .stages {
   display: flex;
