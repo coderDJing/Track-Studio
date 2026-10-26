@@ -318,6 +318,10 @@ jobs:
             "ffmpeg/win32-x64/ffprobe.exe",
             "demucs/bootstrap/mixtape_demucs_bootstrap.py",
             "demucs/bootstrap/beat_this_bridge.py",
+            "demucs/bootstrap/bpm_fix.py",
+            "demucs/bootstrap/bpm_fix_grid.py",
+            "demucs/bootstrap/bpm_fix_crosscheck.py",
+            "demucs/bootstrap/bpm_fix_rubberband.py",
             "demucs/bootstrap/rkb_official_phase_selector.py",
             "demucs/models/htdemucs.yaml",
             "demucs/models/955717e8-8726e21a.th",
@@ -835,6 +839,10 @@ jobs:
             "ffmpeg/darwin/ffprobe"
             "demucs/bootstrap/mixtape_demucs_bootstrap.py"
             "demucs/bootstrap/beat_this_bridge.py"
+            "demucs/bootstrap/bpm_fix.py"
+            "demucs/bootstrap/bpm_fix_grid.py"
+            "demucs/bootstrap/bpm_fix_crosscheck.py"
+            "demucs/bootstrap/bpm_fix_rubberband.py"
             "demucs/bootstrap/rkb_official_phase_selector.py"
             "demucs/models/htdemucs.yaml"
             "demucs/models/955717e8-8726e21a.th"

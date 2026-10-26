@@ -15,7 +15,7 @@
     "profiles": {
       "cpu": {
         "targetDir": "runtime-cpu",
-        "pipInstall": ["beat-this==1.1.0"]
+        "pipInstall": ["beat-this==1.1.0", "librosa==0.11.0"]
       },
       "directml": {
         "targetDir": "runtime-directml",
@@ -25,7 +25,8 @@
           "torch-directml",
           "torchaudio==2.4.1",
           "onnxruntime-directml==1.20.1",
-          "beat-this==1.1.0"
+          "beat-this==1.1.0",
+          "librosa==0.11.0"
         ]
       },
       "cuda": {
@@ -38,7 +39,8 @@
           "numpy<2",
           "torch==2.3.1",
           "torchaudio==2.3.1",
-          "beat-this==1.1.0"
+          "beat-this==1.1.0",
+          "librosa==0.11.0"
         ]
       },
       "xpu": {
@@ -52,7 +54,8 @@
           "torch==2.10.0",
           "torchaudio==2.10.0",
           "torchvision==0.25.0",
-          "beat-this==1.1.0"
+          "beat-this==1.1.0",
+          "librosa==0.11.0"
         ]
       }
     }
@@ -69,11 +72,11 @@
     "profiles": {
       "mps": {
         "targetDir": "runtime-mps",
-        "pipInstall": ["beat-this==1.1.0"]
+        "pipInstall": ["beat-this==1.1.0", "librosa==0.11.0"]
       },
       "cpu": {
         "targetDir": "runtime-cpu",
-        "pipInstall": ["beat-this==1.1.0"]
+        "pipInstall": ["beat-this==1.1.0", "librosa==0.11.0"]
       }
     }
   },
@@ -89,7 +92,7 @@
     "profiles": {
       "cpu": {
         "targetDir": "runtime-cpu",
-        "pipInstall": ["beat-this==1.1.0"]
+        "pipInstall": ["beat-this==1.1.0", "librosa==0.11.0"]
       }
     }
   },

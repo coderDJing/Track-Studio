@@ -187,6 +187,12 @@ const inspectPythonRuntime = (pythonPath, runtimeDir) => {
         '  "prefix": os.path.abspath(sys.prefix),',
         '  "base_prefix": os.path.abspath(getattr(sys, "base_prefix", sys.prefix))',
         '}',
+        'try:',
+        '  from librosa.beat import beat_track',
+        '  payload["librosa"] = True',
+        'except Exception as exc:',
+        '  payload["librosa"] = False',
+        '  payload["librosa_error"] = str(exc)',
         'print(json.dumps(payload))'
       ].join('\n')
     ],
@@ -363,6 +369,12 @@ const runProbe = ({ pythonPath, runtimeDir, runtimeKey }) => {
     '  payload["rotary_embedding_torch"] = True',
     'except Exception as exc:',
     '  payload["rotary_embedding_torch_error"] = str(exc)',
+    'try:',
+    '  from librosa.beat import beat_track',
+    '  payload["librosa"] = True',
+    'except Exception as exc:',
+    '  payload["librosa"] = False',
+    '  payload["librosa_error"] = str(exc)',
     'print(json.dumps(payload))'
   ].join('\n')
   const result = spawnSync(pythonPath, ['-c', script], {
@@ -621,6 +633,7 @@ const main = async () => {
       directmlInstalled: !!probe?.directml_installed,
       directmlDemucsCompatible: !!probe?.directml_demucs_compatible,
       beatThisInstalled: !!probe?.beat_this,
+      librosaInstalled: !!probe?.librosa,
       beatThisVersion: String(probe?.beat_this_version || ''),
       beatThisCheckpointRelativePath: beatThisCheckpoint.relativePath || '',
       beatThisCheckpointUrl: beatThisCheckpoint.url || '',

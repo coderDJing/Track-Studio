@@ -564,6 +564,62 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
     handlePlaylistViewRefreshed
   )
 
+  let bpmRefreshTimer: ReturnType<typeof setTimeout> | null = null
+  let bpmRefreshRunning = false
+  let bpmRefreshPending = false
+  let bpmRefreshDisposed = false
+  const drainBpmRefresh = async () => {
+    if (bpmRefreshRunning || bpmRefreshDisposed) return
+    bpmRefreshRunning = true
+    try {
+      while (bpmRefreshPending && !bpmRefreshDisposed) {
+        bpmRefreshPending = false
+        const uuid = songsAreaState.songListUUID
+        let items: ISongInfo[] = []
+        if (isSetListUUID(uuid)) {
+          const result = await window.electron.ipcRenderer.invoke('setList:load-items', uuid)
+          items = Array.isArray(result?.scanData) ? result.scanData : []
+        } else if (isMixtapeListUUID(uuid)) {
+          const result = await window.electron.ipcRenderer.invoke('mixtape:list', {
+            playlistId: uuid
+          })
+          const raw = Array.isArray(result?.items)
+            ? (result.items as Array<Record<string, unknown>>)
+            : []
+          items = raw.map((item, index) =>
+            mapMixtapeSnapshotToSongInfo(item, index, {
+              buildDisplayPathByUuid: (id) => libraryUtils.buildDisplayPathByUuid(id)
+            })
+          )
+        } else continue
+        if (bpmRefreshDisposed || uuid !== songsAreaState.songListUUID) continue
+        pendingViewRefresh = { songListUUID: uuid, items, missingWaveformFilePaths: [] }
+        await drainViewRefreshQueue()
+      }
+    } finally {
+      bpmRefreshRunning = false
+    }
+  }
+  const disposeBpmRefreshListener = window.electron.ipcRenderer.on(
+    'audio:bpm-fix:files-changed',
+    (_event, payload: { playlistUuids?: string[] }) => {
+      const uuid = songsAreaState.songListUUID
+      if (
+        !payload?.playlistUuids?.includes(uuid) ||
+        (!isSetListUUID(uuid) && !isMixtapeListUUID(uuid))
+      )
+        return
+      bpmRefreshPending = true
+      if (bpmRefreshTimer) clearTimeout(bpmRefreshTimer)
+      bpmRefreshTimer = setTimeout(() => {
+        bpmRefreshTimer = null
+        void drainBpmRefresh().catch((error) =>
+          console.error('[bpm-fix] playlist refresh failed', error)
+        )
+      }, 150)
+    }
+  )
+
   // ── 分散核对：用户正在看 / 选 / 放的那几行，顺手核对一下 ────────────────────
   // 只把文件路径交给主进程，它 stat 这几首并与 song_cache 里的 size/mtime 比；
   // 对不上才排一次整单核对。每个路径只查一次（换歌单或列表被刷新后重置），
@@ -668,6 +724,9 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
 
   onUnmounted(() => {
     disposeViewRefreshListener?.()
+    disposeBpmRefreshListener?.()
+    bpmRefreshDisposed = true
+    if (bpmRefreshTimer) clearTimeout(bpmRefreshTimer)
     emitter.off('songsArea/optimistic-remove', onSongsOptimisticallyRemoved)
     emitter.off('songsArea/optimistic-restore', onSongsOptimisticallyRestored)
     pendingViewRefresh = null

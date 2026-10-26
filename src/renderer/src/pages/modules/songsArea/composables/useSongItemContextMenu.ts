@@ -248,6 +248,10 @@ export function useSongItemContextMenu(
       ? withoutRecordingAnalysisMenus(baseMenuArr)
       : baseMenuArr
     menuArr.value = buildSongItemMenuArr(menuWithSourceLabel, matchedCuratedArtists)
+    if (isExternalView)
+      menuArr.value = menuArr.value
+        .map((group) => group.filter((item) => item.menuName !== 'bpmFix.menu'))
+        .filter((group) => group.length > 0)
     const result = await rightClickMenu({
       menuArr: menuArr.value,
       clickEvent: event
@@ -438,6 +442,15 @@ export function useSongItemContextMenu(
         } catch {
           // 忽略错误，由主进程统一上报
         }
+        return null
+      }
+      case 'bpmFix.menu': {
+        const { startBpmFix } = await import('@renderer/utils/bpmFixActions')
+        await startBpmFix({
+          filePaths: resolveSelectedFilePaths(),
+          songListUUID: songsAreaState.songListUUID,
+          songListPath: libraryUtils.findDirPathByUuid(songsAreaState.songListUUID) || ''
+        })
         return null
       }
       case 'stemSeparation.menu': {

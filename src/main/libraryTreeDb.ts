@@ -999,7 +999,13 @@ export async function findSongListRootByPath(
     if (!next) break
     // 使用库树中的标准目录名，避免大小写漂移导致缓存键不一致
     walked.push(next.dirName)
-    if (next.nodeType === 'songList') {
+    // Logical playlists can own generated audio (for example a BPM-repaired
+    // copy). That audio needs the same canonical song cache root as other songs.
+    if (
+      next.nodeType === 'songList' ||
+      next.nodeType === 'setList' ||
+      next.nodeType === 'mixtapeList'
+    ) {
       lastSongList = [...walked]
     }
     current = next

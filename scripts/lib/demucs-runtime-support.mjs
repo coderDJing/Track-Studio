@@ -367,6 +367,12 @@ export const probeRuntimeModules = ({
         '  payload["rotary_embedding_torch"] = True',
         'except Exception as exc:',
         '  payload["rotary_embedding_torch_error"] = str(exc)',
+        'try:',
+        '  from librosa.beat import beat_track',
+        '  payload["librosa"] = True',
+        'except Exception as exc:',
+        '  payload["librosa"] = False',
+        '  payload["librosa_error"] = str(exc)',
         'print(json.dumps(payload))'
       ].join('\n')
     ],

@@ -77,6 +77,7 @@ import { registerAnalysisRuntimeHandlers } from './ipc/analysisRuntimeHandlers'
 import { registerDemucsModelHandlers } from './ipc/demucsModelHandlers'
 import { registerMixtapeHandlers } from './ipc/mixtapeHandlers'
 import { registerLibraryStemHandlers } from './ipc/libraryStemHandlers'
+import { registerBpmFixHandlers } from './ipc/bpmFixHandlers'
 import { registerMixtapeDragSessionHandlers } from './ipc/mixtapeDragSessionHandlers'
 import { registerMixtapeProjectTempoHandlers } from './ipc/mixtapeProjectTempoHandlers'
 import { registerSongSearchHandlers } from './ipc/songSearchHandlers'
@@ -364,6 +365,7 @@ registerAnalysisRuntimeHandlers()
 registerDemucsModelHandlers()
 registerMixtapeHandlers()
 registerLibraryStemHandlers()
+registerBpmFixHandlers()
 registerMixtapeDragSessionHandlers()
 registerMixtapeProjectTempoHandlers()
 registerSongSearchHandlers()

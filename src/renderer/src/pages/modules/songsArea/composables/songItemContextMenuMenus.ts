@@ -11,7 +11,8 @@ const RECORDING_LIBRARY_ANALYSIS_MENU_NAMES = new Set([
   'similarTracks.menu',
   'metadata.autoFillMenu',
   'fingerprints.analyzeAndAdd',
-  'tracks.clearTrackCache'
+  'tracks.clearTrackCache',
+  'bpmFix.menu'
 ])
 
 const cloneMenuItem = (item: IMenu): IMenu => ({
@@ -66,7 +67,7 @@ export const createDefaultMenuArr = (songListUUID: string): IMenu[][] => [
   [{ menuName: 'fingerprints.analyzeAndAdd' }],
   [{ menuName: 'tracks.convertFormat' }],
   [{ menuName: 'tracks.clearTrackCache' }],
-  [{ menuName: 'stemSeparation.menu' }]
+  [{ menuName: 'stemSeparation.menu' }, { menuName: 'bpmFix.menu' }]
 ]
 
 export const createSetMenuArr = (songListUUID: string): IMenu[][] =>
@@ -114,7 +115,7 @@ export const createMixtapeMenuArr = (): IMenu[][] => [
   [{ menuName: 'similarTracks.menu' }],
   [{ menuName: 'tracks.editMetadata' }],
   [{ menuName: 'tracks.clearTrackCache' }],
-  [{ menuName: 'stemSeparation.menu' }]
+  [{ menuName: 'stemSeparation.menu' }, { menuName: 'bpmFix.menu' }]
 ]
 
 export const withoutRecordingAnalysisMenus = (groups: IMenu[][]): IMenu[][] =>

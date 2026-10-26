@@ -46,6 +46,10 @@ extraResources:
   - from: scripts
     to: demucs/bootstrap
     filter:
+      - bpm_fix.py
+      - bpm_fix_grid.py
+      - bpm_fix_crosscheck.py
+      - bpm_fix_rubberband.py
       - beat_this_anchor_tuning_defaults.py
       - beat_this_runtime_constant_grid.py
       - rkb_beatgrid_candidate_lab.py

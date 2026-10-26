@@ -38,6 +38,7 @@ export default defineConfig({
           index: resolve(__dirname, 'src/main/index.ts'),
           audioDecodeWorker: resolve(__dirname, 'src/main/workers/audioDecodeWorker.ts'),
           keyAnalysisWorker: resolve(__dirname, 'src/main/workers/keyAnalysisWorker.ts'),
+          bpmFixRuntimeWorker: resolve(__dirname, 'src/main/workers/bpmFixRuntimeWorker.ts'),
           audioTimeBasisOffsetWorker: resolve(
             __dirname,
             'src/main/workers/audioTimeBasisOffsetWorker.ts'
@@ -83,6 +84,9 @@ export default defineConfig({
             }
             if (chunk.name === 'keyAnalysisWorker') {
               return 'workers/keyAnalysisWorker.js'
+            }
+            if (chunk.name === 'bpmFixRuntimeWorker') {
+              return 'workers/bpmFixRuntimeWorker.js'
             }
             if (chunk.name === 'audioTimeBasisOffsetWorker') {
               return 'workers/audioTimeBasisOffsetWorker.js'

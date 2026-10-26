@@ -28,6 +28,11 @@ const resolveDevInstanceId = (): string => {
 }
 
 const exactInvokeChannels = new Set([
+  'audio:bpm-fix:analyze',
+  'audio:bpm-fix:repair',
+  'audio:bpm-fix:snapshot',
+  'audio:bpm-fix:close',
+  'audio:bpm-fix:cancel',
   'changeGlobalShortcut',
   'check-path-exists',
   'check-paths-exist',
@@ -147,6 +152,8 @@ const exactSendChannels = new Set([
 const exactSendTransportChannels = new Set(['horizontal-browse-transport:set-playback-rate-live'])
 
 const exactListenChannels = new Set([
+  'audio:bpm-fix:updated',
+  'audio:bpm-fix:files-changed',
   'addSongFingerprintFinished',
   'analysis-runtime-download-state',
   'demucs-model-download-state',

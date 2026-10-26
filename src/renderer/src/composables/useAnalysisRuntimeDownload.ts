@@ -11,16 +11,11 @@ import {
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string
 type ConfirmDialogFn = typeof import('@renderer/components/confirmDialog').default
 
-type AnalysisRuntimePromptSource = 'startup' | 'help' | 'horizontal' | 'stem'
+type AnalysisRuntimePromptSource = 'startup' | 'help' | 'horizontal' | 'stem' | 'bpm-fix'
 type AnalysisRuntimePromptResult = 'ready' | 'started' | 'blocked'
 
 type AnalysisRuntimeDownloadStatus =
-  | 'idle'
-  | 'available'
-  | 'downloading'
-  | 'extracting'
-  | 'ready'
-  | 'failed'
+  'idle' | 'available' | 'downloading' | 'extracting' | 'ready' | 'failed'
 
 type AnalysisRuntimeDownloadState = {
   status: AnalysisRuntimeDownloadStatus
@@ -393,6 +388,9 @@ export const useAnalysisRuntimeDownload = (options: {
       blockedHintKey: 'analysisRuntime.stemBlockedHint'
     })
 
+  const ensureAnalysisRuntimeForBpmFix = () =>
+    ensureAnalysisRuntimeForFeature({ source: 'bpm-fix', blockedHintKey: 'bpmFix.runtimeHint' })
+
   const handleAnalysisRuntimeDownloadState = async (payload: unknown) => {
     const prevStatus = options.runtime.analysisRuntime.state.status
     const next = applyAnalysisRuntimeStatus({
@@ -435,6 +433,7 @@ export const useAnalysisRuntimeDownload = (options: {
     promptAnalysisRuntimeDownload,
     ensureAnalysisRuntimeForHorizontalMode,
     ensureAnalysisRuntimeForStemWorkbench,
+    ensureAnalysisRuntimeForBpmFix,
     handleAnalysisRuntimeDownloadState
   }
 }

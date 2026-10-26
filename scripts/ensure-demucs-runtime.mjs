@@ -542,6 +542,15 @@ const tryRestorePortableProfileFromRemoteAsset = async (profileName, runtimeDir)
     pythonPath,
     label: `Runtime asset (${profileName})`
   })
+  // An older published archive can be portable while lacking newly required
+  // BPM repair dependencies. Do not accept it and skip the local rebuild.
+  if (process.platform === 'win32' || process.platform === 'darwin') {
+    const bpmProbe = runQuiet(pythonPath, ['-c', 'from librosa.beat import beat_track'], {
+      env: buildRuntimeEnv(runtimeDir),
+      timeout: 60_000
+    })
+    if (bpmProbe.status !== 0) return false
+  }
   return true
 }
 
@@ -941,14 +950,22 @@ const main = async () => {
     const beatThisReady = !beatThisExpected
       ? true
       : !!payload.beat_this && !!payload.soxr && !!payload.rotary_embedding_torch
+    const bpmFixReady = platformArg.startsWith('linux-') || !beatThisExpected || !!payload.librosa
     const checkpointReady = !beatThisExpected || (!!checkpointPath && fs.existsSync(checkpointPath))
-    if (!baseReady || !directmlReady || !xpuReady || !beatThisReady || !checkpointReady) {
+    if (
+      !baseReady ||
+      !directmlReady ||
+      !xpuReady ||
+      !beatThisReady ||
+      !bpmFixReady ||
+      !checkpointReady
+    ) {
       const restored = await tryRestorePortableProfileFromRemoteAsset(profileName, runtimeDir)
       if (restored) continue
       addUniqueItem(brokenProfiles, profileName)
       addUniqueItem(rebuildProfiles, profileName)
       console.warn(
-        `[demucs-runtime-ensure] Runtime deps incomplete (${profileName}), will rebuild: demucs=${payload.demucs} torch=${payload.torch} torchaudio=${payload.torchaudio} torch_version=${payload.torch_version || ''} xpu_backend=${payload.xpu_backend} torch_directml=${payload.torch_directml} beat_this=${payload.beat_this} soxr=${payload.soxr} rotary=${payload.rotary_embedding_torch} checkpoint=${checkpointReady}`
+        `[demucs-runtime-ensure] Runtime deps incomplete (${profileName}), will rebuild: demucs=${payload.demucs} torch=${payload.torch} torchaudio=${payload.torchaudio} torch_version=${payload.torch_version || ''} xpu_backend=${payload.xpu_backend} torch_directml=${payload.torch_directml} beat_this=${payload.beat_this} soxr=${payload.soxr} rotary=${payload.rotary_embedding_torch} librosa=${payload.librosa} checkpoint=${checkpointReady}`
       )
     }
   }
