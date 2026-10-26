@@ -9,7 +9,8 @@ from pathlib import Path
 import unittest
 
 import numpy as np
-from bpm_fix_grid import analyze_grid, grid_indices, plan_correction, verify_grid, walk_beats
+from bpm_fix_grid import (analyze_grid, grid_indices, plan_correction, verify_grid,
+                          verification_diagnostics, walk_beats)
 from bpm_fix_crosscheck import beat_f1
 
 
@@ -87,6 +88,29 @@ class GridTests(unittest.TestCase):
     def test_sparse_detection_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "NOT_ENOUGH_BEATS"):
             analyze_grid([0.3, 1, 2], [], 30)
+
+    def test_verification_diagnostics_identify_outlier_without_dumping_all_beats(self):
+        raw = 0.4 + np.arange(180) * 0.5
+        raw[60] += 0.08
+        result = verify_grid(raw, 120, 0.4)
+        details = verification_diagnostics(raw, 120, 0.4, result)
+        self.assertFalse(details["passed"])
+        self.assertEqual(details["reasons"], ["off_grid_beats"])
+        self.assertEqual(details["beatCount"], 180)
+        self.assertEqual(len(details["worstBeats"]), 8)
+        self.assertEqual(details["worstBeats"][0]["beatIndex"], 60)
+        self.assertAlmostEqual(details["worstBeats"][0]["errorMs"], 80)
+        self.assertEqual(details["thresholds"]["maxBeatErrorMs"], 70)
+
+    def test_verification_diagnostics_distinguish_rms_and_too_few_beats(self):
+        raw = 0.4 + np.arange(180) * 0.5 + 0.02
+        details = verification_diagnostics(raw, 120, 0.4, verify_grid(raw, 120, 0.4))
+        self.assertEqual(details["reasons"], ["grid_rms"])
+        self.assertEqual(details["thresholds"]["maxPlannedBeatErrorMs"], 25)
+        details = verification_diagnostics([], 120, 0.4, None)
+        self.assertEqual(details["reasons"], ["insufficient_beats"])
+        self.assertEqual(details["worstBeats"], [])
+        self.assertIsNone(details["metrics"])
 
     @unittest.skipUnless(os.environ.get("FRKB_BPM_FIX_TEST_LIBRARY"), "Managed native library not selected")
     def test_native_variable_map_keeps_pitch_channels_and_length(self):

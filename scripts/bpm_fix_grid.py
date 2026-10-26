@@ -6,6 +6,12 @@ not gain or lose a beat just because it crosses a target-grid boundary.
 
 import numpy as np
 
+MAX_PLANNED_BEAT_ERROR_SEC = 0.025
+MIN_VERIFICATION_BEATS = 8
+MAX_VERIFICATION_BPM_ERROR = 0.6
+MAX_VERIFICATION_RMS_MS = 14.0
+MAX_VERIFICATION_BEAT_ERROR_SEC = 0.070
+
 
 def _line(x, y):
     center = float(np.mean(x))
@@ -184,7 +190,7 @@ def plan_correction(analysis, frames, sr, target_bpm=None, tempo_factor=1.0):
     for _ in range(4):
         chosen = np.asarray(sorted(selected))
         mapped = np.interp(source, source[chosen], targets[chosen])
-        missing = np.flatnonzero(np.abs(mapped - targets) > 0.025)
+        missing = np.flatnonzero(np.abs(mapped - targets) > MAX_PLANNED_BEAT_ERROR_SEC)
         if not len(missing):
             break
         selected.update(int(i) for i in missing)
@@ -211,7 +217,7 @@ def plan_correction(analysis, frames, sr, target_bpm=None, tempo_factor=1.0):
 
 def verify_grid(raw, target_bpm, offset):
     beats = np.asarray(raw, dtype=float)
-    if len(beats) < 8:
+    if len(beats) < MIN_VERIFICATION_BEATS:
         raise ValueError("BPM_FIX_VERIFICATION_FAILED")
     period = 60.0 / target_bpm
     # Measure raw redetected beats, including outliers, so verification cannot
@@ -222,10 +228,59 @@ def verify_grid(raw, target_bpm, offset):
     measured_period, _ = _line(grid[unique], beats[unique])
     detected_bpm = 60.0 / measured_period
     rms_ms = float(np.sqrt(np.mean(residual ** 2)) * 1000)
-    off_grid = int(np.count_nonzero(np.abs(residual) > 0.07))
+    off_grid = int(np.count_nonzero(np.abs(residual) > MAX_VERIFICATION_BEAT_ERROR_SEC))
     bpm_error = abs(detected_bpm - target_bpm)
     return {
-        "passed": bool(bpm_error <= 0.6 and rms_ms <= 14.0 and off_grid == 0),
+        "passed": bool(bpm_error <= MAX_VERIFICATION_BPM_ERROR and
+                       rms_ms <= MAX_VERIFICATION_RMS_MS and off_grid == 0),
         "detectedBpm": round(detected_bpm, 4), "bpmError": round(bpm_error, 4),
         "gridRmsMs": round(rms_ms, 3), "offGridBeats": off_grid,
+    }
+
+
+def verification_diagnostics(raw, target_bpm, offset, verification):
+    """Bounded RC diagnostics; never filter or change the verification evidence."""
+    beats = np.asarray(raw, dtype=float)
+    period = 60.0 / target_bpm
+    grid = np.rint((beats - offset) / period)
+    residual_ms = (beats - (offset + grid * period)) * 1000
+    absolute_ms = np.abs(residual_ms)
+    reasons = []
+    if len(beats) < MIN_VERIFICATION_BEATS:
+        reasons.append("insufficient_beats")
+    if verification is not None:
+        if verification["bpmError"] > MAX_VERIFICATION_BPM_ERROR:
+            reasons.append("bpm_error")
+        if verification["gridRmsMs"] > MAX_VERIFICATION_RMS_MS:
+            reasons.append("grid_rms")
+        if verification["offGridBeats"] > 0:
+            reasons.append("off_grid_beats")
+        # The public metrics are rounded. Explain a boundary rejection using
+        # the unrounded evidence if rounding made all displayed checks pass.
+        if not verification["passed"] and not reasons:
+            reasons.append("unrounded_threshold_exceeded")
+    elif not reasons:
+        reasons.append("verification_error")
+    worst = np.argsort(absolute_ms)[-8:][::-1]
+    return {
+        "passed": bool(verification and verification["passed"]),
+        "reasons": reasons,
+        "thresholds": {
+            "minBeats": MIN_VERIFICATION_BEATS,
+            "maxBpmError": MAX_VERIFICATION_BPM_ERROR,
+            "maxGridRmsMs": MAX_VERIFICATION_RMS_MS,
+            "maxBeatErrorMs": MAX_VERIFICATION_BEAT_ERROR_SEC * 1000,
+            "maxOffGridBeats": 0,
+            "maxPlannedBeatErrorMs": MAX_PLANNED_BEAT_ERROR_SEC * 1000,
+        },
+        "metrics": verification,
+        "beatCount": int(len(beats)),
+        "duplicateGridBeats": int(len(grid) - len(np.unique(grid))),
+        "medianSignedErrorMs": float(np.median(residual_ms)) if len(beats) else None,
+        "p95AbsErrorMs": float(np.percentile(absolute_ms, 95)) if len(beats) else None,
+        "maxAbsErrorMs": float(np.max(absolute_ms)) if len(beats) else None,
+        "worstBeats": [
+            {"beatIndex": int(i), "timeSec": round(float(beats[i]), 6),
+             "errorMs": round(float(residual_ms[i]), 3)} for i in worst
+        ],
     }

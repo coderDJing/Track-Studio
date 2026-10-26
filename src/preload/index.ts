@@ -28,6 +28,7 @@ const resolveDevInstanceId = (): string => {
 }
 
 const exactInvokeChannels = new Set([
+  'audio:bpm-fix:prepare',
   'audio:bpm-fix:analyze',
   'audio:bpm-fix:repair',
   'audio:bpm-fix:snapshot',

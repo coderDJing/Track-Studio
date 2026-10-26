@@ -66,7 +66,7 @@ export type BpmFixTrack = {
 
 export type BpmFixSnapshot = {
   id: string
-  status: 'analyzing' | 'ready' | 'repairing' | 'completed' | 'cancelled' | 'failed'
+  status: 'pending' | 'analyzing' | 'ready' | 'repairing' | 'completed' | 'cancelled' | 'failed'
   tracks: BpmFixTrack[]
   stage: string
   current: number

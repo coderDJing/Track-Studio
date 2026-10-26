@@ -4,6 +4,7 @@ import {
   closeBpmFix,
   getBpmFixSnapshot,
   isBpmFixBusy,
+  prepareBpmFix,
   startBpmFixAnalysis,
   startBpmFixRepair
 } from '../services/bpmFix'
@@ -11,9 +12,13 @@ import { registerBackgroundForegroundBusyProvider } from '../services/background
 import { isLibraryMergeMutationLocked } from '../services/libraryMerge/mutationGate'
 
 export const registerBpmFixHandlers = () => {
-  ipcMain.handle('audio:bpm-fix:analyze', (event, payload: unknown) => {
+  ipcMain.handle('audio:bpm-fix:prepare', (event, payload: unknown) => {
     if (isLibraryMergeMutationLocked()) throw new Error('LIBRARY_MERGE_IN_PROGRESS')
-    return startBpmFixAnalysis(event.sender, payload)
+    return prepareBpmFix(event.sender, payload)
+  })
+  ipcMain.handle('audio:bpm-fix:analyze', (event, id: unknown) => {
+    if (isLibraryMergeMutationLocked()) throw new Error('LIBRARY_MERGE_IN_PROGRESS')
+    return startBpmFixAnalysis(event.sender.id, id)
   })
   ipcMain.handle('audio:bpm-fix:repair', (event, id: unknown, options: unknown) => {
     if (isLibraryMergeMutationLocked()) throw new Error('LIBRARY_MERGE_IN_PROGRESS')

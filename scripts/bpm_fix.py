@@ -56,7 +56,7 @@ def fix(args):
     # DirectML/MPS compatibility handling, not its constant-grid approximation.
     import beat_this_bridge as bridge
     import numpy as np
-    from bpm_fix_grid import analyze_grid, plan_correction, verify_grid
+    from bpm_fix_grid import analyze_grid, plan_correction, verify_grid, verification_diagnostics
     from bpm_fix_rubberband import render_r3
 
     source, output = (Path(p).resolve() for p in (args.input, args.output))
@@ -151,9 +151,34 @@ def fix(args):
         emit({"type": "progress", "stage": "verifying", "percent": 80})
         actual, output_sr = decode_audio(candidate, workdir, args.ffmpeg, args.ffprobe, "verify")
         checked_beats, _ = detect(actual, output_sr)
+        raw_checked_count = len(checked_beats)
         if args.tempo_factor == 0.5:
             checked_beats = checked_beats[::2]
-        verification = verify_grid(checked_beats, plan["targetBpm"], plan["gridOffsetSec"])
+        verification = None
+        try:
+            verification = verify_grid(checked_beats, plan["targetBpm"], plan["gridOffsetSec"])
+        finally:
+            if args.rc_diagnostics:
+                details = verification_diagnostics(
+                    checked_beats, plan["targetBpm"], plan["gridOffsetSec"], verification)
+                planned_beats = np.interp(analysis["beats"] * sr, plan["from"], plan["to"]) / sr
+                planned_grid = (plan["gridOffsetSec"] +
+                                (analysis["indices"] - analysis["indices"][0]) *
+                                60.0 / plan["targetBpm"] * args.tempo_factor)
+                planned_errors = (planned_beats - planned_grid) * 1000
+                details.update({
+                    "sourceBpm": float(analysis["bpm"] * args.tempo_factor),
+                    "targetBpm": plan["targetBpm"], "requestedTargetBpm": args.target_bpm,
+                    "tempoFactor": args.tempo_factor, "confidence": analysis["confidence"],
+                    "gridOffsetSec": plan["gridOffsetSec"], "anchorCount": len(plan["from"]),
+                    "sourceBeatCount": len(analysis["beats"]), "rawOutputBeatCount": raw_checked_count,
+                    "plannedDetectedBeatRmsMs": float(np.sqrt(np.mean(planned_errors ** 2))),
+                    "plannedDetectedBeatMaxErrorMs": float(np.max(np.abs(planned_errors))),
+                    "inputSampleRate": sr, "outputSampleRate": output_sr,
+                    "inputDurationSec": len(audio) / sr, "outputDurationSec": len(actual) / output_sr,
+                    "outputFormat": output.suffix.lower(),
+                })
+                emit({"type": "diagnostic", "event": "verification", "details": details})
         # Retain diagnostic evidence in the result, but never report a failed
         # grid verification as a successful correction.
         result = {
@@ -173,7 +198,7 @@ def fix(args):
             "downbeatBeatOffset": int(round(-analysis["indices"][first_downbeat] * args.tempo_factor)) % 4,
         }
         if not verification["passed"]:
-            raise ValueError("BPM_FIX_VERIFICATION_FAILED: " + json.dumps(verification))
+            raise ValueError("BPM_FIX_VERIFICATION_FAILED")
         emit({"type": "progress", "stage": "saving", "percent": 96})
         # Electron gives us private staging paths. The main process rechecks
         # source identity and publishes to a new destination without overwrite.
@@ -193,6 +218,7 @@ def main():
     parser.add_argument("--tempo-factor", type=float, default=1.0)
     parser.add_argument("--allow-low-confidence", action="store_true")
     parser.add_argument("--analysis-stdin", action="store_true")
+    parser.add_argument("--rc-diagnostics", action="store_true")
     args = parser.parse_args()
     try:
         args.analysis = json.loads(sys.stdin.readline()) if args.analysis_stdin else None

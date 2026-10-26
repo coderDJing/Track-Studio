@@ -22,6 +22,7 @@ import { log } from '../log'
 import { tryBeginLibraryMaintenanceMutation } from './libraryMerge/mutationGate'
 import { resolveBpmFixRuntime, runBpmFixPipeline, type BpmFixProcessJob } from './bpmFixProcess'
 import { readBpmFixSummary } from './bpmFixResult'
+import { isPackagedRcBuild } from './rcDiagnostics'
 import {
   resolveBpmFixPlaylist,
   assertBpmFixPlaylistTrack,
@@ -129,12 +130,24 @@ const runTrack = async (
     if (options.targetBpm !== null) args.push('--target-bpm', String(options.targetBpm))
     if (options.allowLowConfidence) args.push('--allow-low-confidence')
   }
+  // 每首输出一次 RC 复检摘要；失败原因修复且真实样本回归通过后移除这条采集链路。
+  const rcDiagnostics = isPackagedRcBuild()
+  if (rcDiagnostics) args.push('--rc-diagnostics')
   return runBpmFixPipeline(
     job,
     job.runtime,
     args,
     (stage, value) => progress(job, stage, value),
-    analysis
+    analysis,
+    rcDiagnostics
+      ? (details) =>
+          log.info('[bpm-fix][rc] verification', {
+            sessionId: job.snapshot.id,
+            filePath,
+            mode,
+            ...details
+          })
+      : undefined
   )
 }
 const analyzeBatch = async (job: Job) => {
@@ -215,7 +228,7 @@ const analyzeBatch = async (job: Job) => {
     notify(job)
   }
 }
-export const startBpmFixAnalysis = async (owner: WebContents, value: unknown) => {
+export const prepareBpmFix = async (owner: WebContents, value: unknown) => {
   if (activeJob) {
     if (activeJob.owner.id === owner.id) return activeJob.snapshot
     throw new Error('BPM_FIX_BUSY')
@@ -243,10 +256,10 @@ export const startBpmFixAnalysis = async (owner: WebContents, value: unknown) =>
     analyses: new Map(),
     snapshot: {
       id: `bpm_fix_${randomUUID()}`,
-      status: 'analyzing',
+      status: 'pending',
       tracks: paths.map((filePath) => ({ id: randomUUID(), filePath, status: 'pending' })),
-      stage: 'loading',
-      current: 1,
+      stage: 'pending',
+      current: 0,
       currentPercent: 0,
       percent: 0
     },
@@ -267,6 +280,14 @@ export const startBpmFixAnalysis = async (owner: WebContents, value: unknown) =>
     throw error
   }
   owner.once('destroyed', job.destroyed)
+  return job.snapshot
+}
+export const startBpmFixAnalysis = (ownerId: number, id: unknown) => {
+  const job = requireJob(ownerId, id)
+  if (job.working || job.snapshot.status !== 'pending') throw new Error('BPM_FIX_BUSY')
+  job.snapshot.status = 'analyzing'
+  job.snapshot.stage = 'loading'
+  job.snapshot.current = 1
   job.working = analyzeBatch(job)
   notify(job)
   return job.snapshot

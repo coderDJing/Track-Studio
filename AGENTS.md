@@ -78,6 +78,7 @@
 - 如果当前版本是正式版（不含 `-rc`）且我要求预发布版本，自动把版本号 **补丁位 +1**（`Z+1`，逢 10 进 1，例如 `1.1.9 -> 1.2.0`），再加 `-rc.<当前时间>` 并发布。
 - 如果我说“发布正式版”，就把 `-rc.` 以及后面的时间后缀去掉，仅保留 `X.Y.Z`，提交，并**先 push main**，再打同名 tag 并 push tag 触发发布流程。
 - 发布顺序固定：提交 → push main → 打 tag → push tag。
+- 发布工作流触发后，默认不跟踪、轮询或等待远端构建及发布结果；只有用户明确强调需要盯构建流程时，才持续跟进。
 
 ## Documentation Updates
 - Do not modify `README.md` or `readme/README_CN.md` without explicit maintainer approval.

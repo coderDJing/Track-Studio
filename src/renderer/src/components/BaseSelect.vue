@@ -10,6 +10,7 @@
     role="combobox"
     :aria-expanded="isOpen"
     :aria-disabled="disabled"
+    :aria-label="ariaLabel"
     :tabindex="disabled ? -1 : 0"
     @click="toggleDropdown"
     @keydown.stop="handleKeydown"
@@ -104,6 +105,10 @@ const props = defineProps({
   disabled: {
     type: Boolean,
     default: false
+  },
+  ariaLabel: {
+    type: String,
+    default: undefined
   },
   emptyText: {
     type: String,

@@ -43,7 +43,8 @@ export const runBpmFixPipeline = async (
   runtime: BpmFixRuntime,
   args: string[],
   progress: (stage: string, percent: number) => void,
-  analysis?: unknown
+  analysis?: unknown,
+  diagnostic?: (details: Record<string, unknown>) => void
 ) => {
   if (job.cancelled) throw new Error('BPM_FIX_CANCELLED')
   const child = spawn(runtime.command, [...runtime.args, ...args, '--device', runtime.device], {
@@ -97,6 +98,13 @@ export const runBpmFixPipeline = async (
               stages.has(message.stage)
             ) {
               progress(message.stage, Number(message.percent) || 0)
+            } else if (
+              diagnostic &&
+              message.type === 'diagnostic' &&
+              message.event === 'verification' &&
+              isRecord(message.details)
+            ) {
+              diagnostic(message.details)
             } else if (message.type === 'error' && typeof message.error === 'string') {
               failure = message.error
             } else if (message.type === 'result') {

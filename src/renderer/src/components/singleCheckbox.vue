@@ -15,6 +15,10 @@ const props = defineProps({
   disabled: {
     type: Boolean,
     default: false
+  },
+  ariaLabel: {
+    type: String,
+    default: undefined
   }
 })
 
@@ -50,6 +54,7 @@ function handleChange() {
         type="checkbox"
         :value="true"
         :disabled="props.disabled"
+        :aria-label="props.ariaLabel"
         @change="handleChange"
       />
       <label class="box" :for="inputId"></label>

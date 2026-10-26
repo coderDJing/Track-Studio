@@ -146,12 +146,9 @@ export const repairBpmFix = async () => {
     await window.electron.ipcRenderer.invoke('audio:bpm-fix:repair', snapshot.id, options)
   )
 }
-export const startBpmFix = async (input: BpmFixStart) => {
-  initializeBpmFix()
-  if (bpmFixSnapshot.value) {
-    await restoreBpmFix()
-    return
-  }
+export const analyzeBpmFix = async () => {
+  const snapshot = bpmFixSnapshot.value
+  if (!snapshot || snapshot.status !== 'pending') return
   runtimeGate ??= useAnalysisRuntimeDownload({
     runtime: useRuntimeStore(),
     t,
@@ -159,8 +156,17 @@ export const startBpmFix = async (input: BpmFixStart) => {
     appVersion: String(pkg.version)
   })
   if (!(await runtimeGate.ensureAnalysisRuntimeForBpmFix())) return
+  if (bpmFixSnapshot.value?.id !== snapshot.id) return
+  applySnapshot(await window.electron.ipcRenderer.invoke('audio:bpm-fix:analyze', snapshot.id))
+}
+export const startBpmFix = async (input: BpmFixStart) => {
+  initializeBpmFix()
+  if (bpmFixSnapshot.value) {
+    await restoreBpmFix()
+    return
+  }
   try {
-    applySnapshot(await window.electron.ipcRenderer.invoke('audio:bpm-fix:analyze', input))
+    applySnapshot(await window.electron.ipcRenderer.invoke('audio:bpm-fix:prepare', input))
     await restoreBpmFix()
   } catch (error) {
     await confirm({
