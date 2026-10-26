@@ -1,0 +1,2718 @@
+[
+  {
+    "file": "01-startup-dark-zh.png",
+    "label": "01-startup-dark-zh",
+    "time": "2026-10-26T08:50:33.936Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [1890, 1173],
+    "outer": {
+      "x": 650,
+      "y": 305,
+      "width": 1261,
+      "height": 782
+    },
+    "content": {
+      "x": 651,
+      "y": 305,
+      "width": 1260,
+      "height": 782
+    },
+    "renderer": [1260, 782],
+    "client": [1260, 782],
+    "domOuter": [1275, 789],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "02-minimum-welcome-dark-zh.png",
+    "label": "02-minimum-welcome-dark-zh",
+    "time": "2026-10-26T08:50:34.717Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "03-welcome-end-dark-zh.png",
+    "label": "03-welcome-end-dark-zh",
+    "time": "2026-10-26T09:14:00.650Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": "滚动尚未稳定，以 03b 为准"
+  },
+  {
+    "file": "03b-welcome-end-dark-zh.png",
+    "label": "03b-welcome-end-dark-zh",
+    "time": "2026-10-26T09:14:39.752Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "04-color-first-dark-zh.png",
+    "label": "04-color-first-dark-zh",
+    "time": "2026-10-26T09:15:47.151Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "05-drag-right-bottom-dark-zh.png",
+    "label": "05-drag-right-bottom-dark-zh",
+    "time": "2026-10-26T09:16:00.677Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "06-large-settings-dark-zh.png",
+    "label": "06-large-settings-dark-zh",
+    "time": "2026-10-26T09:16:01.419Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [2250, 1425],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1502,
+      "height": 951
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1500,
+      "height": 950
+    },
+    "renderer": [1500, 950],
+    "client": [1500, 950],
+    "domOuter": [1516, 958],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "07-large-drag-shrink-dark-zh.png",
+    "label": "07-large-drag-shrink-dark-zh",
+    "time": "2026-10-26T09:16:18.444Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "08-settings-end-dark-zh.png",
+    "label": "08-settings-end-dark-zh",
+    "time": "2026-10-26T09:17:41.256Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "09-color-light-zh.png",
+    "label": "09-color-light-zh",
+    "time": "2026-10-26T09:18:52.937Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "10-color-anchor-out-light-zh.png",
+    "label": "10-color-anchor-out-light-zh",
+    "time": "2026-10-26T09:19:20.273Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "11-max-settings-light-en.png",
+    "label": "11-max-settings-light-en",
+    "time": "2026-10-26T09:20:24.895Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [3840, 2088],
+    "outer": {
+      "x": -7,
+      "y": -7,
+      "width": 2576,
+      "height": 1408
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 2560,
+      "height": 1392
+    },
+    "renderer": [2560, 1392],
+    "client": [2560, 1392],
+    "domOuter": [2560, 1392],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": true,
+    "note": ""
+  },
+  {
+    "file": "12-content650-settings-light-en.png",
+    "label": "12-content650-settings-light-en",
+    "time": "2026-10-26T09:20:55.972Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1893, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1264,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "renderer": [1262, 651],
+    "client": [1262, 651],
+    "domOuter": [1278, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "13-analysis-config-light-en.png",
+    "label": "13-analysis-config-light-en",
+    "time": "2026-10-26T09:22:06.555Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1893, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1264,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "renderer": [1262, 651],
+    "client": [1262, 651],
+    "domOuter": [1278, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "14-playlist-menu-bottom-light-en.png",
+    "label": "14-playlist-menu-bottom-light-en",
+    "time": "2026-10-26T09:23:28.902Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1893, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1264,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "renderer": [1262, 651],
+    "client": [1262, 651],
+    "domOuter": [1278, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "15-playlist-menu-end-light-en.png",
+    "label": "15-playlist-menu-end-light-en",
+    "time": "2026-10-26T09:24:02.535Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1893, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1264,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "renderer": [1262, 651],
+    "client": [1262, 651],
+    "domOuter": [1278, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "16-rename-config-light-en.png",
+    "label": "16-rename-config-light-en",
+    "time": "2026-10-26T09:24:40.124Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1893, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1264,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "renderer": [1262, 651],
+    "client": [1262, 651],
+    "domOuter": [1278, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "17-rename-presets-light-en.png",
+    "label": "17-rename-presets-light-en",
+    "time": "2026-10-26T09:24:58.328Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1893, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1264,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "renderer": [1262, 651],
+    "client": [1262, 651],
+    "domOuter": [1278, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "18-rename-preview-light-en.png",
+    "label": "18-rename-preview-light-en",
+    "time": "2026-10-26T09:26:01.486Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1893, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1264,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "renderer": [1262, 651],
+    "client": [1262, 651],
+    "domOuter": [1278, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "19-submenu-flip-left-light-en.png",
+    "label": "19-submenu-flip-left-light-en",
+    "time": "2026-10-26T09:27:33.227Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1893, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1264,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "renderer": [1262, 651],
+    "client": [1262, 651],
+    "domOuter": [1278, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "20-metadata-end-light-en.png",
+    "label": "20-metadata-end-light-en",
+    "time": "2026-10-26T09:29:23.010Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1893, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1264,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "renderer": [1262, 651],
+    "client": [1262, 651],
+    "domOuter": [1278, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "21-musicbrainz-light-en.png",
+    "label": "21-musicbrainz-light-en",
+    "time": "2026-10-26T09:30:27.418Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1893, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1264,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "renderer": [1262, 651],
+    "client": [1262, 651],
+    "domOuter": [1278, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "22-browser-list-light-en.png",
+    "label": "22-browser-list-light-en",
+    "time": "2026-10-26T09:31:47.663Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1893, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1264,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "renderer": [1262, 651],
+    "client": [1262, 651],
+    "domOuter": [1278, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "23-manual-minimum-light-en.png",
+    "label": "23-manual-minimum-light-en",
+    "time": "2026-10-26T09:32:11.102Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1261,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1275, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "24-bpm-filter-light-en.png",
+    "label": "24-bpm-filter-light-en",
+    "time": "2026-10-26T09:32:53.347Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1261,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1275, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "25-export-config-light-en.png",
+    "label": "25-export-config-light-en",
+    "time": "2026-10-26T09:33:59.196Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1261,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1275, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "26-import-config-light-en.png",
+    "label": "26-import-config-light-en",
+    "time": "2026-10-26T09:35:21.591Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1261,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1275, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "27-nested-file-selector-light-en.png",
+    "label": "27-nested-file-selector-light-en",
+    "time": "2026-10-26T09:36:13.976Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1261,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1275, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "28-nested-playlist-selector-light-en.png",
+    "label": "28-nested-playlist-selector-light-en",
+    "time": "2026-10-26T09:37:04.695Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1261,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1275, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "29-fixture-date-up-light-en.png",
+    "label": "29-fixture-date-up-light-en",
+    "time": "2026-10-26T09:39:18.946Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "English",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1261,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1275, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "30-fixture-bpm-top-light-en.png",
+    "label": "30-fixture-bpm-top-light-en",
+    "time": "2026-10-26T09:39:39.227Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "English",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1261,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1275, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "31-fixture-bpm-end-light-en.png",
+    "label": "31-fixture-bpm-end-light-en",
+    "time": "2026-10-26T09:40:03.327Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "English",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1261,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1275, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "32-convert-upward-select-light-en.png",
+    "label": "32-convert-upward-select-light-en",
+    "time": "2026-10-26T09:42:04.403Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1261,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1275, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "33-convert-end-light-en.png",
+    "label": "33-convert-end-light-en",
+    "time": "2026-10-26T09:42:58.997Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1261,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1275, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "34-sync-settings-end-light-en.png",
+    "label": "34-sync-settings-end-light-en",
+    "time": "2026-10-26T09:45:19.604Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1261,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1275, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "35-two-pane-browser-light-en.png",
+    "label": "35-two-pane-browser-light-en",
+    "time": "2026-10-26T09:46:12.194Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1261,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1275, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": "尚未呈现双栏，以 48/49 为准"
+  },
+  {
+    "file": "36-set-duration-light-en.png",
+    "label": "36-set-duration-light-en",
+    "time": "2026-10-26T09:47:49.294Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "English",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1261,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1275, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "37-settings-dark-en.png",
+    "label": "37-settings-dark-en",
+    "time": "2026-10-26T09:49:01.306Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "English",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1261,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1275, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "38-max-settings-dark-en.png",
+    "label": "38-max-settings-dark-en",
+    "time": "2026-10-26T09:49:02.072Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "English",
+    "png": [3840, 2088],
+    "outer": {
+      "x": -7,
+      "y": -7,
+      "width": 2576,
+      "height": 1408
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 2560,
+      "height": 1392
+    },
+    "renderer": [2560, 1392],
+    "client": [2560, 1392],
+    "domOuter": [2560, 1392],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": true,
+    "note": ""
+  },
+  {
+    "file": "39-max-settings-dark-zh.png",
+    "label": "39-max-settings-dark-zh",
+    "time": "2026-10-26T09:50:47.146Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [3840, 2088],
+    "outer": {
+      "x": -7,
+      "y": -7,
+      "width": 2576,
+      "height": 1408
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 2560,
+      "height": 1392
+    },
+    "renderer": [2560, 1392],
+    "client": [2560, 1392],
+    "domOuter": [2560, 1392],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": true,
+    "note": ""
+  },
+  {
+    "file": "40-cycle-shrink-settings-dark-zh.png",
+    "label": "40-cycle-shrink-settings-dark-zh",
+    "time": "2026-10-26T09:50:48.027Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "41-cycle-max-settings-dark-zh.png",
+    "label": "41-cycle-max-settings-dark-zh",
+    "time": "2026-10-26T09:50:48.757Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [3840, 2088],
+    "outer": {
+      "x": -7,
+      "y": -7,
+      "width": 2576,
+      "height": 1408
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 2560,
+      "height": 1392
+    },
+    "renderer": [2560, 1392],
+    "client": [2560, 1392],
+    "domOuter": [2560, 1392],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": true,
+    "note": ""
+  },
+  {
+    "file": "42-cycle2-shrink-settings-dark-zh.png",
+    "label": "42-cycle2-shrink-settings-dark-zh",
+    "time": "2026-10-26T09:50:49.623Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "43-settings-light-zh.png",
+    "label": "43-settings-light-zh",
+    "time": "2026-10-26T09:52:11.638Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "44-max-settings-light-zh.png",
+    "label": "44-max-settings-light-zh",
+    "time": "2026-10-26T09:52:12.395Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [3840, 2088],
+    "outer": {
+      "x": -7,
+      "y": -7,
+      "width": 2576,
+      "height": 1408
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 2560,
+      "height": 1392
+    },
+    "renderer": [2560, 1392],
+    "client": [2560, 1392],
+    "domOuter": [2560, 1392],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": true,
+    "note": ""
+  },
+  {
+    "file": "45-settings-light-zh-return.png",
+    "label": "45-settings-light-zh-return",
+    "time": "2026-10-26T09:52:13.312Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "46-global-shortcut-light-zh.png",
+    "label": "46-global-shortcut-light-zh",
+    "time": "2026-10-26T09:54:15.611Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "47-two-pane-light-zh.png",
+    "label": "47-two-pane-light-zh",
+    "time": "2026-10-26T09:55:43.473Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": "尚未呈现双栏，以 48/49 为准"
+  },
+  {
+    "file": "48-two-pane-horizontal-light-zh.png",
+    "label": "48-two-pane-horizontal-light-zh",
+    "time": "2026-10-26T09:56:38.260Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "49-wide-sidebar-two-pane-light-zh.png",
+    "label": "49-wide-sidebar-two-pane-light-zh",
+    "time": "2026-10-26T09:57:02.326Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "50-edit-mode-light-zh.png",
+    "label": "50-edit-mode-light-zh",
+    "time": "2026-10-26T09:58:38.149Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "51-max-edit-light-zh.png",
+    "label": "51-max-edit-light-zh",
+    "time": "2026-10-26T09:58:38.908Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [3840, 2088],
+    "outer": {
+      "x": -7,
+      "y": -7,
+      "width": 2576,
+      "height": 1408
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 2560,
+      "height": 1392
+    },
+    "renderer": [2560, 1392],
+    "client": [2560, 1392],
+    "domOuter": [2560, 1392],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": true,
+    "note": ""
+  },
+  {
+    "file": "52-edit-return-light-zh.png",
+    "label": "52-edit-return-light-zh",
+    "time": "2026-10-26T09:58:39.848Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "53-global-search-light-zh.png",
+    "label": "53-global-search-light-zh",
+    "time": "2026-10-26T10:05:58.902Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "54-library-merge-light-zh.png",
+    "label": "54-library-merge-light-zh",
+    "time": "2026-10-26T10:07:03.235Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "55-library-merge-config-light-zh.png",
+    "label": "55-library-merge-config-light-zh",
+    "time": "2026-10-26T10:07:51.627Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "56-stem-config-light-zh.png",
+    "label": "56-stem-config-light-zh",
+    "time": "2026-10-26T10:09:30.284Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "57-stem-ultra-model-light-zh.png",
+    "label": "57-stem-ultra-model-light-zh",
+    "time": "2026-10-26T10:09:58.820Z",
+    "fixture": false,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "58-browser-welcome-dark-zh.png",
+    "label": "58-browser-welcome-dark-zh",
+    "time": "2026-10-26T10:38:19.095Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "59-browser-welcome-end-dark-zh.png",
+    "label": "59-browser-welcome-end-dark-zh",
+    "time": "2026-10-26T10:38:27.573Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "60-restored-dark-zh.png",
+    "label": "60-restored-dark-zh",
+    "time": "2026-10-26T10:38:57.708Z",
+    "fixture": false,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [1890, 1170],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 781
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 780
+    },
+    "renderer": [1260, 780],
+    "client": [1260, 780],
+    "domOuter": [1276, 788],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-bpm-dark-zh.png",
+    "label": "fixture-bpm-dark-zh",
+    "time": "2026-10-26T10:32:17.530Z",
+    "fixture": true,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-bpm-max-dark-zh.png",
+    "label": "fixture-bpm-max-dark-zh",
+    "time": "2026-10-26T10:32:18.277Z",
+    "fixture": true,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [3840, 2088],
+    "outer": {
+      "x": -7,
+      "y": -7,
+      "width": 2576,
+      "height": 1408
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 2560,
+      "height": 1392
+    },
+    "renderer": [2560, 1392],
+    "client": [2560, 1392],
+    "domOuter": [2560, 1392],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": true,
+    "note": ""
+  },
+  {
+    "file": "fixture-bpm-shrink-dark-zh.png",
+    "label": "fixture-bpm-shrink-dark-zh",
+    "time": "2026-10-26T10:32:19.148Z",
+    "fixture": true,
+    "theme": "暗",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-config-1-light-zh.png",
+    "label": "fixture-config-1-light-zh",
+    "time": "2026-10-26T10:21:58.559Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-config-10-light-zh.png",
+    "label": "fixture-config-10-light-zh",
+    "time": "2026-10-26T10:22:06.131Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-config-11-light-zh.png",
+    "label": "fixture-config-11-light-zh",
+    "time": "2026-10-26T10:28:33.325Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-config-12-light-zh.png",
+    "label": "fixture-config-12-light-zh",
+    "time": "2026-10-26T10:28:34.174Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-config-13-light-zh.png",
+    "label": "fixture-config-13-light-zh",
+    "time": "2026-10-26T10:28:35.103Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-config-2-light-zh.png",
+    "label": "fixture-config-2-light-zh",
+    "time": "2026-10-26T10:21:59.400Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-config-3-light-zh.png",
+    "label": "fixture-config-3-light-zh",
+    "time": "2026-10-26T10:22:00.247Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-config-4-light-zh.png",
+    "label": "fixture-config-4-light-zh",
+    "time": "2026-10-26T10:24:12.492Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-config-5-light-zh.png",
+    "label": "fixture-config-5-light-zh",
+    "time": "2026-10-26T10:22:01.878Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-config-6-light-zh.png",
+    "label": "fixture-config-6-light-zh",
+    "time": "2026-10-26T10:22:02.719Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-config-7-light-zh.png",
+    "label": "fixture-config-7-light-zh",
+    "time": "2026-10-26T10:22:03.577Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-config-8-corrected-light-zh.png",
+    "label": "fixture-config-8-corrected-light-zh",
+    "time": "2026-10-26T10:24:13.430Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-config-8-light-zh.png",
+    "label": "fixture-config-8-light-zh",
+    "time": "2026-10-26T10:22:04.426Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": "夹具 actionKey 无效，已由 8-corrected 替代，不计产品问题"
+  },
+  {
+    "file": "fixture-config-9-light-zh.png",
+    "label": "fixture-config-9-light-zh",
+    "time": "2026-10-26T10:22:05.277Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-keyboard-submenu-light-zh.png",
+    "label": "fixture-keyboard-submenu-light-zh",
+    "time": "2026-10-26T10:15:51.698Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-menu-BL-light-zh.png",
+    "label": "fixture-menu-BL-light-zh",
+    "time": "2026-10-26T10:15:52.576Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-menu-BR-light-zh.png",
+    "label": "fixture-menu-BR-light-zh",
+    "time": "2026-10-26T10:17:39.538Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-menu-TL-light-zh.png",
+    "label": "fixture-menu-TL-light-zh",
+    "time": "2026-10-26T10:12:09.197Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-menu-TR-light-zh.png",
+    "label": "fixture-menu-TR-light-zh",
+    "time": "2026-10-26T10:14:57.794Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-menu-end-keyboard-light-zh.png",
+    "label": "fixture-menu-end-keyboard-light-zh",
+    "time": "2026-10-26T10:18:35.930Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-menu-large-light-zh.png",
+    "label": "fixture-menu-large-light-zh",
+    "time": "2026-10-26T10:18:36.694Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [2250, 1425],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1502,
+      "height": 951
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1500,
+      "height": 950
+    },
+    "renderer": [1500, 950],
+    "client": [1500, 950],
+    "domOuter": [1516, 958],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-menu-raw-submenu-missing-light-zh.png",
+    "label": "fixture-menu-raw-submenu-missing-light-zh",
+    "time": "2026-10-26T10:14:56.548Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-menu-shrink-light-zh.png",
+    "label": "fixture-menu-shrink-light-zh",
+    "time": "2026-10-26T10:18:37.510Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-reactive-submenu-left-light-zh.png",
+    "label": "fixture-reactive-submenu-left-light-zh",
+    "time": "2026-10-26T10:15:24.936Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-rename-result-end-light-zh.png",
+    "label": "fixture-rename-result-end-light-zh",
+    "time": "2026-10-26T10:02:55.139Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-result-1-light-zh.png",
+    "label": "fixture-result-1-light-zh",
+    "time": "2026-10-26T10:00:00.157Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-result-2-light-zh.png",
+    "label": "fixture-result-2-light-zh",
+    "time": "2026-10-26T10:00:01.001Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-result-3-light-zh.png",
+    "label": "fixture-result-3-light-zh",
+    "time": "2026-10-26T10:00:01.873Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-result-4-light-zh.png",
+    "label": "fixture-result-4-light-zh",
+    "time": "2026-10-26T10:00:02.769Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-result-5-light-zh.png",
+    "label": "fixture-result-5-light-zh",
+    "time": "2026-10-26T10:00:03.676Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-submenu-end-light-zh.png",
+    "label": "fixture-submenu-end-light-zh",
+    "time": "2026-10-26T10:17:38.654Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  },
+  {
+    "file": "fixture-submenu-right-light-zh.png",
+    "label": "fixture-submenu-right-light-zh",
+    "time": "2026-10-26T10:12:48.657Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": "普通数组夹具未实际出现子菜单，见 F01；有效右展开见 right-reactive"
+  },
+  {
+    "file": "fixture-submenu-right-reactive-light-zh.png",
+    "label": "fixture-submenu-right-reactive-light-zh",
+    "time": "2026-10-26T10:16:40.296Z",
+    "fixture": true,
+    "theme": "亮",
+    "language": "简体中文",
+    "png": [1890, 977],
+    "outer": {
+      "x": 0,
+      "y": 0,
+      "width": 1262,
+      "height": 651
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 1260,
+      "height": 651
+    },
+    "renderer": [1260, 651],
+    "client": [1260, 651],
+    "domOuter": [1276, 658],
+    "zoom": 1,
+    "dpr": 1.5,
+    "maximized": false,
+    "note": ""
+  }
+]

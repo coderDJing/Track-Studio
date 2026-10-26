@@ -1,0 +1,27 @@
+{
+  "time": "2026-10-26T18:40:51.2964507+08:00",
+  "os": {
+    "Caption": "Microsoft Windows 11 专业版",
+    "Version": "10.0.26300",
+    "BuildNumber": "26300",
+    "OSArchitecture": "64 位"
+  },
+  "display": [
+    {
+      "Name": "GameViewer Virtual Display Adapter",
+      "CurrentHorizontalResolution": 3840,
+      "CurrentVerticalResolution": 2160,
+      "CurrentRefreshRate": 144
+    },
+    {
+      "Name": "NVIDIA GeForce RTX 4080 SUPER",
+      "CurrentHorizontalResolution": 1024,
+      "CurrentVerticalResolution": 768,
+      "CurrentRefreshRate": 60
+    }
+  ],
+  "node": "v24.14.0",
+  "pnpm": "9.15.9",
+  "git": "git version 2.53.0.windows.2",
+  "electronProcesses": []
+}

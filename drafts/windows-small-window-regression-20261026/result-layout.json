@@ -1,0 +1,49 @@
+{
+  "fixture": "rename-result",
+  "theme": "theme-light",
+  "viewport": [1260, 651],
+  "text": [
+    {
+      "text": "100",
+      "color": "rgb(31, 31, 31)",
+      "textShadow": "rgba(0, 0, 0, 0.24) 0px 1px 1px",
+      "contrastAgainstWhite": 16.48
+    },
+    {
+      "text": "0",
+      "color": "rgb(150, 223, 117)",
+      "textShadow": "rgba(0, 0, 0, 0.24) 0px 1px 1px",
+      "contrastAgainstWhite": 1.6
+    },
+    {
+      "text": "100",
+      "color": "rgb(255, 125, 125)",
+      "textShadow": "rgba(0, 0, 0, 0.24) 0px 1px 1px",
+      "contrastAgainstWhite": 2.48
+    },
+    {
+      "text": "0",
+      "color": "rgb(31, 31, 31)",
+      "textShadow": "rgba(0, 0, 0, 0.24) 0px 1px 1px",
+      "contrastAgainstWhite": 16.48
+    }
+  ],
+  "scrollAreas": [
+    {
+      "class": "",
+      "clientHeight": 360,
+      "scrollHeight": 3599,
+      "scrollTop": 360,
+      "rect": {
+        "x": 231.33334350585938,
+        "y": 206.33334350585938,
+        "width": 797.3333740234375,
+        "height": 360,
+        "top": 206.33334350585938,
+        "right": 1028.6667175292969,
+        "bottom": 566.3333435058594,
+        "left": 231.33334350585938
+      }
+    }
+  ]
+}

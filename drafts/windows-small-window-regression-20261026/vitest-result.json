@@ -1,0 +1,6 @@
+{
+  "command": "pnpm exec vitest run src/renderer/src/utils/overlayLayout.spec.ts src/renderer/src/utils/contextMenuPosition.spec.ts",
+  "exitCode": 0,
+  "started": "2026-10-26T18:39:39.2127315+08:00",
+  "finished": "2026-10-26T18:39:41.7191368+08:00"
+}

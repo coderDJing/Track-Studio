@@ -1,0 +1,726 @@
+[
+  {
+    "file": "src/renderer/src/components/addSongFingerprintFinishedDialog.vue",
+    "status": "F/P",
+    "detail": "result2 大计数展示，底部可见；亮色计数F02；无真实处理。",
+    "callers": [
+      "src/renderer/src/components/addSongFingerprintFinishedDialog.ts",
+      "src/renderer/src/pages/modules/bottomInfoArea.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/analysisBpmRangeDialog.vue",
+    "status": "F/P",
+    "detail": "config9，100000首计数、范围配置展示；未开始分析。",
+    "callers": [
+      "src/renderer/src/components/analysisBpmRangeDialog.ts",
+      "src/renderer/src/utils/manualKeyAnalysis.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/AnalysisRuntimeDownloadOverlay.vue",
+    "status": "F/P",
+    "detail": "config12，75%与长提示展示；未运行实际下载、完成或失败。",
+    "callers": [
+      "src/renderer/src/App.vue",
+      "src/renderer/src/composables/useAnalysisRuntimeDownload.ts",
+      "src/renderer/src/pages/modules/bottomInfoArea.vue",
+      "src/renderer/src/stores/runtime.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/audioConvertDialog.vue",
+    "status": "V/P",
+    "detail": "真实配置32/33，7格式向上展开，Esc关下拉后保留弹窗，正文到底；未转换。",
+    "callers": [
+      "src/renderer/src/App.vue",
+      "src/renderer/src/components/audioConvertDialog.ts",
+      "src/renderer/src/utils/audioConvertActions.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/autoMetadataSummaryDialog.vue",
+    "status": "U",
+    "detail": "需要补全标签结果；未写标签，未构造该夹具。",
+    "callers": [
+      "src/renderer/src/components/autoMetadataSummaryDialog.ts",
+      "src/renderer/src/components/libraryItem/useLibraryContextMenu.ts",
+      "src/renderer/src/components/playerControls.vue",
+      "src/renderer/src/pages/modules/librarySelectArea/useLibraryBatchActions.ts",
+      "src/renderer/src/pages/modules/songsArea/composables/useSongItemContextMenu.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/BaseSelect.vue",
+    "status": "V/P",
+    "detail": "真实短列表、9 项范围、格式7项向上展开；Down/Enter选择，Tab/Esc收起；尚未完整覆盖长英文嵌套列表。09–13/32。",
+    "callers": [
+      "src/renderer/src/components/analysisBpmRangeDialog.vue",
+      "src/renderer/src/components/audioConvertDialog.vue",
+      "src/renderer/src/components/cloudSyncSettingsDialog.vue",
+      "src/renderer/src/components/mixtapeOutputDialog.vue",
+      "src/renderer/src/components/playlistBatchRename/PlaylistBatchRenameDialog.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/batchSimilarTracksDialog.vue",
+    "status": "F/P",
+    "detail": "空种子、长错误夹具config11，配置/错误正文和底部；真实推荐列表/播放/写入未覆盖。",
+    "callers": [
+      "src/renderer/src/components/batchSimilarTracksDialog.ts",
+      "src/renderer/src/components/libraryItem/useLibraryContextMenu.ts",
+      "src/renderer/src/components/playerControls.vue",
+      "src/renderer/src/pages/modules/pioneerSongsArea/usePioneerSongContextMenu.ts",
+      "src/renderer/src/pages/modules/songsArea/composables/useSongItemContextMenu.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/BpmFixDialog.vue",
+    "status": "F/P",
+    "detail": "真实入口先分析故未点击；80条长路径ready快照、双滚动/底部，亮英和暗中最小/最大/缩回夹具。30/31及fixture-bpm-*；无真实执行。",
+    "callers": ["src/renderer/src/utils/bpmFixActions.ts"]
+  },
+  {
+    "file": "src/renderer/src/components/bubbleBox.vue",
+    "status": "V/P",
+    "detail": "实测过程中见曲目长名称/控件气泡；未系统覆盖禁用锚点、四角长气泡与嵌套竞争。",
+    "callers": [
+      "src/renderer/src/App.vue",
+      "src/renderer/src/components/audioConvertDialog.vue",
+      "src/renderer/src/components/BaseSelect.vue",
+      "src/renderer/src/components/batchSimilarTracksDialog.vue",
+      "src/renderer/src/components/BeatGridMetronomeControls.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/choiceDialog.vue",
+    "status": "U",
+    "detail": "通用分支调用点已索引；未逐一弹出确认/输入/危险输入。不能由其他弹窗通过推定正常。",
+    "callers": [
+      "src/renderer/src/components/choiceDialog.ts",
+      "src/renderer/src/components/playlistBatchRename/PreviewDialog.vue",
+      "src/renderer/src/components/playlistBatchRename/usePlaylistBatchRenameDialog.ts",
+      "src/renderer/src/composables/mixtape/stemMode.ts",
+      "src/renderer/src/composables/useLibrarySetupWizard.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/cloudSyncSettingsDialog.vue",
+    "status": "V/P",
+    "detail": "真实配置34滚到底，测试/保存/取消可见；仅取消。启动既有自动同步另见报告。",
+    "callers": ["src/renderer/src/App.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/cloudSyncSummaryDialog.vue",
+    "status": "F/P",
+    "detail": "大计数展示夹具result4；几何完整，亮色正文过浅F02；无真实成功同步。",
+    "callers": ["src/renderer/src/App.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/cloudSyncSyncDialog.vue",
+    "status": "U",
+    "detail": "未手动启动同步；进度、取消、长错误和完成状态未覆盖。既有自动尝试不计人工进度验收。",
+    "callers": ["src/renderer/src/App.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/ColorPicker.vue",
+    "status": "V/P",
+    "detail": "设置真实入口，初开色条/HEX 可见，右下拖动跟随，锚点滚出后收起，缩窗收起；未改颜色；四边全部独立组合未穷尽。04/05/09/10。",
+    "callers": ["src/renderer/src/components/settingDialog/SettingDialogBody.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/confirmDialog.vue",
+    "status": "U",
+    "detail": "通用分支调用点已索引；未逐一弹出确认/输入/危险输入。不能由其他弹窗通过推定正常。",
+    "callers": [
+      "src/renderer/src/App.vue",
+      "src/renderer/src/components/batchSimilarTracksDialog.vue",
+      "src/renderer/src/components/cloudSyncSettingsDialog.vue",
+      "src/renderer/src/components/confirmDialog.ts",
+      "src/renderer/src/components/curatedArtistLibraryDialog.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/conversionFinishedSummaryDialog.vue",
+    "status": "F/P",
+    "detail": "result3 80条超长错误，正文及嵌套滚动区域存在、底部可见，未逐个滚至末尾；无真实转换。",
+    "callers": [
+      "src/renderer/src/components/conversionFinishedSummaryDialog.ts",
+      "src/renderer/src/pages/modules/bottomInfoArea.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/curatedArtistLibraryDialog.vue",
+    "status": "U",
+    "detail": "真实收藏/网络列表与长数据未覆盖。",
+    "callers": [
+      "src/renderer/src/components/curatedArtistLibraryDialog.ts",
+      "src/renderer/src/components/settingDialog.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/curatedLibrarySyncDialog.vue",
+    "status": "U",
+    "detail": "未手动启动同步；进度、取消、长错误和完成状态未覆盖。既有自动尝试不计人工进度验收。",
+    "callers": ["src/renderer/src/App.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/curatedLibrarySyncJoinDialog.vue",
+    "status": "F/P",
+    "detail": "长提示大计数夹具config13；正文有滚动区域，初始标题/底部可见，未滚到底/首次对齐。",
+    "callers": [
+      "src/renderer/src/components/curatedLibrarySyncJoinDialog.ts",
+      "src/renderer/src/composables/runCuratedLibrarySyncUi.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/customFileSelector/customFileSelector.vue",
+    "status": "V/P",
+    "detail": "真实导入嵌套27，仅查看系统盘/桌面后取消；深层长目录、权限错误未覆盖。",
+    "callers": ["src/renderer/src/components/ImportTracksDialogBase.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/dangerConfirmWithInputDialog.vue",
+    "status": "U",
+    "detail": "通用分支调用点已索引；未逐一弹出确认/输入/危险输入。不能由其他弹窗通过推定正常。",
+    "callers": [
+      "src/renderer/src/components/cloudSyncSettingsDialog.vue",
+      "src/renderer/src/components/dangerConfirmWithInputDialog.ts",
+      "src/renderer/src/components/settingDialog.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/DateTimePicker.vue",
+    "status": "F/P",
+    "detail": "日期范围夹具29，第二日期向上展开，日历/时间列及底部可见；未实测拖父窗跟随。",
+    "callers": ["src/renderer/src/components/filterDialog.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/demucsUltraModelDownloadDialog.vue",
+    "status": "V/P",
+    "detail": "真实超高质量模型提示57（约297MB），未下载。",
+    "callers": [
+      "src/renderer/src/components/demucsUltraModelDownloadDialog.ts",
+      "src/renderer/src/components/libraryStemSeparationDialog.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/editMetadataDialog/EditMetadataDialog.vue",
+    "status": "V/P",
+    "detail": "真实标签编辑滚至封面/底部20，保存取消可见，只取消。",
+    "callers": [
+      "src/renderer/src/components/editMetadataDialog/index.ts",
+      "src/renderer/src/components/editMetadataDialog/useEditMetadataDialog.ts",
+      "src/renderer/src/components/playerControls.vue",
+      "src/renderer/src/pages/modules/songsArea/composables/useSongItemContextMenu.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/exportDialog.vue",
+    "status": "V/P",
+    "detail": "真实歌单导出配置25，未开始导出；不同删除/文件冲突分支未覆盖。",
+    "callers": [
+      "src/renderer/src/components/exportDialog.ts",
+      "src/renderer/src/components/libraryItem/useLibraryContextMenu.ts",
+      "src/renderer/src/MiniPlayerOverlay.vue",
+      "src/renderer/src/pages/modules/pioneerSongsArea/usePioneerSongContextMenu.ts",
+      "src/renderer/src/pages/modules/songPlayer/usePlayerControlsLogic.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/exportSongFingerprintDialog.vue",
+    "status": "F/P",
+    "detail": "config2，配置展示；未导出。",
+    "callers": ["src/renderer/src/App.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/externalLibraryTargetDialog.vue",
+    "status": "U",
+    "detail": "需外部DJ资料库/目标与写入状态；未连接目标或制造写入。",
+    "callers": [
+      "src/renderer/src/components/externalLibraryTargetDialog.ts",
+      "src/renderer/src/utils/externalLibraryPlaylist.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/fileOpInterruptedDialog.vue",
+    "status": "U",
+    "detail": "需要中断/异常文件操作；未制造。",
+    "callers": ["src/renderer/src/App.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/filterDialog.vue",
+    "status": "V/P+F",
+    "detail": "真实 BPM 数值筛选24，只取消；日期 between 用展示夹具29验证向上浮层；其余类型未逐项。",
+    "callers": ["src/renderer/src/pages/modules/songsArea/SongListHeader.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/globalCallShortcutDialog.vue",
+    "status": "V/P",
+    "detail": "真实设置内嵌套46，仅查看取消。",
+    "callers": [
+      "src/renderer/src/components/globalCallShortcutDialog.ts",
+      "src/renderer/src/components/settingDialog.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/globalSongSearchDialog.vue",
+    "status": "V/P",
+    "detail": "真实搜索House，多条长路径53，未进入/播放/更改。",
+    "callers": ["src/renderer/src/App.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/HorizontalBrowseAudioEditLeaveDialog.vue",
+    "status": "F/P",
+    "detail": "config7，仅离开提示展示；无真实未保存音频。",
+    "callers": ["src/renderer/src/components/HorizontalBrowseAudioEditChrome.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/HorizontalBrowseAudioEditSaveDialog.vue",
+    "status": "F/P",
+    "detail": "config6，长文件名/版本名与MP3提示展示；未编辑或保存音频。",
+    "callers": ["src/renderer/src/components/HorizontalBrowseAudioEditChrome.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/HorizontalBrowseDeckMoveDialog.vue",
+    "status": "U",
+    "detail": "涉及已载入曲目/移动，本轮未触发。",
+    "callers": ["src/renderer/src/components/HorizontalBrowseModeShell.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/importFinishedSummaryDialog.vue",
+    "status": "F/P",
+    "detail": "result1 大计数展示，底部可见；亮色计数F02；无真实导入。",
+    "callers": [
+      "src/renderer/src/components/importFinishedSummaryDialog.ts",
+      "src/renderer/src/pages/modules/bottomInfoArea.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/importSongFingerprintDialog.vue",
+    "status": "F/P",
+    "detail": "config1，空选择配置展示；未导入。",
+    "callers": ["src/renderer/src/App.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/ImportTracksDialogBase.vue",
+    "status": "V/P",
+    "detail": "真实导入配置26及嵌套文件/歌单选择27/28，全部取消；dropInto/扫描新增等复用分支未独立测试。",
+    "callers": [
+      "src/renderer/src/components/dropIntoDialog.ts",
+      "src/renderer/src/components/scanNewSongDialog.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/InputDialog.vue",
+    "status": "U",
+    "detail": "通用分支调用点已索引；未逐一弹出确认/输入/危险输入。不能由其他弹窗通过推定正常。",
+    "callers": [
+      "src/renderer/src/components/cloudSyncSettingsDialog.vue",
+      "src/renderer/src/components/dangerConfirmWithInputDialog.ts",
+      "src/renderer/src/components/inputDialog.ts",
+      "src/renderer/src/components/settingDialog.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/LibraryMergeDialog.vue",
+    "status": "V/P",
+    "detail": "实际迁移/合并介绍54及开始设置55，未选源、未合并；迁移运行中/结果未覆盖。",
+    "callers": ["src/renderer/src/App.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/librarySetup/LibrarySetupOverlay.vue",
+    "status": "U",
+    "detail": "已有资料库，按边界不重置制造首次引导；引导定位/长文/完成状态未覆盖。",
+    "callers": ["src/renderer/src/App.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/libraryStemSeparationDialog.vue",
+    "status": "V/P",
+    "detail": "真实Stem配置56，灰色波形区、页签和按钮；未开始分离/载入波形。",
+    "callers": [
+      "src/renderer/src/components/libraryStemSeparationDialog.ts",
+      "src/renderer/src/components/playerControls.vue",
+      "src/renderer/src/pages/modules/bottomInfoArea.vue",
+      "src/renderer/src/pages/modules/pioneerSongsArea/usePioneerSongContextMenu.ts",
+      "src/renderer/src/pages/modules/songsArea/composables/useSongItemContextMenu.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/manualAddSongFingerprintDialog.vue",
+    "status": "F/P",
+    "detail": "config3，配置展示；未写指纹。",
+    "callers": ["src/renderer/src/App.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/menu.vue",
+    "status": "V/P",
+    "detail": "实际使用文件/迁移等顶栏入口；全部长主菜单四角测试由rightClickMenu夹具补充，不能代替顶栏菜单每一项。",
+    "callers": [
+      "src/renderer/src/App.vue",
+      "src/renderer/src/components/audioConvertDialog.vue",
+      "src/renderer/src/components/dialogLibraryItem/index.vue",
+      "src/renderer/src/components/externalLibraryTargetDialog.vue",
+      "src/renderer/src/components/globalSongSearchDialog.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/mixtape/MixtapeTrackLoopOverlay.vue",
+    "status": "U",
+    "detail": "需要已有时间线/片段/自动增益或节拍对齐状态；未新建编辑任务。",
+    "callers": ["src/renderer/src/Mixtape.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/MixtapeBeatAlignDialog.vue",
+    "status": "U",
+    "detail": "需要已有时间线/片段/自动增益或节拍对齐状态；未新建编辑任务。",
+    "callers": [
+      "src/renderer/src/components/HorizontalBrowseRawWaveformDetail.vue",
+      "src/renderer/src/components/mixtapeBeatAlignPreviewState.ts",
+      "src/renderer/src/components/MixtapeDialogsLayer.vue",
+      "src/renderer/src/composables/horizontalBrowse/horizontalBrowseDetailGridPersistence.ts",
+      "src/renderer/src/composables/horizontalBrowse/horizontalBrowseDetailPresentationState.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/MixtapeDialogsLayer.vue",
+    "status": "U",
+    "detail": "需要已有时间线/片段/自动增益或节拍对齐状态；未新建编辑任务。",
+    "callers": ["src/renderer/src/Mixtape.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/mixtapeOutputDialog.vue",
+    "status": "F/P",
+    "detail": "config5，长输出名称展示；未输出。",
+    "callers": ["src/renderer/src/components/MixtapeDialogsLayer.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/musicBrainzDialog/MusicBrainzDialog.vue",
+    "status": "V/P",
+    "detail": "真实嵌套21，查询无匹配；候选长列表、匹配后应用未覆盖。",
+    "callers": [
+      "src/renderer/src/components/editMetadataDialog/EditMetadataDialog.vue",
+      "src/renderer/src/components/editMetadataDialog/useEditMetadataDialog.ts",
+      "src/renderer/src/components/musicBrainzDialog/composables/useMusicBrainzDialog.ts",
+      "src/renderer/src/components/musicBrainzDialog/index.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/playerGlobalShortcutDialog.vue",
+    "status": "F/P",
+    "detail": "config8-corrected为togglePlayPause有效展示；旧config8错键已废弃。未改快捷键。",
+    "callers": [
+      "src/renderer/src/components/playerGlobalShortcutDialog.ts",
+      "src/renderer/src/components/settingDialog.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/playlistBatchRename/PlaylistBatchRenameDialog.vue",
+    "status": "V/P",
+    "detail": "真实配置16，底部可见，未执行重命名。",
+    "callers": [
+      "src/renderer/src/components/libraryItem/useLibraryContextMenu.ts",
+      "src/renderer/src/components/playlistBatchRename/index.ts",
+      "src/renderer/src/components/playlistBatchRename/PresetManagerDialog.vue",
+      "src/renderer/src/components/playlistBatchRename/usePlaylistBatchRenameDialog.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/playlistBatchRename/PresetManagerDialog.vue",
+    "status": "V/P",
+    "detail": "真实嵌套预设17，只查看，未改/保存/删除预设。",
+    "callers": [
+      "src/renderer/src/components/playlistBatchRename/PlaylistBatchRenameDialog.vue",
+      "src/renderer/src/components/playlistBatchRename/presetManagerDialog.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/playlistBatchRename/PreviewDialog.vue",
+    "status": "V/P",
+    "detail": "真实只读预览2821条18，44问题提示、列表与底部可见；未执行。",
+    "callers": [
+      "src/renderer/src/components/playlistBatchRename/index.ts",
+      "src/renderer/src/components/playlistBatchRename/previewDialog.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/playlistBatchRename/ResultDialog.vue",
+    "status": "F/P",
+    "detail": "100条失败长文件名夹具，滚到第100条；结果5及rename-result-end；亮色计数过浅F02。真实结果未生成。",
+    "callers": [
+      "src/renderer/src/components/playlistBatchRename/PreviewDialog.vue",
+      "src/renderer/src/components/playlistBatchRename/resultDialog.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/rekordboxDesktopCreateNodeDialog.vue",
+    "status": "U",
+    "detail": "需外部DJ资料库/目标与写入状态；未连接目标或制造写入。",
+    "callers": [
+      "src/renderer/src/components/externalLibraryTargetDialog.vue",
+      "src/renderer/src/components/rekordboxDesktopCreateNodeDialog.ts",
+      "src/renderer/src/composables/rekordboxDesktop/useRekordboxDesktopActions.ts",
+      "src/renderer/src/pages/modules/pioneerDeviceLibraryArea.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/rekordboxDesktopStorageDirDialog.vue",
+    "status": "U",
+    "detail": "需外部DJ资料库/目标与写入状态；未连接目标或制造写入。",
+    "callers": [
+      "src/renderer/src/components/rekordboxDesktopStorageDirDialog.ts",
+      "src/renderer/src/utils/rekordboxTrackStorage.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/rekordboxDesktopTargetDialog.vue",
+    "status": "U",
+    "detail": "需外部DJ资料库/目标与写入状态；未连接目标或制造写入。",
+    "callers": [
+      "src/renderer/src/components/externalLibraryTargetDialog.vue",
+      "src/renderer/src/components/rekordboxDesktopTargetDialog.ts",
+      "src/renderer/src/utils/rekordboxDesktopPlaylist.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/RekordboxDesktopWritingOverlay.vue",
+    "status": "U",
+    "detail": "需外部DJ资料库/目标与写入状态；未连接目标或制造写入。",
+    "callers": [
+      "src/renderer/src/pages/modules/pioneerDeviceLibraryArea.vue",
+      "src/renderer/src/pages/modules/pioneerSongsArea.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/rekordboxXmlExportDialog.vue",
+    "status": "F/P",
+    "detail": "config4，长歌单名展示；未导出XML。",
+    "callers": [
+      "src/renderer/src/components/rekordboxXmlExportDialog.ts",
+      "src/renderer/src/utils/rekordboxXmlExport.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/rightClickMenu.vue",
+    "status": "V/P+F",
+    "detail": "实际歌单/曲目长菜单14/15/19及夹具四角/双向子菜单/跨层/键盘W-S/父滚动/子末项/缩窗；普通数组子菜单失败F01。子菜单开着缩窗未专测。",
+    "callers": [
+      "src/renderer/src/components/dialogLibraryItem/index.vue",
+      "src/renderer/src/components/externalLibraryTargetDialog.vue",
+      "src/renderer/src/components/libraryItem/index.vue",
+      "src/renderer/src/components/libraryItem/useLibraryContextMenu.ts",
+      "src/renderer/src/components/rightClickMenu.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/selectSongListDialog.vue",
+    "status": "V/P",
+    "detail": "真实导入嵌套28，三个既有歌单，只查看取消；超长树未覆盖。",
+    "callers": [
+      "src/renderer/src/App.vue",
+      "src/renderer/src/components/HorizontalBrowseDeckMoveDialog.vue",
+      "src/renderer/src/components/HorizontalBrowseModeShell.vue",
+      "src/renderer/src/components/ImportTracksDialogBase.vue",
+      "src/renderer/src/components/rekordboxDesktopTargetDialog.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/setDurationDialog.vue",
+    "status": "V/P",
+    "detail": "实际2821条SET时长统计36，两个cue下拉及关闭可见；没改曲目。",
+    "callers": [
+      "src/renderer/src/components/libraryItem/useLibraryContextMenu.ts",
+      "src/renderer/src/components/setDurationDialog.ts",
+      "src/renderer/src/utils/rekordboxPlaylistSetDuration.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/settingDialog/SettingDialogBody.vue",
+    "status": "V/P",
+    "detail": "实际设置入口；正文到底/颜色/下拉；四组合×最小/真最大化；拖边、缩窗与重复循环。同步操作未执行。04–12、34、37–45。",
+    "callers": ["src/renderer/src/components/settingDialog.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/settingDialog.vue",
+    "status": "V/P",
+    "detail": "实际设置入口；正文到底/颜色/下拉；四组合×最小/真最大化；拖边、缩窗与重复循环。同步操作未执行。04–12、34、37–45。",
+    "callers": [
+      "src/renderer/src/App.vue",
+      "src/renderer/src/components/cloudSyncSettingsDialog.vue",
+      "src/renderer/src/components/settingDialog/context.ts",
+      "src/renderer/src/components/settingDialog/SettingDialogBody.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/songAreaColRightClickMenu.vue",
+    "status": "U",
+    "detail": "独立列头菜单未逐项验证；通用右键菜单证据不替代它们。",
+    "callers": ["src/renderer/src/pages/modules/songsArea/ColumnHeaderContextMenu.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/trackReanalysisDialog.vue",
+    "status": "V/P+F",
+    "detail": "真实打开歌单时缺失分析配置13，查看范围Tab关闭后取消；大量数量夹具config10。未执行分析按钮。",
+    "callers": [
+      "src/renderer/src/components/trackReanalysisDialog.ts",
+      "src/renderer/src/utils/trackReanalysis.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/userGuide/UserGuideCard.vue",
+    "status": "U",
+    "detail": "已有资料库，按边界不重置制造首次引导；引导定位/长文/完成状态未覆盖。",
+    "callers": [
+      "src/renderer/src/App.vue",
+      "src/renderer/src/composables/userGuideCopy.ts",
+      "src/renderer/src/Mixtape.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/components/userGuide/UserGuideIdentityOverlay.vue",
+    "status": "U",
+    "detail": "已有资料库，按边界不重置制造首次引导；引导定位/长文/完成状态未覆盖。",
+    "callers": ["src/renderer/src/App.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/WelcomeCreatePlaylistActions.vue",
+    "status": "V/P",
+    "detail": "欢迎页实际顶部/末尾可滚达；未创建或导入。双轨02/03b，浏览器58/59。",
+    "callers": ["src/renderer/src/components/welcomePage.vue"]
+  },
+  {
+    "file": "src/renderer/src/components/welcomePage.vue",
+    "status": "V/P",
+    "detail": "欢迎页实际顶部/末尾可滚达；未创建或导入。双轨02/03b，浏览器58/59。",
+    "callers": ["src/renderer/src/pages/modules/songsArea/songsArea.vue"]
+  },
+  {
+    "file": "src/renderer/src/composables/miniPlayer/MiniPlayerMoreMenu.vue",
+    "status": "U",
+    "detail": "独立迷你播放器/菜单未打开。",
+    "callers": ["src/renderer/src/MiniPlayerOverlay.vue"]
+  },
+  {
+    "file": "src/renderer/src/LibraryRelocate.vue",
+    "status": "U",
+    "detail": "独立更新/迁移窗口未运行；LibraryMerge配置不等同此处。",
+    "callers": [
+      "src/renderer/src/App.vue",
+      "src/renderer/src/libraryRelocate_main.ts",
+      "src/renderer/src/utils/libraryRelocateActions.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/MiniPlayerOverlay.vue",
+    "status": "U",
+    "detail": "独立迷你播放器/菜单未打开。",
+    "callers": [
+      "src/renderer/src/composables/miniPlayer/MiniPlayerMoreMenu.vue",
+      "src/renderer/src/MiniPlayer.vue",
+      "src/renderer/src/miniPlayerOverlay_main.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/Mixtape.vue",
+    "status": "U",
+    "detail": "独立Mixtape窗口及时间线未打开；输出配置夹具不能代替整个窗口。",
+    "callers": [
+      "src/renderer/src/App.vue",
+      "src/renderer/src/components/dialogLibraryItem/index.vue",
+      "src/renderer/src/components/globalSongSearchDialog.vue",
+      "src/renderer/src/components/HorizontalBrowseDeckMoveButton.vue",
+      "src/renderer/src/components/HorizontalBrowseDeckToolbarRow.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/pages/modules/librarySelectArea.vue",
+    "status": "V/P",
+    "detail": "实际三歌单侧栏、拖宽后双栏49并还原；其他DJ/设备分支未覆盖。",
+    "callers": [
+      "src/renderer/src/pages/homePage.vue",
+      "src/renderer/src/pages/modules/librarySelectArea/useLibraryBatchActions.ts",
+      "src/renderer/src/pages/modules/librarySelectArea/useRekordboxSourceIcons.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/pages/modules/pioneerSongsArea.vue",
+    "status": "U",
+    "detail": "外部DJ资料库与设备数据入口未覆盖。",
+    "callers": [
+      "src/renderer/src/pages/homePage.vue",
+      "src/renderer/src/pages/modules/pioneerSongsArea/usePioneerPlaylistTracks.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/pages/modules/songPlayer/songPlayer.vue",
+    "status": "V/P",
+    "detail": "实际双轨空载播放器、Memory/HotCue/工具条初始布局；未载入播放，真实波形与录音状态未覆盖。",
+    "callers": [
+      "src/renderer/src/components/beatGridWaveformData.ts",
+      "src/renderer/src/components/beatGridWaveformPlaceholder.ts",
+      "src/renderer/src/components/HorizontalBrowseRawWaveformDetail.vue",
+      "src/renderer/src/components/HorizontalBrowseWaveformOverview.vue",
+      "src/renderer/src/components/MixtapeBeatAlignDialog.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/pages/modules/songsArea/ColumnHeaderContextMenu.vue",
+    "status": "U",
+    "detail": "独立列头菜单未逐项验证；通用右键菜单证据不替代它们。",
+    "callers": [
+      "src/renderer/src/components/MixtapeDialogsLayer.vue",
+      "src/renderer/src/pages/modules/pioneerSongsArea.vue",
+      "src/renderer/src/pages/modules/songsArea/songsArea.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/pages/modules/songsArea/SongListHeader.vue",
+    "status": "V/P",
+    "detail": "实际2821曲目、封面/预览波形/长名/横向滚动及搜索；嵌入独立浮层未全覆盖。22/24/48/49。",
+    "callers": [
+      "src/renderer/src/components/MixtapeDialogsLayer.vue",
+      "src/renderer/src/pages/modules/pioneerSongsArea.vue",
+      "src/renderer/src/pages/modules/songsArea/songsArea.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/pages/modules/songsArea/SongListRows/CoverPreviewOverlay.vue",
+    "status": "U",
+    "detail": "封面大图浮层未专门打开验证四角/缩窗。",
+    "callers": ["src/renderer/src/pages/modules/songsArea/SongListRows.vue"]
+  },
+  {
+    "file": "src/renderer/src/pages/modules/songsArea/SongListRows.vue",
+    "status": "V/P",
+    "detail": "实际2821曲目、封面/预览波形/长名/横向滚动及搜索；嵌入独立浮层未全覆盖。22/24/48/49。",
+    "callers": [
+      "src/renderer/src/components/MixtapeDialogsLayer.vue",
+      "src/renderer/src/pages/modules/pioneerSongsArea.vue",
+      "src/renderer/src/pages/modules/songsArea/songsArea.vue"
+    ]
+  },
+  {
+    "file": "src/renderer/src/pages/modules/songsArea/songsArea.vue",
+    "status": "V/P",
+    "detail": "实际2821曲目、封面/预览波形/长名/横向滚动及搜索；嵌入独立浮层未全覆盖。22/24/48/49。",
+    "callers": [
+      "src/renderer/src/App.vue",
+      "src/renderer/src/components/dialogLibraryItem/index.vue",
+      "src/renderer/src/components/libraryItem/handleRekordboxXmlPlaylistExport.ts",
+      "src/renderer/src/components/libraryItem/index.vue",
+      "src/renderer/src/components/libraryItem/useLibraryContextMenu.ts"
+    ]
+  },
+  {
+    "file": "src/renderer/src/Update.vue",
+    "status": "U",
+    "detail": "独立更新/迁移窗口未运行；LibraryMerge配置不等同此处。",
+    "callers": [
+      "src/renderer/src/App.vue",
+      "src/renderer/src/components/curatedLibrarySyncDialog.vue",
+      "src/renderer/src/components/dialogLibraryItem/index.vue",
+      "src/renderer/src/components/editMetadataDialog/useEditMetadataDialog.ts",
+      "src/renderer/src/components/HorizontalBrowseModeShell.vue"
+    ]
+  }
+]

@@ -196,10 +196,10 @@ const showOverviewSection = computed(() => {
   margin-top: 4px;
 }
 .chip.danger .num {
-  color: #ff6b6b;
+  color: var(--danger-text);
 }
 .chip.success .num {
-  color: #9fe870;
+  color: var(--success-text);
 }
 .big {
   font-size: 14px;

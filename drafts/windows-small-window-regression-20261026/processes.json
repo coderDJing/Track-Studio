@@ -1,0 +1,26 @@
+[
+  {
+    "ProcessId": 38184,
+    "ParentProcessId": 38428,
+    "ExecutablePath": "C:\\playground\\Track-Studio\\node_modules\\electron\\dist\\electron.exe",
+    "CommandLine": "C:\\playground\\Track-Studio\\node_modules\\electron\\dist\\electron.exe . --remote-debugging-port=9222 --inspect=9229"
+  },
+  {
+    "ProcessId": 37632,
+    "ParentProcessId": 38184,
+    "ExecutablePath": "C:\\playground\\Track-Studio\\node_modules\\electron\\dist\\electron.exe",
+    "CommandLine": "\"C:\\playground\\Track-Studio\\node_modules\\electron\\dist\\electron.exe\" --type=gpu-process --user-data-dir=\"C:\\Users\\tongr\\AppData\\Roaming\\frkb-dev\" --gpu-preferences=UAAAAAAAAADgAAAEAAAAAAAAAAAAAGAAOAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAABgAAAAAAAAAGAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAA= --field-trial-handle=2392,i,11566046066321942102,4430257103328500421,262144 --enable-features=PdfUseShowSaveFilePicker --disable-features=DropInputEventsWhilePaintHolding,LocalNetworkAccessChecks,NetworkServiceSandbox,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TraceSiteInstanceGetProcessCreation --variations-seed-version --pseudonymization-salt-handle=2396,i,14011758240498404852,10729794376337086614,4 --trace-process-track-uuid=3190708988185955192 --mojo-platform-channel-handle=2388 /prefetch:2"
+  },
+  {
+    "ProcessId": 31296,
+    "ParentProcessId": 38184,
+    "ExecutablePath": "C:\\playground\\Track-Studio\\node_modules\\electron\\dist\\electron.exe",
+    "CommandLine": "\"C:\\playground\\Track-Studio\\node_modules\\electron\\dist\\electron.exe\" --type=utility --utility-sub-type=network.mojom.NetworkService --lang=zh-CN --service-sandbox-type=none --user-data-dir=\"C:\\Users\\tongr\\AppData\\Roaming\\frkb-dev\" --standard-schemes=frkb-preview --secure-schemes=frkb-preview --bypasscsp-schemes=frkb-preview --cors-schemes=frkb-preview --fetch-schemes=frkb-preview --service-worker-schemes=frkb-preview --streaming-schemes=frkb-preview --field-trial-handle=2392,i,11566046066321942102,4430257103328500421,262144 --enable-features=PdfUseShowSaveFilePicker --disable-features=DropInputEventsWhilePaintHolding,LocalNetworkAccessChecks,NetworkServiceSandbox,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TraceSiteInstanceGetProcessCreation --variations-seed-version --pseudonymization-salt-handle=2396,i,14011758240498404852,10729794376337086614,4 --trace-process-track-uuid=3190708989122997041 --mojo-platform-channel-handle=3208 /prefetch:11"
+  },
+  {
+    "ProcessId": 34436,
+    "ParentProcessId": 38184,
+    "ExecutablePath": "C:\\playground\\Track-Studio\\node_modules\\electron\\dist\\electron.exe",
+    "CommandLine": "\"C:\\playground\\Track-Studio\\node_modules\\electron\\dist\\electron.exe\" --type=renderer --user-data-dir=\"C:\\Users\\tongr\\AppData\\Roaming\\frkb-dev\" --standard-schemes=frkb-preview --secure-schemes=frkb-preview --bypasscsp-schemes=frkb-preview --cors-schemes=frkb-preview --fetch-schemes=frkb-preview --service-worker-schemes=frkb-preview --streaming-schemes=frkb-preview --app-user-model-id=\"C:\\playground\\Track-Studio\\node_modules\\electron\\dist\\electron.exe\" --app-path=\"C:\\playground\\Track-Studio\" --no-sandbox --no-zygote --remote-debugging-port=9222 --video-capture-use-gpu-memory-buffer --lang=zh-CN --device-scale-factor=1.5 --num-raster-threads=4 --enable-main-frame-before-activation --renderer-client-id=5 --time-ticks-at-unix-epoch=-1792728638041768 --launch-time-ticks=275677004842 --field-trial-handle=2392,i,11566046066321942102,4430257103328500421,262144 --enable-features=PdfUseShowSaveFilePicker --disable-features=DropInputEventsWhilePaintHolding,LocalNetworkAccessChecks,NetworkServiceSandbox,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TraceSiteInstanceGetProcessCreation --variations-seed-version --pseudonymization-salt-handle=2396,i,14011758240498404852,10729794376337086614,4 --trace-process-track-uuid=3190708990997080739 --mojo-platform-channel-handle=4580 /prefetch:1"
+  }
+]

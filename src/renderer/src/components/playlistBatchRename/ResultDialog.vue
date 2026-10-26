@@ -205,11 +205,11 @@ const resolveStatusLabel = (status: IBatchRenameExecutionStatus) => {
 }
 
 .chip.danger .num {
-  color: #ff7d7d;
+  color: var(--danger-text);
 }
 
 .chip.success .num {
-  color: #96df75;
+  color: var(--success-text);
 }
 
 .groups {

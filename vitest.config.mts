@@ -14,7 +14,8 @@ export default defineConfig({
             ...configDefaults.exclude,
             '**/rust_package/**',
             '**/CoverThumbnailImage.spec.ts',
-            '**/CuratedLibrarySyncSettings.spec.ts'
+            '**/CuratedLibrarySyncSettings.spec.ts',
+            '**/rightClickMenu.spec.ts'
           ]
         }
       },
@@ -22,7 +23,11 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'vue-client',
-          include: ['**/CoverThumbnailImage.spec.ts', '**/CuratedLibrarySyncSettings.spec.ts'],
+          include: [
+            '**/CoverThumbnailImage.spec.ts',
+            '**/CuratedLibrarySyncSettings.spec.ts',
+            '**/rightClickMenu.spec.ts'
+          ],
           environment: './tests/vueClientEnvironment.ts'
         }
       }

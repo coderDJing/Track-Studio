@@ -1,0 +1,18 @@
+const {app,BrowserWindow,session}=require('electron')
+const path=require('node:path')
+const fs=require('node:fs')
+const profile=path.join(__dirname,'fixture-profile')
+fs.mkdirSync(profile,{recursive:true})
+app.setPath('userData',profile)
+app.whenReady().then(()=>{
+  session.defaultSession.webRequest.onBeforeRequest((details,callback)=>{
+    const allowed=/^(http|ws):\/\/127\.0\.0\.1:5175\//.test(details.url) || /^(data|blob):/.test(details.url)
+    if(!allowed) console.log('Fixture blocked request:',new URL(details.url).origin)
+    callback({cancel:!allowed})
+  })
+  const win=new BrowserWindow({width:1260,height:650,minWidth:1260,minHeight:650,frame:false,webPreferences:{contextIsolation:true,sandbox:true,nodeIntegration:false}})
+  win.webContents.setWindowOpenHandler(()=>({action:'deny'}))
+  win.loadURL('http://127.0.0.1:5175/drafts/windows-small-window-regression-20261026/fix-verification/index.html')
+  win.webContents.on('did-finish-load',()=>{win.show();console.log(JSON.stringify({bounds:win.getBounds(),content:win.getContentBounds(),zoom:win.webContents.getZoomFactor(),url:win.webContents.getURL()}))})
+})
+app.on('window-all-closed',()=>app.quit())

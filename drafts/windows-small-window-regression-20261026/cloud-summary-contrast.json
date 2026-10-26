@@ -1,0 +1,49 @@
+{
+  "fixture": "cloud-summary",
+  "theme": "theme-light",
+  "viewport": [1260, 651],
+  "focused": {
+    "tag": "BODY",
+    "class": "theme-light",
+    "placeholder": null
+  },
+  "text": [
+    {
+      "text": "声音指纹",
+      "color": "rgb(208, 208, 208)",
+      "textShadow": "rgba(0, 0, 0, 0.24) 0px 1px 1px",
+      "contrastAgainstWhite": 1.54
+    },
+    {
+      "text": "100000",
+      "color": "rgb(159, 232, 112)",
+      "textShadow": "rgba(0, 0, 0, 0.24) 0px 1px 1px",
+      "contrastAgainstWhite": 1.47
+    },
+    {
+      "text": "200000",
+      "color": "rgb(159, 232, 112)",
+      "textShadow": "rgba(0, 0, 0, 0.24) 0px 1px 1px",
+      "contrastAgainstWhite": 1.47
+    },
+    {
+      "text": "精选表演者",
+      "color": "rgb(208, 208, 208)",
+      "textShadow": "rgba(0, 0, 0, 0.24) 0px 1px 1px",
+      "contrastAgainstWhite": 1.54
+    },
+    {
+      "text": "100000",
+      "color": "rgb(159, 232, 112)",
+      "textShadow": "rgba(0, 0, 0, 0.24) 0px 1px 1px",
+      "contrastAgainstWhite": 1.47
+    },
+    {
+      "text": "100000",
+      "color": "rgb(159, 232, 112)",
+      "textShadow": "rgba(0, 0, 0, 0.24) 0px 1px 1px",
+      "contrastAgainstWhite": 1.47
+    }
+  ],
+  "scrollAreas": []
+}

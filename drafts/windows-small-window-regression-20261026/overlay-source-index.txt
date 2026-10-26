@@ -1,0 +1,237 @@
+src/renderer/src\components\analysisBpmRangeDialog.vue:53:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\analysisBpmRangeDialog.vue:54:    <div v-dialog-drag="'.dialog-title'" class="inner analysis-bpm-range-dialog">
+src/renderer/src\components\analysisBpmRangeDialog.vue:55:      <div class="dialog-title dialog-header">
+src/renderer/src\components\analysisBpmRangeDialog.vue:72:      <div class="dialog-footer">
+src/renderer/src\components\addSongFingerprintFinishedDialog.vue:29:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\addSongFingerprintFinishedDialog.vue:30:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\addSongFingerprintFinishedDialog.vue:78:      <div class="dialog-footer">
+src/renderer/src\components\AnalysisRuntimeDownloadOverlay.vue:58:  position: fixed;
+src/renderer/src\components\audioConvertDialog.vue:320:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\audioConvertDialog.vue:322:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\audioConvertDialog.vue:332:      <div class="dialog-title dialog-header">
+src/renderer/src\components\audioConvertDialog.vue:336:        class="dialog-content-scroll"
+src/renderer/src\components\audioConvertDialog.vue:340:        <div class="dialog-content">
+src/renderer/src\components\audioConvertDialog.vue:484:      <div class="dialog-footer">
+src/renderer/src\components\audioConvertDialog.vue:503:.dialog-content-scroll {
+src/renderer/src\components\audioConvertDialog.vue:508:.dialog-content {
+src/renderer/src\components\autoMetadataSummaryDialog.vue:160:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\autoMetadataSummaryDialog.vue:161:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\autoMetadataSummaryDialog.vue:162:      <div class="dialog-title dialog-header">
+src/renderer/src\components\autoMetadataSummaryDialog.vue:221:      <div class="dialog-footer">
+src/renderer/src\components\BaseSelect.vue:26:    <Teleport to="body">
+src/renderer/src\components\batchSimilarTracksDialog.vue:426:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\batchSimilarTracksDialog.vue:427:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\batchSimilarTracksDialog.vue:428:      <div class="dialog-title dialog-header">{{ t('similarTracks.title') }}</div>
+src/renderer/src\components\batchSimilarTracksDialog.vue:575:      <div class="dialog-footer">
+src/renderer/src\components\BpmFixDialog.vue:107:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\BpmFixDialog.vue:108:    <div v-dialog-drag="'.dialog-title'" class="inner bpm-fix-dialog">
+src/renderer/src\components\BpmFixDialog.vue:109:      <div class="dialog-title dialog-header">
+src/renderer/src\components\bubbleBox.vue:370:  <teleport to="body">
+src/renderer/src\components\bubbleBox.vue:407:  position: fixed;
+src/renderer/src\components\choiceDialog.vue:44:    class="dialog unselectable"
+src/renderer/src\components\choiceDialog.vue:49:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\choiceDialog.vue:54:      <div class="dialog-title dialog-header">
+src/renderer/src\components\choiceDialog.vue:62:      <div class="dialog-footer">
+src/renderer/src\components\cloudSyncSettingsDialog.vue:233:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\cloudSyncSettingsDialog.vue:234:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\cloudSyncSettingsDialog.vue:239:        class="dialog-scroll"
+src/renderer/src\components\cloudSyncSettingsDialog.vue:242:        <div class="dialog-content">
+src/renderer/src\components\cloudSyncSettingsDialog.vue:318:      <div class="dialog-footer">
+src/renderer/src\components\cloudSyncSettingsDialog.vue:356:.dialog-content {
+src/renderer/src\components\cloudSyncSummaryDialog.vue:50:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\cloudSyncSummaryDialog.vue:51:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\cloudSyncSummaryDialog.vue:161:      <div class="dialog-footer">
+src/renderer/src\pages\modules\pioneerSongsArea.vue:869:    <Teleport to="body">
+src/renderer/src\components\cloudSyncSyncDialog.vue:90:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\cloudSyncSyncDialog.vue:91:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\cloudSyncSyncDialog.vue:139:      <div class="dialog-footer">
+src/renderer/src\components\ColorPicker.vue:12:    <Teleport to="body">
+src/renderer/src\components\ColorPicker.vue:334:  position: fixed;
+src/renderer/src\components\confirmDialog.vue:122:    class="dialog unselectable"
+src/renderer/src\components\confirmDialog.vue:127:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\confirmDialog.vue:132:      <div class="dialog-title dialog-header">
+src/renderer/src\components\confirmDialog.vue:152:      <div v-if="confirmShow" class="dialog-footer">
+src/renderer/src\components\confirmDialog.vue:156:      <div v-if="!confirmShow" class="dialog-footer">
+src/renderer/src\pages\modules\songsArea\SongListHeader.vue:733:      <Teleport to="body">
+src/renderer/src\pages\modules\songsArea\SongListHeader.vue:862:  position: fixed;
+src/renderer/src\pages\modules\songPlayer\songPlayer.vue:1018:  <Teleport to="body">
+src/renderer/src\components\curatedLibrarySyncJoinDialog.vue:132:    class="dialog unselectable"
+src/renderer/src\components\curatedLibrarySyncJoinDialog.vue:136:    <div v-dialog-drag="'.dialog-title'" class="inner join-dialog">
+src/renderer/src\components\curatedLibrarySyncJoinDialog.vue:137:      <div class="dialog-title dialog-header">
+src/renderer/src\components\curatedLibrarySyncJoinDialog.vue:190:      <div class="dialog-footer join-dialog__footer">
+src/renderer/src\components\DateTimePicker.vue:23:    <Teleport to="body">
+src/renderer/src\components\DateTimePicker.vue:622:  position: fixed;
+src/renderer/src\pages\modules\songsArea\SongListRows.vue:861:  <teleport to="body">
+src/renderer/src\components\curatedLibrarySyncDialog.vue:160:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\curatedLibrarySyncDialog.vue:161:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\curatedLibrarySyncDialog.vue:215:      <div class="dialog-footer">
+src/renderer/src\components\conversionFinishedSummaryDialog.vue:43:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\conversionFinishedSummaryDialog.vue:44:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\conversionFinishedSummaryDialog.vue:102:      <div class="dialog-footer">
+src/renderer/src\components\demucsUltraModelDownloadDialog.vue:198:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\demucsUltraModelDownloadDialog.vue:199:    <div v-dialog-drag="'.dialog-title'" class="inner demucs-ultra-download-dialog__inner">
+src/renderer/src\components\demucsUltraModelDownloadDialog.vue:200:      <div class="dialog-title dialog-header">
+src/renderer/src\components\demucsUltraModelDownloadDialog.vue:241:      <div class="dialog-footer demucs-ultra-download-dialog__footer">
+src/renderer/src\pages\modules\songsArea\SongListRows\CoverPreviewOverlay.vue:47:  position: fixed;
+src/renderer/src\components\curatedArtistLibraryDialog.vue:258:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\curatedArtistLibraryDialog.vue:259:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\curatedArtistLibraryDialog.vue:260:      <div class="dialog-title dialog-header">
+src/renderer/src\components\curatedArtistLibraryDialog.vue:409:      <div class="dialog-footer">
+src/renderer/src\pages\modules\songsArea\songsArea.vue:1037:    <Teleport to="body">
+src/renderer/src\components\dangerConfirmWithInputDialog.vue:45:    class="dialog unselectable"
+src/renderer/src\components\dangerConfirmWithInputDialog.vue:50:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\dangerConfirmWithInputDialog.vue:55:      <div class="dialog-title dialog-header">
+src/renderer/src\components\dangerConfirmWithInputDialog.vue:74:      <div class="dialog-footer">
+src/renderer/src\components\editMetadataDialog\EditMetadataDialog.vue:57:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\editMetadataDialog\EditMetadataDialog.vue:58:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\editMetadataDialog\EditMetadataDialog.vue:60:        <div class="dialog-title dialog-header">{{ t('metadata.dialogTitle') }}</div>
+src/renderer/src\components\editMetadataDialog\EditMetadataDialog.vue:248:      <div class="dialog-footer">
+src/renderer/src\components\exportDialog.vue:141:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\exportDialog.vue:143:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\exportDialog.vue:147:      <div class="dialog-title dialog-header">
+src/renderer/src\components\exportDialog.vue:196:      <div class="dialog-footer">
+src/renderer/src\components\customFileSelector\customFileSelector.vue:164:  <div v-if="visible" class="dialog unselectable file-selector-dialog dialog-visible">
+src/renderer/src\components\customFileSelector\customFileSelector.vue:167:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\customFileSelector\customFileSelector.vue:172:      <div class="dialog-title dialog-header">
+src/renderer/src\components\exportSongFingerprintDialog.vue:91:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\exportSongFingerprintDialog.vue:93:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\exportSongFingerprintDialog.vue:97:      <div class="dialog-title dialog-header">
+src/renderer/src\components\exportSongFingerprintDialog.vue:117:      <div class="dialog-footer">
+src/renderer/src\components\externalLibraryTargetDialog.vue:473:    class="dialog unselectable rekordboxDesktopTargetDialog"
+src/renderer/src\components\externalLibraryTargetDialog.vue:482:      <div class="dialog-body">
+src/renderer/src\components\externalLibraryTargetDialog.vue:567:      <div class="dialog-footer footer-centered">
+src/renderer/src\components\fileOpInterruptedDialog.vue:57:  <div v-if="shouldRender" class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\fileOpInterruptedDialog.vue:58:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\fileOpInterruptedDialog.vue:65:      <div class="dialog-footer">
+src/renderer/src\components\filterDialog.vue:256:    class="dialog unselectable"
+src/renderer/src\components\filterDialog.vue:261:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\filterDialog.vue:270:      <div class="dialog-title dialog-header">
+src/renderer/src\components\filterDialog.vue:469:      <div class="dialog-footer" style="padding: 10px 20px 18px; gap: 10px">
+src/renderer/src\components\globalCallShortcutDialog.vue:103:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\globalCallShortcutDialog.vue:105:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\globalCallShortcutDialog.vue:109:      <div class="dialog-title dialog-header">
+src/renderer/src\components\globalCallShortcutDialog.vue:115:      <div class="dialog-footer">
+src/renderer/src\components\globalSongSearchDialog.vue:388:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\globalSongSearchDialog.vue:390:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\globalSongSearchDialog.vue:394:      <div class="dialog-title dialog-header">
+src/renderer/src\components\globalSongSearchDialog.vue:456:      <div class="dialog-footer">
+src/renderer/src\components\HorizontalBrowseAudioEditLeaveDialog.vue:47:    class="dialog unselectable"
+src/renderer/src\components\HorizontalBrowseAudioEditLeaveDialog.vue:53:    <div v-dialog-drag="'.dialog-title'" class="inner" style="width: 420px; height: auto">
+src/renderer/src\components\HorizontalBrowseAudioEditLeaveDialog.vue:54:      <div class="dialog-title dialog-header">
+src/renderer/src\components\HorizontalBrowseAudioEditLeaveDialog.vue:58:      <div class="dialog-footer">
+src/renderer/src\components\HorizontalBrowseAudioEditSaveDialog.vue:95:    class="dialog unselectable"
+src/renderer/src\components\HorizontalBrowseAudioEditSaveDialog.vue:103:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\HorizontalBrowseAudioEditSaveDialog.vue:107:      <div class="dialog-title dialog-header">
+src/renderer/src\components\HorizontalBrowseAudioEditSaveDialog.vue:156:      <div class="dialog-footer">
+src/renderer/src\components\importFinishedSummaryDialog.vue:45:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\importFinishedSummaryDialog.vue:46:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\importFinishedSummaryDialog.vue:107:      <div class="dialog-footer">
+src/renderer/src\components\importSongFingerprintDialog.vue:106:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\importSongFingerprintDialog.vue:108:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\importSongFingerprintDialog.vue:112:      <div class="dialog-title dialog-header">
+src/renderer/src\components\importSongFingerprintDialog.vue:132:      <div class="dialog-footer">
+src/renderer/src\components\ImportTracksDialogBase.vue:255:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\ImportTracksDialogBase.vue:257:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\ImportTracksDialogBase.vue:261:      <div class="dialog-title dialog-header">
+src/renderer/src\components\ImportTracksDialogBase.vue:376:      <div class="dialog-footer">
+src/renderer/src\components\InputDialog.vue:37:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\InputDialog.vue:38:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\InputDialog.vue:39:      <div class="dialog-title dialog-header">{{ title }}</div>
+src/renderer/src\components\InputDialog.vue:44:          class="dialog-input"
+src/renderer/src\components\InputDialog.vue:50:      <div class="dialog-footer">
+src/renderer/src\components\LibraryMergeDialog.vue:542:    class="dialog unselectable library-merge-dialog"
+src/renderer/src\components\LibraryMergeDialog.vue:548:    <section v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\LibraryMergeDialog.vue:549:      <div id="library-merge-dialog-title" class="dialog-title dialog-header">
+src/renderer/src\components\LibraryMergeDialog.vue:736:      <footer class="dialog-footer library-merge-dialog__footer">
+src/renderer/src\components\libraryStemSeparationDialog.vue:533:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\libraryStemSeparationDialog.vue:534:    <div v-dialog-drag="'.dialog-title'" class="inner library-stem-dialog__inner">
+src/renderer/src\components\libraryStemSeparationDialog.vue:535:      <div class="dialog-title dialog-header">
+src/renderer/src\components\libraryStemSeparationDialog.vue:654:      <div class="dialog-footer library-stem-dialog__footer">
+src/renderer/src\components\librarySetup\LibrarySetupOverlay.vue:188:  position: fixed;
+src/renderer/src\components\manualAddSongFingerprintDialog.vue:95:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\manualAddSongFingerprintDialog.vue:97:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\manualAddSongFingerprintDialog.vue:101:      <div class="dialog-title dialog-header">
+src/renderer/src\components\manualAddSongFingerprintDialog.vue:121:      <div class="dialog-footer">
+src/renderer/src\components\MixtapeBeatAlignDialog.vue:926:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\MixtapeBeatAlignDialog.vue:928:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\MixtapeBeatAlignDialog.vue:932:      <div class="dialog-title dialog-header">
+src/renderer/src\components\MixtapeBeatAlignDialog.vue:935:      <div class="dialog-body">
+src/renderer/src\components\MixtapeBeatAlignDialog.vue:1025:      <div class="dialog-footer">
+src/renderer/src\components\mixtapeOutputDialog.vue:79:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\mixtapeOutputDialog.vue:80:    <div v-dialog-drag="'.dialog-title'" class="inner" :style="dialogInnerStyle">
+src/renderer/src\components\mixtapeOutputDialog.vue:81:      <div class="dialog-title dialog-header">
+src/renderer/src\components\mixtapeOutputDialog.vue:84:      <div class="dialog-body">
+src/renderer/src\components\mixtapeOutputDialog.vue:108:            <input v-model="draftFilename" class="dialog-input" type="text" />
+src/renderer/src\components\mixtapeOutputDialog.vue:112:      <div class="dialog-footer">
+src/renderer/src\components\playerGlobalShortcutDialog.vue:235:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\playerGlobalShortcutDialog.vue:237:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\playerGlobalShortcutDialog.vue:246:      <div class="dialog-title dialog-header">
+src/renderer/src\components\playerGlobalShortcutDialog.vue:260:      <div class="dialog-footer">
+src/renderer/src\components\musicBrainzDialog\MusicBrainzDialog.vue:73:  <div class="dialog musicbrainz-dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\musicBrainzDialog\MusicBrainzDialog.vue:74:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\musicBrainzDialog\MusicBrainzDialog.vue:75:      <div class="dialog-title dialog-header">{{ t('metadata.musicbrainzDialogTitle') }}</div>
+src/renderer/src\components\musicBrainzDialog\MusicBrainzDialog.vue:314:      <div class="dialog-footer">
+src/renderer/src\components\rekordboxDesktopCreateNodeDialog.vue:63:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\rekordboxDesktopCreateNodeDialog.vue:64:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\rekordboxDesktopCreateNodeDialog.vue:65:      <div class="dialog-title dialog-header">{{ dialogTitle }}</div>
+src/renderer/src\components\rekordboxDesktopCreateNodeDialog.vue:70:          class="dialog-input"
+src/renderer/src\components\rekordboxDesktopCreateNodeDialog.vue:78:      <div class="dialog-footer">
+src/renderer/src\components\rekordboxDesktopStorageDirDialog.vue:79:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\rekordboxDesktopStorageDirDialog.vue:80:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\rekordboxDesktopStorageDirDialog.vue:81:      <div class="dialog-title dialog-header">
+src/renderer/src\components\rekordboxDesktopStorageDirDialog.vue:103:      <div class="dialog-footer">
+src/renderer/src\components\playlistBatchRename\PlaylistBatchRenameDialog.vue:75:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\playlistBatchRename\PlaylistBatchRenameDialog.vue:76:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\playlistBatchRename\PlaylistBatchRenameDialog.vue:77:      <div class="dialog-title dialog-header">{{ title }}</div>
+src/renderer/src\components\playlistBatchRename\PlaylistBatchRenameDialog.vue:157:      <div class="dialog-footer">
+src/renderer/src\components\playlistBatchRename\PresetManagerDialog.vue:310:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\playlistBatchRename\PresetManagerDialog.vue:311:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\playlistBatchRename\PresetManagerDialog.vue:312:      <div class="dialog-title dialog-header">{{ t('batchRename.managePresets') }}</div>
+src/renderer/src\components\playlistBatchRename\PresetManagerDialog.vue:421:      <div class="dialog-footer">
+src/renderer/src\components\rekordboxDesktopTargetDialog.vue:563:    class="dialog unselectable rekordboxDesktopTargetDialog"
+src/renderer/src\components\rekordboxDesktopTargetDialog.vue:567:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\rekordboxDesktopTargetDialog.vue:605:      <div class="dialog-body">
+src/renderer/src\components\rekordboxDesktopTargetDialog.vue:789:      <div class="dialog-footer footer-centered">
+src/renderer/src\components\rekordboxDesktopTargetDialog.vue:806:      <div v-if="dialogWriting" class="dialogBusyMask" data-dialog-drag-ignore="true">
+src/renderer/src\components\rekordboxDesktopTargetDialog.vue:807:        <div class="dialogBusyCard">
+src/renderer/src\components\rekordboxDesktopTargetDialog.vue:808:          <span class="dialogBusySpinner"></span>
+src/renderer/src\components\playlistBatchRename\PreviewDialog.vue:254:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\playlistBatchRename\PreviewDialog.vue:255:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\playlistBatchRename\PreviewDialog.vue:256:      <div class="dialog-title dialog-header">{{ title }}</div>
+src/renderer/src\components\playlistBatchRename\PreviewDialog.vue:347:      <div class="dialog-footer">
+src/renderer/src\components\playlistBatchRename\ResultDialog.vue:103:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\playlistBatchRename\ResultDialog.vue:104:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\playlistBatchRename\ResultDialog.vue:105:      <div class="dialog-title dialog-header">
+src/renderer/src\components\playlistBatchRename\ResultDialog.vue:151:      <div class="dialog-footer">
+src/renderer/src\components\rekordboxXmlExportDialog.vue:157:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\rekordboxXmlExportDialog.vue:159:      v-dialog-drag="'.dialog-title'"
+src/renderer/src\components\rekordboxXmlExportDialog.vue:163:      <div class="dialog-title dialog-header">
+src/renderer/src\components\rekordboxXmlExportDialog.vue:166:      <div class="dialog-content">
+src/renderer/src\components\rekordboxXmlExportDialog.vue:237:      <div class="dialog-footer">
+src/renderer/src\components\rekordboxXmlExportDialog.vue:246:.dialog-content {
+src/renderer/src\components\rightClickMenu.vue:303:  <Teleport to="body">
+src/renderer/src\components\rightClickMenu.vue:356:  position: fixed;
+src/renderer/src\components\rightClickMenu.vue:428:  position: fixed;
+src/renderer/src\components\selectSongListDialog.vue:652:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\selectSongListDialog.vue:653:    <div v-dialog-drag="'.dialog-title'" class="content inner" @contextmenu.stop="contextmenuEvent">
+src/renderer/src\components\selectSongListDialog.vue:687:      <div class="dialog-body">
+src/renderer/src\components\selectSongListDialog.vue:881:      <div class="dialog-footer footer-centered">
+src/renderer/src\components\setDurationDialog.vue:144:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\setDurationDialog.vue:145:    <div v-dialog-drag="'.dialog-title'" class="inner set-duration-dialog">
+src/renderer/src\components\setDurationDialog.vue:146:      <div class="dialog-title dialog-header">
+src/renderer/src\components\setDurationDialog.vue:191:      <div class="dialog-footer">
+src/renderer/src\components\settingDialog\SettingDialogBody.vue:292:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\settingDialog\SettingDialogBody.vue:293:    <div v-dialog-drag="'.dialog-title'" class="inner">
+src/renderer/src\components\settingDialog\SettingDialogBody.vue:294:      <div class="dialog-title dialog-header">
+src/renderer/src\components\settingDialog\SettingDialogBody.vue:310:        class="dialog-scroll"
+src/renderer/src\components\settingDialog\SettingDialogBody.vue:313:        <div class="dialog-content">
+src/renderer/src\components\settingDialog\SettingDialogBody.vue:1045:      <div class="dialog-footer">
+src/renderer/src\components\songAreaColRightClickMenu.vue:159:  <Teleport to="body">
+src/renderer/src\components\songAreaColRightClickMenu.vue:198:  position: fixed;
+src/renderer/src\components\trackReanalysisDialog.vue:126:  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+src/renderer/src\components\trackReanalysisDialog.vue:127:    <div v-dialog-drag="'.dialog-title'" class="inner track-reanalysis-dialog">
+src/renderer/src\components\trackReanalysisDialog.vue:128:      <div class="dialog-title dialog-header">
+src/renderer/src\components\trackReanalysisDialog.vue:192:      <div class="dialog-footer">
+src/renderer/src\components\userGuide\UserGuideIdentityOverlay.vue:67:  position: fixed;
+src/renderer/src\components\userGuide\UserGuideCard.vue:158:  position: fixed;
+src/renderer/src\components\WelcomeCreatePlaylistActions.vue:199:  position: fixed;

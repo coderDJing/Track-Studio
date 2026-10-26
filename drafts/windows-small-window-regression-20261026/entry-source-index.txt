@@ -1,0 +1,639 @@
+src/renderer/src/utils\audioConvertActions.ts:1:import type { AudioConvertDialogResult } from '@renderer/components/audioConvertDialog.types'
+src/renderer/src/utils\audioConvertActions.ts:96:  const { default: openConvertDialog } = await import('@renderer/components/audioConvertDialog')
+src/renderer/src/composables\runCuratedLibrarySyncUi.ts:1:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/composables\runCuratedLibrarySyncUi.ts:2:import curatedLibrarySyncJoinDialog from '@renderer/components/curatedLibrarySyncJoinDialog'
+src/renderer/src/utils\bpmFixActions.ts:3:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/utils\bpmFixActions.ts:61:      emitter.emit('playlistContentChanged', { uuids: value.playlistUuids })
+src/renderer/src/utils\bpmFixActions.ts:65:          emitter.emit('waveform-preview:stop', { reason: 'switch' })
+src/renderer/src/utils\bpmFixActions.ts:108:    const { default: BpmFixDialog } = await import('@renderer/components/BpmFixDialog.vue')
+src/renderer/src/composables\miniPlayer\MiniPlayerMoreMenu.vue:5:import type { MiniPlayerOverlayMenuAction } from '@shared/miniPlayerWindow'
+src/renderer/src/utils\contextMenuPosition.spec.ts:2:import { resolveContextMenuPoint } from './contextMenuPosition'
+src/renderer/src/composables\externalLibrary\useExternalPlaylistContextMenu.ts:2:import rightClickMenu from '@renderer/components/rightClickMenu'
+src/renderer/src/composables\useAnchoredPopover.ts:2:import { positionPopover } from '../utils/overlayLayout'
+src/renderer/src/composables\useAnalysisRuntimeDownload.ts:12:type ConfirmDialogFn = typeof import('@renderer/components/confirmDialog').default
+src/renderer/src/composables\useCuratedLibrarySyncEvents.ts:2:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/composables\useCuratedLibrarySyncEvents.ts:157:        emitter.emit('songsRemoved', {
+src/renderer/src/composables\useCuratedLibrarySyncEvents.ts:175:        emitter.emit('songsArea/optimistic-restore', { listUUID, items: restoreItems })
+src/renderer/src/composables\useCuratedLibrarySyncEvents.ts:182:        emitter.emit('songsArea/sync-fields', {
+src/renderer/src/composables\useCuratedLibrarySyncEvents.ts:195:        emitter.emit('playlistContentChanged', { uuids: parsed.uuids })
+src/renderer/src/composables\useCuratedLibrarySyncEvents.ts:202:        emitter.emit('songsArea/reload-if-current', { uuid: RECYCLE_BIN_UUID })
+src/renderer/src/composables\useCloudSyncEvents.ts:2:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/utils\dragUtils.ts:4:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/utils\dragUtils.ts:6:import dropIntoDialog from '../components/dropIntoDialog'
+src/renderer/src/utils\externalLibraryPlaylist.ts:1:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/utils\externalLibraryPlaylist.ts:2:import externalLibraryTargetDialog from '@renderer/components/externalLibraryTargetDialog'
+src/renderer/src/utils\exclusivePlayback.ts:38:  emitter.emit(EXCLUSIVE_PLAYBACK_PAUSE_OTHERS_EVENT, {
+src/renderer/src/utils\exclusivePlayback.ts:43:      emitter.emit('waveform-preview:stop', { reason: 'switch' })
+src/renderer/src/utils\exclusivePlayback.ts:48:      emitter.emit('waveform-preview:pause-main')
+src/renderer/src/utils\exclusivePlayback.ts:55:  emitter.emit(event, {
+src/renderer/src/utils\exclusivePlayback.ts:74:  emitter.emit('waveform-preview:stop', { reason: 'manual-play' })
+src/renderer/src/utils\fingerprintActions.ts:3:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/utils\externalPlaylist.ts:32:    emitter.emit('external-playlist/refresh', {
+src/renderer/src/pages\modules\songsArea\songsArea.vue:30:import selectSongListDialog from '@renderer/components/selectSongListDialog.vue'
+src/renderer/src/pages\modules\songsArea\songsArea.vue:34:import ColumnHeaderContextMenu from './ColumnHeaderContextMenu.vue'
+src/renderer/src/pages\modules\songsArea\songsArea.vue:38:import { useSongItemContextMenu } from '@renderer/pages/modules/songsArea/composables/useSongItemContextMenu'
+src/renderer/src/pages\modules\songsArea\songsArea.vue:64:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/pages\modules\songsArea\songsArea.vue:404:emitter.on('metadataBatchUpdated', handleMetadataBatchUpdatedFromEvent)
+src/renderer/src/pages\modules\songsArea\songsArea.vue:488:emitter.on('songsArea/clipboardHint', handleClipboardHint)
+src/renderer/src/pages\modules\songsArea\songsArea.vue:508:emitter.on('waveform-preview:state', handleWaveformPreviewState)
+src/renderer/src/pages\modules\songsArea\songsArea.vue:532:emitter.on('preview-transfer:open-dialog', handlePreviewMoveRequest)
+src/renderer/src/pages\modules\songsArea\songsArea.vue:533:emitter.on('songsArea/scrollToTop', handleSongsAreaScrollToTop)
+src/renderer/src/pages\modules\songsArea\songsArea.vue:620:      emitter.emit('playlistContentChanged', { uuids: [songsAreaState.songListUUID] })
+src/renderer/src/pages\modules\songsArea\songsArea.vue:624:    emitter.emit('songMetadataUpdated', {
+src/renderer/src/pages\modules\songsArea\songsArea.vue:700:    emitter.emit('waveform-preview:stop', { reason: 'switch' })
+src/renderer/src/pages\modules\songsArea\songsArea.vue:719:    emitter.emit('horizontalBrowse/load-song', {
+src/renderer/src/pages\modules\songsArea\songsArea.vue:736:    emitter.emit('player/replay-current-song')
+src/renderer/src/pages\modules\songsArea\SongListRows.vue:19:import CoverPreviewOverlay from './SongListRows/CoverPreviewOverlay.vue'
+src/renderer/src/utils\libraryRelocateActions.ts:2:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/utils\libraryUtils.ts:2:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/utils\libraryTreeSort.ts:2:import type { IDir, IMenu } from 'src/types/globals'
+src/renderer/src/composables\mixtape\mixtapeBeatAlignGridDefinitionSave.ts:1:import type ConfirmDialog from '@renderer/components/confirmDialog'
+src/renderer/src/composables\useMixtape.ts:6:import confirmDialog from '@renderer/components/confirmDialog'
+src/renderer/src/composables\useMixtape.ts:691:    emitter.on('playlistContentChanged', handlePlaylistContentChanged)
+src/renderer/src/utils\manualKeyAnalysis.ts:2:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/utils\manualKeyAnalysis.ts:8:import openAnalysisBpmRangeDialog from '@renderer/components/analysisBpmRangeDialog'
+src/renderer/src/composables\useMainWindowPlaybackHandoff.ts:44:      emitter.emit(MAIN_WINDOW_PLAYBACK_SNAPSHOT_REQUEST_EVENT, request)
+src/renderer/src/utils\missingAnalysisScanProgress.spec.ts:27:    emitter.on('renderer-progressSet', listener)
+src/renderer/src/utils\missingAnalysisScanProgress.spec.ts:51:    emitter.on('renderer-progressSet', listener)
+src/renderer/src/utils\missingAnalysisScanProgress.ts:26:    emitter.emit('renderer-progressSet', {
+src/renderer/src/utils\missingAnalysisScanProgress.ts:51:      emitter.emit('renderer-progressSet', { id, dismiss: true })
+src/renderer/src/composables\rekordboxDesktop\useRekordboxDesktopActions.ts:2:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/composables\rekordboxDesktop\useRekordboxDesktopActions.ts:3:import openRekordboxDesktopCreateNodeDialog from '@renderer/components/rekordboxDesktopCreateNodeDialog'
+src/renderer/src/composables\rekordboxDesktop\useRekordboxDesktopActions.ts:4:import rightClickMenu from '@renderer/components/rightClickMenu'
+src/renderer/src/composables\useLibraryTreeSortUi.ts:4:import rightClickMenu from '@renderer/components/rightClickMenu'
+src/renderer/src/composables\rekordboxDesktop\usePioneerUsbPlaylistDrop.ts:72:      if (result) emitter.emit('pioneerUsb/changed', { rootPath, analysisUnchanged: true })
+src/renderer/src/utils\mixtapePlaylistAppend.ts:1:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/utils\mixtapePlaylistAppend.ts:2:import openSelectSongListDialog from '@renderer/components/selectSongListDialog'
+src/renderer/src/utils\mixtapePlaylistAppend.ts:109:  emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/utils\mixtapePlaylistAppend.ts:115:  emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/utils\mixtapePlaylistAppend.ts:152:  emitter.emit('playlistContentChanged', { uuids: [playlistId] })
+src/renderer/src/composables\mixtape\mixtapeMissingTracksNotifier.ts:1:import confirmDialog from '@renderer/components/confirmDialog'
+src/renderer/src/composables\useLibrarySetupWizard.ts:5:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/composables\useLibrarySetupWizard.ts:6:import choice from '@renderer/components/choiceDialog'
+src/renderer/src/composables\mixtape\mixtapeOutputUi.ts:2:import type ConfirmDialog from '@renderer/components/confirmDialog'
+src/renderer/src/composables\useDevSongListTrace.ts:1:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/composables\rekordboxDesktop\usePioneerUsbPlaylistDelete.ts:38:    emitter.emit('pioneerUsb/open-delete-playlist', request)
+src/renderer/src/utils\musicSearch.ts:1:import type { IMenu } from '../../../types/globals'
+src/renderer/src/composables\rekordboxDesktop\usePioneerUsbPlaybackDeletion.ts:70:  emitter.on('pioneerUsb/tracks-deleted', handler)
+src/renderer/src/utils\newSongsImport.ts:1:import scanNewSongDialog from '@renderer/components/scanNewSongDialog'
+src/renderer/src/utils\newSongsImport.ts:2:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/composables\rekordboxDesktop\usePioneerUsbPlaybackDeletion.spec.ts:41:  emitter.emit('pioneerUsb/tracks-deleted', {
+src/renderer/src/utils\overlayLayout.spec.ts:2:import { constrainDialog, positionPopover } from './overlayLayout'
+src/renderer/src/utils\pioneerUsbEditing.ts:33:    emitter.emit('pioneerUsb/changed', { rootPath: song.pioneerUsbSource.rootPath })
+src/renderer/src/utils\pioneerUsbEditing.ts:52:  emitter.emit('pioneerUsb/changed', { rootPath: song.pioneerUsbSource.rootPath })
+src/renderer/src/composables\mixtape\stemMode.ts:1:import choice from '@renderer/components/choiceDialog'
+src/renderer/src/composables\mixtape\stemMode.ts:2:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/composables\rekordboxDesktop\usePioneerCopyToMixtape.ts:1:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\librarySelectArea.vue:23:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/pages\modules\librarySelectArea.vue:202:  emitter.on('playlistContentChanged', handlePlaylistContentChanged)
+src/renderer/src/pages\modules\librarySelectArea.vue:502:  emitter.on(RECORDING_LIBRARY_CHANGED_EVENT, handleRecordingLibraryChanged)
+src/renderer/src/utils\pioneerUsbWrite.ts:1:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/utils\pioneerUsbWrite.ts:68:      emitter.emit('pioneerUsb/tracks-deleted', {
+src/renderer/src/composables\rekordboxDesktop\usePioneerCopyToLibrary.ts:1:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/composables\rekordboxDesktop\usePioneerCopyToLibrary.ts:387:        emitter.emit('playlistContentChanged', {
+src/renderer/src/composables\horizontalBrowse\horizontalBrowseDetailPresentationState.ts:3:import { normalizePreviewBpm } from '@renderer/components/MixtapeBeatAlignDialog.constants'
+src/renderer/src/composables\rekordboxDesktop\useImportCuratedArtists.ts:1:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/composables\rekordboxDesktop\useImportCuratedArtists.ts:32:  emitter.emit('renderer-progressSet', {
+src/renderer/src/composables\mixtape\timelineRenderAndLoad.ts:1:import type { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/composables\rekordboxDesktop\useDjLibrarySongDrop.ts:123:          emitter.emit('dj-library:refresh-selected-playlist', {
+src/renderer/src/composables\mixtape\timelineTransportAndDrag.ts:2:import type { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/utils\recycleBinActions.ts:3:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/utils\recycleBinActions.ts:54:    emitter.emit('playlistContentChanged', { uuids: [RECYCLE_BIN_UUID] })
+src/renderer/src/utils\recycleBinActions.ts:115:    emitter.emit('waveform-preview:stop', { reason: 'switch' })
+src/renderer/src/utils\recycleBinActions.ts:160:      emitter.emit('songsArea/optimistic-remove', {
+src/renderer/src/utils\reactiveIpcFlows.spec.ts:13:import { usePioneerTrackCopyDialog } from '@renderer/pages/modules/pioneerSongsArea/usePioneerTrackCopyDialog'
+src/renderer/src/composables\rekordboxDesktop\useCleanMissingFiles.ts:2:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\librarySelectArea\useRekordboxSourceIcons.ts:3:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\librarySelectArea\useRekordboxSourceIcons.ts:4:import rightClickMenu from '@renderer/components/rightClickMenu'
+src/renderer/src/pages\modules\librarySelectArea\useRekordboxSourceIcons.ts:653:      emitter.emit('dj-library:refresh-selected-playlist', {
+src/renderer/src/pages\modules\librarySelectArea\useRekordboxSourceIcons.ts:853:        emitter.emit('renderer-progressSet', {
+src/renderer/src/pages\modules\librarySelectArea\useRekordboxSourceIcons.ts:862:      emitter.emit('renderer-progressSet', { id: progressId, dismiss: true })
+src/renderer/src/pages\modules\librarySelectArea\useRekordboxSourceIcons.ts:871:    emitter.emit('renderer-progressSet', { id: progressId, dismiss: true })
+src/renderer/src/utils\rekordboxDesktopWriteAvailability.ts:1:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\BottomInfoAreaTotalRow.vue:131:  emitter.emit('songsArea/focus-song', {
+src/renderer/src/pages\modules\librarySelectArea\useLibraryBatchActions.ts:3:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\librarySelectArea\useLibraryBatchActions.ts:4:import rightClickMenu from '@renderer/components/rightClickMenu'
+src/renderer/src/pages\modules\librarySelectArea\useLibraryBatchActions.ts:22:import { collectSongsForSimilarBatch } from '@renderer/components/libraryItem/libraryContextMenuHelpers'
+src/renderer/src/pages\modules\librarySelectArea\useLibraryBatchActions.ts:23:import { openBatchSimilarTracksDialogForSeeds } from '@renderer/utils/similarTracksActions'
+src/renderer/src/pages\modules\librarySelectArea\useLibraryBatchActions.ts:161:      await import('@renderer/components/autoMetadataSummaryDialog')
+src/renderer/src/pages\modules\librarySelectArea\useLibraryBatchActions.ts:172:        emitter.emit('metadataBatchUpdated', { updates })
+src/renderer/src/utils\rekordboxDesktopPlaylist.ts:1:import choiceDialog from '@renderer/components/choiceDialog'
+src/renderer/src/utils\rekordboxDesktopPlaylist.ts:2:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/utils\rekordboxDesktopPlaylist.ts:3:import rekordboxDesktopTargetDialog from '@renderer/components/rekordboxDesktopTargetDialog'
+src/renderer/src/pages\modules\librarySelectArea\useExternalDjSourceIcons.ts:3:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\librarySelectArea\useExternalDjSourceIcons.ts:253:        emitter.emit('dj-library:refresh-selected-playlist', {
+src/renderer/src/utils\rekordboxPlaylistSetDuration.ts:1:import openSetDurationDialog from '@renderer/components/setDurationDialog'
+src/renderer/src/pages\modules\bottomInfoArea.vue:3:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\bottomInfoArea.vue:403:emitter.on('renderer-progressSet', handleRendererProgressSet)
+src/renderer/src/pages\modules\bottomInfoArea.vue:549:      await import('@renderer/components/libraryStemSeparationDialog')
+src/renderer/src/pages\modules\bottomInfoArea.vue:673:  const openImportSummary = (await import('@renderer/components/importFinishedSummaryDialog'))
+src/renderer/src/pages\modules\bottomInfoArea.vue:677:      importSummary as unknown as import('@renderer/components/importFinishedSummaryDialog').ImportSummary
+src/renderer/src/pages\modules\bottomInfoArea.vue:696:    await import('@renderer/components/addSongFingerprintFinishedDialog')
+src/renderer/src/pages\modules\bottomInfoArea.vue:700:      fingerprintSummary as unknown as import('@renderer/components/addSongFingerprintFinishedDialog').FingerprintSummary
+src/renderer/src/pages\modules\bottomInfoArea.vue:717:  const openImportSummary = (await import('@renderer/components/importFinishedSummaryDialog'))
+src/renderer/src/pages\modules\bottomInfoArea.vue:721:      summary as unknown as import('@renderer/components/importFinishedSummaryDialog').ImportSummary
+src/renderer/src/pages\modules\bottomInfoArea.vue:768:  const openSummary = (await import('@renderer/components/conversionFinishedSummaryDialog')).default
+src/renderer/src/pages\homePage.vue:15:import dropIntoDialog from '../components/dropIntoDialog'
+src/renderer/src/pages\homePage.vue:18:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\homePage.vue:463:    emitter.emit('waveform-preview:stop', { reason: 'switch' })
+src/renderer/src/pages\modules\libraryArea.vue:7:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\libraryArea.vue:8:import rightClickMenu from '../../components/rightClickMenu'
+src/renderer/src/pages\modules\libraryArea.vue:12:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/pages\modules\libraryArea.vue:80:  emitter.emit('welcome:playlist-created', { uuid })
+src/renderer/src/pages\modules\libraryArea.vue:128:  emitter.on('welcome:create-playlist', handleWelcomeCreatePlaylist)
+src/renderer/src/pages\modules\libraryArea.vue:322:  emitter.emit('collapseButtonHandleClick', libraryData.value.dirName)
+src/renderer/src/utils\rekordboxXmlExport.ts:1:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/utils\rekordboxXmlExport.ts:2:import openRekordboxXmlExportDialog from '@renderer/components/rekordboxXmlExportDialog'
+src/renderer/src/utils\rekordboxTrackStorage.ts:1:import rekordboxDesktopStorageDirDialog from '@renderer/components/rekordboxDesktopStorageDirDialog'
+src/renderer/src/pages\modules\songsArea\SongListRows\useWaveformPreview.ts:303:    emitter.emit('waveform-preview:play', {
+src/renderer/src/pages\modules\songsArea\SongListRows\useWaveformPreview.ts:324:    emitter.emit('waveform-preview:stop', { reason: 'explicit' })
+src/renderer/src/pages\modules\songsArea\SongListRows\useWaveformPreview.ts:1048:  emitter.on('waveform-preview:state', handleWaveformPreviewState)
+src/renderer/src/pages\modules\songsArea\SongListRows\useWaveformPreview.ts:1049:  emitter.on('waveform-preview:progress', handleWaveformPreviewProgress)
+src/renderer/src/utils\similarTracksActions.ts:1:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/utils\similarTracksActions.ts:139:    await import('@renderer/components/batchSimilarTracksDialog')
+src/renderer/src/pages\modules\songsArea\SongListRows\useWaveformPreview.spec.ts:332:    emitter.emit('waveform-preview:progress', { filePath: pathFor(2), percent: 0.4 })
+src/renderer/src/utils\trackReanalysis.ts:1:import openTrackReanalysisDialog, {
+src/renderer/src/pages\modules\songsArea\composables\useWaveformPreviewPlayer.ts:213:    emitter.emit('waveform-preview:state', {
+src/renderer/src/pages\modules\songsArea\composables\useWaveformPreviewPlayer.ts:250:    emitter.emit('waveform-preview:progress', {
+src/renderer/src/pages\modules\songsArea\composables\useWaveformPreviewPlayer.ts:325:    emitter.emit('waveform-preview:pause-main', {
+src/renderer/src/pages\modules\songsArea\composables\useWaveformPreviewPlayer.ts:389:      emitter.emit('waveform-preview:resume-main')
+src/renderer/src/pages\modules\songsArea\composables\useWaveformPreviewPlayer.ts:689:    emitter.on('waveform-preview:play', handlePreviewPlay)
+src/renderer/src/pages\modules\songsArea\composables\useWaveformPreviewPlayer.ts:690:    emitter.on('waveform-preview:stop', handlePreviewStop)
+src/renderer/src/pages\modules\songsArea\composables\useWaveformPreviewPlayer.ts:691:    emitter.on(MAIN_WINDOW_VOLUME_CHANGED_EVENT, handleMainWindowVolumeChanged)
+src/renderer/src/pages\modules\songsArea\composables\useSongsAreaPlaybackMembership.spec.ts:158:      emitter.emit(event, { listUUID: state.songListUUID, paths: [hiddenSong.filePath] })
+src/renderer/src/pages\modules\songsArea\composables\useSongMoveTransaction.ts:61:      emitter.emit('songsArea/optimistic-remove', {
+src/renderer/src/pages\modules\songsArea\composables\useSongMoveTransaction.ts:83:      emitter.emit('songsArea/optimistic-remove', {
+src/renderer/src/pages\modules\songsArea\composables\useSongMoveTransaction.ts:98:        emitter.emit('songsArea/optimistic-restore', {
+src/renderer/src/pages\modules\songsArea\composables\useSongsLoader.ts:203:  emitter.on('songsArea/optimistic-remove', onSongsOptimisticallyRemoved)
+src/renderer/src/pages\modules\songsArea\composables\useSongsLoader.ts:204:  emitter.on('songsArea/optimistic-restore', onSongsOptimisticallyRestored)
+src/renderer/src/pages\modules\songsArea\composables\useSongsLoader.ts:267:      emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/pages\modules\songsArea\composables\useSongsLoader.ts:455:      emitter.emit('playlistContentChanged', { uuids: [ticket.songListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSongsLoader.ts:522:          emitter.emit('playlistContentChanged', { uuids: [songListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useGlobalSearchFocus.ts:207:  emitter.on('songsArea/focus-song', handleFocusSongRequest)
+src/renderer/src/pages\modules\songsArea\composables\useSongsAreaEvents.ts:129:    emitter.emit('waveform-preview:stop', {
+src/renderer/src/pages\modules\songsArea\composables\useSongsAreaEvents.ts:845:          emitter.emit('playlistContentChanged', { uuids: [songListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSongsAreaEvents.ts:857:      emitter.emit('playlistContentChanged', { uuids: [songListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSongsAreaEvents.ts:868:          emitter.emit('playlistContentChanged', { uuids: [listUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSongsAreaEvents.ts:874:      emitter.emit('playlistContentChanged', { uuids: [listUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSongsAreaEvents.ts:950:    emitter.on('songsArea/optimistic-remove', onSongsOptimisticallyRemoved)
+src/renderer/src/pages\modules\songsArea\composables\useSongsAreaEvents.ts:951:    emitter.on('songsArea/optimistic-restore', onSongsOptimisticallyRestored)
+src/renderer/src/pages\modules\songsArea\composables\useSongsAreaEvents.ts:952:    emitter.on('songsArea/sync-fields', onSongsFieldsPatched)
+src/renderer/src/pages\modules\songsArea\composables\useSongsAreaEvents.ts:953:    emitter.on('songsRemoved', onSongsRemoved)
+src/renderer/src/pages\modules\songsArea\composables\useSongsAreaEvents.ts:954:    emitter.on('songsMovedByDrag', onSongsMovedByDrag)
+src/renderer/src/pages\modules\songsArea\composables\useSongsAreaEvents.ts:955:    emitter.on('external-playlist/refresh', onExternalPlaylistRefresh)
+src/renderer/src/pages\modules\songsArea\composables\useSongsAreaEvents.ts:967:    emitter.on(RECORDING_LIBRARY_CHANGED_EVENT, onRecordingLibraryChanged)
+src/renderer/src/pages\modules\songsArea\composables\useSongsAreaEvents.ts:968:    emitter.on('setList/itemsChanged', onSetListItemsChanged)
+src/renderer/src/pages\modules\songsArea\composables\useSongsAreaEvents.ts:969:    emitter.on('songsArea/reload-if-current', onReloadCurrentSongList)
+src/renderer/src/pages\modules\songsArea\composables\useSongsAreaDragAndDrop.ts:5:import dropIntoDialog from '@renderer/components/dropIntoDialog'
+src/renderer/src/pages\modules\songsArea\composables\useDragSongs.ts:86:      emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/pages\modules\songsArea\composables\useDragSongs.ts:270:          emitter.emit('playlistContentChanged', { uuids: [targetSongListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useDragSongs.ts:271:          emitter.emit('setList/itemsChanged', { uuids: [targetSongListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useDragSongs.ts:354:            emitter.emit('playlistContentChanged', { uuids: [targetSongListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useDragSongs.ts:356:              emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/pages\modules\songsArea\composables\useDragSongs.ts:427:        emitter.emit('playlistContentChanged', { uuids: affected })
+src/renderer/src/pages\modules\songsArea\composables\useDragSongs.ts:435:        emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:3:import { ISongInfo, IMenu, type IMetadataAutoFillSummary } from '../../../../../../types/globals' // Corrected path
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:5:import rightClickMenu from '@renderer/components/rightClickMenu' // Assuming it's a default export or easily callable
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:6:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:11:import exportDialog from '@renderer/components/exportDialog'
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:15:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:23:import choiceDialog from '@renderer/components/choiceDialog'
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:328:        emitter.emit('waveform-preview:stop', { reason: 'switch' })
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:345:          emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:352:          emitter.emit('playlistContentChanged', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:367:          await import('@renderer/components/editMetadataDialog')
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:417:          await import('@renderer/components/autoMetadataSummaryDialog')
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:458:          await import('@renderer/components/libraryStemSeparationDialog')
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:469:          await import('@renderer/components/batchSimilarTracksDialog')
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:505:          emitter.emit('playlistContentChanged', { uuids: [sourceSongListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:506:          emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:541:        emitter.emit('songsArea/optimistic-remove', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:566:            emitter.emit('songsArea/optimistic-restore', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:578:            emitter.emit('songsArea/optimistic-restore', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:599:          emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:603:          emitter.emit('playlistContentChanged', { uuids: [sourceSongListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:623:            emitter.emit('playlistContentChanged', { uuids: [songsAreaState.songListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:624:            emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:644:            emitter.emit('playlistContentChanged', { uuids: [songsAreaState.songListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:645:            emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:673:            emitter.emit('songsArea/optimistic-remove', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:696:                emitter.emit('songsArea/optimistic-restore', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:708:                emitter.emit('songsArea/optimistic-restore', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:726:              emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:730:              emitter.emit('playlistContentChanged', { uuids: [songsAreaState.songListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:863:              emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:867:              emitter.emit('playlistContentChanged', { uuids: [songsAreaState.songListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:886:            emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:890:            emitter.emit('playlistContentChanged', { uuids: [songsAreaState.songListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:942:              emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:946:              emitter.emit('playlistContentChanged', { uuids: [songsAreaState.songListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:964:            emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:968:            emitter.emit('playlistContentChanged', { uuids: [songsAreaState.songListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:1024:            emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:1028:            emitter.emit('playlistContentChanged', { uuids: [songsAreaState.songListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:1047:            emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useSongItemContextMenu.ts:1051:            emitter.emit('playlistContentChanged', { uuids: [songsAreaState.songListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSelectAndMoveSongs.ts:111:      emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/pages\modules\songsArea\composables\useSelectAndMoveSongs.ts:209:        emitter.emit('playlistContentChanged', { uuids: [targetSongListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSelectAndMoveSongs.ts:210:        emitter.emit('setList/itemsChanged', { uuids: [targetSongListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSelectAndMoveSongs.ts:211:        emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/pages\modules\songsArea\composables\useSelectAndMoveSongs.ts:306:        emitter.emit('playlistContentChanged', { uuids: [targetSongListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSelectAndMoveSongs.ts:307:        emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/pages\modules\songsArea\composables\useSelectAndMoveSongs.ts:351:        emitter.emit('playlistContentChanged', { uuids: [targetSongListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useSelectAndMoveSongs.ts:352:        emitter.emit('songsArea/clipboardHint', { action: 'copy' })
+src/renderer/src/pages\modules\songsArea\composables\useSelectAndMoveSongs.ts:400:    emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useSelectAndMoveSongs.ts:410:      emitter.emit('playlistContentChanged', { uuids: affected })
+src/renderer/src/pages\modules\songsArea\composables\useAutoScrollToCurrent.ts:2:import type { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/pages\modules\songsArea\composables\usePlaylistTrackNumbers.ts:2:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\songsArea\composables\usePlaylistTrackNumbers.ts:179:        emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/pages\modules\songsArea\composables\usePlaylistTrackNumbers.ts:206:        emitter.emit('playlistContentChanged', { uuids: [songsAreaState.songListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\usePlaylistTrackNumbers.ts:207:        emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/pages\modules\songsArea\SongListHeader.vue:7:import filterDialog from '@renderer/components/filterDialog.vue'
+src/renderer/src/pages\modules\songsArea\composables\songTransferIpc.spec.ts:101:      emitter.on('playlistContentChanged', changed)
+src/renderer/src/pages\modules\songsArea\ColumnHeaderContextMenu.vue:4:import SongAreaColRightClickMenu from '@renderer/components/songAreaColRightClickMenu.vue'
+src/renderer/src/pages\modules\songsArea\SongListRows\useCoverThumbnails.ts:543:    emitter.on('songMetadataUpdated', handleSongMetadataUpdated)
+src/renderer/src/pages\modules\songsArea\composables\usePlaylistCountConsistency.spec.ts:118:    emitter.emit('playlistContentChanged', { uuids: [UUID] })
+src/renderer/src/pages\modules\songsArea\composables\usePlaylistCountConsistency.spec.ts:162:    emitter.emit('playlistContentChanged', { uuids: [UUID] })
+src/renderer/src/pages\modules\songsArea\SongListRows\useCoverThumbnails.spec.ts:215:    emitter.emit('songMetadataUpdated', { filePath: pathFor(0) })
+src/renderer/src/pages\modules\songsArea\SongListRows\useCoverThumbnails.spec.ts:228:    emitter.emit('songMetadataUpdated', { oldFilePath: pathFor(0), filePath: pathFor(1) })
+src/renderer/src/components\cloudSyncSyncDialog.vue:8:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\analysisBpmRangeDialog.ts:3:import AnalysisBpmRangeDialog from './analysisBpmRangeDialog.vue'
+src/renderer/src/components\cloudSyncSummaryDialog.vue:4:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/pages\modules\songsArea\composables\songItemContextMenuSummaries.ts:2:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\analysisBpmRangeDialog.vue:6:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\addSongFingerprintFinishedDialog.vue:3:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\audioConvertDialog.ts:2:import AudioConvertDialogVue from './audioConvertDialog.vue'
+src/renderer/src/components\cloudSyncSettingsDialog.vue:3:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\cloudSyncSettingsDialog.vue:13:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\cloudSyncSettingsDialog.vue:14:import dangerConfirmWithInput from '@renderer/components/dangerConfirmWithInputDialog'
+src/renderer/src/components\cloudSyncSettingsDialog.vue:15:import CuratedLibrarySyncSettings from '@renderer/components/settingDialog/CuratedLibrarySyncSettings.vue'
+src/renderer/src/components\cloudSyncSettingsDialog.vue:16:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/pages\modules\songsArea\composables\songItemContextMenuMenus.ts:5:import { createMusicSearchMenuItems } from '@renderer/utils/musicSearch'
+src/renderer/src/pages\modules\songsArea\composables\songItemContextMenuMenus.ts:6:import type { IMenu } from '../../../../../../types/globals'
+src/renderer/src/pages\modules\songsArea\composables\useParentRafSampler.ts:2:import type { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\batchSimilarTracksDialog.vue:4:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\batchSimilarTracksDialog.vue:7:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\batchSimilarTracksDialog.vue:8:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\BaseSelect.vue:79:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\autoMetadataSummaryDialog.vue:5:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\choiceDialog.vue:6:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\addSongFingerprintFinishedDialog.ts:2:import AddSongFingerprintFinishedDialog from './addSongFingerprintFinishedDialog.vue'
+src/renderer/src/pages\modules\songsArea\composables\useKeyboardSelection.ts:3:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\songsArea\composables\useKeyboardSelection.ts:112:      emitter.emit('waveform-preview:stop', { reason: 'switch' })
+src/renderer/src/pages\modules\songsArea\composables\useKeyboardSelection.ts:239:        emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useKeyboardSelection.ts:244:          emitter.emit('playlistContentChanged', { uuids: [pendingCutListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useKeyboardSelection.ts:276:      emitter.emit('songsArea/clipboardHint', { action: operation })
+src/renderer/src/pages\modules\songsArea\composables\useKeyboardSelection.ts:300:      emitter.emit('playlistContentChanged', { uuids: [activeSongsAreaState.songListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useKeyboardSelection.ts:301:      emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useKeyboardSelection.ts:323:      emitter.emit('playlistContentChanged', { uuids: [activeSongsAreaState.songListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useKeyboardSelection.ts:324:      emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useKeyboardSelection.ts:405:      emitter.emit('songsArea/optimistic-remove', {
+src/renderer/src/pages\modules\songsArea\composables\useKeyboardSelection.ts:437:          emitter.emit('songsArea/optimistic-restore', {
+src/renderer/src/pages\modules\songsArea\composables\useKeyboardSelection.ts:449:          emitter.emit('songsArea/optimistic-restore', {
+src/renderer/src/pages\modules\songsArea\composables\useKeyboardSelection.ts:467:        emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songsArea\composables\useKeyboardSelection.ts:475:          emitter.emit('playlistContentChanged', { uuids: [activeSongsAreaState.songListUUID] })
+src/renderer/src/pages\modules\songsArea\composables\useKeyboardSelection.ts:560:    emitter.on('waveform-preview:state', handleWaveformPreviewState)
+src/renderer/src/components\batchSimilarTracksDialog.ts:2:import BatchSimilarTracksDialog from './batchSimilarTracksDialog.vue'
+src/renderer/src/components\choiceDialog.ts:2:import ChoiceDialog from './choiceDialog.vue'
+src/renderer/src/components\autoMetadataSummaryDialog.ts:2:import AutoMetadataSummaryDialog from './autoMetadataSummaryDialog.vue'
+src/renderer/src/components\audioConvertDialog.vue:3:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\audioConvertDialog.vue:15:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\audioConvertDialog.vue:16:import type { ConvertOptions, StandaloneConvertPayload } from './audioConvertDialog.types'
+src/renderer/src/components\BpmFixDialog.vue:7:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\HorizontalBrowseAudioEditChrome.vue:2:import HorizontalBrowseAudioEditSaveDialog from '@renderer/components/HorizontalBrowseAudioEditSaveDialog.vue'
+src/renderer/src/components\HorizontalBrowseAudioEditChrome.vue:3:import HorizontalBrowseAudioEditLeaveDialog from '@renderer/components/HorizontalBrowseAudioEditLeaveDialog.vue'
+src/renderer/src/components\HorizontalBrowseWaveformOverview.vue:37:import type { HorizontalBrowsePlaybackRangeOverlay } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseEditPlaybackRange'
+src/renderer/src/components\globalSongSearchDialog.vue:8:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\HorizontalBrowseDeckOverviewSection.vue:10:import type { HorizontalBrowsePlaybackRangeOverlay } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseEditPlaybackRange'
+src/renderer/src/components\HorizontalBrowseRawWaveformDetail.vue:40:import { useHorizontalBrowseRawWaveformAudioEditOverlay } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseRawWaveformAudioEditOverlay'
+src/renderer/src/components\globalCallShortcutDialog.vue:8:import confirmDialog from '@renderer/components/confirmDialog'
+src/renderer/src/components\globalCallShortcutDialog.vue:9:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\HorizontalBrowseModeShell.vue:7:import HorizontalBrowseDeckMoveDialog from '@renderer/components/HorizontalBrowseDeckMoveDialog.vue'
+src/renderer/src/components\HorizontalBrowseModeShell.vue:943:  emitter.on(MAIN_WINDOW_PLAYBACK_SNAPSHOT_REQUEST_EVENT, handleMainWindowPlaybackSnapshotRequest)
+src/renderer/src/components\HorizontalBrowseModeShell.vue:944:  emitter.on('horizontalBrowse/load-song', handleExternalDeckSongLoad)
+src/renderer/src/components\HorizontalBrowseModeShell.vue:945:  emitter.on('songsRemoved', handleSongsRemoved)
+src/renderer/src/components\HorizontalBrowseModeShell.vue:946:  emitter.on('horizontalBrowse/shared-grid-batch-updated', handleSharedGridBatchUpdated)
+src/renderer/src/components\HorizontalBrowseDeckMoveDialog.vue:2:import selectSongListDialog from '@renderer/components/selectSongListDialog.vue'
+src/renderer/src/composables\horizontalBrowse\horizontalBrowseModeShellPresentationResolvers.ts:8:import { formatPreviewBpm } from '@renderer/components/MixtapeBeatAlignDialog.constants'
+src/renderer/src/components\globalCallShortcutDialog.ts:2:import globalCallShortcutDialog from './globalCallShortcutDialog.vue'
+src/renderer/src/components\filterDialog.vue:7:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\dangerConfirmWithInputDialog.vue:7:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\HorizontalBrowseAudioEditSaveDialog.vue:7:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\fileOpInterruptedDialog.vue:4:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\dangerConfirmWithInputDialog.ts:2:import DangerConfirm from './dangerConfirmWithInputDialog.vue'
+src/renderer/src/components\HorizontalBrowseAudioEditLeaveDialog.vue:7:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\externalLibraryTargetDialog.vue:3:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\externalLibraryTargetDialog.vue:4:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\externalLibraryTargetDialog.vue:26:import openRekordboxDesktopCreateNodeDialog from './rekordboxDesktopCreateNodeDialog'
+src/renderer/src/components\externalLibraryTargetDialog.vue:27:import rightClickMenu from './rightClickMenu'
+src/renderer/src/components\externalLibraryTargetDialog.vue:28:import confirmDialog from './confirmDialog'
+src/renderer/src/components\externalLibraryTargetDialog.vue:37:import './rekordboxDesktopTargetDialog.scss'
+src/renderer/src/components\externalLibraryTargetDialog.ts:3:import ExternalLibraryTargetDialog from './externalLibraryTargetDialog.vue'
+src/renderer/src/components\LibraryMergeDialog.vue:6:import confirmDialog from '@renderer/components/confirmDialog'
+src/renderer/src/components\LibraryMergeDialog.vue:7:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\importSongFingerprintDialog.vue:6:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\importSongFingerprintDialog.vue:9:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\horizontalBrowseModeShellWaveformStackTypes.ts:21:import type { HorizontalBrowsePlaybackRangeOverlay } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseEditPlaybackRange'
+src/renderer/src/components\exportSongFingerprintDialog.vue:8:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\importFinishedSummaryDialog.vue:4:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/composables\mixtape\timelineWatchAndMount.ts:2:import type { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\exportDialog.vue:9:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\importFinishedSummaryDialog.ts:2:import ImportFinishedSummaryDialog from './importFinishedSummaryDialog.vue'
+src/renderer/src/components\inputDialog.ts:2:import InputDialog from './InputDialog.vue'
+src/renderer/src/components\ImportTracksDialogBase.vue:7:import selectSongListDialog from './selectSongListDialog.vue'
+src/renderer/src/components\ImportTracksDialogBase.vue:11:import customFileSelector from './customFileSelector/customFileSelector.vue'
+src/renderer/src/components\ImportTracksDialogBase.vue:16:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\exportDialog.ts:2:import exportDialog from './exportDialog.vue'
+src/renderer/src/components\InputDialog.vue:3:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\libraryItem\index.vue:9:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\libraryItem\index.vue:18:import { useLibraryContextMenu } from './useLibraryContextMenu'
+src/renderer/src/components\libraryItem\index.vue:278:emitter.on('collapseButtonHandleClick', handleCollapseButtonClick)
+src/renderer/src/components\libraryItem\handleRekordboxXmlPlaylistExport.ts:1:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\libraryItem\handleRekordboxXmlPlaylistExport.ts:11:import { loadSetPlaylistSongs } from './libraryContextMenuHelpers'
+src/renderer/src/components\libraryItem\handleRekordboxXmlPlaylistExport.ts:60:        emitter.emit('songsRemoved', {
+src/renderer/src/components\libraryItem\handleRekordboxXmlPlaylistExport.ts:80:          emitter.emit('playlistContentChanged', { uuids: [props.uuid] })
+src/renderer/src/components\libraryItem\handleRekordboxXmlPlaylistExport.ts:116:        emitter.emit('playlistContentChanged', { uuids: [props.uuid] })
+src/renderer/src/composables\mixtape\useMixtapeBpmAndUiModule.ts:1:import { resolveContextMenuPoint } from '@renderer/utils/contextMenuPosition'
+src/renderer/src/composables\mixtape\useMixtapeBpmAndUiModule.ts:2:import type ConfirmDialog from '@renderer/components/confirmDialog'
+src/renderer/src/components\libraryItem\libraryContextMenuHelpers.ts:6:import type { IBatchRenameTrackInput, IDir, IMenu, ISongInfo } from 'src/types/globals'
+src/renderer/src/components\mixtape\MixtapeTrackLoopOverlay.vue:5:import type { TrackLoopOverlayViewModel } from '@renderer/composables/mixtape/useMixtapeTrackLoopEditor'
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:2:import rightClickMenu from '@renderer/components/rightClickMenu'
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:4:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:5:import scanNewSongDialog from '@renderer/components/scanNewSongDialog'
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:6:import exportDialog from '@renderer/components/exportDialog'
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:46:import type { IDir, IMenu, IMetadataAutoFillSummary } from '../../../../types/globals'
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:392:            emitter.emit('playlistContentChanged', { uuids: setListUuids })
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:419:            emitter.emit('playlistContentChanged', { uuids: operateUuids })
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:500:                emitter.emit('songsRemoved', {
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:520:                  emitter.emit('playlistContentChanged', { uuids: [...removedByUuid.keys()] })
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:542:              emitter.emit('playlistContentChanged', { uuids: [uuid] })
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:585:              emitter.emit('songsRemoved', {
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:609:                emitter.emit('playlistContentChanged', { uuids: [props.uuid] })
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:632:                emitter.emit('playlistContentChanged', { uuids: [props.uuid] })
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:646:              emitter.emit('playlistContentChanged', { uuids: [props.uuid] })
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:673:          await import('@renderer/components/setDurationDialog')
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:727:          await import('@renderer/components/autoMetadataSummaryDialog')
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:738:            emitter.emit('metadataBatchUpdated', { updates })
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:742:          emitter.emit('playlistContentChanged', { uuids: refreshUuids })
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:840:          await import('@renderer/components/batchSimilarTracksDialog')
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:899:              emitter.emit('songsRemoved', { listUUID: uuid, paths: removedNormalized })
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:902:              emitter.emit('playlistContentChanged', { uuids: [uuid] })
+src/renderer/src/components\libraryItem\useLibraryContextMenu.ts:1040:          emitter.emit('playlistContentChanged', { uuids: refreshUuids })
+src/renderer/src/composables\mixtape\useMixtapeAutoGainDialog.ts:84:  emitter.emit('waveform-preview:stop', { reason: 'explicit' })
+src/renderer/src/components\libraryItem\useLibraryDragAndDrop.ts:245:        emitter.emit('songsMovedByDrag', {
+src/renderer/src/components\editMetadataDialog\useEditMetadataDialog.ts:6:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\editMetadataDialog\useEditMetadataDialog.ts:7:import showMusicBrainzDialog, { MusicBrainzDialogInitialQuery } from '../musicBrainzDialog'
+src/renderer/src/components\customFileSelector\customFileSelector.vue:9:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\customFileSelector\customFileSelector.vue:13:import { useCustomFileSelector } from './useCustomFileSelector'
+src/renderer/src/components\libraryItem\useLibraryTrackCount.ts:97:  emitter.on('playlistContentChanged', handlePlaylistContentChanged)
+src/renderer/src/components\curatedLibrarySyncJoinDialog.vue:6:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\manualAddSongFingerprintDialog.vue:9:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\editMetadataDialog\index.ts:2:import editMetadataDialog from './EditMetadataDialog.vue'
+src/renderer/src/components\libraryItem\useLibraryItemEditing.ts:239:  emitter.on('libraryArea/trigger-rename', handleTriggerRename)
+src/renderer/src/components\libraryStemSeparationDialog.vue:7:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\libraryStemSeparationDialog.vue:11:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\libraryStemSeparationDialog.vue:425:      await import('./demucsUltraModelDownloadDialog')
+src/renderer/src/components\editMetadataDialog\EditMetadataDialog.vue:2:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\editMetadataDialog\EditMetadataDialog.vue:5:import { useEditMetadataDialog } from './useEditMetadataDialog'
+src/renderer/src/components\editMetadataDialog\EditMetadataDialog.vue:7:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\curatedLibrarySyncJoinDialog.ts:2:import JoinDialog from './curatedLibrarySyncJoinDialog.vue'
+src/renderer/src/components\libraryStemSeparationDialog.ts:5:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\libraryStemSeparationDialog.ts:8:import LibraryStemSeparationDialog from './libraryStemSeparationDialog.vue'
+src/renderer/src/components\curatedLibrarySyncDialog.vue:7:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\dropIntoDialog.ts:2:import ImportTracksDialogBase from './ImportTracksDialogBase.vue'
+src/renderer/src/components\curatedArtistLibraryDialog.vue:11:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\curatedArtistLibraryDialog.vue:17:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\curatedArtistLibraryDialog.vue:18:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\rekordboxDesktopStorageDirDialog.ts:3:import RekordboxDesktopStorageDirDialog from './rekordboxDesktopStorageDirDialog.vue'
+src/renderer/src/components\dialogLibraryItem\index.vue:12:import rightClickMenu from '@renderer/components/rightClickMenu'
+src/renderer/src/components\dialogLibraryItem\index.vue:13:import dialogLibraryItem from '@renderer/components/dialogLibraryItem/index.vue'
+src/renderer/src/components\dialogLibraryItem\index.vue:20:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\dialogLibraryItem\index.vue:46:import type { IDir, IMenu } from '../../../../types/globals'
+src/renderer/src/components\dialogLibraryItem\index.vue:392:emitter.on('collapseButtonHandleClick', handleCollapseButtonClick)
+src/renderer/src/components\dialogLibraryItem\index.vue:503:emitter.on('dialog/trigger-rename', handleDialogTriggerRename)
+src/renderer/src/components\dialogLibraryItem\index.vue:636:emitter.on('playlistContentChanged', handlePlaylistContentChanged)
+src/renderer/src/components\rekordboxDesktopCreateNodeDialog.vue:3:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\curatedArtistLibraryDialog.ts:2:import CuratedArtistLibraryDialog from './curatedArtistLibraryDialog.vue'
+src/renderer/src/components\mixtapeBeatAlignPreviewState.ts:13:import { clampNumber } from '@renderer/components/MixtapeBeatAlignDialog.constants'
+src/renderer/src/components\demucsUltraModelDownloadDialog.vue:7:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/pages\modules\songPlayer\webAudioPlayer.ts:95:    this.emitter.on(event, handler)
+src/renderer/src/pages\modules\songPlayer\webAudioPlayer.ts:119:    this.emitter.emit(event, payload as WebAudioPlayerEvents[K])
+src/renderer/src/components\conversionFinishedSummaryDialog.vue:3:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\MixtapeBeatAlignDialog.vue:7:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\rekordboxDesktopCreateNodeDialog.ts:3:import RekordboxDesktopCreateNodeDialog from './rekordboxDesktopCreateNodeDialog.vue'
+src/renderer/src/components\demucsUltraModelDownloadDialog.ts:3:import DemucsUltraModelDownloadDialog from './demucsUltraModelDownloadDialog.vue'
+src/renderer/src/components\conversionFinishedSummaryDialog.ts:2:import Dialog from './conversionFinishedSummaryDialog.vue'
+src/renderer/src/composables\mixtape\useMixtapeTimeline.ts:3:import type { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\MixtapeDialogsLayer.vue:3:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\MixtapeDialogsLayer.vue:4:import MixtapeOutputDialog from '@renderer/components/mixtapeOutputDialog.vue'
+src/renderer/src/components\MixtapeDialogsLayer.vue:5:import MixtapeBeatAlignDialog from '@renderer/components/MixtapeBeatAlignDialog.vue'
+src/renderer/src/components\MixtapeDialogsLayer.vue:6:import ColumnHeaderContextMenu from '@renderer/pages/modules/songsArea/ColumnHeaderContextMenu.vue'
+src/renderer/src/components\mixtapeOutputDialog.vue:4:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\confirmDialog.vue:4:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\confirmDialog.vue:9:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/composables\mixtape\useMixtapeStemRuntimeModule.ts:19:type ConfirmDialogFn = typeof import('@renderer/components/confirmDialog').default
+src/renderer/src/components\playerGlobalShortcutDialog.ts:2:import playerGlobalShortcutDialog from './playerGlobalShortcutDialog.vue'
+src/renderer/src/components\confirmDialog.ts:2:import confirmDialog from './confirmDialog.vue'
+src/renderer/src/components\playerControls.vue:15:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\playerControls.vue:247:    emitter.emit('songsRemoved', {
+src/renderer/src/components\playerControls.vue:251:    emitter.emit('playlistContentChanged', { uuids: [sourceListUuid] })
+src/renderer/src/components\playerControls.vue:277:    emitter.emit('songsRemoved', {
+src/renderer/src/components\playerControls.vue:281:    emitter.emit('playlistContentChanged', { uuids: [sourceListUuid] })
+src/renderer/src/components\playerControls.vue:325:    await import('@renderer/components/batchSimilarTracksDialog')
+src/renderer/src/components\playerControls.vue:370:    await import('@renderer/components/autoMetadataSummaryDialog')
+src/renderer/src/components\playerControls.vue:395:    emitter.emit('metadataBatchUpdated', { updates })
+src/renderer/src/components\playerControls.vue:418:    await import('@renderer/components/editMetadataDialog')
+src/renderer/src/components\playerControls.vue:450:    await import('@renderer/components/libraryStemSeparationDialog')
+src/renderer/src/composables\horizontalBrowse\horizontalBrowseRawWaveformDraw.ts:3:import { PREVIEW_MAX_SAMPLES_PER_PIXEL } from '@renderer/components/MixtapeBeatAlignDialog.constants'
+src/renderer/src/components\playlistBatchRename\index.ts:3:import PlaylistBatchRenameDialog from './PlaylistBatchRenameDialog.vue'
+src/renderer/src/components\playlistBatchRename\index.ts:4:import openPreviewDialog from './previewDialog'
+src/renderer/src/components\musicBrainzDialog\MusicBrainzDialog.vue:4:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\musicBrainzDialog\MusicBrainzDialog.vue:9:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\musicBrainzDialog\index.ts:2:import musicBrainzDialog from './MusicBrainzDialog.vue'
+src/renderer/src/components\playlistBatchRename\presetManagerDialog.ts:3:import PresetManagerDialog from './PresetManagerDialog.vue'
+src/renderer/src/components\playlistBatchRename\PlaylistBatchRenameDialog.vue:3:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\playlistBatchRename\PlaylistBatchRenameDialog.vue:6:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\playlistBatchRename\PlaylistBatchRenameDialog.vue:9:import openPresetManagerDialog from './presetManagerDialog'
+src/renderer/src/components\playlistBatchRename\PlaylistBatchRenameDialog.vue:10:import { usePlaylistBatchRenameDialog } from './usePlaylistBatchRenameDialog'
+src/renderer/src/components\playerGlobalShortcutDialog.vue:8:import confirmDialog from '@renderer/components/confirmDialog'
+src/renderer/src/components\playerGlobalShortcutDialog.vue:15:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\playlistBatchRename\PreviewDialog.vue:3:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\playlistBatchRename\PreviewDialog.vue:4:import choiceDialog from '@renderer/components/choiceDialog'
+src/renderer/src/components\playlistBatchRename\PreviewDialog.vue:5:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\playlistBatchRename\PreviewDialog.vue:8:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\playlistBatchRename\PreviewDialog.vue:16:import openResultDialog from './resultDialog'
+src/renderer/src/components\playlistBatchRename\PreviewDialog.vue:177:      emitter.emit('metadataBatchUpdated', { updates: result.updates })
+src/renderer/src/components\rightClickMenu.vue:9:import { IMenu } from '../../../types/globals'
+src/renderer/src/components\rightClickMenu.vue:10:import { resolveContextMenuPoint } from '@renderer/utils/contextMenuPosition'
+src/renderer/src/pages\modules\songPlayer\useSongLoader.ts:2:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\songPlayer\useSongLoader.ts:168:          emitter.emit('songFileMissing', {
+src/renderer/src/pages\modules\songPlayer\useSongLoader.ts:263:          emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songPlayer\useSongLoader.ts:269:          emitter.emit('playlistContentChanged', { uuids: Array.from(changedPlaylistUuids) })
+src/renderer/src/pages\modules\songPlayer\useSongLoader.ts:459:          emitter.emit('horizontalBrowse/shared-grid-batch-updated', [resolved])
+src/renderer/src/components\playlistBatchRename\PresetManagerDialog.vue:3:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\playlistBatchRename\PresetManagerDialog.vue:6:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\playlistBatchRename\PresetManagerDialog.vue:7:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\playlistBatchRename\PresetManagerDialog.vue:10:import { usePlaylistBatchRenameDialog } from './usePlaylistBatchRenameDialog'
+src/renderer/src/components\playlistBatchRename\previewDialog.ts:3:import PreviewDialog from './PreviewDialog.vue'
+src/renderer/src/components\rightClickMenu.ts:2:import rightClickMenu from './rightClickMenu.vue'
+src/renderer/src/components\rightClickMenu.ts:4:import { IMenu } from 'src/types/globals'
+src/renderer/src/components\rekordboxDesktopTargetDialog.vue:16:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\rekordboxDesktopTargetDialog.vue:17:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\rekordboxDesktopTargetDialog.vue:49:import './rekordboxDesktopTargetDialog.scss'
+src/renderer/src/components\rekordboxDesktopStorageDirDialog.vue:6:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/pages\modules\songPlayer\usePlayerHotkeys.ts:125:    emitter.emit('preview-transfer:open-dialog', payload)
+src/renderer/src/pages\modules\songPlayer\usePlayerHotkeys.ts:254:          emitter.emit('playlistContentChanged', { uuids: [uid] })
+src/renderer/src/pages\modules\songPlayer\usePlayerHotkeys.ts:360:    emitter.on('waveform-preview:state', handleWaveformPreviewState)
+src/renderer/src/components\rekordboxXmlExportDialog.ts:3:import rekordboxXmlExportDialog from './rekordboxXmlExportDialog.vue'
+src/renderer/src/components\rekordboxDesktopTargetDialog.ts:3:import RekordboxDesktopTargetDialog from './rekordboxDesktopTargetDialog.vue'
+src/renderer/src/components\rekordboxXmlExportDialog.vue:6:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/composables\mixtape\useMixtapePageUi.ts:7:import { useMixtapeAutoGainDialog } from '@renderer/composables/mixtape/useMixtapeAutoGainDialog'
+src/renderer/src/components\playlistBatchRename\ResultDialog.vue:3:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\playlistBatchRename\ResultDialog.vue:6:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\playlistBatchRename\resultDialog.ts:3:import ResultDialog from './ResultDialog.vue'
+src/renderer/src/components\selectSongListDialog.vue:14:import rightClickMenu from '@renderer/components/rightClickMenu'
+src/renderer/src/components\selectSongListDialog.vue:15:import dialogLibraryItem from '@renderer/components/dialogLibraryItem/index.vue'
+src/renderer/src/components\selectSongListDialog.vue:28:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\selectSongListDialog.vue:29:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\selectSongListDialog.vue:358:  emitter.emit('collapseButtonHandleClick', libraryData.value.dirName + 'Dialog')
+src/renderer/src/components\selectSongListDialog.vue:503:      if (target) emitter.emit('dialog/trigger-rename', target)
+src/renderer/src/components\settingDialog.vue:19:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\settingDialog.vue:20:import globalCallShortcutDialog from './globalCallShortcutDialog'
+src/renderer/src/components\settingDialog.vue:21:import playerGlobalShortcutDialog from './playerGlobalShortcutDialog'
+src/renderer/src/components\settingDialog.vue:22:import dangerConfirmWithInput from './dangerConfirmWithInputDialog'
+src/renderer/src/components\settingDialog.vue:23:import curatedArtistLibraryDialog from './curatedArtistLibraryDialog'
+src/renderer/src/components\settingDialog.vue:27:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\settingDialog.vue:29:import SettingDialogBody from './settingDialog/SettingDialogBody.vue'
+src/renderer/src/pages\modules\songPlayer\usePlayerDeleteAllAbove.ts:4:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\songPlayer\usePlayerDeleteAllAbove.ts:12:import { showDeleteSummaryIfNeeded } from '@renderer/pages/modules/songsArea/composables/songItemContextMenuSummaries'
+src/renderer/src/pages\modules\songPlayer\usePlayerDeleteAllAbove.ts:125:      emitter.emit('songsArea/optimistic-restore', {
+src/renderer/src/pages\modules\songPlayer\usePlayerDeleteAllAbove.ts:131:      emitter.emit('playlistContentChanged', { uuids: [pending.listUUID] })
+src/renderer/src/pages\modules\songPlayer\usePlayerDeleteAllAbove.ts:224:      emitter.emit('songsArea/optimistic-remove', {
+src/renderer/src/pages\modules\songPlayer\usePlayerDeleteAllAbove.ts:228:      emitter.emit('songsArea/scrollToTop', { listUUID: currentSongListUUID })
+src/renderer/src/pages\modules\songPlayer\usePlayerDeleteAllAbove.ts:296:        emitter.emit('songsArea/optimistic-restore', {
+src/renderer/src/pages\modules\songPlayer\usePlayerDeleteAllAbove.ts:308:          emitter.emit('songsArea/optimistic-restore', {
+src/renderer/src/pages\modules\songPlayer\usePlayerDeleteAllAbove.ts:317:        emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songPlayer\usePlayerDeleteAllAbove.ts:324:      emitter.emit('playlistContentChanged', { uuids: Array.from(changedPlaylistUuids) })
+src/renderer/src/pages\modules\songPlayer\usePlayerDeleteAllAbove.ts:328:        emitter.emit('songsArea/optimistic-restore', {
+src/renderer/src/components\selectSongListDialogNav.spec.ts:31:    const { collectDialogSongLists } = await import('./selectSongListDialogNav')
+src/renderer/src/components\selectSongListDialogNav.spec.ts:57:    const { buildVisibleCombinedNavList } = await import('./selectSongListDialogNav')
+src/renderer/src/components\setDurationDialog.vue:6:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:4:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:5:import exportDialog from '@renderer/components/exportDialog'
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:218:      emitter.emit('waveform-preview:stop', { reason: 'switch' })
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:230:      emitter.emit('waveform-preview:stop', { reason: 'switch' })
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:497:        emitter.emit('songsArea/optimistic-remove', {
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:544:            emitter.emit('songsArea/optimistic-restore', {
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:557:            emitter.emit('songsArea/optimistic-restore', {
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:585:          emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:592:        emitter.emit('playlistContentChanged', { uuids: Array.from(changedPlaylistUuids) })
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:695:      emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:751:        emitter.emit('playlistContentChanged', { uuids: [targetListUuid] })
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:752:        emitter.emit('setList/itemsChanged', { uuids: [targetListUuid] })
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:753:        emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:791:              emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:798:          emitter.emit('playlistContentChanged', { uuids: [targetListUuid] })
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:799:          emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:821:        emitter.emit('playlistContentChanged', { uuids: [targetListUuid] })
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:873:        emitter.emit('songsArea/optimistic-remove', {
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:913:              emitter.emit('songsArea/optimistic-restore', {
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:955:      emitter.emit('playlistContentChanged', {
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:962:        emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:1064:            emitter.emit('songsRemoved', {
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:1069:            emitter.emit('songsRemoved', { listUUID: listUuidAtExportStart, paths: removedPaths })
+src/renderer/src/pages\modules\songPlayer\usePlayerControlsLogic.ts:1071:          emitter.emit('playlistContentChanged', { uuids: [listUuidAtExportStart] })
+src/renderer/src/components\selectSongListDialog.ts:3:import SelectSongListDialog from './selectSongListDialog.vue'
+src/renderer/src/components\playlistBatchRename\usePlaylistBatchRenameDialog.ts:3:import choiceDialog from '@renderer/components/choiceDialog'
+src/renderer/src/components\playlistBatchRename\usePlaylistBatchRenameDialog.ts:4:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\playlistBatchRename\usePlaylistBatchRenameDialog.ts:5:import inputDialog from '@renderer/components/inputDialog'
+src/renderer/src/components\setDurationDialog.ts:3:import SetDurationDialog from './setDurationDialog.vue'
+src/renderer/src/components\titleComponent.vue:9:import menuComponent from './menu.vue'
+src/renderer/src/components\titleComponent.vue:10:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\TopToolbarRecordingButton.vue:4:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/components\TopToolbarRecordingButton.vue:203:    emitter.emit(RECORDING_LIBRARY_CHANGED_EVENT, { hasRecordings: true })
+src/renderer/src/components\scanNewSongDialog.ts:2:import ImportTracksDialogBase from './ImportTracksDialogBase.vue'
+src/renderer/src/components\songAreaColRightClickMenu.vue:8:import { resolveContextMenuPoint } from '@renderer/utils/contextMenuPosition'
+src/renderer/src/pages\modules\pioneerDeviceLibraryArea.vue:4:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/pages\modules\pioneerDeviceLibraryArea.vue:8:import rightClickMenu from '@renderer/components/rightClickMenu'
+src/renderer/src/pages\modules\pioneerDeviceLibraryArea.vue:9:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\pioneerDeviceLibraryArea.vue:10:import openRekordboxDesktopCreateNodeDialog from '@renderer/components/rekordboxDesktopCreateNodeDialog'
+src/renderer/src/pages\modules\pioneerDeviceLibraryArea.vue:11:import RekordboxDesktopWritingOverlay from '@renderer/components/RekordboxDesktopWritingOverlay.vue'
+src/renderer/src/pages\modules\pioneerDeviceLibraryArea.vue:28:import { useExternalPlaylistContextMenu } from '@renderer/composables/externalLibrary/useExternalPlaylistContextMenu'
+src/renderer/src/pages\modules\pioneerDeviceLibraryArea.vue:584:    emitter.emit('dj-library:refresh-selected-playlist', {
+src/renderer/src/pages\modules\songPlayer\useMainPlayerMiniPlayer.ts:96:      emitter.emit('songsRemoved', { listUUID: listUuidAtExportStart, itemIds: removedSetItemIds })
+src/renderer/src/pages\modules\songPlayer\useMainPlayerMiniPlayer.ts:98:      emitter.emit('songsRemoved', { listUUID: listUuidAtExportStart, paths: removedPaths })
+src/renderer/src/pages\modules\songPlayer\useMainPlayerMiniPlayer.ts:100:    emitter.emit('playlistContentChanged', { uuids: [listUuidAtExportStart] })
+src/renderer/src/pages\modules\pioneerSongsArea.vue:3:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/pages\modules\pioneerSongsArea.vue:9:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\pioneerSongsArea.vue:10:import selectSongListDialog from '@renderer/components/selectSongListDialog.vue'
+src/renderer/src/pages\modules\pioneerSongsArea.vue:11:import RekordboxDesktopWritingOverlay from '@renderer/components/RekordboxDesktopWritingOverlay.vue'
+src/renderer/src/pages\modules\pioneerSongsArea.vue:23:import ColumnHeaderContextMenu from '@renderer/pages/modules/songsArea/ColumnHeaderContextMenu.vue'
+src/renderer/src/pages\modules\pioneerSongsArea.vue:34:import { usePioneerSongContextMenu } from './pioneerSongsArea/usePioneerSongContextMenu'
+src/renderer/src/pages\modules\pioneerSongsArea.vue:300:emitter.on('songsArea/focus-song', handleFocusSongRequest)
+src/renderer/src/pages\modules\pioneerSongsArea.vue:490:emitter.on('dj-library:refresh-selected-playlist', handleDjPlaylistRefresh)
+src/renderer/src/pages\modules\pioneerSongsArea.vue:560:      emitter.emit('waveform-preview:stop', { reason: 'switch' })
+src/renderer/src/pages\modules\pioneerSongsArea.vue:619:emitter.on('preview-transfer:open-dialog', handlePreviewMoveRequest)
+src/renderer/src/pages\modules\pioneerSongsArea.vue:638:emitter.on('pioneerUsb/open-delete-playlist', handleUsbDeletePlaylistRequest)
+src/renderer/src/pages\modules\pioneerSongsArea.vue:651:emitter.on('songFileMissing', handleSongFileMissing)
+src/renderer/src/pages\modules\pioneerSongsArea.vue:663:emitter.on('songFileRestored', handleSongFileRestored)
+src/renderer/src/pages\modules\pioneerSongsArea.vue:731:    emitter.emit('waveform-preview:stop', { reason: 'switch' })
+src/renderer/src/pages\modules\pioneerSongsArea.vue:751:    emitter.emit('horizontalBrowse/load-song', {
+src/renderer/src/pages\modules\pioneerSongsArea.vue:768:    emitter.emit('player/replay-current-song')
+src/renderer/src/components\settingDialog\SettingDialogBody.vue:3:import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
+src/renderer/src/components\settingDialog\CuratedLibrarySyncSettings.vue:5:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\songPlayer\useCover.ts:2:import rightClickMenu from '@renderer/components/rightClickMenu'
+src/renderer/src/pages\modules\songPlayer\useCover.ts:209:  emitter.on('songMetadataUpdated', handleSongMetadataUpdated)
+src/renderer/src/components\trackReanalysisDialog.vue:8:import { useDialogTransition } from '@renderer/composables/useDialogTransition'
+src/renderer/src/components\WelcomeCreatePlaylistActions.vue:118:  emitter.emit('welcome:create-playlist', kind)
+src/renderer/src/components\WelcomeCreatePlaylistActions.vue:129:  emitter.on('welcome:playlist-created', handleWelcomePlaylistCreated)
+src/renderer/src/components\trackReanalysisDialog.ts:3:import TrackReanalysisDialog from './trackReanalysisDialog.vue'
+src/renderer/src/pages\modules\songPlayer\songPlayer.vue:19:import selectSongListDialog from '@renderer/components/selectSongListDialog.vue'
+src/renderer/src/pages\modules\songPlayer\songPlayer.vue:75:    emitter.emit('waveform-preview:stop', { reason: 'switch' })
+src/renderer/src/pages\modules\songPlayer\songPlayer.vue:476:  emitter.on('player/replay-current-song', handleReplayRequest)
+src/renderer/src/pages\modules\songPlayer\songPlayer.vue:477:  emitter.on('external-open/play', handleExternalOpenPlay)
+src/renderer/src/pages\modules\songPlayer\songPlayer.vue:478:  emitter.on(MAIN_WINDOW_PLAYBACK_SNAPSHOT_REQUEST_EVENT, handleMainWindowPlaybackSnapshotRequest)
+src/renderer/src/pages\modules\songPlayer\songPlayer.vue:479:  emitter.on('waveform-preview:state', handleWaveformPreviewState)
+src/renderer/src/pages\modules\songPlayer\songPlayer.vue:480:  emitter.on('waveform-preview:pause-main', handleWaveformPreviewPauseMain)
+src/renderer/src/pages\modules\songPlayer\songPlayer.vue:481:  emitter.on('waveform-preview:resume-main', handleWaveformPreviewResumeMain)
+src/renderer/src/pages\modules\songPlayer\songPlayer.vue:505:  emitter.on(MAIN_WINDOW_VOLUME_SET_EVENT, handleMainWindowVolumeSet)
+src/renderer/src/pages\modules\songPlayer\songPlayer.vue:539:    emitter.emit('waveform-preview:stop', { reason: 'manual-play' })
+src/renderer/src/pages\modules\songPlayer\songPlayer.vue:581:  emitter.emit(MAIN_WINDOW_VOLUME_CHANGED_EVENT, value)
+src/renderer/src/pages\modules\pioneerSongsArea\usePioneerDesktopPlaylistActions.ts:2:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\pioneerSongsArea\usePioneerPlaylistTracks.ts:300:      emitter.emit('horizontalBrowse/shared-grid-batch-updated', gridPayloads)
+src/renderer/src/pages\modules\pioneerSongsArea\usePioneerSongContextMenu.spec.ts:3:import { usePioneerSongContextMenu } from './usePioneerSongContextMenu'
+src/renderer/src/pages\modules\pioneerSongsArea\usePioneerSongContextMenu.ts:2:import rightClickMenu from '@renderer/components/rightClickMenu'
+src/renderer/src/pages\modules\pioneerSongsArea\usePioneerSongContextMenu.ts:3:import exportDialog from '@renderer/components/exportDialog'
+src/renderer/src/pages\modules\pioneerSongsArea\usePioneerSongContextMenu.ts:4:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\pioneerSongsArea\usePioneerSongContextMenu.ts:17:import type { IMenu, ISongInfo } from '../../../../../types/globals'
+src/renderer/src/pages\modules\pioneerSongsArea\usePioneerSongContextMenu.ts:18:import type { PioneerTransferTarget } from './usePioneerTrackCopyDialog'
+src/renderer/src/pages\modules\pioneerSongsArea\usePioneerSongContextMenu.ts:189:          await import('@renderer/components/libraryStemSeparationDialog')
+src/renderer/src/pages\modules\pioneerSongsArea\usePioneerSongContextMenu.ts:208:          await import('@renderer/components/batchSimilarTracksDialog')
+src/renderer/src/pages\modules\pioneerSongsArea\usePioneerTrackCopyDialog.ts:2:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/pages\modules\pioneerSongsArea\usePioneerTrackCopyDialog.ts:57:    emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/pages\modules\pioneerSongsArea\usePioneerTrackCopyDialog.ts:135:        emitter.emit('playlistContentChanged', { uuids: [targetSongListUUID] })
+src/renderer/src/pages\modules\pioneerSongsArea\usePioneerTrackCopyDialog.ts:136:        emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/pages\modules\pioneerSongsArea\usePioneerTrackCopyDialog.ts:168:      emitter.emit('playlistContentChanged', { uuids: [targetSongListUUID] })
+src/renderer/src/pages\modules\pioneerSongsArea\usePioneerUsbPlaylistActions.ts:192:  emitter.on('pioneerUsb/changed', handleUsbChanged)
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseAudioEditController.ts:502:            emitter.emit('songsArea/reload-if-current', {
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseAudioEditController.ts:506:            emitter.emit('playlistContentChanged', { uuids: [songListUUID.value] })
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseDeckDelete.ts:2:import confirm from '@renderer/components/confirmDialog'
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseDeckDelete.ts:140:        emitter.emit('songsRemoved', {
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseDeckDelete.ts:146:        emitter.emit('playlistContentChanged', { uuids: [eventListUuid] })
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseDeckMove.ts:191:          emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseDeckMove.ts:245:            emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseDeckMove.ts:255:        emitter.emit('playlistContentChanged', { uuids: [targetSongListUUID] })
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseDeckMove.ts:256:        emitter.emit('songsArea/clipboardHint', {
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseDeckMove.ts:297:        emitter.emit('songsRemoved', {
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseDeckMove.ts:311:      emitter.emit('playlistContentChanged', {
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseDeckTempoControls.ts:3:import { normalizePreviewBpm } from '@renderer/components/MixtapeBeatAlignDialog.constants'
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseDeckTransportInteractions.ts:194:  emitter.on(EXCLUSIVE_PLAYBACK_PAUSE_OTHERS_EVENT, handleExclusivePlaybackPauseOthers)
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseHotkeys.ts:176:    emitter.emit('preview-transfer:open-dialog', {
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseHotkeys.ts:377:    emitter.on('waveform-preview:state', handleWaveformPreviewState)
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseRawWaveformCanvas.ts:7:import { HORIZONTAL_BROWSE_DETAIL_OVERLAY_EXTEND_PX } from '@renderer/composables/horizontalBrowse/horizontalBrowseDetailOverlayCanvas'
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseRawWaveformDetailLifecycle.ts:2:import { clampNumber } from '@renderer/components/MixtapeBeatAlignDialog.constants'
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseVolumeSync.ts:42:    emitter.on(MAIN_WINDOW_VOLUME_SET_EVENT, handleMainWindowVolumeSync)
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseVolumeSync.ts:43:    emitter.on(MAIN_WINDOW_VOLUME_CHANGED_EVENT, handleMainWindowVolumeSync)
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseWaveformPreviewSuspension.spec.ts:13:  emitter.emit(event, {
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseWaveformPreviewSuspension.spec.ts:91:    emitter.on('waveform-preview:stop', stopListener)
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseWaveformPreviewSuspension.ts:79:  emitter.on(WAVEFORM_PREVIEW_TRANSPORT_SUSPEND_EVENT, handleSuspend)
+src/renderer/src/composables\horizontalBrowse\useHorizontalBrowseWaveformPreviewSuspension.ts:80:  emitter.on(WAVEFORM_PREVIEW_TRANSPORT_RESUME_EVENT, handleResume)

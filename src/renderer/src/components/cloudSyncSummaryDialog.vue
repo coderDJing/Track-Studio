@@ -204,7 +204,7 @@ const curatedArtistSummaryView = computed(() => {
 }
 .section-title {
   font-size: 13px;
-  color: #d0d0d0;
+  color: var(--text);
   font-weight: 700;
   letter-spacing: 0.2px;
 }
@@ -241,7 +241,7 @@ const curatedArtistSummaryView = computed(() => {
   margin-top: 4px;
 }
 .chip.success .num {
-  color: #9fe870;
+  color: var(--success-text);
 }
 .count-pair {
   display: inline-flex;

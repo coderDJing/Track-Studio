@@ -1,0 +1,84 @@
+[
+  {
+    "label": "cloud-dark",
+    "theme": "theme-dark",
+    "minimumContrast": 10.26,
+    "colors": ["rgb(204, 204, 204): 10.26", "rgb(159, 232, 112): 11.19"]
+  },
+  {
+    "label": "cloud-light",
+    "theme": "theme-light",
+    "minimumContrast": 6.56,
+    "colors": ["rgb(31, 31, 31): 16.48", "rgb(39, 107, 22): 6.56"]
+  },
+  {
+    "label": "import-light",
+    "theme": "theme-light",
+    "minimumContrast": 6.56,
+    "colors": ["rgb(31, 31, 31): 16.48", "rgb(180, 35, 24): 6.57", "rgb(39, 107, 22): 6.56"]
+  },
+  {
+    "label": "import-dark",
+    "theme": "theme-dark",
+    "minimumContrast": 7.26,
+    "colors": ["rgb(204, 204, 204): 10.26", "rgb(255, 138, 138): 7.26", "rgb(159, 232, 112): 11.19"]
+  },
+  {
+    "label": "fingerprint-light",
+    "theme": "theme-light",
+    "minimumContrast": 6.56,
+    "colors": ["rgb(31, 31, 31): 16.48", "rgb(39, 107, 22): 6.56", "rgb(180, 35, 24): 6.57"]
+  },
+  {
+    "label": "fingerprint-dark",
+    "theme": "theme-dark",
+    "minimumContrast": 7.26,
+    "colors": ["rgb(204, 204, 204): 10.26", "rgb(159, 232, 112): 11.19", "rgb(255, 138, 138): 7.26"]
+  },
+  {
+    "label": "conversion-dark",
+    "theme": "theme-dark",
+    "minimumContrast": 7.26,
+    "colors": ["rgb(204, 204, 204): 10.26", "rgb(255, 138, 138): 7.26", "rgb(159, 232, 112): 11.19"]
+  },
+  {
+    "label": "conversion-light",
+    "theme": "theme-light",
+    "minimumContrast": 6.56,
+    "colors": ["rgb(31, 31, 31): 16.48", "rgb(180, 35, 24): 6.57", "rgb(39, 107, 22): 6.56"]
+  },
+  {
+    "label": "rename-light",
+    "theme": "theme-light",
+    "minimumContrast": 6.56,
+    "colors": ["rgb(31, 31, 31): 16.48", "rgb(39, 107, 22): 6.56", "rgb(180, 35, 24): 6.57"]
+  },
+  {
+    "label": "rename-dark",
+    "theme": "theme-dark",
+    "minimumContrast": 7.26,
+    "colors": ["rgb(204, 204, 204): 10.26", "rgb(159, 232, 112): 11.19", "rgb(255, 138, 138): 7.26"]
+  },
+  {
+    "label": "conversion-warning-light",
+    "theme": "theme-light",
+    "minimumContrast": 6.56,
+    "colors": [
+      "rgb(31, 31, 31): 16.48",
+      "rgb(180, 35, 24): 6.57",
+      "rgb(138, 75, 0): 6.8",
+      "rgb(39, 107, 22): 6.56"
+    ]
+  },
+  {
+    "label": "conversion-warning-dark",
+    "theme": "theme-dark",
+    "minimumContrast": 7.26,
+    "colors": [
+      "rgb(204, 204, 204): 10.26",
+      "rgb(255, 138, 138): 7.26",
+      "rgb(255, 183, 77): 9.52",
+      "rgb(159, 232, 112): 11.19"
+    ]
+  }
+]

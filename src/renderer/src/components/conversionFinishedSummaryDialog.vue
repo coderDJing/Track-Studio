@@ -167,16 +167,16 @@ const getFileName = (filePath?: string) => {
   margin-top: 4px;
 }
 .chip.danger .num {
-  color: #ff6b6b;
+  color: var(--danger-text);
 }
 .chip.success .num {
-  color: #9fe870;
+  color: var(--success-text);
 }
 .chip.warn .num {
-  color: #ff9800;
+  color: var(--warning-text);
 }
 .chip.warn .cap {
-  color: #ff9800;
+  color: var(--warning-text);
 }
 .error-list {
   display: flex;
@@ -207,7 +207,7 @@ const getFileName = (filePath?: string) => {
 }
 .error-msg {
   font-size: 11px;
-  color: #ff8a8a;
+  color: var(--danger-text);
 }
 .error-stderr {
   font-size: 10px;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch, ref, onUnmounted, onMounted, PropType, nextTick, computed } from 'vue'
+import { watch, ref, shallowRef, onUnmounted, onMounted, PropType, nextTick, computed } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { v4 as uuidV4 } from 'uuid'
@@ -77,7 +77,8 @@ let leaveTimer: ReturnType<typeof setTimeout> | undefined
 positionTop.value = -9999
 positionLeft.value = -9999
 
-const hoverItem = ref<IMenu | null>(null)
+// Preserve the identity used by submenu lookup and keyboard traversal for raw and reactive menus.
+const hoverItem = shallowRef<IMenu | null>(null)
 const submenuParent = computed(() => {
   const hovered = hoverItem.value
   return props.menuArr

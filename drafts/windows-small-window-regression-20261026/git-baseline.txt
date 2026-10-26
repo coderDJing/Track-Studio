@@ -1,0 +1,15 @@
+commit 14aefd5aba408af9eae3076125dd3942c1aecb1a
+Author:     Coder <149645781+coderDJing@users.noreply.github.com>
+AuthorDate: Mon Oct 26 16:30:03 2026 +0800
+Commit:     Coder <149645781+coderDJing@users.noreply.github.com>
+CommitDate: Mon Oct 26 16:30:03 2026 +0800
+
+    docs: 规范完整提示词交付并修订跨电脑接手说明
+
+commit 2944d25d2caa2d885291b837ad82375d94b16218
+Author:     Coder <149645781+coderDJing@users.noreply.github.com>
+AuthorDate: Mon Oct 26 16:13:20 2026 +0800
+Commit:     Coder <149645781+coderDJing@users.noreply.github.com>
+CommitDate: Mon Oct 26 16:13:52 2026 +0800
+
+    fix(ui): 完善小窗口适配并发布 1.2.6-rc.202610261612
