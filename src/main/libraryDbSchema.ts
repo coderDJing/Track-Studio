@@ -1,5 +1,9 @@
 import { applyCuratedLibrarySyncSchema } from './curatedLibrarySync/schema'
 import type { SqliteDatabase } from './libraryDb'
+import {
+  normalizedSongCachePathSql,
+  SONG_CACHE_INFO_PATH_SQL
+} from './libraryCacheDb/songCachePathSql'
 
 /**
  * 建库/迁移 DDL 全量集中在这里。libraryDb.ts 只负责连接生命周期、版本守卫与
@@ -875,21 +879,21 @@ export function applyLibraryDbSchema(instance: SqliteDatabase, userVersion: numb
     );
     CREATE INDEX IF NOT EXISTS idx_playlist_view_snapshot_root
       ON playlist_view_snapshot(list_root);
+    CREATE INDEX IF NOT EXISTS idx_playlist_view_snapshot_verification
+      ON playlist_view_snapshot(
+        verified_at_ms, song_list_uuid, list_root, revision, identity_digest, item_count, built_at_ms
+      );
     CREATE INDEX IF NOT EXISTS idx_song_cache_file ON song_cache(file_path);
     CREATE INDEX IF NOT EXISTS idx_song_cache_file_normalized
-      ON song_cache(REPLACE(LOWER(file_path), '/', '\\'));
+      ON song_cache(${normalizedSongCachePathSql('file_path')});
     CREATE INDEX IF NOT EXISTS idx_song_cache_root_file_normalized
       ON song_cache(
-        REPLACE(LOWER(list_root), '/', '\\'),
-        REPLACE(LOWER(file_path), '/', '\\')
+        ${normalizedSongCachePathSql('list_root')},
+        ${normalizedSongCachePathSql('file_path')}
       );
     CREATE INDEX IF NOT EXISTS idx_song_cache_info_file_path_normalized
       ON song_cache(
-        REPLACE(
-          LOWER(CASE WHEN json_valid(info_json) THEN json_extract(info_json, '$.filePath') END),
-          '/',
-          '\\'
-        )
+        ${SONG_CACHE_INFO_PATH_SQL}
       );
   `)
   if (!listTableColumns(instance, 'playlist_view_snapshot').has('missing_waveform_json')) {

@@ -282,6 +282,11 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
   }
 
   const handleWorkerFailure = (worker: Worker, error: Error) => {
+    // error 后还会收到 exit；同一个 worker 只能清理并补建一次。
+    if (!deps.workers.includes(worker)) {
+      deps.clearExpectedWorkerTermination(worker)
+      return
+    }
     const jobId = deps.busy.get(worker)
     const preemptionKind = typeof jobId === 'number' ? deps.preemptedJobs.get(jobId) : undefined
     const expectedTerminationReason = deps.consumeExpectedWorkerTermination(worker)
@@ -366,7 +371,19 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
       if (wasForegroundWorker) {
         deps.setForegroundWorker(replacement)
       }
-      refreshForegroundWorker()
+    }
+    refreshForegroundWorker()
+    // 超时/崩溃必须结算 UI 和手动批次；取消与可恢复抢占仍由原入口处理归属。
+    // 在释放路径、移除旧 worker 后发事件，避免批次结束触发并发调整时重入半清理状态。
+    if (
+      job &&
+      !preemptedJob &&
+      (!wasExpectedTermination || expectedTerminationReason === 'timeout')
+    ) {
+      applyWorkerProgress(worker, job, {
+        stage: 'job-error',
+        elapsedMs: job.trace?.elapsedMs ?? 0
+      })
     }
     deps.drain()
     if (
@@ -591,9 +608,8 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
     })
 
     worker.on('exit', (code) => {
-      if (code !== 0) {
-        handleWorkerFailure(worker, new Error(`worker exited: ${code}`))
-      }
+      // 即使退出码为 0，尚未交付结果的任务也不能永久占着队列。
+      handleWorkerFailure(worker, new Error(`worker exited: ${code}`))
     })
 
     deps.idle.push(worker)

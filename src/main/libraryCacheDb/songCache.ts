@@ -26,6 +26,7 @@ import { markPlaylistViewSnapshotContentStale } from './playlistViewSnapshot'
 import type { SqliteDatabase } from '../libraryDb'
 import { runTracedSync } from '../services/mainProcessActivityTraceState'
 import { loadSongCacheWithHelpers } from './songCacheLoad'
+import { normalizedSongCachePathSql, SONG_CACHE_INFO_PATH_SQL } from './songCachePathSql'
 
 const migratedSongRoots = new Set<string>()
 const looseSongRootCache = new Map<string, string[]>()
@@ -148,11 +149,7 @@ function mergeInfoJson(
 }
 
 function toLooseCompareExpr(column: string): string {
-  return `REPLACE(LOWER(${column}), '/', '\\\\') = REPLACE(LOWER(?), '/', '\\\\')`
-}
-
-function toLooseCompareExprRaw(expr: string): string {
-  return `REPLACE(LOWER(${expr}), '/', '\\\\') = REPLACE(LOWER(?), '/', '\\\\')`
+  return `${normalizedSongCachePathSql(column)} = ${normalizedSongCachePathSql('?')}`
 }
 
 export function getLooseSongCacheRoots(
@@ -255,7 +252,7 @@ function getSongCacheRowByAbsPath(
   try {
     const expr = "CASE WHEN json_valid(info_json) THEN json_extract(info_json, '$.filePath') END"
     const stmt = db.prepare<SongCacheDbRow>(
-      `SELECT list_root, file_path, size, mtime_ms, info_json FROM song_cache WHERE ${toLooseCompareExprRaw(
+      `SELECT list_root, file_path, size, mtime_ms, info_json FROM song_cache WHERE ${toLooseCompareExpr(
         expr
       )} LIMIT 1`
     )
@@ -439,8 +436,7 @@ export async function loadSongCacheAnalysisSources(
   try {
     await ensureSongCacheMigrated(db, listRoot)
     const chunkSize = 400
-    const normalizedInfoPathExpr =
-      "REPLACE(LOWER(CASE WHEN json_valid(info_json) THEN json_extract(info_json, '$.filePath') END), '/', '\\')"
+    const normalizedInfoPathExpr = SONG_CACHE_INFO_PATH_SQL
     for (let offset = 0; offset < normalizedPaths.length; offset += chunkSize) {
       const chunk = normalizedPaths.slice(offset, offset + chunkSize)
       const placeholders = chunk.map(() => '?').join(', ')

@@ -1,6 +1,6 @@
 {
   "name": "frkb",
-  "version": "1.2.6-rc.202610221114",
+  "version": "1.2.6-rc.202610260943",
   "packageManager": "pnpm@9.15.9",
   "description": "Track Studio — Rapid Audio Organization Tool",
   "license": "PolyForm-Noncommercial-1.0.0",
@@ -251,7 +251,7 @@
     "inspect:song-structure": "tsx scripts/inspect_song_structure.ts",
     "song-structure:truth:add": "tsx scripts/add_song_structure_truth_sample.ts",
     "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
-    "test:key-analysis": "vitest run src/main/libraryCacheDb/songCacheAnalysisFields.spec.ts src/main/services/keyAnalysis/analysisTargets.spec.ts src/main/services/keyAnalysis/jobOwnership.spec.ts src/main/services/keyAnalysis/queueActiveFollowUp.spec.ts src/main/services/keyAnalysis/structurePersistence.spec.ts src/main/services/keyAnalysis/workerDispatch.spec.ts src/main/services/songStructureCachePolicy.spec.ts src/main/services/sharedSongGridCachePolicy.spec.ts src/main/services/sharedSongGrid.spec.ts src/main/workers/songEnergyModel.spec.ts src/renderer/src/composables/horizontalBrowse/useHorizontalBrowseDeckSongSync.spec.ts src/renderer/src/utils/manualKeyAnalysis.spec.ts src/shared/analysisBpmRange.spec.ts src/shared/trackReanalysisSelection.spec.ts",
+    "test:key-analysis": "vitest run src/main/libraryCacheDb/songCacheLookup.spec.ts src/main/services/keyAnalysis/workerLifecycle.spec.ts src/main/libraryCacheDb/songCacheAnalysisFields.spec.ts src/main/services/keyAnalysis/analysisTargets.spec.ts src/main/services/keyAnalysis/jobOwnership.spec.ts src/main/services/keyAnalysis/queueActiveFollowUp.spec.ts src/main/services/keyAnalysis/structurePersistence.spec.ts src/main/services/keyAnalysis/workerDispatch.spec.ts src/main/services/songStructureCachePolicy.spec.ts src/main/services/sharedSongGridCachePolicy.spec.ts src/main/services/sharedSongGrid.spec.ts src/main/workers/songEnergyModel.spec.ts src/renderer/src/composables/horizontalBrowse/useHorizontalBrowseDeckSongSync.spec.ts src/renderer/src/utils/manualKeyAnalysis.spec.ts src/shared/analysisBpmRange.spec.ts src/shared/trackReanalysisSelection.spec.ts",
     "test:song-list-scroll": "vitest run src/renderer/src/pages/modules/songsArea/SongListRows",
     "test:analysis-completeness": "vitest run src/shared/songAnalysisCompleteness.spec.ts src/renderer/src/utils/manualKeyAnalysis.spec.ts src/renderer/src/pages/modules/songsArea/composables/useKeyAnalysisProgress.spec.ts src/renderer/src/pages/modules/songsArea/composables/usePlaylistAnalysisPrompt.spec.ts src/main/services/pioneerDeviceLibrary/playlistAnalysis.spec.ts",
     "grid:check-active-v2": "node scripts/check-active-grid-v2.mjs",
