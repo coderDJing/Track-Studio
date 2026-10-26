@@ -945,6 +945,8 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
   }
 
   onMounted(() => {
+    // 歌单成员变更只接受明确的删除/移动事件；播放队列可能是筛选子集或旧快照，
+    // 不能根据队列中缺少的路径反向删除 originalSongInfoArr 中的歌曲。
     emitter.on('songsArea/optimistic-remove', onSongsOptimisticallyRemoved)
     emitter.on('songsArea/optimistic-restore', onSongsOptimisticallyRestored)
     emitter.on('songsArea/sync-fields', onSongsFieldsPatched)
@@ -1013,40 +1015,5 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
         source: 'song-list-watch'
       })
     }
-  )
-
-  // 同步 songsArea 与 playingData.playingSongListData
-  watch(
-    () => runtime.playingData.playingSongListData,
-    (newPlayingListData) => {
-      const currentSongsAreaListUUID = songsAreaState.songListUUID
-      const currentPlayingListUUID = runtime.playingData.playingSongListUUID
-
-      if (currentSongsAreaListUUID && currentSongsAreaListUUID === currentPlayingListUUID) {
-        const songsInArea = songsAreaState.songInfoArr
-        if (!songsInArea || songsInArea.length === 0) return
-
-        const areaFilePaths = new Set(songsInArea.map((s) => s.filePath))
-        const playingListFilePaths = new Set((newPlayingListData || []).map((s) => s.filePath))
-
-        const pathsToRemove: string[] = []
-        areaFilePaths.forEach((filePath) => {
-          if (!playingListFilePaths.has(filePath)) {
-            pathsToRemove.push(filePath)
-          }
-        })
-
-        if (pathsToRemove.length > 0) {
-          originalSongInfoArr.value = originalSongInfoArr.value.filter(
-            (item) => !pathsToRemove.includes(item.filePath)
-          )
-          applyFiltersAndSorting()
-          songsAreaState.selectedSongFilePath = songsAreaState.selectedSongFilePath.filter(
-            (path) => !pathsToRemove.includes(path)
-          )
-        }
-      }
-    },
-    { deep: true }
   )
 }
