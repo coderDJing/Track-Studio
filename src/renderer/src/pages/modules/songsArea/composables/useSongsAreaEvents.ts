@@ -995,7 +995,6 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
     () => songsAreaState.songListUUID,
     async (newUUID) => {
       songsAreaState.searchQuery = ''
-      songsAreaState.compatibleKeyOnly = false
       // 仅在真正切换到“此前未打开过的非空歌单”时才询问分析；
       // 程序化的 '' → 原值 伪切换（如把歌曲移动到当前歌单后强制刷新）目标仍是已打开歌单，不弹框。
       const notifyUserOpened = !!newUUID && newUUID !== lastOpenedUUID

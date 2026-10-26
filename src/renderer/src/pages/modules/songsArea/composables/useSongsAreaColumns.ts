@@ -1,7 +1,10 @@
 import { computed, ref, toRaw, watch, type ShallowRef } from 'vue'
 import type { ISongInfo, ISongsAreaColumn } from '../../../../../../types/globals'
-import { MIN_WIDTH_BY_KEY } from '../minWidth'
-import type { ISongsAreaPaneRuntimeState, useRuntimeStore } from '@renderer/stores/runtime'
+import type {
+  ISongsAreaPaneRuntimeState,
+  SongsAreaColumnMode,
+  useRuntimeStore
+} from '@renderer/stores/runtime'
 import { getKeyDisplayText, getKeySortText, isHarmonicMixCompatible } from '@shared/keyDisplay'
 import { useHarmonicReferenceKey } from '@renderer/composables/useHarmonicReferenceKey'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
@@ -18,7 +21,12 @@ import { matchComparableByFilter } from '@shared/filterCompare'
 import libraryUtils from '@renderer/utils/libraryUtils'
 import { getSongListFieldRawValue } from '@renderer/utils/songListFieldDisplay'
 import { filterSongsByPlaylistSearch } from '@renderer/utils/playlistSongSearch'
-import pkg from '../../../../../../../package.json'
+import { usePlaylistColumnSettings } from './usePlaylistColumnSettings'
+export {
+  buildSongsAreaDefaultColumns,
+  getSongsAreaMinWidthByKey,
+  SONGS_AREA_MIXTAPE_STORAGE_KEY
+} from './songColumnStorage'
 
 interface UseSongsAreaColumnsParams {
   runtime: ReturnType<typeof useRuntimeStore>
@@ -27,283 +35,8 @@ interface UseSongsAreaColumnsParams {
   shouldPersistToLocalStorage: () => boolean
 }
 
-export type SongsAreaColumnMode = 'default' | 'recycle' | 'recording' | 'mixtape'
-
-const INIT_EXTRA_WIDTH = 40
-const IS_RC_BUILD = /-rc(?:\.|$)/i.test(String(pkg.version || '').trim())
-const SONGS_AREA_DEFAULT_STORAGE_KEY = 'songColumnData'
-const SONGS_AREA_RECYCLE_STORAGE_KEY = 'recycleBinColumnData'
-const SONGS_AREA_RECORDING_STORAGE_KEY = 'recordingLibraryColumnData'
-export const SONGS_AREA_MIXTAPE_STORAGE_KEY = 'mixtapeColumnData'
-
-const buildSongsAreaBaseColumns = (
-  mode: SongsAreaColumnMode
-): Omit<ISongsAreaColumn, 'width'>[] => {
-  const isRecycleBin = mode === 'recycle'
-  const isRecording = mode === 'recording'
-  const isMixtape = mode === 'mixtape'
-  const columns: Omit<ISongsAreaColumn, 'width'>[] = [
-    {
-      columnName: isMixtape ? 'columns.mixOrder' : 'columns.index',
-      key: 'index',
-      show: true,
-      order: mode === 'default' ? 'asc' : undefined
-    }
-  ]
-  if (isRecycleBin) {
-    columns.push({
-      columnName: 'columns.deletedAt',
-      key: 'deletedAtMs',
-      show: true,
-      order: 'desc'
-    })
-  }
-  if (isRecording) {
-    columns.push(
-      { columnName: 'columns.waveformPreview', key: 'waveformPreview', show: true },
-      {
-        columnName: 'columns.title',
-        key: 'title',
-        show: true,
-        filterType: 'text'
-      },
-      {
-        columnName: 'columns.duration',
-        key: 'duration',
-        show: true,
-        filterType: 'duration'
-      },
-      { columnName: 'columns.bitrate', key: 'bitrate', show: true },
-      {
-        columnName: 'columns.fileFormat',
-        key: 'fileFormat',
-        show: true,
-        filterType: 'text'
-      },
-      {
-        columnName: 'columns.format',
-        key: 'container',
-        show: true,
-        filterType: 'text'
-      },
-      {
-        columnName: 'columns.fileName',
-        key: 'fileName',
-        show: true,
-        filterType: 'text'
-      }
-    )
-    return columns
-  }
-  columns.push(
-    { columnName: 'columns.cover', key: 'cover', show: true },
-    { columnName: 'columns.waveformPreview', key: 'waveformPreview', show: true },
-    {
-      columnName: 'columns.title',
-      key: 'title',
-      show: true,
-      filterType: isMixtape ? undefined : 'text'
-    },
-    {
-      columnName: 'columns.artist',
-      key: 'artist',
-      show: true,
-      filterType: isMixtape ? undefined : 'text'
-    }
-  )
-  if (isRecycleBin) {
-    columns.push({
-      columnName: 'columns.originalPlaylist',
-      key: 'originalPlaylistPath',
-      show: true,
-      filterType: 'text'
-    })
-  }
-  if (isMixtape) {
-    columns.push({
-      columnName: 'columns.mixSource',
-      key: 'originalPlaylistPath',
-      show: true
-    })
-  }
-  columns.push(
-    {
-      columnName: 'columns.duration',
-      key: 'duration',
-      show: true,
-      filterType: isMixtape ? undefined : 'duration'
-    },
-    {
-      columnName: 'columns.bpm',
-      key: 'bpm',
-      show: true,
-      filterType: isMixtape ? undefined : 'bpm'
-    },
-    {
-      columnName: 'columns.energy',
-      key: 'energyScore',
-      show: true,
-      filterType: isMixtape ? undefined : 'number'
-    },
-    {
-      columnName: 'columns.dancefloorEnergy',
-      key: 'dancefloorScore',
-      show: true,
-      filterType: isMixtape ? undefined : 'number'
-    },
-    {
-      columnName: 'columns.danceability',
-      key: 'danceabilityScore',
-      show: true,
-      filterType: isMixtape ? undefined : 'number'
-    },
-    {
-      columnName: 'columns.rhythmicEnergy',
-      key: 'rhythmicScore',
-      show: true,
-      filterType: isMixtape ? undefined : 'number'
-    },
-    {
-      columnName: 'columns.dropImpact',
-      key: 'dropScore',
-      show: false,
-      filterType: isMixtape ? undefined : 'number'
-    },
-    {
-      columnName: 'columns.breakdownContrast',
-      key: 'breakdownScore',
-      show: false,
-      filterType: isMixtape ? undefined : 'number'
-    },
-    {
-      columnName: 'columns.drivingScore',
-      key: 'drivingScore',
-      show: false,
-      filterType: isMixtape ? undefined : 'number'
-    },
-    {
-      columnName: 'columns.mainSectionScore',
-      key: 'mainSectionScore',
-      show: false,
-      filterType: isMixtape ? undefined : 'number'
-    },
-    {
-      columnName: 'columns.highEnergyCoverageScore',
-      key: 'highEnergyCoverageScore',
-      show: false,
-      filterType: isMixtape ? undefined : 'number'
-    },
-    {
-      columnName: 'columns.peakEnergy',
-      key: 'peakScore',
-      show: false,
-      filterType: isMixtape ? undefined : 'number'
-    },
-    {
-      columnName: 'columns.energyRange',
-      key: 'rangeScore',
-      show: false,
-      filterType: isMixtape ? undefined : 'number'
-    },
-    {
-      columnName: 'columns.key',
-      key: 'key',
-      show: true,
-      filterType: isMixtape ? undefined : 'text'
-    },
-    {
-      columnName: 'columns.album',
-      key: 'album',
-      show: true,
-      filterType: isMixtape ? undefined : 'text'
-    },
-    {
-      columnName: 'columns.label',
-      key: 'label',
-      show: true,
-      filterType: isMixtape ? undefined : 'text'
-    },
-    {
-      columnName: 'columns.genre',
-      key: 'genre',
-      show: true,
-      filterType: isMixtape ? undefined : 'text'
-    },
-    {
-      columnName: 'columns.fileFormat',
-      key: 'fileFormat',
-      show: true,
-      filterType: isMixtape ? undefined : 'text'
-    },
-    { columnName: 'columns.bitrate', key: 'bitrate', show: true },
-    {
-      columnName: 'columns.fileName',
-      key: 'fileName',
-      show: true,
-      filterType: isMixtape ? undefined : 'text'
-    },
-    {
-      columnName: 'columns.format',
-      key: 'container',
-      show: true,
-      filterType: isMixtape ? undefined : 'text'
-    }
-  )
-  if (IS_RC_BUILD) {
-    columns.push({
-      columnName: 'columns.energyConfidence',
-      key: 'confidence',
-      show: true,
-      filterType: isMixtape ? undefined : 'number'
-    })
-  }
-  if (!isRecycleBin) {
-    columns.push({
-      columnName: 'columns.addedAt',
-      key: 'addedAtMs',
-      show: true,
-      filterType: isMixtape ? undefined : 'date'
-    })
-  }
-  return columns
-}
-
-const defaultNoExtraWidthKeys = new Set([
-  'index',
-  'duration',
-  'bpm',
-  'energyScore',
-  'dancefloorScore',
-  'danceabilityScore',
-  'rhythmicScore',
-  'drivingScore',
-  'mainSectionScore',
-  'highEnergyCoverageScore',
-  'dropScore',
-  'breakdownScore',
-  'peakScore',
-  'rangeScore',
-  'confidence',
-  'key'
-])
-
-export const getSongsAreaMinWidthByKey = (key: string, mode: SongsAreaColumnMode) => {
-  const base = MIN_WIDTH_BY_KEY[key] ?? 0
-  if (mode === 'mixtape' && key === 'index') return base + 30
-  return base
-}
-
-export const buildSongsAreaDefaultColumns = (mode: SongsAreaColumnMode): ISongsAreaColumn[] =>
-  buildSongsAreaBaseColumns(mode).map((col) => {
-    const minWidth = getSongsAreaMinWidthByKey(col.key, mode)
-    return {
-      ...col,
-      width: defaultNoExtraWidthKeys.has(col.key) ? minWidth : minWidth + INIT_EXTRA_WIDTH
-    }
-  })
-
 export function useSongsAreaColumns(params: UseSongsAreaColumnsParams) {
-  const { runtime, songsAreaState, originalSongInfoArr, shouldPersistToLocalStorage } = params
+  const { runtime, songsAreaState, originalSongInfoArr } = params
   const harmonicReferenceKey = useHarmonicReferenceKey(runtime)
   const compatibleKeyFilterActive = computed(
     () => songsAreaState.compatibleKeyOnly && runtime.mainWindowBrowseMode !== 'browser'
@@ -342,150 +75,26 @@ export function useSongsAreaColumns(params: UseSongsAreaColumnsParams) {
     )
   })
 
-  const readPersistedColumns = (mode: SongsAreaColumnMode): ISongsAreaColumn[] => {
-    const storageKey =
-      mode === 'recycle'
-        ? SONGS_AREA_RECYCLE_STORAGE_KEY
-        : mode === 'recording'
-          ? SONGS_AREA_RECORDING_STORAGE_KEY
-          : mode === 'mixtape'
-            ? SONGS_AREA_MIXTAPE_STORAGE_KEY
-            : SONGS_AREA_DEFAULT_STORAGE_KEY
-    const defaultColumns = buildSongsAreaDefaultColumns(mode)
-    const savedData = localStorage.getItem(storageKey)
-    let finalColumns: ISongsAreaColumn[]
+  const { columnData, persistColumnData, resetToSharedSettings, independentSettings } =
+    usePlaylistColumnSettings({ ...params, columnMode, onSettingsChange: applyChangedSettings })
 
-    if (!savedData) {
-      finalColumns = JSON.parse(JSON.stringify(defaultColumns))
-    } else {
-      try {
-        const parsedSavedColumns: ISongsAreaColumn[] = JSON.parse(savedData)
-        const defaultColumnsMap = new Map(defaultColumns.map((col) => [col.key, col]))
-
-        finalColumns = parsedSavedColumns
-          .map((savedCol) => {
-            const defaultCol = defaultColumnsMap.get(savedCol.key)
-            if (defaultCol) {
-              const mergedCol = {
-                ...defaultCol,
-                show: savedCol.show !== undefined ? savedCol.show : defaultCol.show,
-                width: savedCol.width !== undefined ? savedCol.width : defaultCol.width,
-                order: (Object.prototype.hasOwnProperty.call(savedCol, 'order')
-                  ? savedCol.order
-                  : undefined) as ISongsAreaColumn['order'],
-                key: defaultCol.key,
-                columnName: defaultCol.columnName,
-                filterType: defaultCol.filterType,
-                filterActive:
-                  (runtime.setting.persistSongFilters ? savedCol.filterActive : false) ?? false,
-                filterValue: runtime.setting.persistSongFilters ? savedCol.filterValue : undefined,
-                filterExcludeValue: runtime.setting.persistSongFilters
-                  ? (savedCol as ISongsAreaColumn).filterExcludeValue
-                  : undefined,
-                filterOp: runtime.setting.persistSongFilters ? savedCol.filterOp : undefined,
-                filterDuration: runtime.setting.persistSongFilters
-                  ? savedCol.filterDuration
-                  : undefined,
-                filterDurationTo: runtime.setting.persistSongFilters
-                  ? (savedCol as ISongsAreaColumn).filterDurationTo
-                  : undefined,
-                filterNumber: runtime.setting.persistSongFilters
-                  ? (savedCol as ISongsAreaColumn).filterNumber
-                  : undefined,
-                filterNumberTo: runtime.setting.persistSongFilters
-                  ? (savedCol as ISongsAreaColumn).filterNumberTo
-                  : undefined,
-                filterDate: runtime.setting.persistSongFilters
-                  ? (savedCol as ISongsAreaColumn).filterDate
-                  : undefined,
-                filterDateTo: runtime.setting.persistSongFilters
-                  ? (savedCol as ISongsAreaColumn).filterDateTo
-                  : undefined,
-                filterCuratedOnly: runtime.setting.persistSongFilters
-                  ? (savedCol as ISongsAreaColumn).filterCuratedOnly
-                  : undefined
-              }
-              return mergedCol
-            }
-            return null
-          })
-          .filter((col) => col !== null) as ISongsAreaColumn[]
-
-        defaultColumns.forEach((defaultCol, defaultIndex) => {
-          if (finalColumns.some((fc) => fc.key === defaultCol.key)) return
-          const precedingKeys = defaultColumns.slice(0, defaultIndex).map((item) => item.key)
-          let insertionIndex = -1
-          for (let index = finalColumns.length - 1; index >= 0; index -= 1) {
-            if (precedingKeys.includes(finalColumns[index].key)) {
-              insertionIndex = index + 1
-              break
-            }
-          }
-          finalColumns.splice(
-            insertionIndex === -1 ? finalColumns.length : insertionIndex,
-            0,
-            JSON.parse(JSON.stringify(defaultCol))
-          )
-        })
-
-        finalColumns = finalColumns.filter((fc) => defaultColumnsMap.has(fc.key))
-      } catch (error) {
-        console.error(`解析本地存储的 ${storageKey} 出错，使用默认列配置:`, error)
-        finalColumns = JSON.parse(JSON.stringify(defaultColumns))
-      }
+  function applyChangedSettings() {
+    applyFiltersAndSorting()
+    const visible = new Set(songsAreaState.songInfoArr.map(getSongSelectionKey))
+    const selected = songsAreaState.selectedSongFilePath
+    if (selected.some((key) => !visible.has(key))) {
+      songsAreaState.selectedSongFilePath = selected.filter((key) => visible.has(key))
     }
-
-    const hasOrderAfterMerge = finalColumns.some((col) => col.order !== undefined)
-    if (!hasOrderAfterMerge && mode !== 'mixtape') {
-      if (mode === 'recycle') {
-        const deletedAtIndex = finalColumns.findIndex((col) => col.key === 'deletedAtMs')
-        if (deletedAtIndex !== -1) {
-          finalColumns[deletedAtIndex] = {
-            ...finalColumns[deletedAtIndex],
-            order: 'desc'
-          }
-        }
-      } else {
-        const indexColIndex = finalColumns.findIndex((col) => col.key === 'index')
-        if (indexColIndex !== -1) {
-          finalColumns[indexColIndex] = { ...finalColumns[indexColIndex], order: 'asc' }
-        } else {
-          const titleColIndex = finalColumns.findIndex((col) => col.key === 'title')
-          if (titleColIndex !== -1) {
-            finalColumns[titleColIndex] = { ...finalColumns[titleColIndex], order: 'asc' }
-          }
-        }
-      }
+    if (runtime.playingData.playingSongListUUID === songsAreaState.songListUUID) {
+      runtime.playingData.playingSongListData = songsAreaState.songInfoArr
     }
-
-    finalColumns = finalColumns.map((col) => {
-      const minWidth = getSongsAreaMinWidthByKey(col.key, mode) ?? col.width
-      if (col.width < minWidth) {
-        return { ...col, width: minWidth }
-      }
-      return col
-    })
-    if (mode === 'mixtape') {
-      finalColumns = finalColumns.map((col) => ({
-        ...col,
-        order: undefined
-      }))
-    }
-
-    return finalColumns
   }
 
-  const loadColumnsForMode = (mode: SongsAreaColumnMode): ISongsAreaColumn[] => {
-    const cached = songsAreaState.columnCacheByMode[mode]
-    if (Array.isArray(cached) && cached.length > 0) {
-      return cached.map((item) => ({ ...item }))
-    }
-    const loaded = readPersistedColumns(mode)
-    songsAreaState.columnCacheByMode[mode] = loaded.map((item) => ({ ...item }))
-    return loaded
+  function getSongSelectionKey(song: ISongInfo) {
+    if (isMixtapeView.value) return song.mixtapeItemId || song.filePath
+    if (isSetView.value) return song.setItemId || song.filePath
+    return song.filePath
   }
-
-  const columnData = ref<ISongsAreaColumn[]>(loadColumnsForMode(columnMode.value))
 
   // --- 工具 ---
   function sortArrayByProperty<T extends object>(
@@ -545,23 +154,6 @@ export function useSongsAreaColumns(params: UseSongsAreaColumnsParams) {
       .split(/[,\n;\r，；、|]+/g)
       .map((item) => item.trim().toLowerCase())
       .filter(Boolean)
-  }
-
-  // --- 持久化 ---
-  const persistColumnData = () => {
-    songsAreaState.columnCacheByMode[columnMode.value] = columnData.value.map((item) => ({
-      ...item
-    }))
-    if (!shouldPersistToLocalStorage()) return
-    const storageKey =
-      columnMode.value === 'recycle'
-        ? SONGS_AREA_RECYCLE_STORAGE_KEY
-        : columnMode.value === 'recording'
-          ? SONGS_AREA_RECORDING_STORAGE_KEY
-          : columnMode.value === 'mixtape'
-            ? SONGS_AREA_MIXTAPE_STORAGE_KEY
-            : SONGS_AREA_DEFAULT_STORAGE_KEY
-    localStorage.setItem(storageKey, JSON.stringify(columnData.value))
   }
 
   // --- 根据列筛选过滤并按当前排序排序 ---
@@ -854,29 +446,13 @@ export function useSongsAreaColumns(params: UseSongsAreaColumnsParams) {
     }
   )
 
-  watch(
-    () => columnMode.value,
-    () => {
-      columnData.value = loadColumnsForMode(columnMode.value)
-      applyFiltersAndSorting()
-    }
-  )
-
   watch([compatibleKeyFilterActive, harmonicReferenceKey], ([active], [wasActive]) => {
     if (!active && !wasActive) return
     applyFiltersAndSorting()
     if (active !== wasActive) {
       songsAreaState.selectedSongFilePath.length = 0
     } else {
-      const visibleKeys = new Set(
-        songsAreaState.songInfoArr.map((song) =>
-          isMixtapeView.value
-            ? song.mixtapeItemId || song.filePath
-            : isSetView.value
-              ? song.setItemId || song.filePath
-              : song.filePath
-        )
-      )
+      const visibleKeys = new Set(songsAreaState.songInfoArr.map(getSongSelectionKey))
       const selected = songsAreaState.selectedSongFilePath
       if (selected.some((key) => !visibleKeys.has(key))) {
         songsAreaState.selectedSongFilePath = selected.filter((key) => visibleKeys.has(key))
@@ -961,6 +537,8 @@ export function useSongsAreaColumns(params: UseSongsAreaColumnsParams) {
     colMenuClick,
     applyFiltersAndSorting,
     shouldApplyFiltersAndSortingForSongChange,
-    persistColumnData
+    persistColumnData,
+    resetToSharedSettings,
+    independentSettings
   }
 }

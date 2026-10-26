@@ -5,6 +5,7 @@ import SongAreaColRightClickMenu from '@renderer/components/songAreaColRightClic
 
 const props = defineProps({
   modelValue: Boolean, // for v-model
+  independentSettings: Boolean,
   targetEvent: {
     type: Object as PropType<MouseEvent | null>,
     default: null
@@ -18,6 +19,7 @@ const props = defineProps({
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
   (e: 'toggle-column-visibility', columnKey: string): void
+  (e: 'reset-to-shared-settings'): void
 }>()
 
 const internalShow = ref(props.modelValue)
@@ -40,8 +42,10 @@ const onMenuVModelUpdate = (value: boolean) => {
     :model-value="internalShow"
     :click-event="targetEvent"
     :column-data="columns"
+    :show-reset-to-shared-settings="independentSettings"
     @update:model-value="onMenuVModelUpdate"
     @col-menu-handle-click="handleMenuItemClick"
+    @reset-to-shared-settings="emit('reset-to-shared-settings')"
   />
 </template>
 

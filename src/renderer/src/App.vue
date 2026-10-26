@@ -25,8 +25,6 @@ import cloudSyncSummaryDialog from './components/cloudSyncSummaryDialog.vue'
 import curatedLibrarySyncDialog from './components/curatedLibrarySyncDialog.vue'
 import FileOpInterruptedDialog from './components/fileOpInterruptedDialog.vue'
 import emitter from './utils/mitt'
-import { replaceExternalPlaylistFromPaths } from '@renderer/utils/externalPlaylist'
-import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
 import {
   PRODUCT_DISPLAY_NAME,
   GITHUB_REPO_URL,
@@ -70,12 +68,9 @@ import {
   markGlobalSongSearchDirty,
   type SongsRemovedPayload
 } from '@renderer/utils/globalSongSearchEvents'
-import {
-  createLayoutConfigReadHandler,
-  isRuntimeLibraryTree
-} from '@renderer/utils/appRuntimeStateGuards'
+import { createLayoutConfigReadHandler } from '@renderer/utils/appRuntimeStateGuards'
+import { useMainWindowLibraryEvents } from '@renderer/composables/useMainWindowLibraryEvents'
 import { stopWindowAudio } from '@renderer/utils/windowAudioCleanup'
-import { pruneLibraryTreeTrackCounts } from '@renderer/utils/libraryTreeSort'
 
 const LIBRARY_SETUP_ALLOWED_DIALOGS = new Set([
   'menu.about',
@@ -649,41 +644,7 @@ const handleBeforeUnload = () => {
   stopWindowAudio()
 }
 
-let startupLibraryTreeReconcileRequested = false
-
-const requestStartupLibraryTreeReconcile = () => {
-  if (startupLibraryTreeReconcileRequested) return
-  startupLibraryTreeReconcileRequested = true
-  // 先让快照树完成一次绘制，再开始后台核对；否则慢盘上的递归扫描会和首屏争抢资源。
-  void nextTick()
-    .then(
-      () =>
-        new Promise<void>((resolve) => {
-          requestAnimationFrame(() => resolve())
-        })
-    )
-    .then(() => {
-      window.electron.ipcRenderer.send('library-tree:startup-ready')
-    })
-}
-
-const getLibrary = async (options?: { useCachedSnapshot?: boolean }) => {
-  if (runtime.librarySetupActive) return
-  runtime.libraryTreeLoading = true
-  let loaded = false
-  try {
-    runtime.libraryTree = await window.electron.ipcRenderer.invoke(
-      options?.useCachedSnapshot ? 'getLibrary:cached' : 'getLibrary'
-    )
-    runtime.oldLibraryTree = JSON.parse(JSON.stringify(runtime.libraryTree))
-    pruneLibraryTreeTrackCounts(runtime.libraryTree)
-    loaded = true
-  } finally {
-    runtime.libraryTreeLoading = false
-    if (options?.useCachedSnapshot && loaded) requestStartupLibraryTreeReconcile()
-  }
-}
-void getLibrary({ useCachedSnapshot: true }).catch(() => {})
+const { handleLibraryTreeUpdated, handleExternalOpenImported } = useMainWindowLibraryEvents(runtime)
 
 // IPC 监听器处理函数
 const handleOpenDialogFromTray = async (_e: unknown, key: string) => {
@@ -708,28 +669,6 @@ const handleTrayAction = async (_e: unknown, action: string) => {
     return
   }
 }
-const handleExternalOpenImported = async (_e: unknown, payload: { paths?: string[] }) => {
-  if (runtime.librarySetupActive) return
-  try {
-    const rawPaths = Array.isArray(payload?.paths) ? payload.paths : []
-    const songs = await replaceExternalPlaylistFromPaths(rawPaths)
-    if (songs.length) {
-      if (
-        runtime.mainWindowBrowseMode === 'horizontal' ||
-        runtime.mainWindowBrowseMode === 'edit'
-      ) {
-        runtime.playingData.playingSongListUUID = EXTERNAL_PLAYLIST_UUID
-        runtime.playingData.playingSongListData = songs
-        emitter.emit('horizontalBrowse/load-song', { deck: 'top', song: songs[0] })
-      } else {
-        emitter.emit('external-open/play', { songs, startIndex: 0 })
-      }
-    }
-    markGlobalSongSearchDirty('external-open-imported')
-  } catch (error) {
-    console.error('[external-open] failed to prepare playlist', error)
-  }
-}
 const handleFileOpInterrupted = async (
   _e: unknown,
   payload: {
@@ -750,19 +689,6 @@ const handleFileOpInterrupted = async (
     fileOpRunning.value = payload?.running || 0
     fileOpPending.value = payload?.pending || 0
     fileOpBatchId.value = payload?.batchId || ''
-  } catch (_err) {}
-}
-const handleLibraryTreeUpdated = async (_e: unknown, tree: unknown) => {
-  try {
-    if (isRuntimeLibraryTree(tree)) {
-      runtime.libraryTree = tree
-      runtime.oldLibraryTree = JSON.parse(JSON.stringify(tree))
-      pruneLibraryTreeTrackCounts(tree)
-      markGlobalSongSearchDirty('library-tree-updated')
-      return
-    }
-    await getLibrary()
-    markGlobalSongSearchDirty('library-tree-reloaded')
   } catch (_err) {}
 }
 const handleOpenDialogFromChild = (e: Event) => {

@@ -312,7 +312,9 @@ const {
   colMenuClick,
   applyFiltersAndSorting,
   shouldApplyFiltersAndSortingForSongChange,
-  persistColumnData
+  persistColumnData,
+  resetToSharedSettings,
+  independentSettings
 } = useSongsAreaColumns({
   runtime,
   songsAreaState,
@@ -1032,7 +1034,9 @@ const { shouldShowEmptyState, emptyTitleText, emptyHintText } = useSongsAreaEmpt
       v-model="colRightClickMenuShow"
       :target-event="triggeringColContextEvent"
       :columns="columnData"
+      :independent-settings="independentSettings"
       @toggle-column-visibility="handleToggleColumnVisibility"
+      @reset-to-shared-settings="resetToSharedSettings"
     />
     <Teleport to="body">
       <selectSongListDialog

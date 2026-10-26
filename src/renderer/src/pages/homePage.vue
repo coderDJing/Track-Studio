@@ -773,6 +773,7 @@ const drop = async (e: DragEvent) => {
               @mousedown.capture="handleSplitPaneMouseDown(pane)"
             >
               <SongsAreaPaneHeader
+                :pane="pane"
                 v-model:search-query="runtime.songsAreaPanels.panes[pane].searchQuery"
                 v-model:compatible-key-only="runtime.songsAreaPanels.panes[pane].compatibleKeyOnly"
                 :title="resolveSongsPaneTitle(pane)"
@@ -802,6 +803,7 @@ const drop = async (e: DragEvent) => {
           <div v-else class="singleSongsAreaShell">
             <SongsAreaPaneHeader
               v-if="showSingleSongsAreaHeader"
+              pane="single"
               v-model:search-query="runtime.songsAreaPanels.panes.single.searchQuery"
               v-model:compatible-key-only="runtime.songsAreaPanels.panes.single.compatibleKeyOnly"
               :title="resolveSongsPaneTitle('single')"

@@ -4,17 +4,49 @@ import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 import EmptyRecycleBinIcon from '@renderer/components/EmptyRecycleBinIcon.vue'
 import singleCheckbox from '@renderer/components/singleCheckbox.vue'
 import { t } from '@renderer/utils/translate'
-import { useRuntimeStore } from '@renderer/stores/runtime'
+import { useRuntimeStore, type SongsAreaPaneKey } from '@renderer/stores/runtime'
+import {
+  isPlaylistViewNode,
+  usePlaylistViewSettingsStore
+} from '@renderer/stores/playlistViewSettings'
+import libraryUtils from '@renderer/utils/libraryUtils'
 import { useHarmonicReferenceKey } from '@renderer/composables/useHarmonicReferenceKey'
 import { isHarmonicMixCompatible } from '@shared/keyDisplay'
 
-defineProps<{
+const props = defineProps<{
   title: string
   showEmptyRecycleBinButton: boolean
+  pane: SongsAreaPaneKey
 }>()
 const searchQuery = defineModel<string>('searchQuery', { required: true })
 const compatibleKeyOnly = defineModel<boolean>('compatibleKeyOnly', { required: true })
 const runtime = useRuntimeStore()
+const viewSettings = usePlaylistViewSettingsStore()
+const paneState = computed(() => runtime.songsAreaPanels.panes[props.pane])
+const playlistNode = computed(() => libraryUtils.getLibraryTreeByUUID(paneState.value.songListUUID))
+const canCustomize = computed(
+  () => !!runtime.libraryTree.uuid && isPlaylistViewNode(playlistNode.value)
+)
+const independentSettings = computed({
+  get: () =>
+    canCustomize.value &&
+    viewSettings.getPlaylist(
+      runtime.libraryTree.uuid,
+      paneState.value.songListUUID,
+      runtime.setting.persistSongFilters
+    )?.enabled === true,
+  set: (enabled: boolean) => {
+    if (!canCustomize.value) return
+    viewSettings.setIndependent(
+      runtime.libraryTree.uuid,
+      paneState.value.songListUUID,
+      playlistNode.value?.type === 'mixtapeList' ? 'mixtape' : 'default',
+      enabled,
+      compatibleKeyOnly.value,
+      runtime.setting.persistSongFilters
+    )
+  }
+})
 const harmonicReferenceKey = useHarmonicReferenceKey(runtime)
 const hasHarmonicReference = computed(() =>
   isHarmonicMixCompatible(harmonicReferenceKey.value, harmonicReferenceKey.value)
@@ -44,6 +76,26 @@ const clearSearch = () => {
       <EmptyRecycleBinIcon />
     </bubbleBoxTrigger>
     <bubbleBoxTrigger
+      v-if="canCustomize"
+      class="songs-pane-header__key-filter"
+      :title="
+        t(
+          independentSettings
+            ? 'tracks.independentListSettingsOnHint'
+            : 'tracks.independentListSettingsOffHint'
+        )
+      "
+      @click.stop
+      @keydown.stop
+    >
+      <singleCheckbox v-model="independentSettings">
+        <span class="songs-pane-header__label-full">{{ t('tracks.independentListSettings') }}</span>
+        <span class="songs-pane-header__label-compact">{{
+          t('tracks.independentListSettingsCompact')
+        }}</span>
+      </singleCheckbox>
+    </bubbleBoxTrigger>
+    <bubbleBoxTrigger
       v-if="runtime.mainWindowBrowseMode !== 'browser'"
       class="songs-pane-header__key-filter"
       :title="
@@ -58,7 +110,10 @@ const clearSearch = () => {
         v-model="compatibleKeyOnly"
         :disabled="!compatibleKeyOnly && !hasHarmonicReference"
       >
-        {{ t('tracks.compatibleKeyOnly') }}
+        <span class="songs-pane-header__label-full">{{ t('tracks.compatibleKeyOnly') }}</span>
+        <span class="songs-pane-header__label-compact">{{
+          t('tracks.compatibleKeyOnlyCompact')
+        }}</span>
       </singleCheckbox>
     </bubbleBoxTrigger>
     <div class="songs-pane-header__search" @click.stop @keydown.stop>
@@ -103,6 +158,7 @@ const clearSearch = () => {
 
 <style scoped lang="scss">
 .songs-pane-header {
+  container: songs-pane-header / inline-size;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -112,6 +168,20 @@ const clearSearch = () => {
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg) 90%, var(--font-color) 10%);
   flex-shrink: 0;
+}
+
+.songs-pane-header__label-compact {
+  display: none;
+}
+
+@container songs-pane-header (max-width: 460px) {
+  .songs-pane-header__label-full {
+    display: none;
+  }
+
+  .songs-pane-header__label-compact {
+    display: inline;
+  }
 }
 
 .songs-pane-header__title {

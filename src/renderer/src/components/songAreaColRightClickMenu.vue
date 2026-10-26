@@ -36,7 +36,7 @@ const COMMON_COLUMN_KEYS = new Set([
   'key'
 ])
 
-const emits = defineEmits(['update:modelValue', 'colMenuHandleClick'])
+const emits = defineEmits(['update:modelValue', 'colMenuHandleClick', 'reset-to-shared-settings'])
 watch(
   () => runtime.activeMenuUUID,
   (val) => {
@@ -46,6 +46,7 @@ watch(
   }
 )
 const props = defineProps({
+  showResetToSharedSettings: Boolean,
   columnData: {
     type: Array as PropType<ISongsAreaColumn[]>,
     required: true
@@ -104,6 +105,11 @@ const closeMenu = () => {
     runtime.activeMenuUUID = ''
   }
   emits('update:modelValue', false)
+}
+
+const resetToSharedSettings = () => {
+  emits('reset-to-shared-settings')
+  closeMenu()
 }
 
 let positionTop = ref(-9999)
@@ -170,6 +176,14 @@ onUnmounted(() => {
         <span class="menuCount">{{ visibleColumnCount }}/{{ props.columnData.length }}</span>
       </div>
       <div class="menuContent">
+        <button
+          v-if="props.showResetToSharedSettings"
+          type="button"
+          class="resetSharedSettings"
+          @click="resetToSharedSettings"
+        >
+          {{ t('tracks.resetIndependentListSettings') }}
+        </button>
         <section v-for="group of groupedColumns" :key="group.id" class="menuSection">
           <div class="menuSectionTitle">{{ t(group.label) }}</div>
           <div class="columnGrid">
@@ -230,6 +244,24 @@ onUnmounted(() => {
   .menuContent {
     overflow-y: auto;
     padding: 6px;
+  }
+
+  .resetSharedSettings {
+    display: block;
+    width: 100%;
+    padding: 7px 8px;
+    margin-bottom: 6px;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    color: var(--font-color);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--hover);
+    }
   }
 
   .menuSection {

@@ -3,6 +3,7 @@ import confirm from '@renderer/components/confirmDialog'
 import { IDir } from 'src/types/globals'
 import { calculateFileSystemOperations } from './diffLibraryTree'
 import { toLibraryDisplayName, t } from './translate'
+import { usePlaylistViewSettingsStore } from '@renderer/stores/playlistViewSettings'
 
 const MIXTAPE_WINDOW_OPEN_ERROR_CODE = 'MIXTAPE_WINDOW_OPEN'
 
@@ -38,6 +39,20 @@ export const diffLibraryTreeExecuteFileOperation = async () => {
     return true
   }
 
+  const libraryUuid = runtime.oldLibraryTree.uuid
+  const deletedPlaylistUuids = new Set<string>()
+  const collectDeletedPlaylists = (node: IDir) => {
+    if (node.type === 'songList' || node.type === 'setList' || node.type === 'mixtapeList') {
+      deletedPlaylistUuids.add(node.uuid)
+    }
+    node.children?.forEach(collectDeletedPlaylists)
+  }
+  for (const operation of operations) {
+    if (operation.type !== 'delete' && operation.type !== 'permanentlyDelete') continue
+    const node = getLibraryTreeByUUID(operation.uuid, runtime.oldLibraryTree)
+    if (node) collectDeletedPlaylists(node)
+  }
+
   // 2. 发送操作到主进程
   const result = await window.electron.ipcRenderer.invoke('operateFileSystemChange', operations)
 
@@ -45,6 +60,12 @@ export const diffLibraryTreeExecuteFileOperation = async () => {
   if (result.success && result.details) {
     // 4. 同步 oldLibraryTree
     runtime.oldLibraryTree = JSON.parse(JSON.stringify(runtime.libraryTree))
+    // 只清理本次已确认删除的歌单，不拿可能已包含下一次乐观操作的树做全量清理。
+    usePlaylistViewSettingsStore().removePlaylists(
+      libraryUuid,
+      deletedPlaylistUuids,
+      runtime.setting.persistSongFilters
+    )
     return true
   } else {
     // 处理主进程报告的失败
@@ -63,6 +84,10 @@ export const diffLibraryTreeExecuteFileOperation = async () => {
       if (latestTree) {
         runtime.libraryTree = latestTree
         runtime.oldLibraryTree = JSON.parse(JSON.stringify(latestTree))
+        usePlaylistViewSettingsStore().pruneDeletedPlaylists(
+          latestTree,
+          runtime.setting.persistSongFilters
+        )
       } else {
         runtime.libraryTree = JSON.parse(JSON.stringify(runtime.oldLibraryTree))
       }
