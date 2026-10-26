@@ -35,7 +35,7 @@ const latestMainWindowSizeMigration = MAIN_WINDOW_SIZE_MIGRATIONS[
 const MAIN_WINDOW_DEFAULT_WIDTH = latestMainWindowSizeMigration.minWidth
 const MAIN_WINDOW_DEFAULT_HEIGHT = latestMainWindowSizeMigration.minHeight
 export const MAIN_WINDOW_MIN_WIDTH = latestMainWindowSizeMigration.minWidth
-export const MAIN_WINDOW_MIN_HEIGHT = latestMainWindowSizeMigration.minHeight
+export const MAIN_WINDOW_MIN_HEIGHT = 650
 
 export const defaultLayoutConfig: ILayoutConfig = {
   libraryAreaWidth: 175,

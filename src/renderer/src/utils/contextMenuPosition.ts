@@ -89,11 +89,13 @@ export const resolveContextMenuPoint = (
   const minX = padding
   const maxX = Math.max(minX, width - menuWidth - padding)
   const minY = Math.max(padding, topInset + padding)
-  const maxY = Math.max(minY, height - menuHeight - padding)
+  const maxHeight = Math.max(0, height - minY - padding)
+  const maxY = Math.max(minY, height - Math.min(menuHeight, maxHeight) - padding)
 
   return {
     x: clamp(clickX, minX, maxX),
     y: clamp(clickY, minY, maxY),
-    topInset
+    topInset,
+    maxHeight
   }
 }

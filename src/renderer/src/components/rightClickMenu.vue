@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch, ref, onUnmounted, onMounted, PropType, nextTick } from 'vue'
+import { watch, ref, onUnmounted, onMounted, PropType, nextTick, computed } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { v4 as uuidV4 } from 'uuid'
@@ -68,12 +68,28 @@ const handleAfterLeave = () => {
 
 let positionTop = ref(0)
 let positionLeft = ref(0)
-let openSubmenuLeft = ref(false)
+const maxMenuHeight = ref(0)
+const submenuRef = ref<HTMLDivElement | null>(null)
+const submenuTop = ref(-9999)
+const submenuLeft = ref(-9999)
+let leaveTimer: ReturnType<typeof setTimeout> | undefined
 
 positionTop.value = -9999
 positionLeft.value = -9999
 
 const hoverItem = ref<IMenu | null>(null)
+const submenuParent = computed(() => {
+  const hovered = hoverItem.value
+  return props.menuArr
+    .flat()
+    .find(
+      (item) =>
+        !item.disabled &&
+        item.children?.length &&
+        hovered &&
+        (item === hovered || item.children.includes(hovered))
+    )
+})
 const getMenuItemRefKey = (item: IMenu) => item.menuName
 const setMenuItemRef = (item: IMenu, element: Element | ComponentPublicInstance | null) => {
   const key = getMenuItemRefKey(item)
@@ -107,37 +123,85 @@ const menuButtonClick = (item: IMenu) => {
   }
   requestClose(item)
 }
+const cancelMenuLeave = () => {
+  clearTimeout(leaveTimer)
+}
 const mouseover = (item: IMenu) => {
+  cancelMenuLeave()
   hoverItem.value = item
 }
-const mouseleave = () => {
-  hoverItem.value = null
+const mouseleave = (event: MouseEvent) => {
+  const target = event.relatedTarget
+  if (
+    target instanceof Node &&
+    (menuRef.value?.contains(target) || submenuRef.value?.contains(target))
+  )
+    return
+  cancelMenuLeave()
+  leaveTimer = setTimeout(() => {
+    hoverItem.value = null
+  }, 120)
+}
+const updateSubmenuPosition = async () => {
+  await nextTick()
+  const parent = submenuParent.value
+  const submenu = submenuRef.value
+  const anchor = parent && menuButtonRefs.value[getMenuItemRefKey(parent)]
+  if (!anchor || !submenu || !menuRef.value) return
+  const rect = anchor.getBoundingClientRect()
+  const menuRect = menuRef.value.getBoundingClientRect()
+  const openLeft = menuRect.right + submenu.offsetWidth > window.innerWidth - 8
+  const point = resolveContextMenuPoint({
+    clickX: openLeft ? menuRect.left - submenu.offsetWidth : menuRect.right,
+    clickY: rect.top - 5,
+    menuWidth: submenu.offsetWidth,
+    menuHeight: submenu.offsetHeight
+  })
+  submenuTop.value = point.y
+  submenuLeft.value = point.x
+}
+watch(submenuParent, () => {
+  submenuTop.value = -9999
+  submenuLeft.value = -9999
+  void updateSubmenuPosition()
+})
+const updateMenuPosition = async () => {
+  const bounds = resolveContextMenuPoint({
+    clickX: 0,
+    clickY: 0,
+    menuWidth: 0,
+    menuHeight: 0
+  })
+  maxMenuHeight.value = bounds.maxHeight
+  await nextTick()
+  if (!menuRef.value) return
+  const point = resolveContextMenuPoint({
+    clickX: props.clickEvent.clientX,
+    clickY: props.clickEvent.clientY,
+    menuWidth: menuRef.value.offsetWidth,
+    menuHeight: menuRef.value.offsetHeight
+  })
+  positionTop.value = point.y
+  positionLeft.value = point.x
+  void updateSubmenuPosition()
+}
+const revealKeyboardItem = async () => {
+  const item = hoverItem.value
+  if (!item) return
+  const parent = submenuParent.value
+  if (parent) menuButtonRefs.value[getMenuItemRefKey(parent)]?.scrollIntoView({ block: 'nearest' })
+  await updateSubmenuPosition()
+  menuButtonRefs.value[getMenuItemRefKey(item)]?.scrollIntoView({ block: 'nearest' })
 }
 const handleGlobalPointerDown = (event: MouseEvent) => {
   if (!isVisible.value) return
   const target = event.target as Node | null
-  if (menuRef.value && target && menuRef.value.contains(target)) return
+  if (target && (menuRef.value?.contains(target) || submenuRef.value?.contains(target))) return
   requestClose('cancel')
 }
 onMounted(() => {
-  nextTick(() => {
-    if (!menuRef.value) return
-
-    const menuElement = menuRef.value
-    const divHeight = menuElement.offsetHeight
-    const divWidth = menuElement.offsetWidth
-
-    const { x, y } = resolveContextMenuPoint({
-      clickX: props.clickEvent.clientX,
-      clickY: props.clickEvent.clientY,
-      menuWidth: divWidth,
-      menuHeight: divHeight
-    })
-
-    positionTop.value = y
-    positionLeft.value = x
-    openSubmenuLeft.value = x + divWidth + 230 > window.innerWidth - 8
-  })
+  void updateMenuPosition()
+  window.addEventListener('resize', updateMenuPosition)
 
   const getNavigableItems = () =>
     props.menuArr
@@ -154,6 +218,7 @@ onMounted(() => {
     } else {
       hoverItem.value = menuArr[currentIndex - 1]
     }
+    void revealKeyboardItem()
     return false
   })
   hotkeys('s', uuid, () => {
@@ -165,6 +230,7 @@ onMounted(() => {
     } else {
       hoverItem.value = menuArr[currentIndex + 1]
     }
+    void revealKeyboardItem()
     return false
   })
   hotkeys('E,Enter', uuid, () => {
@@ -182,6 +248,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  cancelMenuLeave()
+  window.removeEventListener('resize', updateMenuPosition)
   utils.delHotkeysScope(uuid)
   window.removeEventListener('pointerdown', handleGlobalPointerDown, true)
 })
@@ -193,9 +261,15 @@ onUnmounted(() => {
       ref="menuRef"
       data-frkb-context-menu="true"
       class="menu unselectable"
-      :style="{ top: positionTop + 'px', left: positionLeft + 'px' }"
+      :style="{
+        top: positionTop + 'px',
+        left: positionLeft + 'px',
+        maxHeight: maxMenuHeight + 'px'
+      }"
       @click.stop="() => {}"
-      @mouseleave.stop="mouseleave()"
+      @mouseenter="cancelMenuLeave"
+      @mouseleave.stop="mouseleave"
+      @wheel.passive="hoverItem = null"
     >
       <div v-for="item of props.menuArr" class="menuGroup">
         <div
@@ -222,49 +296,47 @@ onUnmounted(() => {
             :show-delay="250"
             :z-index="'calc(var(--z-context-menu) + 1)'"
           />
-          <div
-            v-if="
-              button.children?.length &&
-              !button.disabled &&
-              hoverItem &&
-              (hoverItem.menuName === button.menuName ||
-                button.children.some((child) => child.menuName === hoverItem?.menuName))
-            "
-            class="submenu"
-            :class="{ submenuLeft: openSubmenuLeft }"
-            @click.stop="() => {}"
-            @contextmenu.stop.prevent
-          >
-            <div
-              v-for="child of button.children"
-              :ref="(el) => setMenuItemRef(child, el)"
-              class="submenuButton"
-              :class="{
-                menuButtonOver: hoverItem?.menuName === child.menuName,
-                submenuButtonDisabled: child.disabled
-              }"
-              :aria-disabled="child.disabled ? 'true' : 'false'"
-              @click.stop="menuButtonClick(child)"
-              @mouseover.stop="mouseover(child)"
-              @contextmenu.stop.prevent="menuButtonClick(child)"
-            >
-              <span>{{ t(child.menuName) }}</span>
-              <span :class="{ menuButtonStatus: child.disabled }">{{
-                resolveTrailingText(child)
-              }}</span>
-              <bubbleBox
-                v-if="child.disabled && resolveDisabledReason(child)"
-                :dom="menuButtonRefs[getMenuItemRefKey(child)] || undefined"
-                :title="resolveDisabledReason(child)"
-                :show-delay="250"
-                :z-index="'calc(var(--z-context-menu) + 1)'"
-              />
-            </div>
-          </div>
         </div>
       </div>
     </div>
   </Transition>
+  <Teleport to="body">
+    <div
+      v-if="isVisible && submenuParent"
+      ref="submenuRef"
+      data-frkb-context-menu="true"
+      class="submenu unselectable"
+      :style="{ top: submenuTop + 'px', left: submenuLeft + 'px', maxHeight: maxMenuHeight + 'px' }"
+      @mouseenter="cancelMenuLeave"
+      @mouseleave="mouseleave"
+      @click.stop
+      @contextmenu.stop.prevent
+    >
+      <div
+        v-for="child of submenuParent.children"
+        :ref="(el) => setMenuItemRef(child, el)"
+        class="submenuButton"
+        :class="{
+          menuButtonOver: hoverItem?.menuName === child.menuName,
+          submenuButtonDisabled: child.disabled
+        }"
+        :aria-disabled="child.disabled ? 'true' : 'false'"
+        @click.stop="menuButtonClick(child)"
+        @mouseover.stop="mouseover(child)"
+        @contextmenu.stop.prevent="menuButtonClick(child)"
+      >
+        <span>{{ t(child.menuName) }}</span>
+        <span :class="{ menuButtonStatus: child.disabled }">{{ resolveTrailingText(child) }}</span>
+        <bubbleBox
+          v-if="child.disabled && resolveDisabledReason(child)"
+          :dom="menuButtonRefs[getMenuItemRefKey(child)] || undefined"
+          :title="resolveDisabledReason(child)"
+          :show-delay="250"
+          :z-index="'calc(var(--z-context-menu) + 1)'"
+        />
+      </div>
+    </div>
+  </Teleport>
 </template>
 <style lang="scss" scoped>
 .context-menu-enter-active,
@@ -281,7 +353,12 @@ onUnmounted(() => {
 }
 
 .menu {
-  position: absolute;
+  position: fixed;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
   background-color: var(--bg-elev);
   border: 1px solid var(--border);
   font-size: 14px;
@@ -340,66 +417,75 @@ onUnmounted(() => {
       font-size: 12px;
       color: inherit;
     }
-
-    .submenu {
-      position: absolute;
-      top: -5px;
-      left: 100%;
-      min-width: 220px;
-      width: max-content;
-      max-width: calc(100vw - 12px);
-      padding: 5px;
-      background-color: var(--bg-elev);
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      color: var(--text);
-      z-index: 1;
-    }
-
-    .submenuLeft {
-      left: auto;
-      right: 100%;
-    }
-
-    .submenuButton {
-      position: relative;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: center;
-      column-gap: 24px;
-      padding: 5px 20px;
-      border-radius: 5px;
-      color: var(--text);
-
-      &:hover {
-        background-color: var(--accent);
-        color: #ffffff;
-      }
-    }
-
-    .submenuButton > span {
-      white-space: nowrap;
-    }
-
-    .submenuButton > span:first-child {
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .submenuButtonDisabled {
-      color: var(--text-weak);
-      cursor: default;
-      opacity: 0.68;
-
-      &:hover {
-        background-color: transparent;
-        color: var(--text-weak);
-      }
-    }
   }
 
   .menuGroup:last-child {
     border-bottom: 0;
+  }
+}
+
+.submenu {
+  position: fixed;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+  min-width: 220px;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  padding: 5px;
+  background-color: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 14px;
+  color: var(--text);
+  z-index: var(--z-context-menu);
+
+  .submenuButton {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 24px;
+    padding: 5px 20px;
+    border-radius: 5px;
+    color: var(--text);
+
+    &:hover {
+      background-color: var(--accent);
+      color: #ffffff;
+    }
+  }
+
+  .submenuButton > span {
+    white-space: nowrap;
+  }
+
+  .submenuButton > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .submenuButton.menuButtonOver {
+    background-color: var(--accent);
+    color: #ffffff;
+  }
+
+  .menuButtonStatus {
+    font-size: 12px;
+    color: inherit;
+  }
+
+  .submenuButtonDisabled {
+    color: var(--text-weak);
+    cursor: default;
+    opacity: 0.68;
+
+    &:hover {
+      background-color: transparent;
+      color: var(--text-weak);
+    }
   }
 }
 </style>

@@ -26,4 +26,25 @@ describe('resolveContextMenuPoint', () => {
       )
     ).toMatchObject({ x: 14, y: 14 })
   })
+  it('constrains oversized menus below the title bar with gaps at both edges', () => {
+    const point = resolveContextMenuPoint(
+      { clickX: 300, clickY: 700, menuWidth: 250, menuHeight: 1000 },
+      { windowWidth: 1260, windowHeight: 780, topInset: 40 }
+    )
+    expect(point).toMatchObject({ y: 48, maxHeight: 724 })
+    expect(point.y + point.maxHeight).toBe(772)
+  })
+
+  it('updates available height when the viewport shrinks', () => {
+    const input = { clickX: 300, clickY: 500, menuWidth: 250, menuHeight: 600 }
+    const options = { windowWidth: 1260, topInset: 40 }
+    expect(resolveContextMenuPoint(input, { ...options, windowHeight: 1000 })).toMatchObject({
+      y: 392,
+      maxHeight: 944
+    })
+    expect(resolveContextMenuPoint(input, { ...options, windowHeight: 600 })).toMatchObject({
+      y: 48,
+      maxHeight: 544
+    })
+  })
 })
