@@ -11,7 +11,7 @@ fn build_pioneer_preview_waveform_candidates(input_path: &Path) -> Vec<PathBuf> 
   let mut candidates = Vec::new();
   let mut seen = HashSet::new();
   let mut push_unique = |path: PathBuf| {
-    let key = path.to_string_lossy().to_lowercase();
+    let key = crate::file_path_comparison::file_path_key(&path.to_string_lossy());
     if seen.insert(key) {
       candidates.push(path);
     }
@@ -239,7 +239,7 @@ fn build_pioneer_beat_grid_candidates(input_path: &Path) -> Vec<PathBuf> {
   let mut candidates = Vec::new();
   let mut seen = HashSet::new();
   let mut push_unique = |path: PathBuf| {
-    let key = path.to_string_lossy().to_lowercase();
+    let key = crate::file_path_comparison::file_path_key(&path.to_string_lossy());
     if seen.insert(key) {
       candidates.push(path);
     }
@@ -455,7 +455,7 @@ fn build_pioneer_detail_waveform_candidates(input_path: &Path) -> Vec<PathBuf> {
   let mut candidates = Vec::new();
   let mut seen = HashSet::new();
   let mut push_unique = |path: PathBuf| {
-    let key = path.to_string_lossy().to_lowercase();
+    let key = crate::file_path_comparison::file_path_key(&path.to_string_lossy());
     if seen.insert(key) {
       candidates.push(path);
     }

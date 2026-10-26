@@ -1,4 +1,5 @@
 import { markRaw } from 'vue'
+import { RendererFilePathMap, sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import type { SongListWaveformWorkerIncoming } from '@renderer/workers/songListWaveformPreview.types'
 
 type CanvasRegistryParams = {
@@ -12,7 +13,7 @@ export const createWaveformPreviewCanvasRegistry = (params: CanvasRegistryParams
   const canvasFilePathMap = markRaw(new Map<string, string>())
   // 暂存到延迟解绑结束，同轮 null / 原元素重绑不应把已有位图当成新画布。
   const canvasBindings = new Map<string, { canvas: HTMLCanvasElement; filePath: string }>()
-  const filePathCanvasIdsMap = markRaw(new Map<string, Set<string>>())
+  const filePathCanvasIdsMap = markRaw(new RendererFilePathMap<Set<string>>())
   const pendingCanvasDetachTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
   const addCanvasIdForFilePath = (filePath: string, canvasId: string) => {
@@ -86,10 +87,12 @@ export const createWaveformPreviewCanvasRegistry = (params: CanvasRegistryParams
       cancelPendingCanvasDetach(normalizedCanvasId)
       const previousBinding = canvasBindings.get(normalizedCanvasId)
       const bindingChanged =
-        !previousBinding || previousBinding.canvas !== el || previousBinding.filePath !== filePath
+        !previousBinding ||
+        previousBinding.canvas !== el ||
+        !sameRendererFilePath(previousBinding.filePath, filePath)
       canvasBindings.set(normalizedCanvasId, { canvas: el, filePath })
       const previousFilePath = canvasFilePathMap.get(normalizedCanvasId)
-      if (previousFilePath && previousFilePath !== filePath) {
+      if (previousFilePath && !sameRendererFilePath(previousFilePath, filePath)) {
         removeCanvasIdForFilePath(previousFilePath, normalizedCanvasId)
       }
       canvasFilePathMap.set(normalizedCanvasId, filePath)

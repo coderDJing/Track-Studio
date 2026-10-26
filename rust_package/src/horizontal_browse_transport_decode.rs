@@ -45,7 +45,7 @@ impl HorizontalBrowseTransportEngine {
     }
 
     let pending_matches_file =
-      self.deck(deck).pending_decode_file_path.as_deref() == Some(file_path.as_str());
+      self.deck(deck).pending_decode_file_path.as_deref().is_some_and(|pending| crate::file_path_comparison::same_file_path(pending, &file_path));
     if pending_matches_file {
       if !replace_pending {
         return None;
@@ -53,7 +53,7 @@ impl HorizontalBrowseTransportEngine {
     }
 
     let should_reset_loaded_audio =
-      self.deck(deck).loaded_file_path.as_deref().map(str::trim) != Some(file_path.as_str());
+      !self.deck(deck).loaded_file_path.as_deref().is_some_and(|loaded| crate::file_path_comparison::same_file_path(loaded, &file_path));
     let target = self.deck_mut(deck);
     target.decode_request_id = target.decode_request_id.wrapping_add(1);
     let request_id = target.decode_request_id;
@@ -96,7 +96,7 @@ impl HorizontalBrowseTransportEngine {
     if !self.is_loaded(deck) {
       return None;
     }
-    if self.deck(deck).pending_full_decode_file_path.as_deref() == Some(file_path.as_str()) {
+    if self.deck(deck).pending_full_decode_file_path.as_deref().is_some_and(|pending| crate::file_path_comparison::same_file_path(pending, &file_path)) {
       return None;
     }
     let target = self.deck_mut(deck);
@@ -133,7 +133,7 @@ impl HorizontalBrowseTransportEngine {
     } else {
       current_state.decode_request_id == request_id
     };
-    current_file_path == file_path && request_matches
+    crate::file_path_comparison::same_file_path(current_file_path, file_path) && request_matches
   }
 
   pub(super) fn capture_decode_apply_baseline(
@@ -213,7 +213,7 @@ impl HorizontalBrowseTransportEngine {
       .unwrap_or("");
     let full_decode_request_id = current_state.full_decode_request_id;
     let decode_request_id = current_state.decode_request_id;
-    if current_file_path != file_path {
+    if !crate::file_path_comparison::same_file_path(current_file_path, file_path) {
       return;
     }
     let target = self.deck_mut(deck);

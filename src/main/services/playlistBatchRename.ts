@@ -1,4 +1,9 @@
 import path = require('path')
+import {
+  batchRenamePathKey as normalizeComparablePath,
+  isBatchRenameCaseAlias,
+  createBatchRenameSourceLookup
+} from './playlistBatchRenamePaths'
 import fs = require('fs-extra')
 import { getKeyDisplayText } from '../../shared/keyDisplay'
 import { log } from '../log'
@@ -89,11 +94,6 @@ const INVALID_MAC_CHARS = /[:/\u0000]/
 const MAX_FILE_NAME_LENGTH = 255
 const MAX_WINDOWS_PATH_LENGTH = 259
 const MAX_MAC_PATH_LENGTH = 1023
-
-const normalizeComparablePath = (value: string) => {
-  const resolved = path.resolve(value || '')
-  return resolved.toLocaleLowerCase()
-}
 
 const getPreviewContext = (): PreviewContext => ({
   locale: store.settingConfig?.language === 'enUS' ? 'en-US' : 'zh-CN',
@@ -329,8 +329,11 @@ const buildPreviewItems = async (
     const existingNames = new Set(
       existingFileNames.map((name) => normalizeComparablePath(path.join(dirPath, name)))
     )
-    const movingSourceNames = new Set(
-      dirItems.map(({ item }) => normalizeComparablePath(item.filePath))
+    const existingFoldedNames = new Set(
+      existingFileNames.map((name) => normalizeComparablePath(path.join(dirPath, name), 'win32'))
+    )
+    const findMovingSource = createBatchRenameSourceLookup(
+      dirItems.map(({ item }) => item.filePath)
     )
     const assignedTargetNames = new Set<string>()
 
@@ -347,10 +350,15 @@ const buildPreviewItems = async (
         }
         const normalizedCandidatePath = normalizeComparablePath(candidatePath)
         const normalizedSourcePath = normalizeComparablePath(item.filePath)
-        const existsOnDisk = existingNames.has(normalizedCandidatePath)
-        const occupiedByAssigned = assignedTargetNames.has(normalizedCandidatePath)
-        const candidateIsOwnSource = normalizedCandidatePath === normalizedSourcePath
-        const freedByRenamingSource = movingSourceNames.has(normalizedCandidatePath)
+        const foldedCandidatePath = normalizeComparablePath(candidatePath, 'win32')
+        const existsOnDisk =
+          existingNames.has(normalizedCandidatePath) ||
+          (existingFoldedNames.has(foldedCandidatePath) && (await fs.pathExists(candidatePath)))
+        const occupiedByAssigned = assignedTargetNames.has(foldedCandidatePath)
+        const candidateIsOwnSource =
+          normalizedCandidatePath === normalizedSourcePath ||
+          (existsOnDisk && (await isBatchRenameCaseAlias(item.filePath, candidatePath)))
+        const freedByRenamingSource = existsOnDisk && Boolean(await findMovingSource(candidatePath))
         const occupied =
           occupiedByAssigned || (existsOnDisk && !candidateIsOwnSource && !freedByRenamingSource)
         if (!occupied) {
@@ -358,7 +366,7 @@ const buildPreviewItems = async (
           if (candidate === item.originalFileName) {
             item.status = 'unchanged'
           }
-          assignedTargetNames.add(normalizedCandidatePath)
+          assignedTargetNames.add(foldedCandidatePath)
           assigned = true
           continue
         }
@@ -409,20 +417,21 @@ const mapRenameError = (error: unknown): IBatchRenameExecutionStatus => {
   return 'failed'
 }
 
-const partitionComponentOrder = (items: IBatchRenameExecutionRequestItem[]) => {
+const partitionComponentOrder = async (items: IBatchRenameExecutionRequestItem[]) => {
   const validItems = [...items].sort((a, b) => a.order - b.order)
   const bySource = new Map<string, IBatchRenameExecutionRequestItem>()
   for (const item of validItems) {
     bySource.set(normalizeComparablePath(item.filePath), item)
   }
   const adjacency = new Map<string, Set<string>>()
+  const findSource = createBatchRenameSourceLookup(validItems.map((item) => item.filePath))
   for (const item of validItems) {
     const key = normalizeComparablePath(item.filePath)
     adjacency.set(key, adjacency.get(key) || new Set())
-    const targetPath = normalizeComparablePath(
-      path.join(path.dirname(item.filePath), item.targetFileName)
-    )
-    const dependency = bySource.get(targetPath)
+    const targetPath = path.join(path.dirname(item.filePath), item.targetFileName)
+    const source = await findSource(targetPath)
+    const dependency =
+      source === undefined ? undefined : bySource.get(normalizeComparablePath(source))
     if (!dependency || dependency.id === item.id) continue
     adjacency.get(key)?.add(normalizeComparablePath(dependency.filePath))
     const dependencyKey = normalizeComparablePath(dependency.filePath)
@@ -591,25 +600,40 @@ export async function executePlaylistBatchRename(params: {
       executableItems.push(item)
     }
 
-    const sourcePathSet = new Set(
-      executableItems.map((item) => normalizeComparablePath(item.filePath))
-    )
-    const revalidatedItems: IBatchRenameExecutionRequestItem[] = []
+    const assignedTargetNames = new Set<string>()
+    let revalidatedItems: IBatchRenameExecutionRequestItem[] = []
     for (const item of executableItems) {
       const targetPath = path.join(path.dirname(item.filePath), item.targetFileName)
-      const normalizedTarget = normalizeComparablePath(targetPath)
-      const normalizedSource = normalizeComparablePath(item.filePath)
-      if (normalizedTarget !== normalizedSource) {
-        const targetExists = await fs.pathExists(targetPath).catch(() => false)
-        if (targetExists && !sourcePathSet.has(normalizedTarget)) {
-          recordResult(item, 'target_exists')
-          continue
-        }
+      const targetKey = normalizeComparablePath(targetPath, 'win32')
+      if (assignedTargetNames.has(targetKey)) {
+        recordResult(item, 'target_exists')
+        continue
       }
+      assignedTargetNames.add(targetKey)
       revalidatedItems.push(item)
     }
+    // 被拒绝的项不会腾出源文件；连续剔除依赖这些源文件的项，防止覆盖。
+    let removedOccupiedTarget = true
+    while (removedOccupiedTarget) {
+      removedOccupiedTarget = false
+      const findSource = createBatchRenameSourceLookup(
+        revalidatedItems.map((item) => item.filePath)
+      )
+      const nextItems: IBatchRenameExecutionRequestItem[] = []
+      for (const item of revalidatedItems) {
+        const targetPath = path.join(path.dirname(item.filePath), item.targetFileName)
+        const exists = await fs.pathExists(targetPath)
+        if (exists && !(await findSource(targetPath))) {
+          recordResult(item, 'target_exists')
+          removedOccupiedTarget = true
+        } else {
+          nextItems.push(item)
+        }
+      }
+      revalidatedItems = nextItems
+    }
 
-    const components = partitionComponentOrder(revalidatedItems)
+    const components = await partitionComponentOrder(revalidatedItems)
     for (let componentIndex = 0; componentIndex < components.length; componentIndex += 1) {
       const component = components[componentIndex]
       if (cancelState.cancelled) {

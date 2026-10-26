@@ -139,7 +139,7 @@ impl HorizontalBrowseTransportEngine {
       .as_deref()
       .map(str::trim)
       .unwrap_or("");
-    if current != file_path.trim() {
+    if !crate::file_path_comparison::same_file_path(current, file_path) {
       return;
     }
     let target = self.deck_mut(deck);

@@ -1,3 +1,6 @@
+import { buildPlayerSongSnapshot as buildSongSnapshot } from './playerSongSnapshot'
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
+
 import { ref, nextTick, type Ref } from 'vue'
 import { type ISongInfo } from 'src/types/globals'
 import { useRuntimeStore } from '@renderer/stores/runtime'
@@ -14,7 +17,6 @@ import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
 import { isEditablePioneerUsbSong, deletePioneerUsbSong } from '@renderer/utils/pioneerUsbEditing'
 import { usePioneerUsbPlaybackDeletion } from '@renderer/composables/rekordboxDesktop/usePioneerUsbPlaybackDeletion'
-import { projectSongBeatGridMapV2ToFixedGrid } from '@shared/songBeatGridMapV2'
 import {
   resolveLibraryTransferActionModeForPlayback,
   type LibraryTransferActionMode,
@@ -96,38 +98,6 @@ export function usePlayerControlsLogic({
       runtime.playingData.playingSong
     )
   const isNoBpmSong = (song?: ISongInfo | null) => song?.beatGridStatus === 'no-bpm'
-  const buildSongSnapshot = (filePath: string, song: ISongInfo) => {
-    const baseName =
-      String(filePath || '')
-        .split(/[/\\]/)
-        .pop() || ''
-    const parts = baseName.split('.')
-    const ext = parts.length > 1 ? parts.pop() || '' : ''
-    const fileFormat = ext ? ext.toUpperCase() : ''
-    return {
-      filePath,
-      fileName: song?.fileName || baseName,
-      fileFormat: song?.fileFormat || fileFormat,
-      cover: null,
-      title: song?.title ?? baseName,
-      artist: song?.artist,
-      album: song?.album,
-      duration: song?.duration ?? '',
-      genre: song?.genre,
-      label: song?.label,
-      bitrate: song?.bitrate,
-      container: song?.container,
-      key: song?.key,
-      keyAnalysisAlgorithmVersion: song?.keyAnalysisAlgorithmVersion,
-      originalKey: song?.key,
-      originalBpm: projectSongBeatGridMapV2ToFixedGrid(song?.beatGridMap)?.bpm,
-      energyScore: song?.energyScore,
-      energyAlgorithmVersion: song?.energyAlgorithmVersion,
-      energyAnalysis: song?.energyAnalysis,
-      hotCues: Array.isArray(song?.hotCues) ? song.hotCues.map((cue) => ({ ...cue })) : [],
-      memoryCues: Array.isArray(song?.memoryCues) ? song.memoryCues.map((cue) => ({ ...cue })) : []
-    }
-  }
   const buildSongAnalysisSnapshot = (song: ISongInfo) => ({
     key: song.key,
     keyAnalysisAlgorithmVersion: song.keyAnalysisAlgorithmVersion,
@@ -177,7 +147,9 @@ export function usePlayerControlsLogic({
   }
   const resolvePlaybackAfterRemovingSong = (filePath: string) => {
     const currentList = [...runtime.playingData.playingSongListData]
-    const currentIndex = currentList.findIndex((song) => song.filePath === filePath)
+    const currentIndex = currentList.findIndex((song) =>
+      sameRendererFilePath(song.filePath, filePath)
+    )
     if (currentIndex === -1) {
       return {
         nextList: currentList,
@@ -306,8 +278,8 @@ export function usePlayerControlsLogic({
 
     let hasNextSong = false
     if (runtime.playingData.playingSong && runtime.playingData.playingSongListData?.length) {
-      const currentIndex = runtime.playingData.playingSongListData.findIndex(
-        (item) => item.filePath === runtime.playingData.playingSong?.filePath
+      const currentIndex = runtime.playingData.playingSongListData.findIndex((item) =>
+        sameRendererFilePath(item.filePath, runtime.playingData.playingSong?.filePath)
       )
       hasNextSong =
         currentIndex !== -1 && currentIndex < runtime.playingData.playingSongListData.length - 1
@@ -355,8 +327,8 @@ export function usePlayerControlsLogic({
     runtime.isSwitchingSong = true
     if (!runtime.playingData.playingSong) return
     const songList = runtime.playingData.playingSongListData
-    const currentIndex = songList.findIndex(
-      (item) => item.filePath === runtime.playingData.playingSong?.filePath
+    const currentIndex = songList.findIndex((item) =>
+      sameRendererFilePath(item.filePath, runtime.playingData.playingSong?.filePath)
     )
     if (currentIndex === -1 || currentIndex >= songList.length - 1) {
       runtime.playerReady = true
@@ -383,8 +355,8 @@ export function usePlayerControlsLogic({
     if (!runtime.playingData.playingSong) return
 
     const songList = runtime.playingData.playingSongListData
-    const currentIndex = songList.findIndex(
-      (item) => item.filePath === runtime.playingData.playingSong?.filePath
+    const currentIndex = songList.findIndex((item) =>
+      sameRendererFilePath(item.filePath, runtime.playingData.playingSong?.filePath)
     )
     if (currentIndex <= 0) {
       // 如果是第一首，或者找不到，则不执行任何操作
@@ -418,7 +390,8 @@ export function usePlayerControlsLogic({
       const playbackAfterDelete = resolvePlaybackAfterRemovingSong(usbSong.filePath)
       try {
         if (!(await deletePioneerUsbSong(usbSong))) return
-        if (runtime.playingData.playingSong?.filePath !== usbSong.filePath) return
+        if (!sameRendererFilePath(runtime.playingData.playingSong?.filePath, usbSong.filePath))
+          return
         if (playbackAfterDelete.nextSong?.filePath)
           switchPlaybackToSong({
             listUUID,
@@ -824,7 +797,9 @@ export function usePlayerControlsLogic({
       }
 
       const currentList = [...runtime.playingData.playingSongListData]
-      const currentIndex = currentList.findIndex((song) => song.filePath === filePathToMove)
+      const currentIndex = currentList.findIndex((song) =>
+        sameRendererFilePath(song.filePath, filePathToMove)
+      )
 
       if (currentIndex === -1) {
         console.error(
@@ -935,7 +910,10 @@ export function usePlayerControlsLogic({
         const currentPlayingFilePath = normalizePath(runtime.playingData.playingSong?.filePath)
         const nextPlayingFilePath = normalizePath(nextPlayingSong?.filePath)
         if (nextPlayingSong) {
-          if (currentPlayingFilePath && currentPlayingFilePath === nextPlayingFilePath) {
+          if (
+            currentPlayingFilePath &&
+            sameRendererFilePath(currentPlayingFilePath, nextPlayingFilePath)
+          ) {
             // 下一首就是当前正在播放的歌，只更新列表数据，不重新加载
             runtime.playingData.playingSongListData = nextList
           } else {

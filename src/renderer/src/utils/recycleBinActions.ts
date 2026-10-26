@@ -1,3 +1,4 @@
+import { RendererFilePathSet } from '@renderer/utils/filePathComparison'
 import { nextTick } from 'vue'
 import type { useRuntimeStore } from '@renderer/stores/runtime'
 import confirm from '@renderer/components/confirmDialog'
@@ -148,7 +149,9 @@ export async function emptyRecycleBinWithOptimisticUpdate(
   const isRecycleBinView = runtime.songsArea.songListUUID === RECYCLE_BIN_UUID
   const optimisticPaths = isRecycleBinView
     ? Array.from(
-        new Set(runtime.songsArea.songInfoArr.map((song) => song.filePath).filter(Boolean))
+        new RendererFilePathSet(
+          runtime.songsArea.songInfoArr.map((song) => song.filePath).filter(Boolean)
+        )
       )
     : []
 

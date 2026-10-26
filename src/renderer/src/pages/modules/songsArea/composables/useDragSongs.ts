@@ -1,3 +1,9 @@
+import {
+  RendererFilePathMap,
+  RendererFilePathSet,
+  sameRendererFilePath
+} from '@renderer/utils/filePathComparison'
+
 import { ref, computed } from 'vue'
 import { type ISongsAreaPaneRuntimeState, useRuntimeStore } from '@renderer/stores/runtime'
 import libraryUtils from '@renderer/utils/libraryUtils'
@@ -116,7 +122,7 @@ export function useDragSongs(params: UseDragSongsParams = {}) {
   }
 
   const sortFilePathsByVisibleSongOrder = (filePaths: string[], songs: ISongInfo[]) => {
-    const normalizedSet = new Set(
+    const normalizedSet = new RendererFilePathSet(
       filePaths.map((item) => String(item || '').trim()).filter(Boolean)
     )
     if (normalizedSet.size <= 1) return [...normalizedSet]
@@ -124,7 +130,7 @@ export function useDragSongs(params: UseDragSongsParams = {}) {
       .map((song) => String(song.filePath || '').trim())
       .filter((filePath) => normalizedSet.has(filePath))
     if (ordered.length === normalizedSet.size) return ordered
-    const seen = new Set(ordered)
+    const seen = new RendererFilePathSet(ordered)
     return [...ordered, ...[...normalizedSet].filter((filePath) => !seen.has(filePath))]
   }
 
@@ -160,7 +166,9 @@ export function useDragSongs(params: UseDragSongsParams = {}) {
         songFilePaths = songOrSongs.map((song) => song.filePath)
       } else {
         const singleSong = songOrSongs
-        const isSelected = songsAreaState.selectedSongFilePath.includes(singleSong.filePath)
+        const isSelected = songsAreaState.selectedSongFilePath.some((filePath) =>
+          sameRendererFilePath(filePath, singleSong.filePath)
+        )
 
         if (isSelected && songsAreaState.selectedSongFilePath.length > 0) {
           // 如果这首歌被选中且有其他选中的歌曲，拖拽所有选中的歌曲
@@ -250,8 +258,8 @@ export function useDragSongs(params: UseDragSongsParams = {}) {
           return []
         }
         const originPathSnapshot = libraryUtils.buildDisplayPathByUuid(sourceSongListUUID)
-        const songMap = new Map(
-          sourceSongsAreaState.songInfoArr.map((song) => [song.filePath, song])
+        const songMap = new RendererFilePathMap(
+          sourceSongsAreaState.songInfoArr.map((song) => [song.filePath, song] as const)
         )
         const items = orderedSongFilePaths.map((filePath) => ({
           filePath,
@@ -278,8 +286,8 @@ export function useDragSongs(params: UseDragSongsParams = {}) {
           return []
         }
         const originPathSnapshot = libraryUtils.buildDisplayPathByUuid(sourceSongListUUID)
-        const songMap = new Map(
-          sourceSongsAreaState.songInfoArr.map((song) => [song.filePath, song])
+        const songMap = new RendererFilePathMap(
+          sourceSongsAreaState.songInfoArr.map((song) => [song.filePath, song] as const)
         )
         const mixtapeSongMap = new Map(
           sourceSongsAreaState.songInfoArr
@@ -391,8 +399,8 @@ export function useDragSongs(params: UseDragSongsParams = {}) {
           {
             returnSummary: true,
             curatedArtistNames: orderedSongFilePaths.map((filePath) => {
-              const song = sourceSongsAreaState.songInfoArr.find(
-                (item) => item.filePath === filePath
+              const song = sourceSongsAreaState.songInfoArr.find((item) =>
+                sameRendererFilePath(item.filePath, filePath)
               )
               return song?.artist || ''
             })
@@ -411,8 +419,8 @@ export function useDragSongs(params: UseDragSongsParams = {}) {
       if (failedSourcePaths.length > 0) {
         moveTransaction.restoreSourceList(failedSourcePaths)
       }
-      const sourceSongMap = new Map(
-        sourceSongsAreaState.songInfoArr.map((song) => [song.filePath, song])
+      const sourceSongMap = new RendererFilePathMap(
+        sourceSongsAreaState.songInfoArr.map((song) => [song.filePath, song] as const)
       )
       await copySongCueDefinitionsToTargets(
         moveSummary.movedEntries.map(({ sourcePath, targetPath }) => ({

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
+
 import previousSongAsset from '@renderer/assets/previousSong.svg?asset'
 import fastBackwardAsset from '@renderer/assets/fastBackward.svg?asset'
 import playAsset from '@renderer/assets/play.svg?asset'
@@ -375,12 +377,16 @@ const handleAutoFillMetadata = async () => {
 const applyMetadataUpdateToPlayingSong = (updatedSong: ISongInfo, oldFilePath?: string) => {
   const current = runtime.playingData.playingSong
   if (!current) return
-  if (current.filePath !== updatedSong.filePath && current.filePath !== (oldFilePath ?? '')) return
+  if (
+    !sameRendererFilePath(current.filePath, updatedSong.filePath) &&
+    !sameRendererFilePath(current.filePath, oldFilePath ?? '')
+  )
+    return
   runtime.playingData.playingSong = { ...current, ...updatedSong }
   runtime.playingData.playingSong.filePath = updatedSong.filePath
   runtime.playingData.playingSongListData = runtime.playingData.playingSongListData.map((item) =>
-    item.filePath === (oldFilePath ?? updatedSong.filePath) ||
-    item.filePath === updatedSong.filePath
+    sameRendererFilePath(item.filePath, oldFilePath ?? updatedSong.filePath) ||
+    sameRendererFilePath(item.filePath, updatedSong.filePath)
       ? { ...item, ...updatedSong }
       : item
   )
@@ -516,10 +522,7 @@ const handleExternalPlaylist = async (kind: 'serato' | 'traktor') => {
 }
 
 const resolvePlaybackSourceLibraryName = ():
-  | 'FilterLibrary'
-  | 'CuratedLibrary'
-  | 'SetLibrary'
-  | '' => {
+  'FilterLibrary' | 'CuratedLibrary' | 'SetLibrary' | '' => {
   const listUuid = runtime.playingData.playingSongListUUID
   if (!listUuid) return ''
   const dirPath = String(libraryUtils.findDirPathByUuid(listUuid) || '').replace(/\\/g, '/')
@@ -599,7 +602,7 @@ const hasPrev = computed(() => {
   const list = runtime.playingData.playingSongListData
   const cur = runtime.playingData.playingSong?.filePath
   if (!cur) return false
-  const idx = list.findIndex((i) => i.filePath === cur)
+  const idx = list.findIndex((i) => sameRendererFilePath(i.filePath, cur))
   return idx > 0
 })
 
@@ -607,7 +610,7 @@ const hasNext = computed(() => {
   const list = runtime.playingData.playingSongListData
   const cur = runtime.playingData.playingSong?.filePath
   if (!cur) return false
-  const idx = list.findIndex((i) => i.filePath === cur)
+  const idx = list.findIndex((i) => sameRendererFilePath(i.filePath, cur))
   return idx !== -1 && idx < list.length - 1
 })
 

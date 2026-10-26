@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { createSongRowPlaybackLookup } from '@renderer/utils/songRowPlaybackIdentity'
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
+
 import { computed, nextTick, onUnmounted, ref, shallowRef, watch, useTemplateRef } from 'vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { useRuntimeStore } from '@renderer/stores/runtime'
@@ -191,28 +194,19 @@ const { rowsVisibleColumns, handleColumnDragPreview } = useColumnDragPreview(vis
 const totalWidth = computed(() =>
   visibleColumns.value.reduce((sum, col) => sum + Number(col.width || 0), 0)
 )
-const playingSongFilePathForRows = computed(() => {
-  if (!currentPlaybackListKey.value) return undefined
-  if (runtime.playingData.playingSongListUUID !== currentPlaybackListKey.value) return undefined
-  const playingSong = runtime.playingData.playingSong
-  return playingSong?.mixtapeItemId || playingSong?.filePath || undefined
-})
-const playingSongFilePathsForRows = computed(() => {
-  const keys = new Set<string>()
-  const mainRowKey = playingSongFilePathForRows.value
-  if (mainRowKey) keys.add(mainRowKey)
-  const topDeckSong = runtime.horizontalBrowseDecks.topSong
-  if (topDeckSong) {
-    const key = String(topDeckSong.mixtapeItemId || topDeckSong.filePath || '').trim()
-    if (key) keys.add(key)
-  }
-  const bottomDeckSong = runtime.horizontalBrowseDecks.bottomSong
-  if (bottomDeckSong) {
-    const key = String(bottomDeckSong.mixtapeItemId || bottomDeckSong.filePath || '').trim()
-    if (key) keys.add(key)
-  }
-  return [...keys]
-})
+const playingRowLookup = computed(() =>
+  createSongRowPlaybackLookup(visibleSongs.value, (song) => song.mixtapeItemId || song.filePath)
+)
+const playingSongFilePathForRows = computed(
+  () => playingRowLookup.value(runtime.playingData.playingSong)[0]
+)
+const playingSongFilePathsForRows = computed(() => [
+  ...new Set([
+    ...playingRowLookup.value(runtime.playingData.playingSong),
+    ...playingRowLookup.value(runtime.horizontalBrowseDecks.topSong),
+    ...playingRowLookup.value(runtime.horizontalBrowseDecks.bottomSong)
+  ])
+])
 const harmonicReferenceKeyForRows = computed(() => {
   if (runtime.mainWindowBrowseMode === 'browser') return ''
   if (runtime.mainWindowBrowseMode === 'edit') {
@@ -643,7 +637,7 @@ const handleSongFileMissing = (payload: { listUUID?: string; filePath?: string }
   if (currentPlaybackListKey.value && payload.listUUID === currentPlaybackListKey.value) {
     const missingPath = payload.filePath
     originalTracks.value = originalTracks.value.map((track) =>
-      track.filePath === missingPath ? { ...track, fileMissing: true } : track
+      sameRendererFilePath(track.filePath, missingPath) ? { ...track, fileMissing: true } : track
     )
     applyFiltersAndSorting('fileMissing-changed')
   }
@@ -655,7 +649,7 @@ const handleSongFileRestored = (payload: { listUUID?: string; filePath?: string 
   if (currentPlaybackListKey.value && payload.listUUID === currentPlaybackListKey.value) {
     const restoredPath = payload.filePath
     originalTracks.value = originalTracks.value.map((track) =>
-      track.filePath === restoredPath ? { ...track, fileMissing: false } : track
+      sameRendererFilePath(track.filePath, restoredPath) ? { ...track, fileMissing: false } : track
     )
     applyFiltersAndSorting('fileRestored-changed')
   }
@@ -698,7 +692,7 @@ const handleSongDblClick = async (song: ISongInfo, event?: MouseEvent) => {
     if (!exists) {
       const missingPath = song.filePath
       originalTracks.value = originalTracks.value.map((track) =>
-        track.filePath === missingPath ? { ...track, fileMissing: true } : track
+        sameRendererFilePath(track.filePath, missingPath) ? { ...track, fileMissing: true } : track
       )
       applyFiltersAndSorting('fileMissing-changed')
       song.fileMissing = true
@@ -758,7 +752,8 @@ const handleSongDblClick = async (song: ISongInfo, event?: MouseEvent) => {
   if (!playbackListKey) return
   const isSameList = runtime.playingData.playingSongListUUID === playbackListKey
   const isSameSong =
-    isSameList && runtime.playingData.playingSong?.filePath === normalizedSong.filePath
+    isSameList &&
+    sameRendererFilePath(runtime.playingData.playingSong?.filePath, normalizedSong.filePath)
 
   runtime.playingData.playingSongListUUID = playbackListKey
   runtime.playingData.playingSongListData = [...visibleSongs.value]

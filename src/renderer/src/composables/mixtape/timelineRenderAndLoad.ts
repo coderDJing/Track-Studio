@@ -1,3 +1,4 @@
+import { RendererFilePathMap } from '@renderer/utils/filePathComparison'
 import type { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { MIXTAPE_WAVEFORM_HEIGHT_SCALE } from '@renderer/composables/mixtape/constants'
 import type { UnifiedDisplayWaveformDetailData } from '@shared/unifiedDisplayWaveform'
@@ -874,8 +875,10 @@ export const createTimelineRenderAndLoadModule = (ctx: TimelineRenderAndLoadCont
       return
     }
 
-    const itemMap = new Map(
-      items.map((item) => [item.filePath, normalizeUnifiedDisplayWaveformData(item.data) ?? null])
+    const itemMap = new RendererFilePathMap(
+      items.map(
+        (item) => [item.filePath, normalizeUnifiedDisplayWaveformData(item.data) ?? null] as const
+      )
     )
     const missing: string[] = []
     for (const filePath of filePaths) {

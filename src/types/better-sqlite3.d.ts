@@ -27,6 +27,11 @@ declare module 'better-sqlite3' {
       readonly inTransaction: boolean
       prepare<TResult = Record<string, unknown>>(source: string): Statement<TResult>
       transaction<T extends (...args: unknown[]) => unknown>(fn: T): Transaction<T>
+      function(
+        name: string,
+        options: { deterministic?: boolean },
+        callback: (...args: unknown[]) => string | number | bigint | null
+      ): this
       pragma(source: string, options: { simple: true }): unknown
       pragma(source: string, options?: { simple?: boolean }): unknown
       exec(source: string): this

@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { mainFilePathKey } from '../../filePathComparison'
 import { createHash } from 'node:crypto'
 import {
   createDjLibraryCollectionNode,
@@ -215,10 +216,10 @@ export const buildSeratoWaveformOverviews = (
 ): Array<{ filePath: string; data: SeratoWaveformOverviewData | null }> => {
   if (snapshot.kind !== 'serato') return filePaths.map((filePath) => ({ filePath, data: null }))
   const trackByPath = new Map(
-    snapshot.tracks.map((track) => [path.normalize(track.filePath).toLowerCase(), track])
+    snapshot.tracks.map((track) => [mainFilePathKey(path.normalize(track.filePath)), track])
   )
   return filePaths.map((filePath) => {
-    const track = trackByPath.get(path.normalize(filePath).toLowerCase())
+    const track = trackByPath.get(mainFilePathKey(path.normalize(filePath)))
     return {
       filePath,
       data: parseSeratoWaveformOverview(track?.waveformOverview)

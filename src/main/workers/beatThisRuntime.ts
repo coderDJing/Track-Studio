@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import childProcess from 'node:child_process'
 import { buildAnalysisChildEnv } from './analysisRuntimeTuning'
+import { mainFilePathKey } from '../filePathComparison'
 
 type BeatThisPythonCommand = {
   command: string
@@ -878,8 +879,8 @@ const findCachedRuntimeCandidate = (
   if (!requestedDeviceMatchesCachedRuntime(cached, requestedDevice)) return null
   for (const candidate of candidates) {
     const commandMatches =
-      normalizeBeatThisFsPath(candidate.command).toLowerCase() ===
-      normalizeBeatThisFsPath(cached.command).toLowerCase()
+      mainFilePathKey(normalizeBeatThisFsPath(candidate.command)) ===
+      mainFilePathKey(normalizeBeatThisFsPath(cached.command))
     if (!commandMatches) continue
     if (
       !stringListEquals(

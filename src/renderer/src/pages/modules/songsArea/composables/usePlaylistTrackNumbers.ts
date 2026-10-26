@@ -1,3 +1,4 @@
+import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
 import { computed, markRaw, ref, type Ref, type ShallowRef } from 'vue'
 import confirm from '@renderer/components/confirmDialog'
 import emitter from '@renderer/utils/mitt'
@@ -16,10 +17,7 @@ type UsePlaylistTrackNumbersParams = {
   resolveCoreLibraryNameBySongListUUID: (uuid: string) => string
 }
 
-const normalizePath = (value: string | undefined | null) =>
-  String(value || '')
-    .replace(/\//g, '\\')
-    .toLowerCase()
+const normalizePath = (value: string | undefined | null) => rendererFilePathKey(String(value || ''))
 
 const normalizeSetItemId = (value: string | undefined | null) => String(value || '').trim()
 

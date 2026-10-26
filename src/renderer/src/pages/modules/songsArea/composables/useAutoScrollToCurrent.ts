@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { nextTick } from 'vue'
 import type { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import type { ISongsAreaPaneRuntimeState, useRuntimeStore } from '@renderer/stores/runtime'
@@ -303,7 +304,9 @@ export function useAutoScrollToCurrent(params: UseAutoScrollParams) {
 
   const scrollToSong = (filePath?: string | null) => {
     if (!filePath) return
-    const index = songsAreaState.songInfoArr.findIndex((s) => s.filePath === filePath)
+    const index = songsAreaState.songInfoArr.findIndex((s) =>
+      sameRendererFilePath(s.filePath, filePath)
+    )
     if (index < 0) return
     scrollToIndex(index)
   }

@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import type { ISongInfo, ISongMemoryCue } from 'src/types/globals'
 import {
   editPioneerUsbSong,
@@ -62,7 +63,7 @@ export const useHorizontalBrowseDeckMemoryCues = (
           loopEndSec: cueDefinition.loopEndSec
         })) as { memoryCues?: ISongMemoryCue[] } | null)
     if (isEditablePioneerUsbSong(song) && !result) return
-    if (params.resolveDeckSong(deck)?.filePath !== song.filePath) return
+    if (!sameRendererFilePath(params.resolveDeckSong(deck)?.filePath, song.filePath)) return
     patchDeckSongMemoryCues(deck, Array.isArray(result?.memoryCues) ? result.memoryCues : [])
   }
 
@@ -76,7 +77,7 @@ export const useHorizontalBrowseDeckMemoryCues = (
           sec
         })) as { memoryCues?: ISongMemoryCue[] } | null)
     if (isEditablePioneerUsbSong(song) && !result) return
-    if (params.resolveDeckSong(deck)?.filePath !== song.filePath) return
+    if (!sameRendererFilePath(params.resolveDeckSong(deck)?.filePath, song.filePath)) return
     patchDeckSongMemoryCues(deck, Array.isArray(result?.memoryCues) ? result.memoryCues : [])
   }
 

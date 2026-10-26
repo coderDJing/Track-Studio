@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
+
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
 import confirm from '@renderer/components/confirmDialog'
 import { useRuntimeStore } from '@renderer/stores/runtime'
@@ -19,10 +21,7 @@ import { useBottomInfoTaskProgressMirror } from './useBottomInfoTaskProgressMirr
 import { toIpcCloneablePayload } from '@renderer/utils/ipcCloneablePayload'
 const runtime = useRuntimeStore()
 
-const normalizeAnalysisPath = (value: string) =>
-  String(value || '')
-    .replace(/\//g, '\\')
-    .toLowerCase()
+const normalizeAnalysisPath = (value: string) => rendererFilePathKey(String(value || ''))
 const visibleSongsHaveAnalysisProgress = useBottomInfoVisibleAnalysisProgress()
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>

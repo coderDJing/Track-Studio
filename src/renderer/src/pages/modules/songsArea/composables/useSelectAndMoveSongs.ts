@@ -12,6 +12,7 @@ import {
   type LibraryTransferActionMode
 } from '@renderer/utils/libraryTransfer'
 import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
+import { RendererFilePathMap, RendererFilePathSet } from '@renderer/utils/filePathComparison'
 
 export type MoveSongsLibraryName =
   'CuratedLibrary' | 'FilterLibrary' | 'SetLibrary' | 'MixtapeLibrary'
@@ -49,13 +50,13 @@ export function useSelectAndMoveSongs(params: UseSelectAndMoveSongsParams) {
       )
     )
   const sortFilePathsByVisibleSongOrder = (filePaths: string[]) => {
-    const normalizedSet = new Set(normalizeUniqueStrings(filePaths))
+    const normalizedSet = new RendererFilePathSet(normalizeUniqueStrings(filePaths))
     if (normalizedSet.size <= 1) return [...normalizedSet]
     const ordered = songsAreaState.songInfoArr
       .map((song) => String(song.filePath || '').trim())
       .filter((filePath) => normalizedSet.has(filePath))
     if (ordered.length === normalizedSet.size) return ordered
-    const seen = new Set(ordered)
+    const seen = new RendererFilePathSet(ordered)
     return [...ordered, ...[...normalizedSet].filter((filePath) => !seen.has(filePath))]
   }
   const resolveFileNameAndFormat = (filePath: string) => {
@@ -137,7 +138,7 @@ export function useSelectAndMoveSongs(params: UseSelectAndMoveSongsParams) {
 
   const resolveSelectedSongsByRowKey = (selectedKeys: string[], sourceNodeType?: string) => {
     const songByKey = new Map<string, ISongInfo>()
-    const songByPath = new Map<string, ISongInfo>()
+    const songByPath = new RendererFilePathMap<ISongInfo>()
     for (const song of songsAreaState.songInfoArr) {
       const rowKey = resolveSourceRowKey(sourceNodeType, song)
       if (rowKey) songByKey.set(rowKey, song)
@@ -165,7 +166,9 @@ export function useSelectAndMoveSongs(params: UseSelectAndMoveSongsParams) {
     const selectedPaths = sortFilePathsByVisibleSongOrder(
       JSON.parse(JSON.stringify(songsAreaState.selectedSongFilePath))
     )
-    const songMap = new Map(songsAreaState.songInfoArr.map((song) => [song.filePath, song]))
+    const songMap = new RendererFilePathMap(
+      songsAreaState.songInfoArr.map((song) => [song.filePath, song] as const)
+    )
     if (!selectedPaths.length) return
 
     const targetNode = libraryUtils.getLibraryTreeByUUID(targetSongListUUID)

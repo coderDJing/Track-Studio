@@ -1,4 +1,5 @@
 import { app, ipcMain } from 'electron'
+import { mainFilePathKey, uniqueMainFilePaths } from '../filePathComparison'
 import path = require('path')
 import fs = require('fs-extra')
 import { performance } from 'node:perf_hooks'
@@ -355,7 +356,7 @@ export function registerLibraryMaintenanceHandlers() {
         ? payload.diagnosticContext.trim()
         : ''
     const diagnosticsEnabled = isPackagedRcBuild() && diagnosticContext === 'delete-all-above'
-    const uniquePaths = Array.from(new Set(filePaths.filter(Boolean)))
+    const uniquePaths = uniqueMainFilePaths(filePaths.filter(Boolean))
     const releasePlaylistViewSnapshotMutation =
       beginPlaylistViewSnapshotMutationByPaths(uniquePaths)
     const releaseLibraryTreeWatcherBulk = beginLibraryTreeWatcherBulkOperation()
@@ -691,7 +692,7 @@ export function registerLibraryMaintenanceHandlers() {
   ipcMain.handle('recycleBin:list', async () => {
     assertLibraryMergeMutationAllowed()
     const records = listRecycleBinRecords()
-    const recordMap = new Map(records.map((r) => [r.filePath, r]))
+    const recordMap = new Map(records.map((r) => [mainFilePathKey(r.filePath), r]))
     const rootDir = store.databaseDir
     if (!rootDir) {
       return { scanData: [], songListUUID: RECYCLE_BIN_UUID }
@@ -712,7 +713,7 @@ export function registerLibraryMaintenanceHandlers() {
         if (!audioExts.has(ext)) continue
         const absPath = path.join(recycleRoot, entry.name)
         const rel = toLibraryRelativePath(absPath)
-        if (!rel || recordMap.has(rel)) continue
+        if (!rel || recordMap.has(mainFilePathKey(rel))) continue
         const stat = await fs.stat(absPath).catch(() => null)
         const deletedAtMs = stat && Number.isFinite(stat.mtimeMs) ? stat.mtimeMs : Date.now()
         const newRecord = {
@@ -724,7 +725,7 @@ export function registerLibraryMaintenanceHandlers() {
         }
         upsertRecycleBinRecord(newRecord)
         records.push(newRecord)
-        recordMap.set(rel, newRecord)
+        recordMap.set(mainFilePathKey(rel), newRecord)
       }
     }
     const existing: Array<{ record: RecycleBinRecord; absPath: string }> = []
@@ -752,10 +753,10 @@ export function registerLibraryMaintenanceHandlers() {
     )
     const recordByPath = new Map<string, RecycleBinRecord>()
     for (const item of existing) {
-      recordByPath.set(path.resolve(item.absPath), item.record)
+      recordByPath.set(mainFilePathKey(path.resolve(item.absPath)), item.record)
     }
     const merged = scanData.map((song) => {
-      const record = recordByPath.get(path.resolve(song.filePath))
+      const record = recordByPath.get(mainFilePathKey(path.resolve(song.filePath)))
       if (!record) return song
       return {
         ...song,
@@ -790,7 +791,7 @@ export function registerLibraryMaintenanceHandlers() {
         ? payload.filePaths
         : []
     const rootDir = store.databaseDir
-    const uniquePaths = Array.from(new Set(filePaths.filter(Boolean)))
+    const uniquePaths = uniqueMainFilePaths(filePaths.filter(Boolean))
     if (uniquePaths.length === 0) {
       return {
         total: 0,

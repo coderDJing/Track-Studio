@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
+
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import type {
@@ -568,8 +570,9 @@ const loadWaveform = async () => {
 
       if (currentToken !== loadToken) return
       const preview =
-        response?.items?.find((item) => item.analyzePath === externalWaveformSource.analyzePath)
-          ?.data ?? null
+        response?.items?.find((item) =>
+          sameRendererFilePath(item.analyzePath, externalWaveformSource.analyzePath)
+        )?.data ?? null
       if (preview) {
         pioneerPreviewData.value = preview
         drawWaveform()

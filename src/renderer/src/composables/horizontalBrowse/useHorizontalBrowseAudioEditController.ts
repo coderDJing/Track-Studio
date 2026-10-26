@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { computed, onMounted, onUnmounted, ref, watch, type ComputedRef, type Ref } from 'vue'
 import { v4 as uuidV4 } from 'uuid'
 import type { ISongInfo } from 'src/types/globals'
@@ -109,7 +110,7 @@ export const useHorizontalBrowseAudioEditController = (
   watch(
     filePath,
     (nextFilePath) => {
-      if (sourceSessionFilePath && sourceSessionFilePath !== nextFilePath) {
+      if (sourceSessionFilePath && !sameRendererFilePath(sourceSessionFilePath, nextFilePath)) {
         releaseSourceSession(sourceSessionId)
         sourceSessionId = uuidV4()
       }

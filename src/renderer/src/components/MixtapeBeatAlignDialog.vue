@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
+
 import { computed, onBeforeUnmount, onMounted, ref, toRef, watch, type PropType } from 'vue'
 import type { ISongInfo } from 'src/types/globals'
 import { t } from '@renderer/utils/translate'
@@ -789,7 +791,7 @@ const handleWindowResize = () => {
 const handleSongWaveformUpdated = (_event: unknown, payload?: { filePath?: string }) => {
   const updatedPath = normalizePathKey(payload?.filePath)
   const currentPath = normalizePathKey(props.filePath)
-  if (!updatedPath || !currentPath || updatedPath !== currentPath) return
+  if (!updatedPath || !currentPath || !sameRendererFilePath(updatedPath, currentPath)) return
   void loadPreviewWaveform(props.filePath)
 }
 

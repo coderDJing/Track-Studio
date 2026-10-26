@@ -1,3 +1,4 @@
+import { rendererFilePathKey, sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { useRuntimeStore } from '@renderer/stores/runtime'
 import confirm from '@renderer/components/confirmDialog'
@@ -134,10 +135,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
     libraryType === 'oneLibrary' ? t('pioneer.oneLibraryLabel') : t('pioneer.deviceLibraryLabel')
 
   const normalizePhysicalPathKey = (value: string) =>
-    String(value || '')
-      .trim()
-      .replace(/[\\/]+$/, '')
-      .toLocaleLowerCase()
+    rendererFilePathKey(String(value || '').replace(/[\\/]+$/, ''))
 
   const resolvePhysicalSourceKey = (sourceKind: 'desktop' | 'usb', rootPath?: string) => {
     if (sourceKind === 'desktop') return 'desktop'
@@ -353,7 +351,9 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
         runtime.pioneerDeviceLibrary.selectedSourceName = sourceName
       }
       const nextRootPath = resolveRootPath?.(result) || rootPath
-      if (runtime.pioneerDeviceLibrary.selectedSourceRootPath !== nextRootPath) {
+      if (
+        !sameRendererFilePath(runtime.pioneerDeviceLibrary.selectedSourceRootPath, nextRootPath)
+      ) {
         runtime.pioneerDeviceLibrary.selectedSourceRootPath = nextRootPath
       }
     } catch (error) {

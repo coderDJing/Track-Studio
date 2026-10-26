@@ -1,3 +1,4 @@
+import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
 import type { ISongInfo } from 'src/types/globals'
 import type { HorizontalBrowseDeckKey } from '@renderer/composables/horizontalBrowse/horizontalBrowseNativeTransport'
 
@@ -13,10 +14,7 @@ type UseHorizontalBrowseSongsRemovedParams = {
   handleDeckEjectSong: (deck: DeckKey) => Promise<unknown>
 }
 
-const normalizePath = (value: string | null | undefined) =>
-  String(value || '')
-    .replace(/\//g, '\\')
-    .toLowerCase()
+const normalizePath = (value: string | null | undefined) => rendererFilePathKey(String(value || ''))
 
 export const useHorizontalBrowseSongsRemoved = (params: UseHorizontalBrowseSongsRemovedParams) => {
   const handleSongsRemoved = (payload: SongsRemovedPayload) => {

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
+
 import { computed } from 'vue'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 import { i18n } from '@renderer/i18n'
@@ -11,10 +13,7 @@ import type { ISongInfo } from 'src/types/globals'
 
 const runtime = useRuntimeStore()
 
-const normalizeAnalysisPath = (value: string) =>
-  String(value || '')
-    .replace(/\//g, '\\')
-    .toLowerCase()
+const normalizeAnalysisPath = (value: string) => rendererFilePathKey(String(value || ''))
 
 const isPioneerView = computed(() => runtime.libraryAreaSelected === 'PioneerDeviceLibrary')
 const currentLocale = computed(() => i18n.global.locale.value)

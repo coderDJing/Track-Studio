@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { onMounted, onUnmounted, type Ref } from 'vue'
 import type { ISongInfo } from 'src/types/globals'
 import type { RawWaveformData } from '@renderer/composables/mixtape/types'
@@ -71,7 +72,8 @@ export const useHorizontalBrowseRawWaveformSourceLoader = (options: SourceLoader
         const detailRaw = await loadHorizontalBrowseNativeDetailWaveform(currentSong, {
           durationSec: options.resolvePreviewDurationSec()
         })
-        if (currentToken !== loadToken || options.song()?.filePath !== filePath) return
+        if (currentToken !== loadToken || !sameRendererFilePath(options.song()?.filePath, filePath))
+          return
         if (detailRaw) {
           options.commitAudioEditSourceRaw(detailRaw)
           options.compactVisualWaveformActive.value = true

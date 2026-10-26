@@ -1,3 +1,4 @@
+import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
 import type { useRuntimeStore } from '@renderer/stores/runtime'
 
 type RuntimeStore = ReturnType<typeof useRuntimeStore>
@@ -8,10 +9,7 @@ export type SongsRemovedPayload = {
   paths?: string[]
 }
 
-const normalizePath = (value: string) =>
-  String(value || '')
-    .replace(/\//g, '\\')
-    .toLowerCase()
+const normalizePath = (value: string) => rendererFilePathKey(String(value || ''))
 
 export const markGlobalSongSearchDirty = (
   reason: string,

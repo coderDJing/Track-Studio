@@ -1,3 +1,4 @@
+import { RendererFilePathMap, RendererFilePathSet } from '@renderer/utils/filePathComparison'
 import type { Ref } from 'vue'
 import { canPlayHtmlAudio, toPreviewUrl } from '@renderer/pages/modules/songPlayer/webAudioPlayer'
 import { t } from '@renderer/utils/translate'
@@ -175,8 +176,8 @@ const normalizeBeatOffset = (value: unknown, interval: number) => {
 }
 
 export const createTimelineTransportAudioDataModule = (ctx: TimelineTransportAudioDataCtx) => {
-  const transportDecodedBufferCache = new Map<string, AudioBuffer>()
-  const transportDecodeInflight = new Map<string, Promise<AudioBuffer>>()
+  const transportDecodedBufferCache = new RendererFilePathMap<AudioBuffer>()
+  const transportDecodeInflight = new RendererFilePathMap<Promise<AudioBuffer>>()
   let transportPreloadVersion = 0
   let transportPreloadTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -530,7 +531,8 @@ export const createTimelineTransportAudioDataModule = (ctx: TimelineTransportAud
   const decodeBrowser = async (filePath: string): Promise<AudioBuffer> => {
     const url = toPreviewUrl(filePath)
     const response = await fetch(url)
-    if (!response.ok) throw new Error(t('mixtape.transportFetchFailed', { status: response.status }))
+    if (!response.ok)
+      throw new Error(t('mixtape.transportFetchFailed', { status: response.status }))
     const arrayBuffer = await response.arrayBuffer()
     if (!arrayBuffer.byteLength) throw new Error(t('mixtape.transportFetchEmpty'))
     const audioCtx = ctx.ensureTransportAudioContext()
@@ -613,13 +615,10 @@ export const createTimelineTransportAudioDataModule = (ctx: TimelineTransportAud
       if (key) failedTrackKeys.add(key)
     }
     if (ctx.isStemMixMode()) {
-      const stemAudioByPath = new Map<
-        string,
-        {
-          audio: TransportStemAudioRef
-          entries: Array<Pick<TransportEntry, 'trackId' | 'filePath'>>
-        }
-      >()
+      const stemAudioByPath = new RendererFilePathMap<{
+        audio: TransportStemAudioRef
+        entries: Array<Pick<TransportEntry, 'trackId' | 'filePath'>>
+      }>()
       for (const entry of entries) {
         for (const stemId of ctx.resolveStemIdsForMode()) {
           const stemAudio = entry.stemAudioById?.[stemId]
@@ -672,13 +671,10 @@ export const createTimelineTransportAudioDataModule = (ctx: TimelineTransportAud
       }
       return failedTrackKeys.size
     }
-    const audioRefByPath = new Map<
-      string,
-      {
-        audio: TransportAudioRef
-        entries: Array<Pick<TransportEntry, 'trackId' | 'filePath'>>
-      }
-    >()
+    const audioRefByPath = new RendererFilePathMap<{
+      audio: TransportAudioRef
+      entries: Array<Pick<TransportEntry, 'trackId' | 'filePath'>>
+    }>()
     for (const entry of entries) {
       const audioRef = entry.audioRef
       const filePath = String(audioRef?.filePath || '').trim()
@@ -726,7 +722,7 @@ export const createTimelineTransportAudioDataModule = (ctx: TimelineTransportAud
   }
 
   const collectUniqueTransportAudios = (entries: TransportEntry[]): PreloadAudioRef[] => {
-    const uniqueAudioRefs = new Map<string, PreloadAudioRef>()
+    const uniqueAudioRefs = new RendererFilePathMap<PreloadAudioRef>()
     if (ctx.isStemMixMode()) {
       for (const entry of entries) {
         for (const stemId of ctx.resolveStemIdsForMode()) {
@@ -849,7 +845,7 @@ export const createTimelineTransportAudioDataModule = (ctx: TimelineTransportAud
     const version = ++transportPreloadVersion
     const plan = buildTransportEntries()
     const uniqueAudios = collectUniqueTransportAudios(plan.entries)
-    const keepPaths = new Set(uniqueAudios.map((item) => item.filePath))
+    const keepPaths = new RendererFilePathSet(uniqueAudios.map((item) => item.filePath))
     for (const key of Array.from(transportDecodedBufferCache.keys())) {
       if (!keepPaths.has(key)) {
         transportDecodedBufferCache.delete(key)

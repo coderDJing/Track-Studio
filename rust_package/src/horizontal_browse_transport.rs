@@ -420,7 +420,7 @@ impl HorizontalBrowseTransportEngine {
     if Self::effective_track_end_sec(deck_state).is_some_and(|end_sec| target_sec >= end_sec) {
       return false;
     }
-    if deck_state.loaded_file_path.as_deref() != deck_state.file_path.as_deref() {
+    if !crate::file_path_comparison::same_file_path(deck_state.loaded_file_path.as_deref().unwrap_or(""), deck_state.file_path.as_deref().unwrap_or("")) {
       return false;
     }
     if deck_state.pcm_data.is_empty() || deck_state.sample_rate == 0 || deck_state.channels == 0 {
@@ -465,8 +465,8 @@ impl HorizontalBrowseTransportEngine {
       .map(|value| value.trim())
       .unwrap_or("");
     !file_path.is_empty()
-      && file_path == fully_decoded_file_path
-      && deck_state.loaded_file_path.as_deref().map(str::trim) == Some(file_path)
+      && crate::file_path_comparison::same_file_path(file_path, fully_decoded_file_path)
+      && deck_state.loaded_file_path.as_deref().is_some_and(|loaded| crate::file_path_comparison::same_file_path(loaded, file_path))
       && deck_state.pcm_start_sec <= 0.0001
       && !deck_state.pcm_data.is_empty()
       && deck_state.sample_rate > 0
@@ -1022,7 +1022,7 @@ impl HorizontalBrowseTransportEngine {
       .map(|path| path.trim())
       .unwrap_or("");
     !file_path.is_empty()
-      && file_path == loaded_file_path
+      && crate::file_path_comparison::same_file_path(file_path, loaded_file_path)
       && !deck_state.pcm_data.is_empty()
       && deck_state.sample_rate > 0
       && deck_state.channels > 0

@@ -3,6 +3,7 @@ import { areSongHotCuesEqual, normalizeSongHotCues } from '@shared/hotCues'
 import { areSongMemoryCuesEqual, normalizeSongMemoryCues } from '@shared/memoryCues'
 import { normalizeSongStructureAnalysis, type SongStructureAnalysis } from '@shared/songStructure'
 import { normalizeSongBeatGridMapV2 } from '@shared/songBeatGridMapV2'
+import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
 
 type SharedSongGridPayload = {
   filePath?: string
@@ -18,13 +19,7 @@ type SharedSongGridPayload = {
 } | null
 
 export const isSameHorizontalBrowseSongFilePath = (left: unknown, right: unknown) => {
-  const normalize = (value: unknown) => {
-    const normalized = String(value || '')
-      .trim()
-      .replace(/\//g, '\\')
-    if (!normalized) return ''
-    return /win/i.test(navigator.platform) ? normalized.toLowerCase() : normalized
-  }
+  const normalize = (value: unknown) => rendererFilePathKey(typeof value === 'string' ? value : '')
   const leftPath = normalize(left)
   const rightPath = normalize(right)
   return !!leftPath && leftPath === rightPath

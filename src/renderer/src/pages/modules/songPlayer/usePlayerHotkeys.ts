@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { onMounted, onUnmounted, Ref, ref } from 'vue'
 import hotkeys, { KeyHandler } from 'hotkeys-js'
 import type { SongsAreaPaneKey } from '@renderer/stores/runtime'
@@ -81,7 +82,7 @@ export function usePlayerHotkeys(
       previewMoveTarget.value = null
       return
     }
-    if (previewMoveTarget.value?.filePath === filePath) {
+    if (sameRendererFilePath(previewMoveTarget.value?.filePath, filePath)) {
       previewMoveTarget.value = null
     }
   }

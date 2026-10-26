@@ -1,3 +1,4 @@
+import { RendererFilePathMap } from '@renderer/utils/filePathComparison'
 import {
   drawSongListCompactVisualWaveform,
   drawSongListTimelineTicks,
@@ -15,8 +16,8 @@ type RenderPayload = Extract<SongListWaveformWorkerIncoming, { type: 'render' }>
 
 const canvasMap = new Map<string, OffscreenCanvas>()
 const ctxMap = new Map<string, OffscreenCanvasRenderingContext2D>()
-const dataMap = new Map<string, SongListWaveformWorkerData>()
-const rgbMetricsCache = new Map<string, SongListWaveformRgbMetricsCacheEntry>()
+const dataMap = new RendererFilePathMap<SongListWaveformWorkerData>()
+const rgbMetricsCache = new RendererFilePathMap<SongListWaveformRgbMetricsCacheEntry>()
 const pendingRenderByCanvasId = new Map<string, RenderPayload>()
 let renderTimer: ReturnType<typeof setTimeout> | null = null
 

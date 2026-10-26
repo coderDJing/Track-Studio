@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { computed, ref, watch, type Ref } from 'vue'
 import {
   buildSongsAreaDefaultColumns,
@@ -136,7 +137,9 @@ export const useMixtapeAutoGainDialog = (options: UseMixtapeAutoGainDialogOption
 
   const resolveAutoGainReferenceId = (song: ISongInfo) => {
     if (song.mixtapeItemId) return song.mixtapeItemId
-    const matchedTrack = options.tracks.value.find((item) => item.filePath === song.filePath)
+    const matchedTrack = options.tracks.value.find((item) =>
+      sameRendererFilePath(item.filePath, song.filePath)
+    )
     return matchedTrack?.id || ''
   }
 

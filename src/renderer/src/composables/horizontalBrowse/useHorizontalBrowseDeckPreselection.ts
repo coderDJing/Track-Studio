@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { reactive, ref, watch } from 'vue'
 import type { ISongInfo } from 'src/types/globals'
 import type {
@@ -150,7 +151,7 @@ export const useHorizontalBrowseDeckPreselection = (params: Params) => {
       if (master) {
         const songPath = String(params.resolveDeckSong(master)?.filePath || '')
         const snapshot = params.resolveDeckSnapshot(master)
-        if (songPath !== pendingMasterSongPath) {
+        if (!sameRendererFilePath(songPath, pendingMasterSongPath)) {
           pendingMasterSongPath = songPath
           masterDecodeSeen = false
           failedMasterDeck.value = null

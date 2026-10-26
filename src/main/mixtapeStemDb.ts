@@ -268,7 +268,7 @@ export function replaceMixtapeStemAssetFilePath(params: {
       .prepare(
         `UPDATE ${STEM_ASSET_TABLE}
          SET file_path = ?, updated_at_ms = ?
-         WHERE library_root = ? AND file_path = ?`
+         WHERE frkb_file_path_key(library_root) = frkb_file_path_key(?) AND frkb_file_path_key(file_path) = frkb_file_path_key(?)`
       )
       .run(newFilePath, Date.now(), libraryRoot, oldFilePath)
     return { updated: Number(info?.changes || 0) }
@@ -299,15 +299,14 @@ export function removeMixtapeStemAssetsByFilePath(params: {
                 vocal_path, inst_path, bass_path, drums_path,
                 error_code, error_message, created_at_ms, updated_at_ms
          FROM ${STEM_ASSET_TABLE}
-         WHERE library_root = ? AND file_path = ?`
+         WHERE frkb_file_path_key(library_root) = frkb_file_path_key(?) AND frkb_file_path_key(file_path) = frkb_file_path_key(?)`
       )
       .all(libraryRoot, filePath)
     const records = rows.map(toAssetRecord).filter(Boolean) as MixtapeStemAssetRecord[]
     if (!records.length) return []
-    db.prepare(`DELETE FROM ${STEM_ASSET_TABLE} WHERE library_root = ? AND file_path = ?`).run(
-      libraryRoot,
-      filePath
-    )
+    db.prepare(
+      `DELETE FROM ${STEM_ASSET_TABLE} WHERE frkb_file_path_key(library_root) = frkb_file_path_key(?) AND frkb_file_path_key(file_path) = frkb_file_path_key(?)`
+    ).run(libraryRoot, filePath)
     return records
   } catch (error) {
     log.error('[sqlite] mixtape stem asset delete by file path failed', {

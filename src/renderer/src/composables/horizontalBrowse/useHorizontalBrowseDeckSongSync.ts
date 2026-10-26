@@ -1,3 +1,4 @@
+import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
 import type { Ref } from 'vue'
 import type { ISongInfo } from 'src/types/globals'
 import { useRuntimeStore } from '@renderer/stores/runtime'
@@ -151,19 +152,13 @@ export const useHorizontalBrowseDeckSongSync = (params: UseHorizontalBrowseDeckS
         params.bottomDeckSong.value?.filePath,
         runtime.playingData.playingSong?.filePath
       ]
-        .map((filePath) =>
-          String(filePath || '')
-            .replace(/\//g, '\\')
-            .toLowerCase()
-        )
+        .map((filePath) => rendererFilePathKey(String(filePath || '')))
         .filter(Boolean)
     )
     if (activePaths.size === 0) return
     const handledPaths = new Set<string>()
     for (const payload of payloads) {
-      const normalizedPath = String(payload?.filePath || '')
-        .replace(/\//g, '\\')
-        .toLowerCase()
+      const normalizedPath = rendererFilePathKey(String(payload?.filePath || ''))
       if (!normalizedPath || !activePaths.has(normalizedPath) || handledPaths.has(normalizedPath)) {
         continue
       }

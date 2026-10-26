@@ -1,4 +1,5 @@
 import { computed, markRaw, ref } from 'vue'
+import { RendererFilePathMap, RendererFilePathSet } from '@renderer/utils/filePathComparison'
 import type { Ref } from 'vue'
 import type { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { t } from '@renderer/utils/translate'
@@ -117,23 +118,23 @@ export const useMixtapeTimeline = (options: UseMixtapeTimelineOptions) => {
     ctx: null as CanvasRenderingContext2D | null
   }
   const waveformDataMap = markRaw(
-    new Map<string, StemWaveformData | UnifiedDisplayWaveformDetailData | null>()
+    new RendererFilePathMap<StemWaveformData | UnifiedDisplayWaveformDetailData | null>()
   )
   const waveformMinMaxCache = markRaw(
-    new Map<
-      string,
-      { source: StemWaveformData | UnifiedDisplayWaveformDetailData; samples: MinMaxSample[] }
-    >()
+    new RendererFilePathMap<{
+      source: StemWaveformData | UnifiedDisplayWaveformDetailData
+      samples: MinMaxSample[]
+    }>()
   )
   const timelineLayoutCache = markRaw(new Map<number, TimelineLayoutSnapshot>())
   const timelineLayoutVersion = ref(0)
-  const rawWaveformDataMap = markRaw(new Map<string, RawWaveformData | null>())
-  const rawWaveformPyramidMap = markRaw(new Map<string, RawWaveformLevel[]>())
-  const waveformInflight = new Set<string>()
-  const waveformQueuedMissing = new Set<string>()
-  const rawWaveformInflight = new Set<string>()
+  const rawWaveformDataMap = markRaw(new RendererFilePathMap<RawWaveformData | null>())
+  const rawWaveformPyramidMap = markRaw(new RendererFilePathMap<RawWaveformLevel[]>())
+  const waveformInflight = new RendererFilePathSet()
+  const waveformQueuedMissing = new RendererFilePathSet()
+  const rawWaveformInflight = new RendererFilePathSet()
   const waveformTileCache = markRaw(new Map<string, { source: CanvasImageSource; used: number }>())
-  const waveformTileCacheIndex = markRaw(new Map<string, Set<string>>())
+  const waveformTileCacheIndex = markRaw(new RendererFilePathMap<Set<string>>())
   let waveformTileCacheTick = 0
   let waveformTileCacheLimit = 260
   const waveformVersion = ref(0)

@@ -1,3 +1,4 @@
+import { registerFilePathComparison } from './filePathComparison'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { SqliteDatabase } from './libraryDb'
@@ -57,6 +58,7 @@ const inspectBackupQuickCheck = (
     if (!(await hasPath(backupPath))) return { exists: false, valid: false }
     try {
       const backupDb = new Database(backupPath, { readonly: true, fileMustExist: true })
+      registerFilePathComparison(backupDb)
       try {
         assertDatabaseQuickCheck(backupDb, '迁移备份')
         return { exists: true, valid: true }
@@ -146,6 +148,7 @@ export const migrateLibrarySchemaV38ToV39 = async (
 
   const Database = require('better-sqlite3') as typeof import('better-sqlite3')
   const db = new Database(normalizedPath, { fileMustExist: true }) as BackupCapableDatabase
+  registerFilePathComparison(db)
   let backupPath = ''
   let migrationValidated = false
   let recoveredInterruptedBackup = false

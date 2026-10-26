@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import type { ISongHotCue, ISongInfo } from 'src/types/globals'
 import { mergeHorizontalBrowseSongWithHotCues } from '@renderer/composables/horizontalBrowse/horizontalBrowseShellSongs'
 import type {
@@ -107,7 +108,7 @@ export const useHorizontalBrowseDeckHotCues = (params: UseHorizontalBrowseDeckHo
           durationSec: params.resolveDeckDurationSeconds(deck)
         })) as { hotCues?: ISongHotCue[] } | null)
     if (isEditablePioneerUsbSong(song) && !result) return
-    if (params.resolveDeckSong(deck)?.filePath !== song.filePath) return
+    if (!sameRendererFilePath(params.resolveDeckSong(deck)?.filePath, song.filePath)) return
     const nextHotCues = Array.isArray(result?.hotCues)
       ? result.hotCues
       : [{ slot, sec: cueDefinition.sec }]
@@ -135,7 +136,7 @@ export const useHorizontalBrowseDeckHotCues = (params: UseHorizontalBrowseDeckHo
           durationSec: params.resolveDeckDurationSeconds(deck)
         })) as { hotCues?: ISongHotCue[] } | null)
     if (isEditablePioneerUsbSong(song) && !result) return
-    if (params.resolveDeckSong(deck)?.filePath !== song.filePath) return
+    if (!sameRendererFilePath(params.resolveDeckSong(deck)?.filePath, song.filePath)) return
     patchDeckSongHotCues(deck, Array.isArray(result?.hotCues) ? result.hotCues : [])
     params.syncDeckRenderState({ force: deck })
   }

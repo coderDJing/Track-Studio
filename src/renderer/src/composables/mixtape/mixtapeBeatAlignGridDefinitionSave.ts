@@ -1,4 +1,5 @@
 import type ConfirmDialog from '@renderer/components/confirmDialog'
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import {
   normalizeSongBeatGridMapV2,
   projectSongBeatGridMapV2ToFixedGrid
@@ -105,7 +106,7 @@ export const createMixtapeBeatAlignGridDefinitionSaver = (
       nextBpm !== null && (originalBpm === null || Math.abs(nextBpm - originalBpm) > 0.0001)
     const isSameTrack = (track: MixtapeTrack) =>
       targetFilePath.length > 0
-        ? normalizeMixtapeFilePath(track.filePath) === targetFilePath
+        ? sameRendererFilePath(track.filePath, targetFilePath)
         : track.id === trackId
     const bpmChanged =
       shouldPersistBpm &&

@@ -1,3 +1,4 @@
+import { RendererFilePathMap, RendererFilePathSet } from '@renderer/utils/filePathComparison'
 import { resolveTempoRatioByBpm } from '@renderer/composables/mixtape/beatSyncModel'
 import {
   buildFlatGainEnvelope,
@@ -58,7 +59,11 @@ const parseDurationToSeconds = (input: string) => {
 }
 
 const resolveTrackSetKey = (tracks: MixtapeTrack[]) =>
-  Array.from(new Set(tracks.map((track) => String(track.filePath || '').trim()).filter(Boolean)))
+  Array.from(
+    new RendererFilePathSet(
+      tracks.map((track) => String(track.filePath || '').trim()).filter(Boolean)
+    )
+  )
     .sort((a, b) => a.localeCompare(b))
     .join('|')
 
@@ -201,7 +206,7 @@ const resolveTrackStartAndDurations = (
 }
 
 const buildTrackTitleByPath = (tracks: MixtapeTrack[]) => {
-  const titleByPath = new Map<string, string>()
+  const titleByPath = new RendererFilePathMap<string>()
   for (const track of tracks) {
     const filePath = String(track.filePath || '').trim()
     if (!filePath || titleByPath.has(filePath)) continue
@@ -216,9 +221,11 @@ const analyzeTrackLoudnessByPath = async (params: {
 }) => {
   const tracks = Array.isArray(params.tracks) ? params.tracks : []
   const uniquePaths = Array.from(
-    new Set(tracks.map((track) => String(track.filePath || '').trim()).filter(Boolean))
+    new RendererFilePathSet(
+      tracks.map((track) => String(track.filePath || '').trim()).filter(Boolean)
+    )
   )
-  const analysisMap = new Map<string, LoudnessAnalysis | null>()
+  const analysisMap = new RendererFilePathMap<LoudnessAnalysis | null>()
   if (!uniquePaths.length) {
     return { analysisMap, uniquePaths }
   }
@@ -353,7 +360,7 @@ const pickReferenceTrackId = async (params: {
       analysisSnapshot: {
         trackSetKey: '',
         uniquePaths: [],
-        analysisMap: new Map<string, LoudnessAnalysis | null>()
+        analysisMap: new RendererFilePathMap<LoudnessAnalysis | null>()
       }
     } as PickReferenceTrackIdResult
   }

@@ -5,6 +5,8 @@ import path from 'node:path'
 import Database from 'better-sqlite3'
 import { readSongCacheOffMainThread } from './songCacheReadWorker'
 import type { SqliteDatabase } from '../libraryDb'
+import { registerFilePathComparison } from '../filePathComparison'
+import { ensureSongCachePathIndexes } from '../libraryCacheDb/songCachePathSql'
 
 // pnpm run build 后运行：npx vitest run src/main/services/songCacheReadWorker.spec.ts
 vi.mock('../workerPath', () => ({
@@ -23,11 +25,13 @@ const createDatabase = async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'frkb-cache-read-'))
   roots.push(root)
   const db = new Database(path.join(root, 'cache.sqlite'))
+  registerFilePathComparison(db)
   databases.push(db)
   db.exec(`CREATE TABLE song_cache (
     list_root TEXT, file_path TEXT, size INTEGER, mtime_ms INTEGER, info_json TEXT,
     PRIMARY KEY (list_root, file_path)
   )`)
+  ensureSongCachePathIndexes(db)
   db.prepare('INSERT INTO song_cache VALUES (?, ?, ?, ?, ?)').run(
     'library/test',
     'a.mp3',
@@ -59,6 +63,7 @@ describe('song cache read worker', () => {
     // 先预热 worker，把启动时间与 SQLite 锁等待区分开。
     await readSongCacheOffMainThread(db, ['library/test'])
     const writer = new Database(db.name)
+    registerFilePathComparison(writer)
     writer.exec('BEGIN EXCLUSIVE')
     let ticks = 0
     const timer = setInterval(() => ticks++, 10)

@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { createVNode, render, reactive, shallowRef, ref } from 'vue'
 import { attachAppContext } from '@renderer/utils/appContext'
 import confirm from '@renderer/components/confirmDialog'
@@ -61,7 +62,7 @@ export const initializeBpmFix = () => {
       emitter.emit('playlistContentChanged', { uuids: value.playlistUuids })
       if (value.overwritten) {
         const runtime = useRuntimeStore()
-        if (runtime.playingData.playingSong?.filePath === value.sourcePath) {
+        if (sameRendererFilePath(runtime.playingData.playingSong?.filePath, value.sourcePath)) {
           emitter.emit('waveform-preview:stop', { reason: 'switch' })
           runtime.playingData.playingSong = null
           runtime.playingData.playingSongListUUID = ''

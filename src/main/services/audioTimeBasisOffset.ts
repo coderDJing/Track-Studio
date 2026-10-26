@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { mainFilePathKey } from '../filePathComparison'
 import { resolveBundledFfmpegPath } from '../ffmpeg'
 import { log } from '../log'
 import { runWithConcurrency } from '../nodeTaskUtils'
@@ -11,9 +12,7 @@ const timeBasisOffsetCache = new Map<string, Promise<number>>()
 const toFixedMs = (value: number) => Number(value.toFixed(3))
 
 const normalizeLookupKey = (value: unknown) =>
-  String(value || '')
-    .trim()
-    .toLowerCase()
+  mainFilePathKey(typeof value === 'string' ? value : '')
 
 type RustTimeBasisBinding = {
   probeAudioTimeBasisOffsetMs?: (filePath: string) => number | Promise<number>

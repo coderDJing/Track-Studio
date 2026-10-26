@@ -1,3 +1,4 @@
+import { RendererFilePathSet } from '@renderer/utils/filePathComparison'
 import { computed } from 'vue'
 import {
   BASE_PX_PER_SEC,
@@ -682,7 +683,9 @@ export const createTimelineHelpersModule = (ctx: TimelineHelpersContext) => {
   }
 
   const resolveTrackWaveformFilePaths = (track: MixtapeTrack) =>
-    Array.from(new Set(resolveTrackWaveformSources(track).map((item) => item.filePath)))
+    Array.from(
+      new RendererFilePathSet(resolveTrackWaveformSources(track).map((item) => item.filePath))
+    )
 
   const isWaveformReady = (track: MixtapeTrack) => {
     void waveformVersion?.value

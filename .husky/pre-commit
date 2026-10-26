@@ -1,2 +1,3 @@
+node scripts/check-file-path-comparisons.mjs || exit 1
 pnpm exec vue-tsc --noEmit || exit 1
 node node_modules/lint-staged/bin/lint-staged.js

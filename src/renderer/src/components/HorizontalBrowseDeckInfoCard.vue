@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
+
 import { computed, onUnmounted, ref, watch } from 'vue'
 import type { ISongInfo } from 'src/types/globals'
 import { useRuntimeStore } from '@renderer/stores/runtime'
@@ -89,7 +91,7 @@ const loadCover = async () => {
       dataUrl?: string
     } | null
 
-    if (filePath !== String(props.song?.filePath || '').trim()) return
+    if (!sameRendererFilePath(filePath, String(props.song?.filePath || '').trim())) return
     if (thumb?.dataUrl) {
       coverUrl.value = thumb.dataUrl
       return

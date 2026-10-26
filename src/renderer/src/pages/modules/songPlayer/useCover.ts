@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { ref, onUnmounted } from 'vue'
 import rightClickMenu from '@renderer/components/rightClickMenu'
 import { t } from '@renderer/utils/translate'
@@ -104,7 +105,7 @@ export function useCover(runtime: ReturnType<typeof useRuntimeStore>) {
     const fallbackThumb = await fetchCoverFromCache(filePath, 256)
     if (fallbackThumb) return
 
-    const stillCurrent = filePath === runtime.playingData.playingSong?.filePath
+    const stillCurrent = sameRendererFilePath(filePath, runtime.playingData.playingSong?.filePath)
     if (stillCurrent) {
       disposeCoverUrl()
     }
@@ -120,7 +121,7 @@ export function useCover(runtime: ReturnType<typeof useRuntimeStore>) {
         size,
         rootDir || ''
       )
-      if (!thumb || filePath !== runtime.playingData.playingSong?.filePath) {
+      if (!thumb || !sameRendererFilePath(filePath, runtime.playingData.playingSong?.filePath)) {
         return false
       }
       if (thumb.data) {
@@ -146,7 +147,7 @@ export function useCover(runtime: ReturnType<typeof useRuntimeStore>) {
   const handleSongMetadataUpdated = (payload: { filePath?: string }) => {
     const filePath = payload?.filePath
     if (!filePath) return
-    if (runtime.playingData.playingSong?.filePath === filePath) {
+    if (sameRendererFilePath(runtime.playingData.playingSong?.filePath, filePath)) {
       setCoverByIPC(filePath)
     }
   }

@@ -76,6 +76,9 @@ jobs:
       - name: Typecheck (vue-tsc)
         run: npx vue-tsc --noEmit
 
+      - name: Check file-path comparisons
+        run: node scripts/check-file-path-comparisons.mjs
+
   build_win:
     needs: [validate_release_tag]
     if: >-

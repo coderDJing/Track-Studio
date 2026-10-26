@@ -1,3 +1,4 @@
+import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
 import type { ComputedRef, Ref, ShallowRef } from 'vue'
 import { normalizeBpmDisplayScaled } from '@renderer/utils/bpm'
 import { getKeyDisplayText, getKeySortText } from '@shared/keyDisplay'
@@ -61,10 +62,7 @@ type UsePioneerSongsProjectionParams = {
 
 const getSongField = (song: ISongInfo, key: string): unknown => getSongListFieldRawValue(song, key)
 
-const normalizePath = (value: string) =>
-  String(value || '')
-    .replace(/\//g, '\\')
-    .toLowerCase()
+const normalizePath = (value: string) => rendererFilePathKey(String(value || ''))
 
 const resolveFileNameAndFormat = (filePath: string) => {
   const baseName =

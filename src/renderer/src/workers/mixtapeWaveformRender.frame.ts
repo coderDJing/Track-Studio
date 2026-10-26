@@ -1,3 +1,4 @@
+import { RendererFilePathMap } from '@renderer/utils/filePathComparison'
 import type {
   FrameBufferSlot,
   RenderFramePayload,
@@ -59,7 +60,7 @@ export const createFrameRenderer = (options: CreateFrameRendererOptions) => {
 
   const frameBufferSlots = new Map<string, FrameBufferSlot>()
   const tileCache = new Map<string, { texture: WebGLTexture; used: number }>()
-  const tileCacheIndex = new Map<string, Set<string>>()
+  const tileCacheIndex = new RendererFilePathMap<Set<string>>()
   let tileCacheTick = 0
   let tileCacheLimit = 260
 

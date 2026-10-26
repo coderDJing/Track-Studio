@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { ref, type Ref } from 'vue'
 import type { useRuntimeStore } from '@renderer/stores/runtime'
 import type { IPioneerPlaylistTreeNode, ISongInfo } from 'src/types/globals'
@@ -17,7 +18,9 @@ export const usePioneerUsbPlaylistDrop = (params: {
     const paths = params.runtime.draggingSongFilePaths
     const rowKeys = new Set(params.runtime.dragSourceMixtapeItemIds)
     const songs = params.runtime.playingData.playingSongListData.filter(
-      (song) => rowKeys.has(song.mixtapeItemId || '') && paths.includes(song.filePath)
+      (song) =>
+        rowKeys.has(song.mixtapeItemId || '') &&
+        paths.some((filePath) => sameRendererFilePath(filePath, song.filePath))
     )
     if (
       !paths.length ||
@@ -26,8 +29,8 @@ export const usePioneerUsbPlaylistDrop = (params: {
       songs.some(
         (song) =>
           !isEditablePioneerUsbSong(song) ||
-          song.pioneerUsbSource?.rootPath !== params.rootPath.value ||
-          song.pioneerUsbSource.libraryType !== params.libraryType.value
+          !sameRendererFilePath(song.pioneerUsbSource?.rootPath, params.rootPath.value) ||
+          song.pioneerUsbSource?.libraryType !== params.libraryType.value
       )
     )
       return []

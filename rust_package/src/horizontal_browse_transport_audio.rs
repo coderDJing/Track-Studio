@@ -137,8 +137,8 @@ fn normalized_path(value: &Option<String>) -> &str {
 fn has_full_track_pcm(target: &DeckState) -> bool {
   let file_path = normalized_path(&target.file_path);
   !file_path.is_empty()
-    && normalized_path(&target.loaded_file_path) == file_path
-    && normalized_path(&target.fully_decoded_file_path) == file_path
+    && crate::file_path_comparison::same_file_path(normalized_path(&target.loaded_file_path), file_path)
+    && crate::file_path_comparison::same_file_path(normalized_path(&target.fully_decoded_file_path), file_path)
     && target.pcm_start_sec <= 0.0001
     && !target.pcm_data.is_empty()
     && target.sample_rate > 0

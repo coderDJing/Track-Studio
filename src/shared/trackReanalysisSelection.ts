@@ -1,4 +1,5 @@
 import { hasExistingBeatGridForStructure } from './songAnalysisCompleteness'
+import { normalizeFilePathForComparison } from './filePathComparison'
 
 export type TrackReanalysisUserSelection = {
   key: boolean
@@ -35,12 +36,9 @@ const readBoolean = (value: unknown, fallback: boolean) => {
   return fallback
 }
 
-const normalizeReanalysisFilePath = (value: unknown) => {
+const normalizeReanalysisFilePath = (value: unknown, caseInsensitive: boolean) => {
   if (typeof value !== 'string') return ''
-  return value
-    .trim()
-    .replace(/[/\\]+/g, '\\')
-    .toLowerCase()
+  return normalizeFilePathForComparison(value, caseInsensitive)
 }
 
 export const hasAnyTrackReanalysisUserSelection = (selection: TrackReanalysisUserSelection) =>
@@ -52,13 +50,18 @@ export const hasAnyTrackReanalysisUserSelection = (selection: TrackReanalysisUse
 
 export const canSelectStructureAloneFromSongs = (
   songs: Array<TrackReanalysisSongHint | null | undefined>,
-  filePaths?: string[]
+  filePaths?: string[],
+  caseInsensitive = false
 ) => {
-  const files = new Set((filePaths || []).map(normalizeReanalysisFilePath).filter(Boolean))
+  const files = new Set(
+    (filePaths || [])
+      .map((filePath) => normalizeReanalysisFilePath(filePath, caseInsensitive))
+      .filter(Boolean)
+  )
   const relevant = songs.filter((song) => {
     if (!song) return false
     if (files.size === 0) return true
-    const songPath = normalizeReanalysisFilePath(song.filePath)
+    const songPath = normalizeReanalysisFilePath(song.filePath, caseInsensitive)
     return Boolean(songPath && files.has(songPath))
   })
   return relevant.length > 0 && relevant.every((song) => hasExistingBeatGridForStructure(song))

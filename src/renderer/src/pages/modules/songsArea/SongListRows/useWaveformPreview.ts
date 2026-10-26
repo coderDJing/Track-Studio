@@ -1,3 +1,10 @@
+import {
+  RendererFilePathMap,
+  RendererFilePathSet,
+  rendererFilePathKey,
+  sameRendererFilePath
+} from '@renderer/utils/filePathComparison'
+
 import { computed, markRaw, nextTick, onBeforeUnmount, ref, watch, type Ref } from 'vue'
 import type { ISongInfo, ISongsAreaColumn } from '../../../../../../types/globals'
 import type { SongsAreaPaneKey } from '@renderer/stores/runtime'
@@ -79,23 +86,21 @@ export function useWaveformPreview(params: {
     typeof HTMLCanvasElement !== 'undefined' &&
     typeof HTMLCanvasElement.prototype.transferControlToOffscreen === 'function'
   const normalizePath = (value: string | undefined | null) =>
-    String(value || '')
-      .replace(/\//g, '\\')
-      .toLowerCase()
-  const dataMap = markRaw(new Map<string, WaveformCacheEntry>())
-  const placeholderStateMap = markRaw(new Map<string, WaveformPlaceholderState>())
-  const placeholderReasonMap = markRaw(new Map<string, string>())
-  const rgbMetricsCache = markRaw(new Map<string, SongListWaveformRgbMetricsCacheEntry>())
-  const waveformDataVersionMap = markRaw(new Map<string, number>())
-  const manualPreviewPaths = markRaw(new Set<string>())
-  const inflight = new Set<string>()
+    rendererFilePathKey(String(value || ''))
+  const dataMap = markRaw(new RendererFilePathMap<WaveformCacheEntry>())
+  const placeholderStateMap = markRaw(new RendererFilePathMap<WaveformPlaceholderState>())
+  const placeholderReasonMap = markRaw(new RendererFilePathMap<string>())
+  const rgbMetricsCache = markRaw(new RendererFilePathMap<SongListWaveformRgbMetricsCacheEntry>())
+  const waveformDataVersionMap = markRaw(new RendererFilePathMap<number>())
+  const manualPreviewPaths = markRaw(new RendererFilePathSet())
+  const inflight = new RendererFilePathSet()
   const MAX_CACHE_ENTRIES = 200
   let loadTimer: ReturnType<typeof setTimeout> | null = null
   let drawRaf = 0
   let waveformWorker: Worker | null = null
   let drawAllVisiblePending = false
   let themeClassObserver: MutationObserver | null = null
-  const pendingDrawFilePaths = new Set<string>()
+  const pendingDrawFilePaths = new RendererFilePathSet()
   let lastPixelRatio = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
   const previewActive = ref(false)
   const previewFilePath = ref<string | null>(null)
@@ -210,7 +215,7 @@ export function useWaveformPreview(params: {
   }
   const getVisiblePaths = (): string[] => {
     const paths: string[] = []
-    const seen = new Set<string>()
+    const seen = new RendererFilePathSet()
     for (const item of visibleSongsWithIndex.value || []) {
       const filePath = item?.song?.filePath
       if (!filePath || seen.has(filePath)) continue
@@ -265,7 +270,9 @@ export function useWaveformPreview(params: {
     }>
   ) => {
     if (!requests.length) return requests
-    const requestByFilePath = new Map(requests.map((request) => [request.filePath, request]))
+    const requestByFilePath = new RendererFilePathMap(
+      requests.map((request) => [request.filePath, request] as const)
+    )
     const eager: typeof requests = []
     const visibleRest: typeof requests = []
     const buffered: typeof requests = []
@@ -324,7 +331,7 @@ export function useWaveformPreview(params: {
     emitter.emit('waveform-preview:stop', { reason: 'explicit' })
   }
   const isWaveformPreviewActive = (filePath: string) =>
-    previewActive.value && previewFilePath.value === filePath
+    previewActive.value && sameRendererFilePath(previewFilePath.value, filePath)
   const getWaveformPreviewPlayheadStyle = (filePath: string) => {
     if (!isWaveformPreviewActive(filePath)) return {}
     const percent = clamp01(previewPercent.value)
@@ -598,8 +605,8 @@ export function useWaveformPreview(params: {
   }
   const fetchWaveformBatch = async (filePaths: string[]) => {
     if (!filePaths.length) return
-    const requestVersions = new Map(
-      filePaths.map((filePath) => [filePath, getWaveformDataVersion(filePath)])
+    const requestVersions = new RendererFilePathMap(
+      filePaths.map((filePath) => [filePath, getWaveformDataVersion(filePath)] as const)
     )
     for (const filePath of filePaths) {
       inflight.add(filePath)
@@ -612,7 +619,9 @@ export function useWaveformPreview(params: {
       }
       return
     }
-    const itemMap = new Map(items.map((item) => [item.filePath, item.data ?? null]))
+    const itemMap = new RendererFilePathMap(
+      items.map((item) => [item.filePath, item.data ?? null] as const)
+    )
     const missing: string[] = []
     for (const filePath of filePaths) {
       if (manualPreviewPaths.has(normalizePath(filePath))) {
@@ -655,8 +664,8 @@ export function useWaveformPreview(params: {
     if (!filePaths.length) return
     const sourcePath = resolveExternalRootPath()
     if (!sourcePath) return
-    const requestVersions = new Map(
-      filePaths.map((filePath) => [filePath, getWaveformDataVersion(filePath)])
+    const requestVersions = new RendererFilePathMap(
+      filePaths.map((filePath) => [filePath, getWaveformDataVersion(filePath)] as const)
     )
     for (const filePath of filePaths) {
       inflight.add(filePath)
@@ -925,7 +934,7 @@ export function useWaveformPreview(params: {
     const isActive = Boolean(payload?.active)
     if (!isActive) {
       const previousFilePath = previewFilePath.value
-      if (!filePath || previewFilePath.value === filePath) {
+      if (!filePath || sameRendererFilePath(previewFilePath.value, filePath)) {
         previewActive.value = false
         previewFilePath.value = null
         previewPercent.value = 0

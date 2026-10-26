@@ -1,3 +1,4 @@
+import { registerFilePathComparison } from '../../filePathComparison'
 import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -331,8 +332,7 @@ const verifyTargetRows = (
     }
   }
   const marker = targetDb.prepare('SELECT value FROM meta WHERE key = ?').get(commitKey) as
-    | Record<string, unknown>
-    | undefined
+    Record<string, unknown> | undefined
   if (String(marker?.value || '') !== '1') {
     throw new LibraryMergeError('TARGET_VERIFY_FAILED', '目标库缺少合并提交标记')
   }
@@ -421,8 +421,7 @@ const normalizeScope = (value: unknown): LibraryMergeScope =>
 
 const hasCommitMarker = (db: SqliteDatabase, jobId: string, scope: LibraryMergeScope): boolean => {
   const row = db.prepare('SELECT value FROM meta WHERE key = ?').get(getCommitKey(jobId, scope)) as
-    | Record<string, unknown>
-    | undefined
+    Record<string, unknown> | undefined
   return String(row?.value || '') === '1'
 }
 
@@ -442,6 +441,7 @@ const deleteSourceAfterCommit = async (params: {
       const sourceDb = new Database(path.join(params.sourceRoot, DB_FILE_NAME), {
         fileMustExist: true
       })
+      registerFilePathComparison(sourceDb)
       try {
         sourceDb.pragma('foreign_keys = ON')
         sourceDb.pragma('busy_timeout = 5000')
@@ -567,6 +567,7 @@ export async function recoverIncompleteLibraryMerges(targetRootInput: string): P
     await fs.rm(preflightPath, { recursive: true, force: true })
     const Database = getDatabaseCtor()
     const targetDb = new Database(path.join(targetRoot, DB_FILE_NAME), { fileMustExist: true })
+    registerFilePathComparison(targetDb)
     targetDb.pragma('foreign_keys = ON')
     try {
       for (const workDirName of MERGE_WORK_DIR_NAMES) {
@@ -623,8 +624,10 @@ export async function mergeFrkbLibraries(
       readonly: true,
       fileMustExist: true
     })
+    registerFilePathComparison(sourceDb)
     sourceDb.exec('BEGIN')
     targetDb = new Database(path.join(targetRoot, DB_FILE_NAME), { fileMustExist: true })
+    registerFilePathComparison(targetDb)
     targetDb.pragma('foreign_keys = ON')
     const workDirName = getMergeWorkDirName(scope)
     journalDir = path.join(targetRoot, workDirName, jobId)
@@ -640,6 +643,7 @@ export async function mergeFrkbLibraries(
         readonly: true,
         fileMustExist: true
       })
+      registerFilePathComparison(sourceDb)
       sourceDb.exec('BEGIN')
     }
     targetDb.pragma('busy_timeout = 1000')

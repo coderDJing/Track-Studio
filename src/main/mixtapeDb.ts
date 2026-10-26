@@ -12,6 +12,7 @@ import { areSongMemoryCuesEqual, normalizeSongMemoryCues } from '../shared/memor
 import type { ISongHotCue, ISongMemoryCue } from '../types/globals'
 import type { SqliteDatabase } from './libraryDb'
 import { stripMixtapeGridCopies } from './services/mixtapeAnalysisInfo'
+import { mainFilePathKey } from './filePathComparison'
 
 const TABLE = 'mixtape_items'
 const PROJECT_TABLE = 'mixtape_projects'
@@ -103,7 +104,7 @@ function toRecord(row: unknown): MixtapeItemRecord | null {
 }
 
 function resolveFilePathWhereClause(): string {
-  return process.platform === 'win32' ? 'LOWER(file_path) = LOWER(?)' : 'file_path = ?'
+  return 'frkb_file_path_key(file_path) = frkb_file_path_key(?)'
 }
 
 // 在已有事务中执行重排序（不开新事务）
@@ -332,7 +333,9 @@ export function removeMixtapeItemsByFilePath(
   const db = getLibraryDb()
   if (!db) return { removed: 0 }
   try {
-    const del = db.prepare(`DELETE FROM ${TABLE} WHERE playlist_uuid = ? AND file_path = ?`)
+    const del = db.prepare(
+      `DELETE FROM ${TABLE} WHERE playlist_uuid = ? AND ${resolveFilePathWhereClause()}`
+    )
     let removed = 0
     const tx = db.transaction(() => {
       for (const filePath of normalizedPaths) {
@@ -500,9 +503,8 @@ export function listMixtapeFilePathsInUse(filePaths: string[]): string[] {
       const chunk = normalizedPaths.slice(offset, offset + IN_CLAUSE_CHUNK_SIZE)
       if (chunk.length === 0) continue
       const placeholders = chunk.map(() => '?').join(',')
-      const caseInsensitive = process.platform === 'win32'
-      const filePathExpression = caseInsensitive ? 'LOWER(file_path)' : 'file_path'
-      const queryPaths = caseInsensitive ? chunk.map((filePath) => filePath.toLowerCase()) : chunk
+      const filePathExpression = 'frkb_file_path_key(file_path)'
+      const queryPaths = chunk.map((filePath) => mainFilePathKey(filePath))
       const rows = db
         .prepare(
           `SELECT DISTINCT file_path FROM ${TABLE} WHERE ${filePathExpression} IN (${placeholders})`
@@ -635,7 +637,7 @@ export function clearMixtapeItemGridCopiesByFilePath(entries: Array<{ filePath: 
   for (const item of entries) {
     const filePath = typeof item?.filePath === 'string' ? item.filePath.trim() : ''
     if (!filePath) continue
-    filePaths.add(filePath)
+    filePaths.add(mainFilePathKey(filePath))
   }
   if (!filePaths.size) return { updated: 0 }
 
@@ -651,12 +653,12 @@ export function clearMixtapeItemGridCopiesByFilePath(entries: Array<{ filePath: 
         const placeholders = chunk.map(() => '?').join(',')
         const rows = db
           .prepare(
-            `SELECT id, file_path, info_json FROM ${TABLE} WHERE file_path IN (${placeholders})`
+            `SELECT id, file_path, info_json FROM ${TABLE} WHERE frkb_file_path_key(file_path) IN (${placeholders})`
           )
           .all(...chunk) as Array<{ id: string; file_path: string; info_json?: string | null }>
         for (const row of rows) {
           const filePath = typeof row?.file_path === 'string' ? row.file_path.trim() : ''
-          if (!filePaths.has(filePath)) continue
+          if (!filePaths.has(mainFilePathKey(filePath))) continue
           const info = parseMixtapeItemInfoJson(row?.info_json)
           const removedGridCopy = stripMixtapeGridCopies(info)
           if (removedGridCopy) {
@@ -685,7 +687,7 @@ export function upsertMixtapeItemHotCuesByFilePath(
   for (const item of entries) {
     const filePath = typeof item?.filePath === 'string' ? item.filePath.trim() : ''
     if (!filePath) continue
-    hotCuesByFilePath.set(filePath, normalizeSongHotCues(item?.hotCues))
+    hotCuesByFilePath.set(mainFilePathKey(filePath), normalizeSongHotCues(item?.hotCues))
   }
   const filePaths = Array.from(hotCuesByFilePath.keys())
   if (!filePaths.length) return { updated: 0 }
@@ -701,12 +703,12 @@ export function upsertMixtapeItemHotCuesByFilePath(
         const placeholders = chunk.map(() => '?').join(',')
         const rows = db
           .prepare(
-            `SELECT id, file_path, info_json FROM ${TABLE} WHERE file_path IN (${placeholders})`
+            `SELECT id, file_path, info_json FROM ${TABLE} WHERE frkb_file_path_key(file_path) IN (${placeholders})`
           )
           .all(...chunk) as Array<{ id: string; file_path: string; info_json?: string | null }>
         for (const row of rows) {
           const filePath = typeof row?.file_path === 'string' ? row.file_path.trim() : ''
-          const nextHotCues = hotCuesByFilePath.get(filePath)
+          const nextHotCues = hotCuesByFilePath.get(mainFilePathKey(filePath))
           if (!nextHotCues) continue
           const info = parseMixtapeItemInfoJson(row?.info_json)
           if (areSongHotCuesEqual(info.hotCues, nextHotCues)) continue
@@ -735,7 +737,7 @@ export function upsertMixtapeItemMemoryCuesByFilePath(
   for (const item of entries) {
     const filePath = typeof item?.filePath === 'string' ? item.filePath.trim() : ''
     if (!filePath) continue
-    memoryCuesByFilePath.set(filePath, normalizeSongMemoryCues(item?.memoryCues))
+    memoryCuesByFilePath.set(mainFilePathKey(filePath), normalizeSongMemoryCues(item?.memoryCues))
   }
   const filePaths = Array.from(memoryCuesByFilePath.keys())
   if (!filePaths.length) return { updated: 0 }
@@ -751,12 +753,12 @@ export function upsertMixtapeItemMemoryCuesByFilePath(
         const placeholders = chunk.map(() => '?').join(',')
         const rows = db
           .prepare(
-            `SELECT id, file_path, info_json FROM ${TABLE} WHERE file_path IN (${placeholders})`
+            `SELECT id, file_path, info_json FROM ${TABLE} WHERE frkb_file_path_key(file_path) IN (${placeholders})`
           )
           .all(...chunk) as Array<{ id: string; file_path: string; info_json?: string | null }>
         for (const row of rows) {
           const filePath = typeof row?.file_path === 'string' ? row.file_path.trim() : ''
-          const nextMemoryCues = memoryCuesByFilePath.get(filePath)
+          const nextMemoryCues = memoryCuesByFilePath.get(mainFilePathKey(filePath))
           if (!nextMemoryCues) continue
           const info = parseMixtapeItemInfoJson(row?.info_json)
           if (areSongMemoryCuesEqual(info.memoryCues, nextMemoryCues)) continue

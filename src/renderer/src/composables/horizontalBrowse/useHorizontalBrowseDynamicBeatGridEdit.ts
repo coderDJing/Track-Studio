@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { computed, ref, watch, type Ref } from 'vue'
 import type { ISongInfo } from 'src/types/globals'
 import {
@@ -274,7 +275,7 @@ export const useHorizontalBrowseDynamicBeatGridEdit = (
 
   const syncFromSong = () => {
     const songFilePath = String(params.song()?.filePath || '')
-    const songFileChanged = songFilePath !== lastSyncedSongFilePath
+    const songFileChanged = !sameRendererFilePath(songFilePath, lastSyncedSongFilePath)
     lastSyncedSongFilePath = songFilePath
     const previousScope = adjustmentScope.value
     const previousTarget = selectedTarget.value

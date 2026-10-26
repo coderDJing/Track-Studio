@@ -34,7 +34,7 @@ const insert = (listRoot: string, filePath: string, info: string) =>
 
 describe('song cache indexed path lookups', () => {
   it('keeps every legacy and missing-path lookup indexed with the installed schema', async () => {
-    // 既有库仍使用原索引，不依赖重建库或变更 user_version 才修好查询。
+    // 重复结构检查保留已有索引，所有兼容路径查询仍走索引。
     applyLibraryDbSchema(db, 39)
     const listRoot = path.join(root, 'library', 'AI生成')
     insert('library\\other', 'existing.wav', JSON.stringify({ title: 'existing' }))
@@ -67,7 +67,8 @@ describe('song cache indexed path lookups', () => {
     )
     const listRoot = path.join(root, 'library', 'AI生成')
     const result = await loadSongCacheEntry(listRoot, path.join(listRoot, 'song.wav'))
-    expect(result?.info).toMatchObject({ key: '8A', bpm: 128 })
+    if (process.platform === 'win32') expect(result?.info).toMatchObject({ key: '8A', bpm: 128 })
+    else expect(result).toBeNull()
   })
 
   it('finds cross-playlist analysis by JSON absolute path and ignores invalid JSON', async () => {
@@ -80,14 +81,26 @@ describe('song cache indexed path lookups', () => {
       JSON.stringify({ filePath: filePath.replace(/\\/g, '/').toUpperCase(), key: '9A', bpm: 126 })
     )
     const result = await loadSongCacheEntry(listRoot, filePath)
-    expect(result?.info).toMatchObject({ key: '9A', bpm: 126, filePath })
+    if (process.platform === 'win32')
+      expect(result?.info).toMatchObject({ key: '9A', bpm: 126, filePath })
+    else expect(result).toBeNull()
   })
 
   it('normalizes a slash to exactly one backslash in SQL', () => {
     const row = db
       .prepare<{ normalized: string }>(`SELECT ${normalizedSongCachePathSql('?')} AS normalized`)
       .get('Library/AI生成/Song.WAV')
-    expect(row?.normalized).toBe('library\\ai生成\\song.wav')
+    expect(row?.normalized).toBe(
+      process.platform === 'win32' ? 'library\\ai生成\\song.wav' : 'Library\\AI生成\\Song.WAV'
+    )
+  })
+
+  it('uses platform case rules for Unicode cached analysis paths', async () => {
+    const listRoot = path.join(root, 'library', '音乐')
+    insert('library/音乐', 'Ä Track.mp3', JSON.stringify({ key: '8A', bpm: 128 }))
+    const result = await loadSongCacheEntry(listRoot, path.join(listRoot, 'ä track.mp3'))
+    if (process.platform === 'win32') expect(result?.info).toMatchObject({ key: '8A', bpm: 128 })
+    else expect(result).toBeNull()
   })
 
   it('reads verification metadata from a covering index without sorting snapshot JSON rows', () => {

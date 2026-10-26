@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import type { SongsAreaPaneKey } from '@renderer/stores/runtime'
 import { useRuntimeStore } from '@renderer/stores/runtime'
@@ -397,7 +398,7 @@ export function useWaveformPreviewPlayer() {
       return
     }
     if (playToken.value !== token) return
-    if (!previewActive.value || previewFilePath.value !== filePath) return
+    if (!previewActive.value || !sameRendererFilePath(previewFilePath.value, filePath)) return
     if (previewMode.value !== 'html') return
     if (pcmFallbackToken.value === token) {
       stopWaveformPreview('error')
@@ -407,7 +408,7 @@ export function useWaveformPreviewPlayer() {
     stopProgressLoop()
     void startPcmPreview(filePath, startPercent, token).catch(() => {
       if (playToken.value !== token) return
-      if (!previewActive.value || previewFilePath.value !== filePath) return
+      if (!previewActive.value || !sameRendererFilePath(previewFilePath.value, filePath)) return
       stopWaveformPreview('error')
     })
   }
@@ -518,11 +519,15 @@ export function useWaveformPreviewPlayer() {
     }
 
     let buffer: AudioBuffer
-    if (pcmBuffer && pcmBufferFilePath === filePath) {
+    if (pcmBuffer && sameRendererFilePath(pcmBufferFilePath, filePath)) {
       buffer = pcmBuffer
     } else {
       buffer = await decodePreviewPcmBuffer(filePath)
-      if (playToken.value !== token || !previewActive.value || previewFilePath.value !== filePath) {
+      if (
+        playToken.value !== token ||
+        !previewActive.value ||
+        !sameRendererFilePath(previewFilePath.value, filePath)
+      ) {
         return
       }
       pcmBuffer = buffer
@@ -540,7 +545,11 @@ export function useWaveformPreviewPlayer() {
       } catch {}
     }
 
-    if (playToken.value !== token || !previewActive.value || previewFilePath.value !== filePath) {
+    if (
+      playToken.value !== token ||
+      !previewActive.value ||
+      !sameRendererFilePath(previewFilePath.value, filePath)
+    ) {
       return
     }
 
@@ -560,7 +569,7 @@ export function useWaveformPreviewPlayer() {
 
     source.onended = () => {
       if (playToken.value !== token) return
-      if (!previewActive.value || previewFilePath.value !== filePath) return
+      if (!previewActive.value || !sameRendererFilePath(previewFilePath.value, filePath)) return
       stopWaveformPreview('auto-finish')
     }
 
@@ -574,13 +583,13 @@ export function useWaveformPreviewPlayer() {
 
   const startWaveformPreviewAudio = (filePath: string, startPercent: number, token: number) => {
     if (playToken.value !== token) return
-    if (!previewActive.value || previewFilePath.value !== filePath) return
+    if (!previewActive.value || !sameRendererFilePath(previewFilePath.value, filePath)) return
 
     if (shouldUsePcmPreview(filePath)) {
       stopProgressLoop()
       void startPcmPreview(filePath, startPercent, token).catch(() => {
         if (playToken.value !== token) return
-        if (!previewActive.value || previewFilePath.value !== filePath) return
+        if (!previewActive.value || !sameRendererFilePath(previewFilePath.value, filePath)) return
         stopWaveformPreview('error')
       })
       return
@@ -671,7 +680,7 @@ export function useWaveformPreviewPlayer() {
       .then(() => startWaveformPreviewAudio(filePath, startPercent, token))
       .catch(() => {
         if (playToken.value !== token) return
-        if (!previewActive.value || previewFilePath.value !== filePath) return
+        if (!previewActive.value || !sameRendererFilePath(previewFilePath.value, filePath)) return
         stopWaveformPreview('error')
       })
   }

@@ -1,3 +1,4 @@
+import { RendererFilePathSet } from '@renderer/utils/filePathComparison'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import type { IPioneerPlaylistTreeNode } from '../../../../types/globals'
 import type { ExternalLibraryKind, ExternalLibraryMutationResponse } from '@shared/externalLibrary'
@@ -36,7 +37,7 @@ export const resolveDjLibrarySongDrop = (
     sourcePlaylistId === node.id
   )
     return null
-  const filePaths = Array.from(new Set(state.filePaths.filter(Boolean)))
+  const filePaths = Array.from(new RendererFilePathSet(state.filePaths.filter(Boolean)))
   const rowKeys = Array.from(new Set(state.rowKeys.filter(Boolean)))
   if (!filePaths.length || (source.kind === 'desktop' && !rowKeys.length)) return null
   return {

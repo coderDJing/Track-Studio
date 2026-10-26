@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { mainFilePathKey } from '../../filePathComparison'
 import {
   getAllCrates,
   getLibraryTracks,
@@ -18,7 +19,7 @@ import type {
 type SeratoChunk = { tag: string; payload: Buffer }
 
 const normalizePathKey = (value: string) =>
-  path.normalize(value).replaceAll('\\', '/').replace(/^\/+/, '').toLowerCase()
+  mainFilePathKey(path.normalize(value)).replace(/^\/+/, '')
 
 const decodeUtf16Be = (payload: Buffer): string => {
   const evenLength = payload.length - (payload.length % 2)

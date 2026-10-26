@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { reactive, ref } from 'vue'
 import type { ISongInfo } from 'src/types/globals'
 import { buildHorizontalBrowseSongSnapshot } from '@renderer/composables/horizontalBrowse/horizontalBrowseShellSongs'
@@ -50,9 +51,13 @@ export const useHorizontalBrowseDeckDrop = (params: UseHorizontalBrowseDeckDropP
     const sourceSongListUUID = String(runtime.dragSourceSongListUUID || '').trim()
     const sourceSongsAreaState = params.resolveSongsAreaStateBySongListUUID(sourceSongListUUID)
     const currentSong =
-      sourceSongsAreaState?.songInfoArr.find((song) => song.filePath === filePath) ||
-      runtime.songsArea.songInfoArr.find((song) => song.filePath === filePath) ||
-      runtime.playingData.playingSongListData.find((song) => song.filePath === filePath)
+      sourceSongsAreaState?.songInfoArr.find((song) =>
+        sameRendererFilePath(song.filePath, filePath)
+      ) ||
+      runtime.songsArea.songInfoArr.find((song) => sameRendererFilePath(song.filePath, filePath)) ||
+      runtime.playingData.playingSongListData.find((song) =>
+        sameRendererFilePath(song.filePath, filePath)
+      )
 
     return currentSong ? { ...currentSong } : buildHorizontalBrowseSongSnapshot(filePath)
   }

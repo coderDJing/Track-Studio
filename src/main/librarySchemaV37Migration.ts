@@ -1,3 +1,4 @@
+import { registerFilePathComparison } from './filePathComparison'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { SqliteDatabase } from './libraryDb'
@@ -145,6 +146,7 @@ export const migrateLibrarySchemaToV38 = async (
   ) => options.onProgress?.({ phase, databasePath: normalizedPath, ...details })
   const Database = require('better-sqlite3') as typeof import('better-sqlite3')
   const db = new Database(normalizedPath, { fileMustExist: true }) as BackupCapableDatabase
+  registerFilePathComparison(db)
   let backupPath = ''
   let migrationValidated = false
   try {

@@ -1,3 +1,5 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
+
 import { ref, onBeforeUnmount, shallowRef } from 'vue'
 import confirm from '@renderer/components/confirmDialog'
 import { t } from '@renderer/utils/translate'
@@ -125,7 +127,7 @@ export function useSongLoader(params: {
   const resolveBrowserPlaybackHandoff = (filePath: string, durationSec: number) => {
     const handoff = runtime.mainWindowPlaybackHandoff
     if (!handoff || handoff.targetMode !== 'browser') return null
-    if (String(handoff.song?.filePath || '').trim() !== filePath) return null
+    if (!sameRendererFilePath(String(handoff.song?.filePath || '').trim(), filePath)) return null
     return {
       id: handoff.id,
       currentSec: normalizePlaybackHandoffSeconds(handoff.currentSec, durationSec),
@@ -152,8 +154,8 @@ export function useSongLoader(params: {
 
     try {
       // 只有路径明确不存在时，才标记文件缺失并自动跳下一首
-      const songIndex = runtime.playingData.playingSongListData.findIndex(
-        (item) => item.filePath === localFilePath
+      const songIndex = runtime.playingData.playingSongListData.findIndex((item) =>
+        sameRendererFilePath(item.filePath, localFilePath)
       )
       if (songIndex !== -1) {
         const fileExists = await window.electron.ipcRenderer
@@ -245,12 +247,12 @@ export function useSongLoader(params: {
         }
         if (removedPathsForEvent.length === 0) return
 
-        const errorIndex = runtime.playingData.playingSongListData.findIndex(
-          (item) => item.filePath === localFilePath
+        const errorIndex = runtime.playingData.playingSongListData.findIndex((item) =>
+          sameRendererFilePath(item.filePath, localFilePath)
         )
         if (errorIndex !== -1) runtime.playingData.playingSongListData.splice(errorIndex, 1)
 
-        if (runtime.playingData.playingSong?.filePath === localFilePath) {
+        if (sameRendererFilePath(runtime.playingData.playingSong?.filePath, localFilePath)) {
           runtime.playingData.playingSong = null
           runtime.playingData.playingSongListUUID = ''
           if (audioPlayer.value) {
@@ -269,7 +271,7 @@ export function useSongLoader(params: {
           emitter.emit('playlistContentChanged', { uuids: Array.from(changedPlaylistUuids) })
         }
       } else {
-        if (runtime.playingData.playingSong?.filePath === localFilePath) {
+        if (sameRendererFilePath(runtime.playingData.playingSong?.filePath, localFilePath)) {
           runtime.playingData.playingSong = null
           runtime.playingData.playingSongListUUID = ''
           if (audioPlayer.value) {
@@ -333,9 +335,9 @@ export function useSongLoader(params: {
     }
 
     if (requestId !== currentLoadRequestId.value) return false
-    if (runtime.playingData.playingSong?.filePath !== filePath) return false
+    if (!sameRendererFilePath(runtime.playingData.playingSong?.filePath, filePath)) return false
 
-    const item = response?.items?.find((entry) => entry.filePath === filePath)
+    const item = response?.items?.find((entry) => sameRendererFilePath(entry.filePath, filePath))
     const compactVisualWaveformData = item?.data ?? null
     const playerInstance = audioPlayer.value
     if (!playerInstance) return false
@@ -371,9 +373,11 @@ export function useSongLoader(params: {
     }
 
     if (requestId !== currentLoadRequestId.value) return
-    if (runtime.playingData.playingSong?.filePath !== filePath) return
+    if (!sameRendererFilePath(runtime.playingData.playingSong?.filePath, filePath)) return
 
-    const item = response?.items?.find((entry) => entry.analyzePath === analyzePath)
+    const item = response?.items?.find((entry) =>
+      sameRendererFilePath(entry.analyzePath, analyzePath)
+    )
     const data = item?.data ?? null
     const playerInstance = audioPlayer.value
     if (!playerInstance) return
@@ -396,7 +400,7 @@ export function useSongLoader(params: {
   ) => {
     const startPlay = () => {
       if (requestId !== currentLoadRequestId.value) return
-      if (runtime.playingData.playingSong?.filePath !== filePath) return
+      if (!sameRendererFilePath(runtime.playingData.playingSong?.filePath, filePath)) return
       const duration = playerInstance.getDuration()
       const handoff = resolveBrowserPlaybackHandoff(filePath, duration)
       let startTime = handoff?.currentSec ?? 0
@@ -435,7 +439,7 @@ export function useSongLoader(params: {
 
   const handleLoadSong = async (filePath: string, requestId: number) => {
     if (requestId !== currentLoadRequestId.value) return
-    if (runtime.playingData.playingSong?.filePath !== filePath) return
+    if (!sameRendererFilePath(runtime.playingData.playingSong?.filePath, filePath)) return
 
     const playerInstance = audioPlayer.value
     if (!playerInstance) return
@@ -453,7 +457,7 @@ export function useSongLoader(params: {
       void loadRekordboxPlaybackRuntime(currentSong)
         .then((resolved) => {
           if (requestId !== currentLoadRequestId.value) return
-          if (runtime.playingData.playingSong?.filePath !== filePath) return
+          if (!sameRendererFilePath(runtime.playingData.playingSong?.filePath, filePath)) return
           runtime.playingData.playingSong = resolved
           resolveBpmValue()
           emitter.emit('horizontalBrowse/shared-grid-batch-updated', [resolved])
@@ -489,7 +493,7 @@ export function useSongLoader(params: {
             const hasCachedWaveform = await fetchWaveformCache(filePath, requestId)
             if (hasCachedWaveform) return
             if (requestId !== currentLoadRequestId.value) return
-            if (runtime.playingData.playingSong?.filePath !== filePath) return
+            if (!sameRendererFilePath(runtime.playingData.playingSong?.filePath, filePath)) return
             tracePlayerWaveform('loader', 'formal-cache:queue-generation', filePath)
             queueMainPlayerPlayingAnalysis(runtime, filePath)
           })()
@@ -540,7 +544,7 @@ export function useSongLoader(params: {
   const handleWaveformUpdated = (_event: unknown, payload: { filePath?: string }) => {
     const filePath = typeof payload?.filePath === 'string' ? payload.filePath.trim() : ''
     if (!filePath) return
-    if (runtime.playingData.playingSong?.filePath !== filePath) return
+    if (!sameRendererFilePath(runtime.playingData.playingSong?.filePath, filePath)) return
     tracePlayerWaveform('loader', 'formal-cache:updated-event', filePath)
     void fetchWaveformCache(filePath, currentLoadRequestId.value)
   }
@@ -554,7 +558,7 @@ export function useSongLoader(params: {
     const requestNumber = Number(requestId)
     if (!Number.isFinite(requestNumber)) return
     if (requestNumber !== currentLoadRequestId.value) return
-    if (runtime.playingData.playingSong?.filePath !== filePath) return
+    if (!sameRendererFilePath(runtime.playingData.playingSong?.filePath, filePath)) return
 
     const playerInstance = audioPlayer.value
     if (!playerInstance) return
@@ -592,7 +596,7 @@ export function useSongLoader(params: {
     const requestNumber = Number(requestId)
     if (!Number.isFinite(requestNumber)) return
     if (requestNumber !== currentLoadRequestId.value) return
-    if (runtime.playingData.playingSong?.filePath !== filePath) return
+    if (!sameRendererFilePath(runtime.playingData.playingSong?.filePath, filePath)) return
     isLoadingBlob.value = false
     void handleSongLoadError(filePath, false, message)
   }

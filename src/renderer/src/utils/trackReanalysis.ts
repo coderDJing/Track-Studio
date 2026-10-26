@@ -65,7 +65,11 @@ export const promptTrackAnalysisSelection = async (options: {
     count: files.length,
     purpose: options.purpose,
     initialSelection,
-    canSelectStructureAlone: canSelectStructureAloneFromSongs(songs, files),
+    canSelectStructureAlone: canSelectStructureAloneFromSongs(
+      songs,
+      files,
+      isCurrentRendererWindowsPathPlatform()
+    ),
     initialBpmRangeId: normalizeAnalysisBpmRangeId(runtime.setting.analysisBpmRange)
   })
   if (!result) return null

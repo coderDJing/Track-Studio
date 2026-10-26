@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
 import { mutateSeratoCrate } from './seratoCrateWriter'
 import { __seratoTestUtils, readSeratoLibrary } from './serato'
 import { buildExternalLibraryBrowserTracks, getPlaylistNumericId } from './browserAdapter'
+
+vi.mock('electron', () => ({ app: { getPath: () => os.homedir() } }))
 
 const chunk = (tag: string, payload: Buffer) => {
   const header = Buffer.alloc(8)

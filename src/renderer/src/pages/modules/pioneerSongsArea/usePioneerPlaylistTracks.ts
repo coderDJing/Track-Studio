@@ -1,3 +1,4 @@
+import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
 import type { ComputedRef, Ref, ShallowRef } from 'vue'
 import { buildRekordboxSourceChannel } from '@shared/rekordboxSources'
 import {
@@ -46,10 +47,7 @@ type FetchPlaylistTracksParams = {
   preserveVisible?: boolean
 }
 
-const normalizePath = (value: unknown) =>
-  String(value || '')
-    .replace(/\//g, '\\')
-    .toLowerCase()
+const normalizePath = (value: unknown) => rendererFilePathKey(String(value || ''))
 
 const mergeRuntimeTrack = (
   current: IPioneerPlaylistTrack,

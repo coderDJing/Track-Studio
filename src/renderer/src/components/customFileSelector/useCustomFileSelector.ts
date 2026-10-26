@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import {
   computed,
   nextTick,
@@ -104,7 +105,7 @@ const findExistingPath = async (startPath: string): Promise<string> => {
     }
 
     const parentPath = getParentPath(currentPath)
-    if (!parentPath || parentPath === currentPath) break
+    if (!parentPath || sameRendererFilePath(parentPath, currentPath)) break
     currentPath = parentPath
   }
 

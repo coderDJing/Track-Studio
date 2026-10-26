@@ -71,7 +71,7 @@ export const assertBpmFixPlaylistTrack = (playlist: BpmFixPlaylist, source: stri
   const table = playlist.kind === 'set' ? 'set_items' : 'mixtape_items'
   const found = db
     ?.prepare(
-      `SELECT id FROM ${table} WHERE playlist_uuid = ? AND LOWER(REPLACE(file_path, '\\', '/')) = LOWER(?) LIMIT 1`
+      `SELECT id FROM ${table} WHERE playlist_uuid = ? AND frkb_file_path_key(file_path) = frkb_file_path_key(?) LIMIT 1`
     )
     .get(playlist.uuid, source.replace(/\\/g, '/'))
   if (!found) throw new Error('BPM_FIX_INVALID_PLAYLIST')
@@ -199,12 +199,12 @@ export const commitBpmFixPlaylist = (
   const db = getLibraryDb()
   if (!db) throw new Error('BPM_FIX_INVALID_PLAYLIST')
   const affected = new Set([playlist.uuid])
-  const where = "LOWER(REPLACE(file_path, '\\', '/')) = LOWER(?)"
+  const where = 'frkb_file_path_key(file_path) = frkb_file_path_key(?)'
   const sourceKey = source.replace(/\\/g, '/')
   db.transaction(() => {
     const cached = db
       .prepare(
-        "SELECT list_root, file_path, info_json FROM song_cache WHERE LOWER(REPLACE(json_extract(info_json, '$.filePath'), '\\', '/')) = LOWER(?)"
+        "SELECT list_root, file_path, info_json FROM song_cache WHERE frkb_file_path_key(json_extract(info_json, '$.filePath')) = frkb_file_path_key(?)"
       )
       .all(sourceKey)
       .filter(

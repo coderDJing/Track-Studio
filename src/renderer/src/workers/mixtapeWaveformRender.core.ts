@@ -1,4 +1,5 @@
 import { createFrameRenderer } from './mixtapeWaveformRender.frame'
+import { RendererFilePathMap } from '@renderer/utils/filePathComparison'
 import { createTileRenderer } from './mixtapeWaveformRender.tile'
 import type {
   PreRenderPayload,
@@ -28,9 +29,9 @@ const MIXTAPE_WAVEFORM_HEIGHT_SCALE = 0.72
 const MIXTAPE_SUMMARY_ZOOM = 0
 const MIXTAPE_DEBUG_TRACK_LINES = false
 
-const stemWaveformCache = new Map<string, StemWaveformData>()
-const rawCache = new Map<string, RawWaveformData>()
-const rawPyramidCache = new Map<string, RawWaveformLevel[]>()
+const stemWaveformCache = new RendererFilePathMap<StemWaveformData>()
+const rawCache = new RendererFilePathMap<RawWaveformData>()
+const rawPyramidCache = new RendererFilePathMap<RawWaveformLevel[]>()
 
 type WorkerMessageToMain =
   | { type: 'preRenderProgress'; done: number; total: number }

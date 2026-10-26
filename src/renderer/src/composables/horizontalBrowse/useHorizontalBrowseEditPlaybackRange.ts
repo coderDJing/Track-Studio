@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
 import type { ISongInfo } from 'src/types/globals'
 import type { HorizontalBrowseDeckKey } from '@renderer/composables/horizontalBrowse/horizontalBrowseNativeTransport'
@@ -186,7 +187,7 @@ export const useHorizontalBrowseEditPlaybackRange = (
 
   const queueCurrentSongSectionAnalysis = () => {
     const filePath = currentFilePath.value
-    if (!filePath || queuedSectionAnalysisFilePath.value === filePath) return
+    if (!filePath || sameRendererFilePath(queuedSectionAnalysisFilePath.value, filePath)) return
     queuedSectionAnalysisFilePath.value = filePath
     try {
       window.electron.ipcRenderer.send('key-analysis:queue-playing', {
@@ -256,7 +257,7 @@ export const useHorizontalBrowseEditPlaybackRange = (
     const action = pendingAction
     if (!action) return false
     const expired = performance.now() - action.startedAtMs >= RANGE_ACTION_TIMEOUT_MS
-    if (action.filePath !== currentFilePath.value || expired) {
+    if (!sameRendererFilePath(action.filePath, currentFilePath.value) || expired) {
       pendingAction = null
       return false
     }
@@ -463,7 +464,10 @@ export const useHorizontalBrowseEditPlaybackRange = (
         queueCurrentSongSectionAnalysis()
         return
       }
-      if (state.status === 'ready' && sectionRangeFallbackFilePath.value === state.filePath) {
+      if (
+        state.status === 'ready' &&
+        sameRendererFilePath(sectionRangeFallbackFilePath.value, state.filePath)
+      ) {
         sectionRangeFallbackFilePath.value = null
         handleLateSectionRangeReady()
         return

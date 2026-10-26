@@ -1,3 +1,4 @@
+import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
 import { nextTick } from 'vue'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import emitter from '@renderer/utils/mitt'
@@ -22,10 +23,7 @@ export type MoveSongsToDirSummary = {
   failed: number
 }
 
-const normalizePath = (value: string | undefined | null) =>
-  String(value || '')
-    .replace(/\//g, '\\')
-    .toLowerCase()
+const normalizePath = (value: string | undefined | null) => rendererFilePathKey(String(value || ''))
 
 export function useSongMoveTransaction() {
   const runtime = useRuntimeStore()

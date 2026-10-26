@@ -1,4 +1,6 @@
 ﻿<script setup lang="ts">
+import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
+
 import { PropType, computed, onUnmounted, ref as vRef, toRef } from 'vue'
 import type { ISongInfo, ISongsAreaColumn } from '../../../../../types/globals'
 import type { SongsAreaPaneKey } from '@renderer/stores/runtime'
@@ -379,14 +381,9 @@ const { getAnalysisProgress, isSongNeedsAnalysis, hasAnyAnalysisProgress } = use
     requiresRuntimeAnalysis,
     isAnalysisCompleteOverride: (filePath) => {
       if (sourceLibraryNameRef.value === 'RecordingLibrary') return true
-      const normalized = String(filePath || '')
-        .replace(/\//g, '\\')
-        .toLowerCase()
+      const normalized = rendererFilePathKey(String(filePath || ''))
       return props.analysisCompleteFilePaths.some(
-        (item) =>
-          String(item || '')
-            .replace(/\//g, '\\')
-            .toLowerCase() === normalized
+        (item) => rendererFilePathKey(String(item || '')) === normalized
       )
     }
   }

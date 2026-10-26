@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { RendererFilePathMap, sameRendererFilePath } from '@renderer/utils/filePathComparison'
+
 import {
   ref,
   shallowRef,
@@ -385,7 +387,7 @@ const handleMetadataBatchUpdatedFromEvent = async (payload: {
 }) => {
   const updates = Array.isArray(payload?.updates) ? payload.updates : []
   if (!updates.length) return
-  const renameMap = new Map<string, string>()
+  const renameMap = new RendererFilePathMap<string>()
   let touchedCurrentList = false
   for (const update of updates) {
     if (!update?.song) continue
@@ -503,7 +505,10 @@ const handleWaveformPreviewState = (payload?: WaveformPreviewStatePayload) => {
     return
   }
   const payloadFilePath = String(payload?.filePath || '').trim()
-  if (!payload?.active && (!payloadFilePath || activePreviewFilePath.value === payloadFilePath)) {
+  if (
+    !payload?.active &&
+    (!payloadFilePath || sameRendererFilePath(activePreviewFilePath.value, payloadFilePath))
+  ) {
     activePreviewFilePath.value = ''
   }
 }
@@ -564,8 +569,9 @@ const applyMetadataUpdate = async (
   const oldFilePath = incomingOldFilePath ?? updatedSong.filePath
   let touchedCurrentList = false
   const arr = [...originalSongInfoArr.value]
-  let idx = arr.findIndex((item) => item.filePath === oldFilePath)
-  if (idx === -1) idx = arr.findIndex((item) => item.filePath === updatedSong.filePath)
+  let idx = arr.findIndex((item) => sameRendererFilePath(item.filePath, oldFilePath))
+  if (idx === -1)
+    idx = arr.findIndex((item) => sameRendererFilePath(item.filePath, updatedSong.filePath))
   if (idx !== -1) {
     arr.splice(idx, 1, { ...arr[idx], ...updatedSong })
     originalSongInfoArr.value = arr
@@ -575,11 +581,11 @@ const applyMetadataUpdate = async (
 
   let runtimeListTouched = false
   songsAreaState.songInfoArr = songsAreaState.songInfoArr.map((item) => {
-    if (item.filePath === oldFilePath) {
+    if (sameRendererFilePath(item.filePath, oldFilePath)) {
       runtimeListTouched = true
       return { ...item, ...updatedSong }
     }
-    if (item.filePath === updatedSong.filePath) {
+    if (sameRendererFilePath(item.filePath, updatedSong.filePath)) {
       runtimeListTouched = true
       return { ...item, ...updatedSong }
     }
@@ -589,7 +595,7 @@ const applyMetadataUpdate = async (
 
   let selectionTouched = false
   songsAreaState.selectedSongFilePath = songsAreaState.selectedSongFilePath.map((path) => {
-    if (path === oldFilePath) {
+    if (sameRendererFilePath(path, oldFilePath)) {
       selectionTouched = true
       return updatedSong.filePath
     }
@@ -599,8 +605,8 @@ const applyMetadataUpdate = async (
 
   if (
     runtime.playingData.playingSong &&
-    (runtime.playingData.playingSong.filePath === updatedSong.filePath ||
-      runtime.playingData.playingSong.filePath === oldFilePath)
+    (sameRendererFilePath(runtime.playingData.playingSong.filePath, updatedSong.filePath) ||
+      sameRendererFilePath(runtime.playingData.playingSong.filePath, oldFilePath))
   ) {
     runtime.playingData.playingSong = {
       ...runtime.playingData.playingSong,
@@ -611,7 +617,8 @@ const applyMetadataUpdate = async (
 
   if (runtime.playingData.playingSongListUUID === songsAreaState.songListUUID) {
     runtime.playingData.playingSongListData = runtime.playingData.playingSongListData.map((item) =>
-      item.filePath === oldFilePath || item.filePath === updatedSong.filePath
+      sameRendererFilePath(item.filePath, oldFilePath) ||
+      sameRendererFilePath(item.filePath, updatedSong.filePath)
         ? { ...item, ...updatedSong }
         : item
     )
@@ -638,7 +645,7 @@ const applyMetadataUpdate = async (
   const selectionBeforeReload = [...songsAreaState.selectedSongFilePath]
   await openSongList()
   songsAreaState.selectedSongFilePath = selectionBeforeReload.map((path) =>
-    path === oldFilePath ? updatedSong.filePath : path
+    sameRendererFilePath(path, oldFilePath) ? updatedSong.filePath : path
   )
   return touchedCurrentList
 }
@@ -666,7 +673,7 @@ const handleSongContextMenuEvent = async (event: MouseEvent, song: ISongInfo) =>
   if (result.action === 'metadataBatchUpdated') {
     const updates = Array.isArray(result.updates) ? result.updates : []
     if (!updates.length) return
-    const renameMap = new Map<string, string>()
+    const renameMap = new RendererFilePathMap<string>()
     let touchedCurrentList = false
     for (const update of updates) {
       if (!update?.song) continue
@@ -728,7 +735,8 @@ const songDblClick = async (song: ISongInfo, event?: MouseEvent) => {
   }
   const isSameList = runtime.playingData.playingSongListUUID === songsAreaState.songListUUID
   const isSameSong =
-    isSameList && runtime.playingData.playingSong?.filePath === normalizedSong.filePath
+    isSameList &&
+    sameRendererFilePath(runtime.playingData.playingSong?.filePath, normalizedSong.filePath)
 
   runtime.playingData.playingSongListUUID = songsAreaState.songListUUID
   runtime.playingData.playingSongListData = songsAreaState.songInfoArr

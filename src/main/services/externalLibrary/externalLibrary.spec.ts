@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import os from 'node:os'
 import { __seratoTestUtils } from './serato'
 import { __traktorTestUtils } from './traktor'
 import {
@@ -11,6 +12,8 @@ import type { ExternalLibrarySnapshot } from '../../../shared/externalLibrary'
 import { parseSeratoWaveformOverview } from '../../../shared/seratoWaveformOverview'
 import { mergeExternalAnalysisIntoBrowserTrack } from './analysisCache'
 import { createSongBeatGridMapV2FromFixedGrid } from '../../../shared/songBeatGridMapV2'
+
+vi.mock('electron', () => ({ app: { getPath: () => os.homedir() } }))
 
 const textChunk = (tag: string, value: string) => {
   const utf16 = Buffer.from(value, 'utf16le')

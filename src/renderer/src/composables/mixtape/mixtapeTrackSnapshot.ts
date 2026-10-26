@@ -1,3 +1,4 @@
+import { RendererFilePathSet } from '@renderer/utils/filePathComparison'
 import {
   normalizeGainEnvelopePoints,
   normalizeMixEnvelopePoints
@@ -73,7 +74,7 @@ const normalizeTimestampMs = (value: unknown): number | undefined => {
 export const normalizeUniquePaths = (values: unknown[]) => {
   if (!Array.isArray(values)) return [] as string[]
   return Array.from(
-    new Set(
+    new RendererFilePathSet(
       values
         .filter((value) => typeof value === 'string')
         .map((value) => String(value).trim())

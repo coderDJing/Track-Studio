@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { onScopeDispose, watch, type Ref } from 'vue'
 import type { ISongInfo } from 'src/types/globals'
 import type {
@@ -240,12 +241,12 @@ export const useHorizontalBrowseDeckTransportInteractions = (
         params.resolveDeckSong('bottom')?.filePath ?? ''
       ] as const,
     ([topFilePath, bottomFilePath], [previousTopFilePath, previousBottomFilePath]) => {
-      if (topFilePath !== previousTopFilePath) {
+      if (!sameRendererFilePath(topFilePath, previousTopFilePath)) {
         void deactivateDeckLoop('top')
         resetDeckCueInteractionState('top')
         deckPendingPlayOnLoad.top = false
       }
-      if (bottomFilePath !== previousBottomFilePath) {
+      if (!sameRendererFilePath(bottomFilePath, previousBottomFilePath)) {
         void deactivateDeckLoop('bottom')
         resetDeckCueInteractionState('bottom')
         deckPendingPlayOnLoad.bottom = false

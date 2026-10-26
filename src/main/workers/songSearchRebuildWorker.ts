@@ -1,3 +1,4 @@
+import { registerFilePathComparison } from '../filePathComparison'
 import { parentPort } from 'node:worker_threads'
 import { performance } from 'node:perf_hooks'
 import { readSongSearchPage, type SongSearchPageTimings } from '../services/songSearchPageRead'
@@ -26,6 +27,7 @@ const openDatabase = (databasePath: string): SqliteDatabase => {
   closeDatabase()
   const Database = require('better-sqlite3') as typeof import('better-sqlite3')
   const next = new Database(databasePath, { readonly: true, fileMustExist: true })
+  registerFilePathComparison(next)
   next.pragma('query_only = ON')
   next.pragma('busy_timeout = 4000')
   db = next

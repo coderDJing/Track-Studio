@@ -8,8 +8,8 @@ impl HorizontalBrowseTransportEngine {
   fn has_full_track_pcm_state(deck_state: &DeckState) -> bool {
     let file_path = Self::normalized_path(&deck_state.file_path);
     !file_path.is_empty()
-      && Self::normalized_path(&deck_state.loaded_file_path) == file_path
-      && Self::normalized_path(&deck_state.fully_decoded_file_path) == file_path
+      && crate::file_path_comparison::same_file_path(Self::normalized_path(&deck_state.loaded_file_path), file_path)
+      && crate::file_path_comparison::same_file_path(Self::normalized_path(&deck_state.fully_decoded_file_path), file_path)
       && deck_state.pcm_start_sec <= 0.0001
       && !deck_state.pcm_data.is_empty()
       && deck_state.sample_rate > 0
@@ -626,7 +626,7 @@ impl HorizontalBrowseTransportEngine {
       .map(str::trim)
       .unwrap_or("")
       .to_string();
-    let same_file = current_file_path == next_file_path;
+    let same_file = crate::file_path_comparison::same_file_path(&current_file_path, &next_file_path);
     let previous_current_sec = Self::estimate_current_sec(self.deck(deck), now_ms);
     let preserve_playhead =
       same_file && !next_file_path.is_empty() && self.deck(deck).playing && payload.playing;

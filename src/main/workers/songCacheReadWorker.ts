@@ -1,3 +1,4 @@
+import { registerFilePathComparison } from '../filePathComparison'
 import { parentPort } from 'node:worker_threads'
 import { readSongCacheRows, readSongCacheTrackFieldRows } from '../libraryCacheDb/songCacheRead'
 import type { SqliteDatabase } from '../libraryDb'
@@ -15,6 +16,7 @@ parentPort?.on(
       const Database = require('better-sqlite3') as typeof import('better-sqlite3')
       // 不建库、不迁移；连接随请求关闭，切换资料库时不持有旧库文件。
       db = new Database(request.databasePath, { readonly: true, fileMustExist: true })
+      registerFilePathComparison(db)
       const rows =
         request.mode === 'track-fields'
           ? readSongCacheTrackFieldRows(db, request.roots)

@@ -12,10 +12,13 @@ import {
 } from './services/libraryMerge/participants'
 import { applyLibraryDbSchema } from './libraryDbSchema'
 import { runTracedSync } from './services/mainProcessActivityTraceState'
+import { mainFilePathKey, registerFilePathComparison } from './filePathComparison'
+import { ensureSongCachePathIndexes } from './libraryCacheDb/songCachePathSql'
 
 const DB_FILE_NAME = 'FRKB.database.sqlite'
 const SCHEMA_VERSION = 39
-export const MAX_SUPPORTED_DATABASE_SCHEMA_VERSION = 40
+const FILE_PATH_COMPARISON_SCHEMA_VERSION = 41
+export const MAX_SUPPORTED_DATABASE_SCHEMA_VERSION = FILE_PATH_COMPARISON_SCHEMA_VERSION
 
 type SqliteDatabaseCtor = typeof import('better-sqlite3')
 
@@ -100,6 +103,7 @@ export function assertExistingDatabaseSchemaSupported(dbPath: string): number {
   if (!normalizedPath) throw new Error('音乐库路径不能为空')
   const Database = require('better-sqlite3') as SqliteDatabaseCtor
   const instance = new Database(normalizedPath, { readonly: true, fileMustExist: true })
+  registerFilePathComparison(instance)
   try {
     const userVersion = readDatabaseSchemaVersion(instance)
     assertSupportedDatabaseSchemaVersion(normalizedPath, userVersion)
@@ -122,11 +126,16 @@ function createDatabase(dbPath: string): SqliteDatabase {
     instance.close()
     throw error
   }
-  applyLibraryDbSchema(instance, userVersion)
-  if (userVersion < SCHEMA_VERSION) {
-    instance.pragma('user_version = ' + SCHEMA_VERSION)
-  }
   try {
+    registerFilePathComparison(instance)
+    applyLibraryDbSchema(instance, userVersion)
+    // 函数表达式索引需要新运行时。索引和版本一起提交，旧版通过已有版本守卫拒绝写入。
+    instance.transaction(() => {
+      ensureSongCachePathIndexes(instance)
+      if (userVersion < FILE_PATH_COMPARISON_SCHEMA_VERSION) {
+        instance.pragma('user_version = ' + FILE_PATH_COMPARISON_SCHEMA_VERSION)
+      }
+    })()
     assertLibraryMergeParticipantCoverage(instance)
     if (isConfiguredDevDatabase(path.dirname(dbPath))) {
       assertStoredMetadataContracts(instance)
@@ -167,7 +176,12 @@ export function initLibraryDb(dirPath: string): SqliteDatabase | null {
   if (!dirPath) return null
   // 已打开的连接直接复用。getLibraryDb 是缓存读写的热路径，不能每次都同步探测磁盘；
   // 在慢盘/后台读取期间，即使目录存在性检查也会阻塞主进程数秒。
-  if (db && dbRoot === dirPath) return db
+  if (
+    db &&
+    dbRoot &&
+    mainFilePathKey(path.resolve(dbRoot)) === mainFilePathKey(path.resolve(dirPath))
+  )
+    return db
   // 打开既有库不能产生任何文件。启动时设置里可能仍保留一个已被手动删除的库路径；
   // 首次打开/换库仍必须检查，不能把丢失的库误判为可修复的空库。
   const libraryDirPath = path.join(dirPath, 'library')

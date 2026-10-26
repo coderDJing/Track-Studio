@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { computed, ref, type Ref } from 'vue'
 import type { ISongInfo } from 'src/types/globals'
 import type { HorizontalBrowseDeckKey } from '@renderer/composables/horizontalBrowse/horizontalBrowseNativeTransport'
@@ -30,7 +31,7 @@ const resolveCurrentSongIndex = (songs: ISongInfo[], currentSong: ISongInfo | nu
 
   const currentFilePath = resolveSongFilePath(currentSong)
   if (!currentFilePath) return -1
-  return songs.findIndex((song) => resolveSongFilePath(song) === currentFilePath)
+  return songs.findIndex((song) => sameRendererFilePath(resolveSongFilePath(song), currentFilePath))
 }
 
 export const useHorizontalBrowseEditDeckNavigation = ({
@@ -72,7 +73,7 @@ export const useHorizontalBrowseEditDeckNavigation = ({
       if (
         shouldResumePlayback &&
         editNavigationToken === token &&
-        resolveSongFilePath(topDeckSong.value) === filePath &&
+        sameRendererFilePath(resolveSongFilePath(topDeckSong.value), filePath) &&
         !resolveDeckPlaying('top')
       ) {
         handleDeckPlayPauseToggle('top')

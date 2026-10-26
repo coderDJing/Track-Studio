@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { computed, ref, onUnmounted, type Ref, type ShallowRef } from 'vue'
 import emitter from '@renderer/utils/mitt'
 import {
@@ -182,7 +183,7 @@ export const usePioneerUsbPlaylistActions = (params: {
   const handleUsbChanged = (value: unknown) => {
     if (!value || typeof value !== 'object' || !('rootPath' in value)) return
     clearRekordboxSourceCachesByKind('usb')
-    if (value.rootPath !== params.selectedSourceRootPath.value) return
+    if (!sameRendererFilePath(value.rootPath, params.selectedSourceRootPath.value)) return
     refreshReuseRuntime &&= 'analysisUnchanged' in value && value.analysisUnchanged === true
     if (refreshTimer) clearTimeout(refreshTimer)
     refreshTimer = setTimeout(() => {

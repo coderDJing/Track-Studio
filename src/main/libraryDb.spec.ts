@@ -13,6 +13,7 @@ import {
   MAX_SUPPORTED_DATABASE_SCHEMA_VERSION
 } from './libraryDb'
 import store from './store'
+import { registerFilePathComparison } from './filePathComparison'
 
 const temporaryRoots: string[] = []
 const previousDatabaseDir = store.databaseDir
@@ -101,5 +102,38 @@ describe('library database initialization', () => {
       DatabaseSchemaVersionError
     )
     expect(() => initLibraryDb(root)).toThrow(DatabaseSchemaVersionError)
+  })
+
+  it('upgrades legacy cache indexes atomically with the schema guard and preserves cached data', async () => {
+    const root = await createTemporaryRoot()
+    await fs.mkdir(path.join(root, 'library'))
+    expect(initLibraryDb(root)).not.toBeNull()
+    closeLibraryDb()
+    const Database = require('better-sqlite3') as typeof import('better-sqlite3')
+    const legacy = new Database(getLibraryDbPath(root))
+    registerFilePathComparison(legacy)
+    legacy.exec(`
+      PRAGMA user_version = 40;
+      DROP INDEX idx_song_cache_file_normalized;
+      DROP INDEX idx_song_cache_root_file_normalized;
+      DROP INDEX idx_song_cache_info_file_path_normalized;
+      CREATE INDEX idx_song_cache_file_normalized ON song_cache(REPLACE(LOWER(file_path), '/', '\\'));
+      INSERT INTO song_cache VALUES ('library/music', 'Ä Track.mp3', 1, 2, '{}');
+    `)
+    legacy.close()
+    const instance = initLibraryDb(root)
+    expect(instance).not.toBeNull()
+    expect(instance?.pragma('user_version', { simple: true })).toBe(41)
+    expect(instance?.prepare('SELECT file_path FROM song_cache').get()).toMatchObject({
+      file_path: 'Ä Track.mp3'
+    })
+    expect(
+      instance
+        ?.prepare("SELECT sql FROM sqlite_master WHERE name = 'idx_song_cache_file_normalized'")
+        .get()
+    ).toMatchObject({ sql: expect.stringContaining('frkb_file_path_key_mode') })
+    closeLibraryDb()
+    expect(assertExistingDatabaseSchemaSupported(getLibraryDbPath(root))).toBe(41)
+    expect(initLibraryDb(root)).not.toBeNull()
   })
 })

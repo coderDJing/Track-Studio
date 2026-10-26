@@ -240,7 +240,7 @@ const readLibrary = async (
   preferCached = false,
   refreshAttempt = 0
 ) => {
-  const cacheKey = `${kind}:${path.normalize(sourcePath).toLocaleLowerCase()}`
+  const cacheKey = `${kind}:${normalizeAbsolutePathKey(sourcePath)}`
   const sourceStamp =
     kind === 'serato' && preferCached ? undefined : await getExternalSourceStamp(kind, sourcePath)
   const cached = snapshotCache.get(cacheKey)
@@ -286,7 +286,7 @@ export const invalidateExternalLibrarySnapshot = (
   kind: ExternalLibraryKind,
   sourcePath: string
 ) => {
-  const cacheKey = `${kind}:${path.normalize(sourcePath).toLocaleLowerCase()}`
+  const cacheKey = `${kind}:${normalizeAbsolutePathKey(sourcePath)}`
   snapshotCache.delete(cacheKey)
   if (kind === 'serato') clearSeratoTrackMetadataCache(sourcePath)
 }

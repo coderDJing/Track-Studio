@@ -34,11 +34,14 @@ const safeRequire = (id: string): unknown => {
   }
 }
 
+// 普通 Node 脚本/测试没有 Electron app；加载 npm 包反而可能触发运行时自动下载。
 const electronModule =
-  (safeRequire('electron') as {
-    app?: ElectronAppLike
-    shell?: ElectronShellLike
-  } | null) || null
+  (process.versions.electron
+    ? (safeRequire('electron') as {
+        app?: ElectronAppLike
+        shell?: ElectronShellLike
+      } | null)
+    : null) || null
 
 const electronApp = electronModule?.app || null
 const electronShell = electronModule?.shell || null

@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { parseWindowsTraktorRoots } from './traktorConfig'
+
+vi.mock('electron', () => ({ app: {} }))
 
 describe('Traktor configured RootDirectory', () => {
   it('accepts one or several registry records with Unicode paths', () => {

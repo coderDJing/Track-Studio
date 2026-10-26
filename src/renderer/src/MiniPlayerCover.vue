@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
+
 import {
   nextTick,
   onMounted,
@@ -81,7 +83,7 @@ const loadCover = async (next: MiniPlayerCoverPopupPayload) => {
       size,
       next.rootDir || ''
     )
-    if (!thumb || payload.value?.filePath !== filePath) return false
+    if (!thumb || !sameRendererFilePath(payload.value?.filePath, filePath)) return false
     if (thumb.data) {
       const bytes = toUint8Array(thumb.data)
       if (bytes && bytes.length > 0) {
@@ -104,11 +106,11 @@ const loadCover = async (next: MiniPlayerCoverPopupPayload) => {
   }
   if (await trySize(512)) return
   if (await trySize(256)) return
-  if (payload.value?.filePath === filePath) disposeCoverUrl()
+  if (sameRendererFilePath(payload.value?.filePath, filePath)) disposeCoverUrl()
 }
 
 const handleState = (_event: unknown, next: MiniPlayerCoverPopupPayload) => {
-  const sameFile = payload.value?.filePath === next.filePath
+  const sameFile = sameRendererFilePath(payload.value?.filePath, next.filePath)
   payload.value = next
   if (!sameFile || !coverUrl.value) void loadCover(next)
   void reportSize()

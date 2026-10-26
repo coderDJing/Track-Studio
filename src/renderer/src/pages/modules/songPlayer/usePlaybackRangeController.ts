@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import {
@@ -253,7 +254,7 @@ export function usePlaybackRangeController(options: PlaybackRangeControllerOptio
     const song = runtime.playingData.playingSong
     if (isRekordboxExternalPlaybackSource(runtime.playingData.playingSongListUUID, song)) return
     const filePath = song?.filePath
-    if (!filePath || queuedSectionAnalysisFilePath.value === filePath) return
+    if (!filePath || sameRendererFilePath(queuedSectionAnalysisFilePath.value, filePath)) return
     queuedSectionAnalysisFilePath.value = filePath
     queueMainPlayerPlayingAnalysis(runtime, filePath)
   }
@@ -339,7 +340,10 @@ export function usePlaybackRangeController(options: PlaybackRangeControllerOptio
         queueCurrentSongSectionAnalysis()
         return
       }
-      if (state.status === 'ready' && sectionRangeFallbackFilePath.value === state.filePath) {
+      if (
+        state.status === 'ready' &&
+        sameRendererFilePath(sectionRangeFallbackFilePath.value, state.filePath)
+      ) {
         sectionRangeFallbackFilePath.value = null
         handleLateSectionRangeReady()
         return

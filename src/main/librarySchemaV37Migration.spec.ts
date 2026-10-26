@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -9,6 +9,12 @@ import {
 } from './librarySchemaV37Migration'
 
 const temporaryDirectories: string[] = []
+// 此套件通过 resolveTimeBasisOffsetMs 注入结果，不加载 Electron/ffmpeg 运行时。
+vi.mock('./ffmpeg', () => ({
+  resolveBundledFfmpegPath: () => {
+    throw new Error('unexpected ffmpeg access in schema migration test')
+  }
+}))
 
 const createV36Database = async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'frkb-schema-v37-'))

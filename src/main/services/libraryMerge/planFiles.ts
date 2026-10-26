@@ -3,6 +3,7 @@ import path from 'node:path'
 import { v4 as uuidV4 } from 'uuid'
 import type { PlannedFile } from './plan'
 import { LibraryMergeError } from './types'
+import { mainFilePathKey } from '../../filePathComparison'
 
 const CONTROL_FILE_NAMES = new Set(['.frkb.uuid', '.description.json', '.description.json.legacy'])
 
@@ -137,10 +138,10 @@ export const assertExpectedDirectoryEntries = async (params: {
   }
 }
 
-export const getMergeFilePathKey = (filePath: string): string => {
-  const resolved = path.resolve(filePath)
-  return resolved.toLocaleLowerCase()
-}
+export const getMergeFilePathKey = (
+  filePath: string,
+  platform: string = process.platform
+): string => mainFilePathKey(path.resolve(filePath), platform)
 
 export const uniqueTargetFilePath = async (
   targetRoot: string,
@@ -160,7 +161,8 @@ export const uniqueTargetFilePath = async (
         ? fileName
         : `${baseName} (from ${sourceLabel}${index === 2 ? '' : ` ${index}`})${ext}`
     const candidate = path.join(targetDir, candidateName)
-    const key = getMergeFilePathKey(candidate)
+    // 目标命名保留跨平台防冲突策略；来源身份使用 getMergeFilePathKey 的平台规则。
+    const key = getMergeFilePathKey(candidate, 'win32')
     const existing = await fs.lstat(candidate).catch(() => null)
     if (!existing && !reservedPaths.has(key)) {
       reservedPaths.add(key)

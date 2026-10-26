@@ -161,7 +161,7 @@ pub fn horizontal_browse_transport_set_beat_grid(
         .as_deref()
         .map(str::trim)
         .unwrap_or("");
-      if current_file_path != expected_file_path {
+      if !crate::file_path_comparison::same_file_path(current_file_path, &expected_file_path) {
         return Ok(engine_guard.snapshot(engine_guard.last_now_ms));
       }
     }

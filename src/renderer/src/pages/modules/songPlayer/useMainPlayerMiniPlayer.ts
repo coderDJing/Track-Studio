@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import type { ComputedRef, Ref } from 'vue'
 import { useMiniPlayerHost } from '@renderer/composables/miniPlayer/useMiniPlayerHost'
 import type { useRuntimeStore } from '@renderer/stores/runtime'
@@ -63,7 +64,9 @@ export function useMainPlayerMiniPlayer(params: {
       !isRekordboxExternalPlaybackSource(params.runtime.playingData.playingSongListUUID, song)
     const listUuidAtExportStart = params.runtime.playingData.playingSongListUUID
     const currentList = params.runtime.playingData.playingSongListData
-    const currentIndex = currentList.findIndex((item) => item.filePath === song.filePath)
+    const currentIndex = currentList.findIndex((item) =>
+      sameRendererFilePath(item.filePath, song.filePath)
+    )
     const summary = (await window.electron.ipcRenderer.invoke(
       'exportSongsToDir',
       folderPath,

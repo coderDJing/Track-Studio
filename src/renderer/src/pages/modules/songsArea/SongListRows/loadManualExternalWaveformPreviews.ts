@@ -1,4 +1,5 @@
 import type { WaveformListPreviewData } from '@shared/waveformSurfaceCache'
+import { RendererFilePathMap, RendererFilePathSet } from '@renderer/utils/filePathComparison'
 import type { ISongInfo } from 'src/types/globals'
 import type { RekordboxSourceKind } from '@shared/rekordboxSources'
 import { resolveSongExternalWaveformSource } from '@renderer/utils/rekordboxExternalSource'
@@ -26,7 +27,7 @@ export const loadManualExternalWaveformPreviews = async (params: {
   store: (filePath: string, data: WaveformListPreviewData) => void
   markReady: (filePath: string) => void
 }) => {
-  const ready = new Set<string>()
+  const ready = new RendererFilePathSet()
   const filePaths = selectNativeExternalWaveformPaths(
     params.filePaths,
     params.resolveSong,
@@ -34,7 +35,9 @@ export const loadManualExternalWaveformPreviews = async (params: {
     params.sourceKind
   )
   if (!filePaths.length) return ready
-  const versions = new Map(filePaths.map((filePath) => [filePath, params.getVersion(filePath)]))
+  const versions = new RendererFilePathMap(
+    filePaths.map((filePath) => [filePath, params.getVersion(filePath)] as const)
+  )
   for (const filePath of filePaths) params.inflight.add(filePath)
   try {
     const response = (await window.electron.ipcRenderer.invoke(

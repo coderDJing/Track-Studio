@@ -1,4 +1,5 @@
 import { BPM_INTERNAL_DECIMALS, formatBpmDisplay } from '@renderer/utils/bpm'
+import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
 
 export const PREVIEW_WARMUP_DELAY_MS = 600
 export const PREVIEW_WARMUP_EAGER_DELAY_MS = 0
@@ -16,9 +17,7 @@ export const PREVIEW_BPM_TAP_MAX_DELTA_MS = 2000
 export const PREVIEW_BPM_TAP_MAX_COUNT = 8
 
 export const normalizePathKey = (value: unknown) =>
-  String(value || '')
-    .trim()
-    .toLowerCase()
+  rendererFilePathKey(typeof value === 'string' ? value : '')
 
 export const clampNumber = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value))

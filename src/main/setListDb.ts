@@ -1,5 +1,6 @@
 import { v4 as uuidV4 } from 'uuid'
 import path = require('path')
+import { mainFilePathKey } from './filePathComparison'
 import { getLibraryDb, isSqliteRow } from './libraryDb'
 import { log } from './log'
 
@@ -48,7 +49,7 @@ function stringifyAnalysisJson(analysis: unknown): string | null {
 }
 
 function resolveFilePathWhereClause(): string {
-  return process.platform === 'win32' ? 'LOWER(file_path) = LOWER(?)' : 'file_path = ?'
+  return 'frkb_file_path_key(file_path) = frkb_file_path_key(?)'
 }
 
 function buildFilePathLookupCandidates(filePath: string): string[] {
@@ -337,7 +338,7 @@ export function findSetItemsByFilePaths(filePaths: string[]): SetItemRecord[] {
     new Set(
       (Array.isArray(filePaths) ? filePaths : [])
         .flatMap((filePath) => buildFilePathLookupCandidates(filePath))
-        .map((candidate) => (process.platform === 'win32' ? candidate.toLowerCase() : candidate))
+        .map((candidate) => mainFilePathKey(candidate))
     )
   )
   if (lookupCandidates.length === 0) return []
@@ -349,7 +350,7 @@ export function findSetItemsByFilePaths(filePaths: string[]): SetItemRecord[] {
     for (let offset = 0; offset < lookupCandidates.length; offset += chunkSize) {
       const chunk = lookupCandidates.slice(offset, offset + chunkSize)
       const placeholders = chunk.map(() => '?').join(', ')
-      const filePathExpression = process.platform === 'win32' ? 'LOWER(file_path)' : 'file_path'
+      const filePathExpression = 'frkb_file_path_key(file_path)'
       rows.push(
         ...db
           .prepare(

@@ -1,3 +1,5 @@
+import { sameRendererFilePath, RendererFilePathMap } from '@renderer/utils/filePathComparison'
+
 import { FIXED_MIXTAPE_STEM_MODE } from '@shared/mixtapeStemMode'
 import type {
   MixtapeTrack,
@@ -173,7 +175,7 @@ export const createTimelineWaveformLoadingModule = (ctx: TimelineWaveformLoading
     }
 
     const responseItems = Array.isArray(response?.items) ? response!.items : []
-    const responseDataMap = new Map<string, StemWaveformData | null>()
+    const responseDataMap = new RendererFilePathMap<StemWaveformData | null>()
     for (const item of responseItems) {
       const stems = Array.isArray(item?.stems) ? item.stems : []
       for (const stem of stems) {
@@ -256,7 +258,9 @@ export const createTimelineWaveformLoadingModule = (ctx: TimelineWaveformLoading
       response = null
     }
     const items = Array.isArray(response?.items) ? response!.items : []
-    const itemMap = new Map(items.map((entry) => [entry?.filePath || '', entry?.data ?? null]))
+    const itemMap = new RendererFilePathMap(
+      items.map((entry) => [entry?.filePath || '', entry?.data ?? null] as const)
+    )
     let updated = false
     for (const filePath of requestedPaths) {
       try {
@@ -316,7 +320,7 @@ export const createTimelineWaveformLoadingModule = (ctx: TimelineWaveformLoading
         for (const source of waveformSources) {
           const filePath = String(source.filePath || '').trim()
           if (!filePath || waveformDataMap.has(filePath) || waveformInflight.has(filePath)) continue
-          if (!list.includes(filePath)) {
+          if (!list.some((candidate) => sameRendererFilePath(candidate, filePath))) {
             list.push(filePath)
           }
         }
@@ -403,8 +407,7 @@ export const createTimelineWaveformLoadingModule = (ctx: TimelineWaveformLoading
       const collectVisibleTargets = () => {
         const viewport =
           (timelineScrollRef.value?.osInstance?.()?.elements?.().viewport as
-            | HTMLElement
-            | undefined) || null
+            HTMLElement | undefined) || null
         const viewportLeft = Math.max(
           0,
           Math.floor(viewport?.scrollLeft || Number(timelineScrollLeft.value || 0))
@@ -537,7 +540,7 @@ export const createTimelineWaveformLoadingModule = (ctx: TimelineWaveformLoading
       let listRoot = ''
       for (const track of tracks.value) {
         const waveformSource = resolveTrackWaveformSources(track).find(
-          (item: { filePath: string }) => item.filePath === filePath
+          (item: { filePath: string }) => sameRendererFilePath(item.filePath, filePath)
         )
         if (waveformSource?.listRoot) {
           listRoot = waveformSource.listRoot
@@ -556,7 +559,11 @@ export const createTimelineWaveformLoadingModule = (ctx: TimelineWaveformLoading
     const stemBundleRequestKeySet = new Set<string>()
     for (const track of tracks.value) {
       const waveformSources = resolveTrackWaveformSources(track)
-      if (!waveformSources.some((source: { filePath?: string }) => source.filePath === filePath)) {
+      if (
+        !waveformSources.some((source: { filePath?: string }) =>
+          sameRendererFilePath(source.filePath, filePath)
+        )
+      ) {
         continue
       }
       const sourceFilePath = String(track.filePath || '').trim()
@@ -591,8 +598,8 @@ export const createTimelineWaveformLoadingModule = (ctx: TimelineWaveformLoading
     }
     let listRoot = ''
     for (const track of tracks.value) {
-      const waveformSource = resolveTrackWaveformSources(track).find(
-        (item: { filePath: string }) => item.filePath === filePath
+      const waveformSource = resolveTrackWaveformSources(track).find((item: { filePath: string }) =>
+        sameRendererFilePath(item.filePath, filePath)
       )
       if (waveformSource?.listRoot) {
         listRoot = waveformSource.listRoot

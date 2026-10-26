@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import type { HorizontalBrowseDeckKey } from '@renderer/composables/horizontalBrowse/horizontalBrowseNativeTransport'
 
 type DeckInteractionTrace = {
@@ -31,7 +32,8 @@ export const resolveHorizontalBrowseInteractionElapsedMs = (
 ) => {
   const current = deckInteractionTraceMap.get(deck)
   const normalizedPath = String(filePath || '').trim()
-  if (!current || !normalizedPath || current.filePath !== normalizedPath) return undefined
+  if (!current || !normalizedPath || !sameRendererFilePath(current.filePath, normalizedPath))
+    return undefined
   return Number((performance.now() - current.startedAt).toFixed(1))
 }
 
@@ -56,6 +58,7 @@ export const resolveHorizontalBrowseDeckActionElapsedMs = (
 ) => {
   const current = deckActionTraceMap.get(resolveDeckActionTraceKey(deck, action))
   const normalizedPath = String(filePath || '').trim()
-  if (!current || !normalizedPath || current.filePath !== normalizedPath) return undefined
+  if (!current || !normalizedPath || !sameRendererFilePath(current.filePath, normalizedPath))
+    return undefined
   return Number((performance.now() - current.startedAt).toFixed(1))
 }

@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { onUnmounted, type Ref } from 'vue'
 import type { ISongInfo, IRekordboxBeatGridEntry } from 'src/types/globals'
 import type { SongBeatGridMapV2 } from '@shared/songBeatGridMapV2'
@@ -111,7 +112,9 @@ export const usePioneerUsbGridEditing = (params: {
     flush,
     flushFile: (filePath?: string): Promise<void> | null => {
       const matches = filePath
-        ? [...sessions.values()].filter((session) => session.song.filePath === filePath)
+        ? [...sessions.values()].filter((session) =>
+            sameRendererFilePath(session.song.filePath, filePath)
+          )
         : currentSession()
           ? [currentSession()!]
           : []

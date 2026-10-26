@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
+import { mainFilePathKey } from '../../filePathComparison'
 import { LibraryMergeError } from './types'
 
 type SqliteDatabase = InstanceType<typeof import('better-sqlite3')>
@@ -53,7 +54,7 @@ const remapSourcePath = (params: {
   const raw = typeof params.value === 'string' ? params.value.trim() : ''
   if (!raw) return null
   const sourceAbs = path.resolve(raw)
-  const exactTarget = params.sourceFilePathToTarget.get(sourceAbs.toLocaleLowerCase())
+  const exactTarget = params.sourceFilePathToTarget.get(mainFilePathKey(sourceAbs))
   if (exactTarget) return exactTarget
   if (!path.isAbsolute(raw) || !isPathInside(params.sourceRoot, sourceAbs)) return raw
   const candidateNodes = [...params.sourceNodePaths].sort(

@@ -1,3 +1,4 @@
+import { registerFilePathComparison } from '../../filePathComparison'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -39,12 +40,14 @@ export async function inspectLibraryMergeSource(params: {
     readonly: true,
     fileMustExist: true
   })
+  registerFilePathComparison(sourceDb)
   // Inspect is read-only planning: open the live target library without write intent so
   // concurrent app readers are less likely to contend while integrity checks run.
   const targetDb = new Database(path.join(targetRoot, DB_FILE_NAME), {
     readonly: true,
     fileMustExist: true
   })
+  registerFilePathComparison(targetDb)
   const workspaceDir = path.join(targetRoot, PREFLIGHT_WORK_DIR_NAME, randomUUID())
   targetDb.pragma('foreign_keys = ON')
   targetDb.pragma('busy_timeout = 5000')
@@ -60,6 +63,7 @@ export async function inspectLibraryMergeSource(params: {
     if (snapshot) {
       closeDb(sourceDb)
       sourceDb = new Database(snapshot.databasePath, { readonly: true, fileMustExist: true })
+      registerFilePathComparison(sourceDb)
       sourceDb.pragma('busy_timeout = 5000')
       sourceDb.exec('BEGIN')
     }

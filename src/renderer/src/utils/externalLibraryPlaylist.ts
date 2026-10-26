@@ -1,3 +1,4 @@
+import { RendererFilePathSet } from '@renderer/utils/filePathComparison'
 import confirm from '@renderer/components/confirmDialog'
 import externalLibraryTargetDialog from '@renderer/components/externalLibraryTargetDialog'
 import { useRuntimeStore } from '@renderer/stores/runtime'
@@ -50,7 +51,9 @@ export const openExternalLibraryPlaylistForSelectedTracks = async (params: {
     ).trim()
   }
   const trackPaths = Array.from(
-    new Set(params.tracks.map((track) => String(track.filePath || '').trim()).filter(Boolean))
+    new RendererFilePathSet(
+      params.tracks.map((track) => String(track.filePath || '').trim()).filter(Boolean)
+    )
   )
   if (!sourcePath) {
     await confirm({

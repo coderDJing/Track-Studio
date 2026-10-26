@@ -1,3 +1,4 @@
+import { deleteLocalFile } from './applyRemoteFileDeletion'
 import path from 'node:path'
 import fs from 'fs-extra'
 import os from 'node:os'
@@ -12,7 +13,6 @@ import {
   updateLibraryNodeOrder
 } from '../libraryTreeDb'
 import { normalizeOrder, writeUuidMarker } from '../libraryTreeDbHelpers'
-import { protectSetReferencedFilesForDeletion } from '../ipc/setListHandlers'
 import { getRecycleBinRecordByFileId, type RecycleBinRecord } from '../recycleBinDb'
 import { moveFileToRecycleBin, restoreRecycleBinFile } from '../recycleBinService'
 import { stampPlaylistSongsAddedAt } from '../services/playlistAddedAt'
@@ -383,16 +383,6 @@ const emitImported = (
     trackNumber: asOptionalPositiveInt(file.trackNumber),
     addedAtMs: asOptionalPositiveInt(file.addedAtMs)
   })
-}
-
-const deleteLocalFile = async (absPath: string, ctx: ApplyRemoteContext): Promise<boolean> => {
-  if (isBusyPath(absPath, ctx)) return false
-  const setProtection = await protectSetReferencedFilesForDeletion([absPath])
-  if (setProtection.protectedFiles.some((item) => item.filePath === absPath && item.success)) {
-    return true
-  }
-  const result = await moveFileToRecycleBin(absPath)
-  return result.status === 'moved' || result.status === 'skipped'
 }
 
 const ensureRemoteDestinationAvailable = async (

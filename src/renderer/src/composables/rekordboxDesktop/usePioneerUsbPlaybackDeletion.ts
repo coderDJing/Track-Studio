@@ -1,3 +1,5 @@
+import { rendererFilePathKey, sameRendererFilePath } from '@renderer/utils/filePathComparison'
+
 import { onUnmounted } from 'vue'
 import emitter from '@renderer/utils/mitt'
 import { isEditablePioneerUsbSong } from '@renderer/utils/pioneerUsbEditing'
@@ -15,7 +17,7 @@ export const usePioneerUsbPlaybackDeletion = (params: {
   }) => void
   onDeckDeleted?: (deck: 'top' | 'bottom', song: ISongInfo) => Promise<unknown>
 }) => {
-  const key = (value: string) => value.replace(/\\/g, '/').toLowerCase()
+  const key = (value: string) => rendererFilePathKey(value)
   const handler = (value: unknown) => {
     if (
       !value ||
@@ -40,8 +42,8 @@ export const usePioneerUsbPlaybackDeletion = (params: {
     const playback = params.runtime.playingData
     if (params.onMainDeleted && !params.skipMain?.()) {
       const current = playback.playingSong
-      const previousIndex = playback.playingSongListData.findIndex(
-        (song) => song.filePath === current?.filePath
+      const previousIndex = playback.playingSongListData.findIndex((song) =>
+        sameRendererFilePath(song.filePath, current?.filePath)
       )
       const nextList = playback.playingSongListData.filter((song) => !deleted(song))
       if (deleted(current))

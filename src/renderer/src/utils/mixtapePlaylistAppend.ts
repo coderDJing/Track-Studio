@@ -1,3 +1,4 @@
+import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
 import confirm from '@renderer/components/confirmDialog'
 import openSelectSongListDialog from '@renderer/components/selectSongListDialog'
 import emitter from '@renderer/utils/mitt'
@@ -55,10 +56,7 @@ export type MixtapeAppendSourceEntry = {
   originPathSnapshot?: string
 }
 
-const normalizePathKey = (value: string) =>
-  String(value || '')
-    .replace(/\//g, '\\')
-    .toLowerCase()
+const normalizePathKey = (value: string) => rendererFilePathKey(String(value || ''))
 
 const resolveFileNameAndFormat = (filePath: string) => {
   const baseName =

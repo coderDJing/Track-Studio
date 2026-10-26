@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { RendererFilePathSet, sameRendererFilePath } from '@renderer/utils/filePathComparison'
+
 import { ref, onMounted, onUnmounted, computed, useTemplateRef, watch } from 'vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { t } from '@renderer/utils/translate'
@@ -180,7 +182,9 @@ watch(resolvedSourceExts, () => {
 })
 
 const normalizeUniquePaths = (values: string[]) =>
-  Array.from(new Set(values.map((item) => String(item || '').trim()).filter(Boolean)))
+  Array.from(
+    new RendererFilePathSet(values.map((item) => String(item || '').trim()).filter(Boolean))
+  )
 
 let clickChooseFileFlag = false
 const clickChooseFiles = async () => {
@@ -188,8 +192,7 @@ const clickChooseFiles = async () => {
   clickChooseFileFlag = true
   try {
     const filePaths = (await window.electron.ipcRenderer.invoke('select-audio-files')) as
-      | string[]
-      | null
+      string[] | null
     if (Array.isArray(filePaths) && filePaths.length > 0) {
       selectedFiles.value = normalizeUniquePaths([...selectedFiles.value, ...filePaths])
     }
@@ -204,8 +207,7 @@ const clickChooseOutputDir = async () => {
   clickChooseOutputDirFlag = true
   try {
     const folderPath = (await window.electron.ipcRenderer.invoke('select-folder', false)) as
-      | string[]
-      | null
+      string[] | null
     if (Array.isArray(folderPath) && folderPath[0]) {
       outputDir.value = folderPath[0]
     }
@@ -215,7 +217,7 @@ const clickChooseOutputDir = async () => {
 }
 
 const removeSelectedFile = (filePath: string) => {
-  selectedFiles.value = selectedFiles.value.filter((item) => item !== filePath)
+  selectedFiles.value = selectedFiles.value.filter((item) => !sameRendererFilePath(item, filePath))
 }
 
 const clearSelectedFiles = () => {

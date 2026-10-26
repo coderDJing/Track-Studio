@@ -1,4 +1,5 @@
 import { t } from '@renderer/utils/translate'
+import { RendererFilePathSet } from '@renderer/utils/filePathComparison'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import confirm from '@renderer/components/confirmDialog'
 
@@ -14,7 +15,7 @@ type ErrorLike = {
 
 const normalizePaths = (paths: string[]): string[] => {
   return Array.from(
-    new Set(
+    new RendererFilePathSet(
       (paths || []).map((p) => (typeof p === 'string' ? p.trim() : '')).filter((p) => p.length > 0)
     )
   )

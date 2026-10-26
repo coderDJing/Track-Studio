@@ -1,4 +1,5 @@
 import { onMounted, onUnmounted } from 'vue'
+import { RendererFilePathSet } from '@renderer/utils/filePathComparison'
 import hotkeys from 'hotkeys-js'
 import confirm from '@renderer/components/confirmDialog'
 import { t } from '@renderer/utils/translate'
@@ -51,7 +52,7 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
   let cutPollTimer: ReturnType<typeof setInterval> | null = null
   let cutPollStartAt = 0
   let cutPollInFlight = false
-  let pendingCutPaths = new Set<string>()
+  let pendingCutPaths = new RendererFilePathSet()
   let pendingCutListUUID = ''
   const normalizePath = (p: string | undefined | null) =>
     normalizeFilePathForComparison(
@@ -257,7 +258,7 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
   const startCutPolling = (paths: string[], listUUID: string) => {
     stopCutPolling()
     if (paths.length === 0) return
-    pendingCutPaths = new Set(paths)
+    pendingCutPaths = new RendererFilePathSet(paths)
     pendingCutListUUID = listUUID
     cutPollStartAt = Date.now()
     cutPollTimer = setInterval(() => {

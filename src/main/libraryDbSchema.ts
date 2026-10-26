@@ -1,13 +1,9 @@
 import { applyCuratedLibrarySyncSchema } from './curatedLibrarySync/schema'
 import type { SqliteDatabase } from './libraryDb'
-import {
-  normalizedSongCachePathSql,
-  SONG_CACHE_INFO_PATH_SQL
-} from './libraryCacheDb/songCachePathSql'
 
 /**
- * 建库/迁移 DDL 全量集中在这里。libraryDb.ts 只负责连接生命周期、版本守卫与
- * 契约校验，两边职责不重叠：这里不读 store、不管连接开关，也不写 user_version。
+ * 基础建库/迁移 DDL 集中在这里；路径比较索引由 libraryDb.ts 与格式版本一起更新。
+ * 这里不读 store、不管连接开关，也不写 user_version。
  */
 function hasTable(dbInstance: SqliteDatabase, tableName: string): boolean {
   const normalized = String(tableName || '').trim()
@@ -884,17 +880,6 @@ export function applyLibraryDbSchema(instance: SqliteDatabase, userVersion: numb
         verified_at_ms, song_list_uuid, list_root, revision, identity_digest, item_count, built_at_ms
       );
     CREATE INDEX IF NOT EXISTS idx_song_cache_file ON song_cache(file_path);
-    CREATE INDEX IF NOT EXISTS idx_song_cache_file_normalized
-      ON song_cache(${normalizedSongCachePathSql('file_path')});
-    CREATE INDEX IF NOT EXISTS idx_song_cache_root_file_normalized
-      ON song_cache(
-        ${normalizedSongCachePathSql('list_root')},
-        ${normalizedSongCachePathSql('file_path')}
-      );
-    CREATE INDEX IF NOT EXISTS idx_song_cache_info_file_path_normalized
-      ON song_cache(
-        ${SONG_CACHE_INFO_PATH_SQL}
-      );
   `)
   if (!listTableColumns(instance, 'playlist_view_snapshot').has('missing_waveform_json')) {
     instance.exec(

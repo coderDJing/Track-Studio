@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 type KeyboardPercentSeekPlayer = {
   getDuration: () => number
   seek: (time: number, manual?: boolean) => void
@@ -48,7 +49,11 @@ export const createBrowserPlayerKeyboardPercentSeek = (options: KeyboardPercentS
     }
 
     const currentFilePath = options.getFilePath()
-    if (target.filePath && currentFilePath && target.filePath !== currentFilePath) {
+    if (
+      target.filePath &&
+      currentFilePath &&
+      !sameRendererFilePath(target.filePath, currentFilePath)
+    ) {
       resetBurst()
       return
     }

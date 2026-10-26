@@ -1,3 +1,4 @@
+import { registerFilePathComparison } from './filePathComparison'
 import type { SqliteDatabase } from './libraryDb'
 import {
   applyCuratedLibrarySyncSchema,
@@ -24,6 +25,7 @@ export const migrateLibrarySchemaV39ToV40 = async (
 
   const Database = require('better-sqlite3') as typeof import('better-sqlite3')
   const db = new Database(normalizedPath, { fileMustExist: true })
+  registerFilePathComparison(db)
   try {
     const databaseVersion = getSchemaVersion(db)
     if (databaseVersion !== 39) {

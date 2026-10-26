@@ -1,4 +1,9 @@
 import type { MixtapeTrack } from '@renderer/composables/mixtape/types'
+import {
+  RendererFilePathMap,
+  RendererFilePathSet,
+  rendererFilePathKey
+} from '@renderer/utils/filePathComparison'
 import { normalizeMixtapeFilePath } from '@renderer/composables/mixtape/mixtapeTrackSnapshot'
 import { normalizeSongBeatGridDownbeatBeatOffset } from '@shared/songBeatGridMapV2'
 
@@ -10,7 +15,7 @@ type BpmAnalysisEntry = {
 }
 
 const resolveBpmAnalysisMap = (results: unknown[]) => {
-  const analysisMap = new Map<string, BpmAnalysisEntry>()
+  const analysisMap = new RendererFilePathMap<BpmAnalysisEntry>()
   for (const item of results) {
     const payload =
       item && typeof item === 'object' && !Array.isArray(item)
@@ -46,7 +51,7 @@ const resolveBpmAnalysisMap = (results: unknown[]) => {
 }
 
 export const buildMixtapeBpmTargets = (tracks: MixtapeTrack[]) => {
-  const unique = new Set<string>()
+  const unique = new RendererFilePathSet()
   const targets: string[] = []
   for (const track of tracks) {
     const filePath = normalizeMixtapeFilePath(track.filePath)
@@ -64,13 +69,15 @@ export const buildMixtapeBpmTargets = (tracks: MixtapeTrack[]) => {
   return targets
 }
 
-export const buildMixtapeBpmTargetKey = (filePaths: string[]) => [...filePaths].sort().join('|')
+export const buildMixtapeBpmTargetKey = (filePaths: string[]) =>
+  [...new RendererFilePathSet(filePaths)].map(rendererFilePathKey).sort().join('|')
 
 export const resolveMissingBpmTrackCount = (tracks: MixtapeTrack[], bpmTargets: Set<string>) => {
   if (!bpmTargets.size) return 0
+  const targets = new RendererFilePathSet(bpmTargets)
   return tracks.filter((track) => {
     const trackPath = normalizeMixtapeFilePath(track.filePath)
-    if (!trackPath || !bpmTargets.has(trackPath)) return false
+    if (!trackPath || !targets.has(trackPath)) return false
     const bpmValue = Number(track.gridBaseBpm ?? track.originalBpm ?? track.bpm)
     const firstBeatMsValue = Number(track.firstBeatMs)
     const downbeatBeatOffsetValue = Number(track.downbeatBeatOffset)

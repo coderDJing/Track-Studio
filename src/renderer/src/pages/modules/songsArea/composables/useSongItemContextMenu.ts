@@ -1,3 +1,5 @@
+import { sameRendererFilePath, RendererFilePathSet } from '@renderer/utils/filePathComparison'
+
 import { nextTick, Ref, ref } from 'vue'
 import { type ISongsAreaPaneRuntimeState, useRuntimeStore } from '@renderer/stores/runtime'
 import { ISongInfo, IMenu, type IMetadataAutoFillSummary } from '../../../../../../types/globals' // Corrected path
@@ -153,7 +155,7 @@ export function useSongItemContextMenu(
       const selectedKeySet = new Set(selectedKeys)
       return songsAreaState.songInfoArr.filter((item) => selectedKeySet.has(getRowKey(item)))
     }
-    const selectedFilePathSet = new Set(resolveSelectedFilePaths(selectedKeys))
+    const selectedFilePathSet = new RendererFilePathSet(resolveSelectedFilePaths(selectedKeys))
     return songsAreaState.songInfoArr.filter((item) => selectedFilePathSet.has(item.filePath))
   }
   const hasWarnedMissingAcoustId = ref(false)
@@ -826,7 +828,9 @@ export function useSongItemContextMenu(
             isMixtapeView() || isSetView()
               ? songsAreaState.songInfoArr.filter((item) => selectedKeySet.has(getRowKey(item)))
               : songsAreaState.songInfoArr.filter((item) =>
-                  songsToExportFilePaths.includes(item.filePath)
+                  songsToExportFilePaths.some((filePath) =>
+                    sameRendererFilePath(filePath, item.filePath)
+                  )
                 )
 
           if (songsToExportObjects.length === 0) return null
@@ -878,7 +882,9 @@ export function useSongItemContextMenu(
             if (songsAreaState.songListUUID === runtime.playingData.playingSongListUUID) {
               if (
                 runtime.playingData.playingSong &&
-                removedPaths.includes(runtime.playingData.playingSong.filePath)
+                removedPaths.some((filePath) =>
+                  sameRendererFilePath(filePath, runtime.playingData.playingSong?.filePath)
+                )
               ) {
                 runtime.playingData.playingSong = null
               }
@@ -956,7 +962,9 @@ export function useSongItemContextMenu(
             if (songsAreaState.songListUUID === runtime.playingData.playingSongListUUID) {
               if (
                 runtime.playingData.playingSong &&
-                summary.sourceFilePaths.includes(runtime.playingData.playingSong.filePath)
+                summary.sourceFilePaths.some((filePath) =>
+                  sameRendererFilePath(filePath, runtime.playingData.playingSong?.filePath)
+                )
               ) {
                 runtime.playingData.playingSong = null
               }
@@ -1039,7 +1047,9 @@ export function useSongItemContextMenu(
             if (songsAreaState.songListUUID === runtime.playingData.playingSongListUUID) {
               if (
                 runtime.playingData.playingSong &&
-                summary.removedSourceFilePaths.includes(runtime.playingData.playingSong.filePath)
+                summary.removedSourceFilePaths.some((filePath) =>
+                  sameRendererFilePath(filePath, runtime.playingData.playingSong?.filePath)
+                )
               ) {
                 runtime.playingData.playingSong = null
               }

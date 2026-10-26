@@ -2,6 +2,8 @@ import { computed, ref, watch, type ComputedRef } from 'vue'
 import type { ISongsAreaPaneRuntimeState, useRuntimeStore } from '@renderer/stores/runtime'
 import type { ISongInfo } from '../../../../../../types/globals'
 import { useHarmonicReferenceKey } from '@renderer/composables/useHarmonicReferenceKey'
+import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
+import { createSongRowPlaybackLookup } from '@renderer/utils/songRowPlaybackIdentity'
 
 type SongsAreaViewState = 'welcome' | 'blank' | 'loading' | 'list'
 
@@ -17,30 +19,36 @@ export function useSongsAreaPlayingFollow(params: {
   const { runtime, songsAreaState, viewState, getRowKey, scrollToIndex, scrollToIndexIfNeeded } =
     params
 
-  const playingSongFilePathForRows = computed(() => {
-    const playingSong = runtime.playingData.playingSong
-    if (!playingSong) return undefined
-    return getRowKey(playingSong)
-  })
+  const normalizePath = (filePath: string) =>
+    normalizeFilePathForComparison(
+      filePath,
+      isWindowsPathPlatform(runtime.setting.platform || runtime.platform)
+    )
+  const playingRowLookup = computed(() =>
+    createSongRowPlaybackLookup(songsAreaState.songInfoArr, getRowKey, normalizePath)
+  )
+  const resolvePlayingRowKeys = (song: ISongInfo | null | undefined) => playingRowLookup.value(song)
+  const playingSongFilePathForRows = computed(
+    () => resolvePlayingRowKeys(runtime.playingData.playingSong)[0]
+  )
   const playingSongFilePathsForRows = computed(() => {
-    const keys = new Set<string>()
-    const mainRowKey = playingSongFilePathForRows.value
-    if (mainRowKey) keys.add(mainRowKey)
-    const topDeckSong = runtime.horizontalBrowseDecks.topSong
-    if (topDeckSong) keys.add(getRowKey(topDeckSong))
-    const bottomDeckSong = runtime.horizontalBrowseDecks.bottomSong
-    if (bottomDeckSong) keys.add(getRowKey(bottomDeckSong))
-    return [...keys]
+    return [
+      ...new Set([
+        ...resolvePlayingRowKeys(runtime.playingData.playingSong),
+        ...resolvePlayingRowKeys(runtime.horizontalBrowseDecks.topSong),
+        ...resolvePlayingRowKeys(runtime.horizontalBrowseDecks.bottomSong)
+      ])
+    ]
   })
   const harmonicReferenceKeyForRows = useHarmonicReferenceKey(runtime)
   const currentPlayingRowKey = computed(() => {
     if (runtime.mainWindowBrowseMode === 'edit') {
       const topDeckSong = runtime.horizontalBrowseDecks.topSong
-      if (topDeckSong) return getRowKey(topDeckSong)
+      if (topDeckSong) return resolvePlayingRowKeys(topDeckSong)[0] || ''
     }
     const playingSong = runtime.playingData.playingSong
     if (!playingSong) return ''
-    return getRowKey(playingSong)
+    return resolvePlayingRowKeys(playingSong)[0] || ''
   })
   const currentPlayingIndex = computed(() => {
     const rowKey = currentPlayingRowKey.value

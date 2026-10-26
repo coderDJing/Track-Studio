@@ -1,3 +1,4 @@
+import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
 import confirm from '@renderer/components/confirmDialog'
 import { loadRekordboxPlaylistTracks } from '@renderer/composables/rekordboxDesktop/useRekordboxTrackLoader'
 import { t } from '@renderer/utils/translate'
@@ -14,9 +15,9 @@ type CollectRekordboxSimilarSeedsOptions = {
 }
 
 const normalizeSeedKey = (song: ISongInfo) =>
-  String(song.filePath || song.mixtapeItemId || song.setItemId || '')
-    .replace(/\//g, '\\')
-    .toLowerCase()
+  song.filePath
+    ? rendererFilePathKey(song.filePath)
+    : String(song.mixtapeItemId || song.setItemId || '').trim()
 
 const resolveFileNameAndFormat = (filePath: string) => {
   const fileName =

@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import type { Ref } from 'vue'
 import type { ISongInfo } from '../../../../../../types/globals'
 
@@ -25,7 +26,10 @@ export function useSongRowEvents({
     if (!rowKey) return null
     return (
       resolveSongs().find(
-        (s) => s.mixtapeItemId === rowKey || s.setItemId === rowKey || s.filePath === rowKey
+        (s) =>
+          s.mixtapeItemId === rowKey ||
+          s.setItemId === rowKey ||
+          sameRendererFilePath(s.filePath, rowKey)
       ) || null
     )
   }

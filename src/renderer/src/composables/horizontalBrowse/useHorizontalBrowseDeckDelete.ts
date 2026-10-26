@@ -1,3 +1,5 @@
+import { rendererFilePathKey, sameRendererFilePath } from '@renderer/utils/filePathComparison'
+
 import type { ISongInfo } from 'src/types/globals'
 import confirm from '@renderer/components/confirmDialog'
 import type { HorizontalBrowseDeckKey } from '@renderer/composables/horizontalBrowse/horizontalBrowseNativeTransport'
@@ -22,17 +24,17 @@ type UseHorizontalBrowseDeckDeleteParams = {
   ejectDeckSong: (deck: HorizontalBrowseDeckKey) => Promise<unknown>
 }
 
-const normalizePath = (value: string | null | undefined) =>
-  String(value || '')
-    .replace(/\//g, '\\')
-    .toLowerCase()
+const normalizePath = (value: string | null | undefined) => rendererFilePathKey(String(value || ''))
 
 export const useHorizontalBrowseDeckDelete = (params: UseHorizontalBrowseDeckDeleteParams) => {
   const deletingDecks = new Set<HorizontalBrowseDeckKey>()
   usePioneerUsbPlaybackDeletion({
     runtime: params.runtime,
     onDeckDeleted: async (deck, song) => {
-      if (!deletingDecks.has(deck) && params.getDeckSong(deck)?.filePath === song.filePath)
+      if (
+        !deletingDecks.has(deck) &&
+        sameRendererFilePath(params.getDeckSong(deck)?.filePath, song.filePath)
+      )
         await params.ejectDeckSong(deck)
     }
   })
@@ -63,7 +65,8 @@ export const useHorizontalBrowseDeckDelete = (params: UseHorizontalBrowseDeckDel
       deletingDecks.add(deck)
       try {
         if (await deletePioneerUsbSong(song)) {
-          if (params.getDeckSong(deck)?.filePath === filePath) await params.ejectDeckSong(deck)
+          if (sameRendererFilePath(params.getDeckSong(deck)?.filePath, filePath))
+            await params.ejectDeckSong(deck)
         }
       } finally {
         deletingDecks.delete(deck)

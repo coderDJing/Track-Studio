@@ -1,3 +1,5 @@
+import { sameRendererFilePath, rendererFilePathKey } from '@renderer/utils/filePathComparison'
+
 import { computed, ref, type Ref } from 'vue'
 import type { ISongInfo } from '../../../../../../types/globals'
 import {
@@ -34,10 +36,7 @@ const PHASE_WEIGHTS = {
   waveform: 40
 }
 
-const normalizePath = (value: string) =>
-  String(value || '')
-    .replace(/\//g, '\\')
-    .toLowerCase()
+const normalizePath = (value: string) => rendererFilePathKey(String(value || ''))
 
 const computePercent = (
   stage: AnalysisStage,
@@ -290,7 +289,7 @@ export function useKeyAnalysisProgress(params: {
     // 检查可见歌曲列表中是否有这首歌且需要分析
     for (const item of visibleSongsWithIndex.value || []) {
       const songPath = normalizePath(item?.song?.filePath || '')
-      if (songPath === normalized) {
+      if (sameRendererFilePath(songPath, normalized)) {
         return !hasRequiredAnalysis(item.song) && !isAnalysisCompleteOverride?.(filePath)
       }
     }

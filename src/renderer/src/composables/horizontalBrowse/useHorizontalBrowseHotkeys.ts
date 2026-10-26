@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { onMounted, onUnmounted } from 'vue'
 import type { SongsAreaPaneKey } from '@renderer/stores/runtime'
 import type { HorizontalBrowseDeckKey } from '@renderer/composables/horizontalBrowse/horizontalBrowseNativeTransport'
@@ -365,7 +366,10 @@ export const useHorizontalBrowseHotkeys = (params: UseHorizontalBrowseHotkeysPar
       return
     }
     const payloadFilePath = String(payload?.filePath || '').trim()
-    if (!payloadFilePath || previewMoveTarget?.song.filePath === payloadFilePath) {
+    if (
+      !payloadFilePath ||
+      sameRendererFilePath(previewMoveTarget?.song.filePath, payloadFilePath)
+    ) {
       previewMoveTarget = null
     }
   }

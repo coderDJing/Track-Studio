@@ -1,3 +1,4 @@
+import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import type { PioneerUsbLibraryType } from '@shared/pioneerUsbWrite'
 
 export type PioneerUsbSourceSelection = {
@@ -55,7 +56,7 @@ export const matchesPioneerUsbPlaylistDeleteRequest = (
     expected &&
     request.playlistId === expected.playlistId &&
     request.sourceKey === expected.sourceKey &&
-    request.rootPath === expected.rootPath &&
+    sameRendererFilePath(request.rootPath, expected.rootPath) &&
     request.libraryType === expected.libraryType
   )
 }

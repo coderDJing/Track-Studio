@@ -1,3 +1,4 @@
+import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
 import { nextTick, ref } from 'vue'
 import type { ISongInfo } from 'src/types/globals'
 import type { HorizontalBrowseDeckKey } from '@renderer/composables/horizontalBrowse/horizontalBrowseNativeTransport'
@@ -26,10 +27,7 @@ type MixtapeAppendResult = {
   skippedNoBpm?: number
 }
 
-const normalizePath = (value: string | null | undefined) =>
-  String(value || '')
-    .replace(/\//g, '\\')
-    .toLowerCase()
+const normalizePath = (value: string | null | undefined) => rendererFilePathKey(String(value || ''))
 
 const resolveFileNameAndFormat = (filePath: string) => {
   const baseName =
