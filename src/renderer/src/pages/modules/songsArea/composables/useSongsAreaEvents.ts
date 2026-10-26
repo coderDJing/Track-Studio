@@ -937,13 +937,6 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
     void openSongList().catch(() => {})
   }
 
-  const onSetListItemsChanged = (payload?: { uuids?: string[] } | null) => {
-    const uuids = Array.isArray(payload?.uuids) ? payload.uuids : []
-    if (!songsAreaState.songListUUID || !uuids.includes(songsAreaState.songListUUID)) return
-    if (libraryUtils.getLibraryTreeByUUID(songsAreaState.songListUUID)?.type !== 'setList') return
-    void openSongList().catch(() => {})
-  }
-
   onMounted(() => {
     // 歌单成员变更只接受明确的删除/移动事件；播放队列可能是筛选子集或旧快照，
     // 不能根据队列中缺少的路径反向删除 originalSongInfoArr 中的歌曲。
@@ -965,7 +958,6 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
     window.electron.ipcRenderer.on('audio:convert:done', onAudioConvertDone)
     window.electron.ipcRenderer.on(RECORDING_LIBRARY_CHANGED_EVENT, onRecordingLibraryChanged)
     emitter.on(RECORDING_LIBRARY_CHANGED_EVENT, onRecordingLibraryChanged)
-    emitter.on('setList/itemsChanged', onSetListItemsChanged)
     emitter.on('songsArea/reload-if-current', onReloadCurrentSongList)
     // 组件挂载（含切分屏/进出 Pioneer 等导致的重挂载）恢复已有歌单时不弹框，
     // 仅记录已打开的歌单，待用户真正切换歌单时才询问。
@@ -995,7 +987,6 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
       onRecordingLibraryChanged
     )
     emitter.off(RECORDING_LIBRARY_CHANGED_EVENT, onRecordingLibraryChanged)
-    emitter.off('setList/itemsChanged', onSetListItemsChanged)
     emitter.off('songsArea/reload-if-current', onReloadCurrentSongList)
   })
 

@@ -17,6 +17,7 @@ import {
   type SongListLoadTicket
 } from './songListLoadGeneration'
 import { createPlaylistOptimisticRemovalGuard } from './playlistOptimisticRemovalGuard'
+import { useSetListBackgroundRefresh } from './useSetListBackgroundRefresh'
 import { libraryTreeTrackCountMap } from '@renderer/utils/libraryTreeSort'
 
 interface UseSongsLoaderParams {
@@ -484,7 +485,10 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
     return true
   }
 
-  const applyViewRefreshPayload = async (payload: PlaylistViewRefreshPayload) => {
+  const applyViewRefreshPayload = async (
+    payload: PlaylistViewRefreshPayload,
+    isCurrent: () => boolean = () => true
+  ) => {
     const songListUUID = String(payload.songListUUID || '')
     const rawNextItems = Array.isArray(payload.items) ? (payload.items as ISongInfo[]) : []
     const nextItems = optimisticRemovalGuard.filterRefreshItems(songListUUID, rawNextItems)
@@ -494,7 +498,7 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
 
     // 合并期间前台可能刚落地了另一份列表，那份基线才是对的：最多重算三次。
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      if (songListUUID !== songsAreaState.songListUUID) return
+      if (!isCurrent() || songListUUID !== songsAreaState.songListUUID) return
       const baseline = originalSongInfoArr.value
       const merge = await planSongListMerge({
         current: baseline,
@@ -503,7 +507,7 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
         onYield: yieldAfterSongListItems
       })
       if (originalSongInfoArr.value !== baseline) continue
-      if (songListUUID !== songsAreaState.songListUUID) return
+      if (!isCurrent() || songListUUID !== songsAreaState.songListUUID) return
 
       rememberAppliedViewRevision(songListUUID, payload.revision)
       if (!sameStringList(songsAreaState.missingWaveformFilePaths, nextMissing)) {
@@ -990,6 +994,15 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
       settleSongListRequest(ticket)
     }
   }
+
+  useSetListBackgroundRefresh({
+    getSongListUUID: () => songsAreaState.songListUUID,
+    isSetListUUID,
+    isRequesting,
+    lastAppliedSongListUUID,
+    applyItems: (songListUUID, items, isCurrent) =>
+      applyViewRefreshPayload({ songListUUID, items }, isCurrent)
+  })
 
   return {
     loadingShow,
