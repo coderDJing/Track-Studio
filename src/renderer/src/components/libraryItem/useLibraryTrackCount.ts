@@ -86,11 +86,9 @@ export function useLibraryTrackCount({ runtime, dirDataRef, props }: UseLibraryT
       }
       debounceTimer = setTimeout(() => {
         if (pendingSet.has(props.uuid)) {
-          if (runtime.songsArea.songListUUID === props.uuid) {
-            trackCount.value = runtime.songsArea.totalSongCount
-          } else {
-            ensureTrackCount({ force: true })
-          }
+          // 当前列表可能来自旧快照，也可能尚未完整解析，不能据此覆盖磁盘计数。
+          // 打开和内容变更都复用精确计数入口，仍由当前去抖窗口合并请求。
+          void ensureTrackCount({ force: true })
         }
         pendingSet.clear()
       }, 200)

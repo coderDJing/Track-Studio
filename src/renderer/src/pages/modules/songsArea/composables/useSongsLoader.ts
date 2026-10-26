@@ -17,6 +17,7 @@ import {
   type SongListLoadTicket
 } from './songListLoadGeneration'
 import { createPlaylistOptimisticRemovalGuard } from './playlistOptimisticRemovalGuard'
+import { libraryTreeTrackCountMap } from '@renderer/utils/libraryTreeSort'
 
 interface UseSongsLoaderParams {
   runtime: ReturnType<typeof useRuntimeStore>
@@ -848,13 +849,19 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
       try {
         const snapshotPayload = (await window.electron.ipcRenderer.invoke('playlist:fast-open', {
           songListUUID: requestUUID,
-          songListPath
+          songListPath,
+          expectedTrackCount: libraryTreeTrackCountMap[requestUUID]
         })) as PlaylistFastOpenPayload | null
         if (!loadGenerationGuard.isCurrent(ticket)) return
-        if (snapshotPayload?.hit) {
-          const snapshotItems = Array.isArray(snapshotPayload.items)
-            ? (snapshotPayload.items as ISongInfo[])
-            : []
+        const snapshotItems = Array.isArray(snapshotPayload?.items)
+          ? (snapshotPayload.items as ISongInfo[])
+          : []
+        // 徽标的已知计数与快照冲突，说明不能把这份展示缓存当作完整列表。
+        // 计数只用于拒绝可疑快照，最终以接下来的磁盘身份核对/扫描为准。
+        const knownTrackCount = libraryTreeTrackCountMap[requestUUID]
+        const snapshotCountMatches =
+          typeof knownTrackCount !== 'number' || knownTrackCount === snapshotItems.length
+        if (snapshotPayload?.hit && snapshotCountMatches) {
           songsAreaState.missingWaveformFilePaths = normalizeMissingWaveformFilePaths(
             snapshotPayload.missingWaveformFilePaths
           )

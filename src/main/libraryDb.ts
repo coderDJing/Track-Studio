@@ -165,11 +165,13 @@ export function migrateStandaloneLibraryDb(dbPath: string): void {
 
 export function initLibraryDb(dirPath: string): SqliteDatabase | null {
   if (!dirPath) return null
+  // 已打开的连接直接复用。getLibraryDb 是缓存读写的热路径，不能每次都同步探测磁盘；
+  // 在慢盘/后台读取期间，即使目录存在性检查也会阻塞主进程数秒。
+  if (db && dbRoot === dirPath) return db
   // 打开既有库不能产生任何文件。启动时设置里可能仍保留一个已被手动删除的库路径；
-  // 若在这里补建根目录或 SQLite，后续启动检查就会把丢失的库误判为可修复的空库。
+  // 首次打开/换库仍必须检查，不能把丢失的库误判为可修复的空库。
   const libraryDirPath = path.join(dirPath, 'library')
   if (!fs.pathExistsSync(dirPath) || !fs.pathExistsSync(libraryDirPath)) return null
-  if (db && dbRoot === dirPath) return db
   try {
     closeLibraryDb()
     db = runTracedSync('sqlite:createDatabase', () => createDatabase(getLibraryDbPath(dirPath)))

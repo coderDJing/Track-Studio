@@ -156,6 +156,7 @@ onDeferredWaveformAvailability(applyDeferredWaveformAvailability)
 export function openPlaylistViewFast(input: {
   songListUUID: string
   songListPath?: string
+  expectedTrackCount?: number
 }): PlaylistFastOpenResult {
   const startedAt = Date.now()
   const uuid = normalizeUuid(input?.songListUUID)
@@ -174,6 +175,16 @@ export function openPlaylistViewFast(input: {
   if (!snapshot) return miss()
   // itemCount 与 items 长度不一致说明这行写坏了，宁可当没命中重扫一次。
   if (snapshot.itemCount !== snapshot.items.length) return miss()
+  // 已知目录计数和旧快照冲突时直接交给前台磁盘核对，不再同时排一轮后台扫描。
+  // expectedTrackCount 只是拒绝快照的提示，不用于写入或替代精确磁盘核对。
+  if (
+    typeof input.expectedTrackCount === 'number' &&
+    Number.isSafeInteger(input.expectedTrackCount) &&
+    input.expectedTrackCount >= 0 &&
+    input.expectedTrackCount !== snapshot.itemCount
+  ) {
+    return miss()
+  }
 
   // renderer 传入的是当前库树解析出的真实路径。UUID 可能在云同步/异常恢复中被
   // 复用，路径不一致时旧 items 里的 filePath 已不可用，不能先把它展示出来。

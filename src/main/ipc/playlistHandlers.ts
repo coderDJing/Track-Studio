@@ -298,7 +298,10 @@ export function registerPlaylistHandlers() {
   // 没命中就老老实实回 hit=false，让 renderer 走 scanSongList——**只起一个 worker**。
   ipcMain.handle(
     'playlist:fast-open',
-    (_e, payload: { songListUUID?: string; songListPath?: string }) => {
+    (
+      _e,
+      payload: { songListUUID?: string; songListPath?: string; expectedTrackCount?: number }
+    ) => {
       const songListUUID = String(payload?.songListUUID || '').trim()
       if (!songListUUID) {
         return {
@@ -313,7 +316,11 @@ export function registerPlaylistHandlers() {
       }
       const rawPath = String(payload?.songListPath || '').trim()
       const songListPath = rawPath ? resolveLibraryPath(rawPath).absPath : ''
-      const result = openPlaylistViewFast({ songListUUID, songListPath })
+      const result = openPlaylistViewFast({
+        songListUUID,
+        songListPath,
+        expectedTrackCount: payload?.expectedTrackCount
+      })
       // 只累计命中率与未命中原因（内存计数器）；这条路径正常是个位数毫秒，不会写日志。
       recordPlaylistOpenPath({
         source: 'snapshot',
