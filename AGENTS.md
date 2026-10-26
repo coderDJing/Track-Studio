@@ -82,6 +82,10 @@
 ## Documentation Updates
 - Do not modify `README.md` or `readme/README_CN.md` without explicit maintainer approval.
 
+## 提示词交付
+- 用户索要提示词时，每次都必须在回复中给出完整、自包含、可直接复制使用的提示词；即使只是修订其中一部分，也必须重新提供完整版本。禁止只给修改片段、要求用户自行替换或拼接，或用“其余保持不变”省略内容；文件链接不能代替回复中的完整提示词。
+- 跨电脑、跨会话的接手提示词不得假定目标机器的盘符、用户名、绝对路径或已有会话上下文。优先让接手方核对当前工作区的仓库身份，确认根目录后使用仓库相对路径；无法确认项目位置时再询问用户。
+
 ## Configuration & Security Tips
 - Copy `env.example` to `.env` for local config; never commit secrets.
 - If updating `vendor/` binaries, ensure `electron-builder.yml` packaging paths stay in sync.
