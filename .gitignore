@@ -83,3 +83,7 @@ rust_package/native/ffmpeg/**/*.dll
 rust_package/native/ffmpeg/**/*.a
 rust_package/native/ffmpeg/**/*.dylib
 rust_package/native/ffmpeg/**/bin/
+
+# Local screenshots from the Windows small-window regression
+/drafts/windows-small-window-regression-20261026/screenshots/*.png
+/drafts/windows-small-window-regression-20261026/fix-verification/screenshots/*.png
