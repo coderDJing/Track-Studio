@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
+import libraryUtils from '@renderer/utils/libraryUtils'
 
 import { computed } from 'vue'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
@@ -24,7 +25,10 @@ const selectedSongCount = computed(() =>
     : runtime.songsArea.selectedSongFilePath.filter(Boolean).length
 )
 const selectedSongsText = computed(() =>
-  t('bottomInfo.selectedSongs', { count: selectedSongCount.value })
+  t('bottomInfo.selectedSongs', {
+    count: selectedSongCount.value,
+    duration: selectedDurationText.value
+  })
 )
 const splitLeftSelectedCount = computed(
   () => runtime.songsAreaPanels.panes.left.selectedSongFilePath.filter(Boolean).length
@@ -152,46 +156,83 @@ function formatDurationUnit(unit: 'day' | 'hour' | 'minute' | 'second', count: n
   return t(`bottomInfo.durationUnits.${unit}.${pluralKey}`, { count })
 }
 
-const playlistTotalDaysHoursSeconds = computed(() => {
-  const list = (runtime.songsArea?.songInfoArr || []) as Array<{ duration?: string }>
-  let total = 0
-  for (const s of list) {
-    const mmss = String(s?.duration || '')
-    const parts = mmss.split(':')
-    if (parts.length === 2) {
-      const m = Number(parts[0])
-      const sec = Number(parts[1])
-      if (!Number.isNaN(m) && !Number.isNaN(sec)) {
-        total += m * 60 + sec
-      }
-    }
-  }
+const sumDurations = (durations: string[]) =>
+  durations.reduce((total, duration) => {
+    const parts = String(duration || '').split(':')
+    if (parts.length !== 2 || parts.some((part) => !/^\d+$/.test(part))) return total
+    return total + Number(parts[0]) * 60 + Number(parts[1])
+  }, 0)
+
+const formatTotalDuration = (total: number) => {
   const days = Math.floor(total / 86400)
-  const afterDays = total % 86400
-  const hours = Math.floor(afterDays / 3600)
-  const afterHours = afterDays % 3600
-  const minutes = Math.floor(afterHours / 60)
-  const seconds = afterHours % 60
-  const joiner = currentLocale.value === 'zh-CN' ? '' : ' '
+  const hours = Math.floor((total % 86400) / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = total % 60
   const segments: string[] = []
-  if (days > 0) {
-    segments.push(formatDurationUnit('day', days))
-  }
+  if (days > 0) segments.push(formatDurationUnit('day', days))
   segments.push(formatDurationUnit('hour', hours))
   segments.push(formatDurationUnit('minute', minutes))
   segments.push(formatDurationUnit('second', seconds))
-  return segments.join(joiner)
-})
+  return segments.join(currentLocale.value === 'zh-CN' ? '' : ' ')
+}
+
+const selectedDuration = (songs: ISongInfo[], keys: string[], songListUUID: string) => {
+  const selected = new Set(keys.filter(Boolean))
+  const listType = libraryUtils.getLibraryTreeByUUID(songListUUID)?.type
+  return sumDurations(
+    songs
+      .filter((song) => {
+        const key =
+          listType === 'mixtapeList' && song.mixtapeItemId
+            ? song.mixtapeItemId
+            : listType === 'setList' && song.setItemId
+              ? song.setItemId
+              : song.filePath
+        return selected.has(key)
+      })
+      .map((song) => song.duration)
+  )
+}
+const selectedDurationText = computed(() =>
+  formatTotalDuration(
+    isPioneerView.value
+      ? sumDurations(runtime.pioneerSelectedDurations)
+      : selectedDuration(
+          runtime.songsArea.songInfoArr,
+          runtime.songsArea.selectedSongFilePath,
+          runtime.songsArea.songListUUID
+        )
+  )
+)
+const splitSelectedDurationText = (pane: 'left' | 'right') => {
+  const state = runtime.songsAreaPanels.panes[pane]
+  return formatTotalDuration(
+    selectedDuration(state.songInfoArr, state.selectedSongFilePath, state.songListUUID)
+  )
+}
+const playlistTotalDaysHoursSeconds = computed(() =>
+  formatTotalDuration(sumDurations(runtime.songsArea.songInfoArr.map((song) => song.duration)))
+)
 </script>
 
 <template>
   <div v-if="hasTotalRowContent" class="total-row">
     <template v-if="!isPioneerView && runtime.songsAreaPanels.splitEnabled">
       <div v-if="splitLeftSelectedCount > 0" class="selected-count-text">
-        {{ t('bottomInfo.selectedSongsLeft', { count: splitLeftSelectedCount }) }}
+        {{
+          t('bottomInfo.selectedSongsLeft', {
+            count: splitLeftSelectedCount,
+            duration: splitSelectedDurationText('left')
+          })
+        }}
       </div>
       <div v-if="splitRightSelectedCount > 0" class="selected-count-text">
-        {{ t('bottomInfo.selectedSongsRight', { count: splitRightSelectedCount }) }}
+        {{
+          t('bottomInfo.selectedSongsRight', {
+            count: splitRightSelectedCount,
+            duration: splitSelectedDurationText('right')
+          })
+        }}
       </div>
     </template>
     <div v-else-if="selectedSongCount > 0" class="selected-count-text">{{ selectedSongsText }}</div>

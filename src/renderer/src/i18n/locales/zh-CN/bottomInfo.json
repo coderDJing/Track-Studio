@@ -1,9 +1,9 @@
 {
   "bottomInfo": {
     "totalDurationLabel": "总时长：",
-    "selectedSongs": "已选 {count} 首",
-    "selectedSongsLeft": "左已选 {count} 首",
-    "selectedSongsRight": "右已选 {count} 首",
+    "selectedSongs": "已选 {count} 首 · {duration}",
+    "selectedSongsLeft": "左已选 {count} 首 · {duration}",
+    "selectedSongsRight": "右已选 {count} 首 · {duration}",
     "pendingAnalysis": "{count} 首待分析",
     "pendingAnalysisLeft": "左 {count} 首待分析",
     "pendingAnalysisRight": "右 {count} 首待分析",

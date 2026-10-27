@@ -219,6 +219,7 @@ interface Runtime {
   }
   pioneerDeviceLibrary: IRekordboxLibraryBrowserState
   pioneerSelectedRowKeys: string[]
+  pioneerSelectedDurations: string[]
   manualKeyAnalysisPendingFilePaths: string[]
   playlistAnalysisPromptDismissedSongListUUIDs: string[]
   confirmShow: boolean
@@ -392,6 +393,7 @@ export const useRuntimeStore = defineStore('runtime', {
         treeNodes: []
       },
       pioneerSelectedRowKeys: [],
+      pioneerSelectedDurations: [],
       manualKeyAnalysisPendingFilePaths: [],
       playlistAnalysisPromptDismissedSongListUUIDs: [],
       confirmShow: false, //是否有确认框正在显示

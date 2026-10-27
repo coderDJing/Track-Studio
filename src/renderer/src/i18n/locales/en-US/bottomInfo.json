@@ -1,9 +1,9 @@
 {
   "bottomInfo": {
     "totalDurationLabel": "Total duration: ",
-    "selectedSongs": "{count} selected",
-    "selectedSongsLeft": "L: {count} selected",
-    "selectedSongsRight": "R: {count} selected",
+    "selectedSongs": "{count} selected · {duration}",
+    "selectedSongsLeft": "L: {count} selected · {duration}",
+    "selectedSongsRight": "R: {count} selected · {duration}",
     "pendingAnalysis": "{count} pending analysis",
     "pendingAnalysisLeft": "L: {count} pending",
     "pendingAnalysisRight": "R: {count} pending",

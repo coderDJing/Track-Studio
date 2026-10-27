@@ -590,6 +590,17 @@ watch(
   { deep: true }
 )
 
+watch(
+  [selectedRowKeys, visibleSongs],
+  ([keys, songs]) => {
+    const selected = new Set(keys)
+    runtime.pioneerSelectedDurations = songs
+      .filter((song) => selected.has(song.mixtapeItemId || song.filePath))
+      .map((song) => song.duration)
+  },
+  { immediate: true, deep: true }
+)
+
 const handleSongClick = (event: MouseEvent, song: ISongInfo) => {
   if (playlistMutationPending.value) return
   songClick(event, song)
