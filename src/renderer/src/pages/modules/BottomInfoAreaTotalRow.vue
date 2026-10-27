@@ -26,6 +26,12 @@ const selectedSongCount = computed(() =>
 const selectedSongsText = computed(() =>
   t('bottomInfo.selectedSongs', { count: selectedSongCount.value })
 )
+const splitLeftSelectedCount = computed(
+  () => runtime.songsAreaPanels.panes.left.selectedSongFilePath.filter(Boolean).length
+)
+const splitRightSelectedCount = computed(
+  () => runtime.songsAreaPanels.panes.right.selectedSongFilePath.filter(Boolean).length
+)
 
 const collectPendingAnalysisFiles = (songInfoArr: ISongInfo[]): string[] =>
   collectMissingAnalysisFilesFromSongs(
@@ -180,7 +186,15 @@ const playlistTotalDaysHoursSeconds = computed(() => {
 
 <template>
   <div v-if="hasTotalRowContent" class="total-row">
-    <div v-if="selectedSongCount > 0" class="selected-count-text">{{ selectedSongsText }}</div>
+    <template v-if="!isPioneerView && runtime.songsAreaPanels.splitEnabled">
+      <div v-if="splitLeftSelectedCount > 0" class="selected-count-text">
+        {{ t('bottomInfo.selectedSongsLeft', { count: splitLeftSelectedCount }) }}
+      </div>
+      <div v-if="splitRightSelectedCount > 0" class="selected-count-text">
+        {{ t('bottomInfo.selectedSongsRight', { count: splitRightSelectedCount }) }}
+      </div>
+    </template>
+    <div v-else-if="selectedSongCount > 0" class="selected-count-text">{{ selectedSongsText }}</div>
     <template
       v-if="
         !isPioneerView && runtime.songsAreaPanels.splitEnabled && manualPendingAnalysisCount <= 0
