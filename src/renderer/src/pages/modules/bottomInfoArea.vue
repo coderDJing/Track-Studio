@@ -6,6 +6,7 @@ import confirm from '@renderer/components/confirmDialog'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { t } from '@renderer/utils/translate'
 import emitter from '@renderer/utils/mitt'
+import { beginImportSummary } from '@renderer/utils/importSummaryGate'
 import BottomInfoAreaTotalRow from './BottomInfoAreaTotalRow.vue'
 import {
   bpmFixSnapshot,
@@ -62,6 +63,10 @@ type Task = {
   disableProgressTransition?: boolean
 }
 const tasks = ref<Task[]>([])
+const isBpmFixInactive = (task: Task) =>
+  task.id === bpmFixSnapshot.value?.id &&
+  bpmFixSnapshot.value.status !== 'analyzing' &&
+  bpmFixSnapshot.value.status !== 'repairing'
 const libraryStemTask = ref<LibraryStemTask | null>(null)
 let libraryStemRestoreRunning = false
 const libraryStemTaskVisible = computed(() => {
@@ -661,10 +666,11 @@ onMounted(() => {
 
 const handleImportFinished = async (
   _event: unknown,
-  _songListUUID: unknown,
+  songListUUID: unknown,
   importSummary: unknown,
   progressId?: string
 ) => {
+  const finishSummary = beginImportSummary(String(songListUUID || ''))
   runtime.isProgressing = false
   runtime.importingSongListUUID = ''
   // 有 progressId 则按 id 清理；否则清理整组 import
@@ -673,12 +679,16 @@ const handleImportFinished = async (
   } else {
     tasks.value = tasks.value.filter((t) => t.id !== 'import')
   }
-  const openImportSummary = (await import('@renderer/components/importFinishedSummaryDialog'))
-    .default
-  if (isRecord(importSummary)) {
-    await openImportSummary(
-      importSummary as unknown as import('@renderer/components/importFinishedSummaryDialog').ImportSummary
-    )
+  try {
+    if (isRecord(importSummary)) {
+      const openImportSummary = (await import('@renderer/components/importFinishedSummaryDialog'))
+        .default
+      await openImportSummary(
+        importSummary as unknown as import('@renderer/components/importFinishedSummaryDialog').ImportSummary
+      )
+    }
+  } finally {
+    finishSummary()
   }
 }
 window.electron.ipcRenderer.on('importFinished', handleImportFinished)
@@ -885,8 +895,13 @@ onBeforeUnmount(() => {
       class="task-list"
       @after-leave="handleAfterLeave"
     >
-      <div v-for="task in tasks" :key="task.id" class="task-row">
-        <div class="spinner">
+      <div
+        v-for="task in tasks"
+        v-show="!isBpmFixInactive(task) || !bpmFixDialogOpen"
+        :key="task.id"
+        class="task-row"
+      >
+        <div v-if="!isBpmFixInactive(task)" class="spinner">
           <div class="loading">
             <div></div>
             <div></div>
@@ -897,10 +912,12 @@ onBeforeUnmount(() => {
         </div>
         <div class="label">
           {{ task.title }}
-          <span v-show="!task.noNum">{{ task.now }} / {{ task.total }}</span>
+          <span v-show="!task.noNum && !isBpmFixInactive(task)"
+            >{{ task.now }} / {{ task.total }}</span
+          >
         </div>
         <div class="container">
-          <div v-if="!task.noProgress" class="progress">
+          <div v-if="!task.noProgress && !isBpmFixInactive(task)" class="progress">
             <div class="progress-bar" :style="getTaskProgressStyle(task)" />
           </div>
         </div>

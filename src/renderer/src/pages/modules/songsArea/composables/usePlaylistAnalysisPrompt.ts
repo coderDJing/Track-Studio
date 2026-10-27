@@ -5,6 +5,7 @@ import {
 } from '@renderer/utils/manualKeyAnalysis'
 import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
+import { waitForImportSummaries } from '@renderer/utils/importSummaryGate'
 import { RECORDING_LIBRARY_UUID } from '@shared/recordingLibrary'
 import type { ISongInfo } from '../../../../../../types/globals'
 import {
@@ -53,6 +54,9 @@ type OpenSongListAnalysisPromptOptions = {
 const normalizeFilePathKey = (filePath: string) =>
   normalizeFilePathForComparison(filePath, isCurrentRendererWindowsPathPlatform())
 
+const pendingPlaylistPrompts = new Set<string>()
+let previousPlaylistPrompt: Promise<void> = Promise.resolve()
+
 export function usePlaylistAnalysisPrompt({
   runtime,
   songsAreaState,
@@ -63,6 +67,7 @@ export function usePlaylistAnalysisPrompt({
   isMixtapeListView: Ref<boolean>
 }) {
   const manualAnalyzePending = ref(false)
+  let disposed = false
   const promptOwnedManualBatches = new Map<string, PromptOwnedManualBatch>()
   const missingAnalysisFiles = computed(() =>
     collectMissingAnalysisFilesFromSongs(
@@ -161,6 +166,7 @@ export function usePlaylistAnalysisPrompt({
   })
 
   onUnmounted(() => {
+    disposed = true
     promptOwnedManualBatches.clear()
     window.electron.ipcRenderer.removeListener(
       'key-analysis:manual-batch-end',
@@ -175,8 +181,18 @@ export function usePlaylistAnalysisPrompt({
     songListUUID: string,
     options?: OpenSongListAnalysisPromptOptions
   ) => {
+    if (!songListUUID || pendingPlaylistPrompts.has(songListUUID)) return
+    pendingPlaylistPrompts.add(songListUUID)
     analysisPromptPending.value = true
+    const previous = previousPlaylistPrompt
+    let releasePrompt!: () => void
+    previousPlaylistPrompt = new Promise<void>((resolve) => {
+      releasePrompt = resolve
+    })
     try {
+      await previous
+      await waitForImportSummaries(songListUUID)
+      if (disposed || songsAreaState.songListUUID !== songListUUID) return
       if (shouldSkipAnalysisPrompt(songListUUID)) return
 
       const missingFilesForEvaluation = missingAnalysisFiles.value
@@ -185,6 +201,7 @@ export function usePlaylistAnalysisPrompt({
         return
       }
       const promptMissingResult = await filterManualBatchPendingFiles(missingFilesForEvaluation)
+      if (disposed || songsAreaState.songListUUID !== songListUUID) return
       const missingFilesToPrompt = promptMissingResult.files
       if (!missingFilesToPrompt.length) {
         return
@@ -219,6 +236,8 @@ export function usePlaylistAnalysisPrompt({
       rememberManualBatch(result, songListUUID)
     } finally {
       analysisPromptPending.value = false
+      pendingPlaylistPrompts.delete(songListUUID)
+      releasePrompt()
     }
   }
 

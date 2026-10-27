@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, reactive, ref } from 'vue'
 import type { ISongInfo } from '../../../../../../types/globals'
 import { usePlaylistAnalysisPrompt } from './usePlaylistAnalysisPrompt'
+import { beginImportSummary } from '@renderer/utils/importSummaryGate'
 
 const mocks = vi.hoisted(() => ({
   prompt: vi.fn(async () => ({ batchId: '', queued: 0, canceled: true })),
@@ -36,7 +37,11 @@ const noBpmSong = (index: number): ISongInfo => ({
   beatGridStatus: 'no-bpm'
 })
 
-const mountPrompt = (songs: ISongInfo[], missingWaveformFilePaths: string[] = []) => {
+const mountPrompt = (
+  songs: ISongInfo[],
+  missingWaveformFilePaths: string[] = [],
+  uuid = 'ambient-playlist'
+) => {
   const runtime = reactive({
     libraryAreaSelected: 'library',
     manualKeyAnalysisPendingFilePaths: [] as string[],
@@ -44,7 +49,7 @@ const mountPrompt = (songs: ISongInfo[], missingWaveformFilePaths: string[] = []
     playlistAnalysisPromptDismissedSongListUUIDs: [] as string[]
   })
   const songsAreaState = reactive({
-    songListUUID: 'ambient-playlist',
+    songListUUID: uuid,
     songInfoArr: songs,
     missingWaveformFilePaths
   })
@@ -66,6 +71,19 @@ afterEach(() => {
 })
 
 describe('playlist entry analysis prompt', () => {
+  it('waits for the import summary to close before showing analysis options', async () => {
+    const finishSummary = beginImportSummary('ambient-playlist')
+    const prompt = mountPrompt([{ ...noBpmSong(1), key: undefined }])
+    const request = prompt.handleUserOpenedSongList('ambient-playlist', {
+      forceAnalysisPrompt: true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mocks.prompt).not.toHaveBeenCalled()
+    finishSummary()
+    await request
+    expect(mocks.prompt).toHaveBeenCalledTimes(1)
+  })
+
   it('does not prompt again for three completed no-BPM songs without energy or structure', async () => {
     const prompt = mountPrompt([noBpmSong(0), noBpmSong(1), noBpmSong(2)])
 
@@ -94,5 +112,45 @@ describe('playlist entry analysis prompt', () => {
       expect.objectContaining({ missingWaveformFilePaths: [missingWaveform.filePath] })
     )
     expect(prompt.playlistAnalysisActionVisible.value).toBe(true)
+  })
+
+  it('shows only one prompt when the same playlist is checked concurrently', async () => {
+    let finish!: (value: { batchId: string; queued: number; canceled: boolean }) => void
+    mocks.prompt.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    const song = { ...noBpmSong(1), key: undefined }
+    const first = mountPrompt([song])
+    const second = mountPrompt([song])
+    const firstRequest = first.handleUserOpenedSongList('ambient-playlist')
+    const secondRequest = second.handleUserOpenedSongList('ambient-playlist', {
+      forceAnalysisPrompt: true
+    })
+    await vi.waitFor(() => expect(mocks.prompt).toHaveBeenCalledTimes(1))
+    finish({ batchId: '', queued: 0, canceled: true })
+    await Promise.all([firstRequest, secondRequest])
+    expect(mocks.prompt).toHaveBeenCalledTimes(1)
+  })
+
+  it('waits for another playlist prompt to close before opening its own', async () => {
+    let finish!: (value: { batchId: string; queued: number; canceled: boolean }) => void
+    mocks.prompt.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    const song = { ...noBpmSong(1), key: undefined }
+    const first = mountPrompt([song])
+    const second = mountPrompt([song], [], 'other-playlist')
+    const firstRequest = first.handleUserOpenedSongList('ambient-playlist')
+    const secondRequest = second.handleUserOpenedSongList('other-playlist')
+    await vi.waitFor(() => expect(mocks.prompt).toHaveBeenCalledTimes(1))
+    finish({ batchId: '', queued: 0, canceled: true })
+    await Promise.all([firstRequest, secondRequest])
+    expect(mocks.prompt).toHaveBeenCalledTimes(2)
   })
 })

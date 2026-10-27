@@ -1,8 +1,5 @@
 <script setup lang="ts">
 defineOptions({ inheritAttrs: false })
-import chromeMaximizeAsset from '@renderer/assets/chrome-maximize.svg?asset'
-import chromeRestoreAsset from '@renderer/assets/chrome-restore.svg?asset'
-import chromeMiniimizeAsset from '@renderer/assets/chrome-minimize.svg?asset'
 import logoAsset from '@renderer/assets/logo.png?asset'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { ref, computed, watch } from 'vue'
@@ -19,9 +16,6 @@ import {
 } from '@shared/windowScreenshotFeature'
 import { PRODUCT_DISPLAY_NAME } from '@shared/productBrand'
 
-const chromeMaximize = chromeMaximizeAsset
-const chromeRestore = chromeRestoreAsset
-const chromeMiniimize = chromeMiniimizeAsset
 const logo = logoAsset
 type MenuItem = {
   name: string
@@ -470,29 +464,56 @@ const titleMenuButtonMouseEnter = (item: Menu) => {
         <slot name="rightExtra" />
       </div>
     </div>
-    <div v-if="runtime.platform !== 'Mac'" style="display: flex; z-index: 1">
-      <div class="rightIcon" @click="toggleMinimize()">
-        <img :src="chromeMiniimize" :draggable="false" />
+    <div v-if="runtime.platform !== 'Mac'" class="window-controls-space"></div>
+    <Teleport to="body">
+      <div v-if="runtime.platform !== 'Mac'" class="window-controls">
+        <div class="rightIcon" @click="toggleMinimize()">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <line
+              x1="4"
+              y1="8"
+              x2="12"
+              y2="8"
+              stroke="currentColor"
+              stroke-width="1.2"
+              stroke-linecap="round"
+            />
+          </svg>
+        </div>
+        <div class="rightIcon" @click="toggleMaximize()">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.2"
+            aria-hidden="true"
+          >
+            <template v-if="runtime.isWindowMaximized">
+              <rect x="5.5" y="5.5" width="7" height="7" rx="1" />
+              <path d="M8.5 5.5V4.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1" />
+            </template>
+            <rect v-else x="3.5" y="3.5" width="9" height="9" rx="1.5" />
+          </svg>
+        </div>
+        <div class="rightIcon closeIcon" @click="toggleClose()">
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 15 15"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="currentColor"
+          >
+            <path
+              fill-rule="evenodd"
+              clip-rule="evenodd"
+              d="M7.116 8l-4.558 4.558.884.884L8 8.884l4.558 4.558.884-.884L8.884 8l4.558-4.558-.884-.884L8 7.116 3.442 2.558l-.884.884L7.116 8z"
+            />
+          </svg>
+        </div>
       </div>
-      <div class="rightIcon" @click="toggleMaximize()">
-        <img :src="runtime.isWindowMaximized ? chromeRestore : chromeMaximize" :draggable="false" />
-      </div>
-      <div class="rightIcon closeIcon" @click="toggleClose()">
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 15 15"
-          xmlns="http://www.w3.org/2000/svg"
-          fill="currentColor"
-        >
-          <path
-            fill-rule="evenodd"
-            clip-rule="evenodd"
-            d="M7.116 8l-4.558 4.558.884.884L8 8.884l4.558 4.558.884-.884L8.884 8l4.558-4.558-.884-.884L8 7.116 3.442 2.558l-.884.884L7.116 8z"
-          />
-        </svg>
-      </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 <style lang="scss" scoped>
@@ -601,8 +622,24 @@ const titleMenuButtonMouseEnter = (item: Menu) => {
     flex-shrink: 0;
     margin-left: 10px;
   }
+}
+
+.window-controls-space {
+  width: 141px;
+  flex-shrink: 0;
+}
+
+.window-controls {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 95;
+  display: flex;
+  background: var(--bg);
 
   .rightIcon {
+    position: relative;
+    color: var(--text-weak);
     width: 47px;
     display: flex;
     justify-content: center;
@@ -611,6 +648,16 @@ const titleMenuButtonMouseEnter = (item: Menu) => {
     transition:
       background-color 0.15s ease,
       color 0.15s ease;
+  }
+
+  .rightIcon::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.24s ease;
   }
 
   .rightIcon:hover {

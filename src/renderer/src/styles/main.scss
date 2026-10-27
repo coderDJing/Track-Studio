@@ -190,6 +190,10 @@ body,
   transition: opacity 0.24s ease;
 }
 
+body:has(.dialog.dialog-visible) .window-controls .rightIcon:not(:hover)::after {
+  opacity: 1;
+}
+
 .dialog--dragging {
   .inner {
     transition: none !important;
