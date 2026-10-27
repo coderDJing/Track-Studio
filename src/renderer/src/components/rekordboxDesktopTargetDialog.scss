@@ -133,10 +133,10 @@
   .content {
     height: 70vh;
     max-height: 70vh;
-    width: 300px;
-    max-width: 300px;
+    width: min(300px, calc(100vw - 16px));
+    min-width: 0;
     display: flex;
-    flex-grow: 1;
+    flex: 0 1 auto;
     background-color: var(--bg);
     overflow: hidden;
     flex-direction: column;
