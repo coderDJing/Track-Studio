@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
-import { constants } from 'node:fs'
+import { constants, createReadStream } from 'node:fs'
 import path from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { log } from '../log'
 import { normalizeFilePathForComparison } from '../../shared/filePathComparison'
 
@@ -21,6 +21,12 @@ export const assertBpmFixSourceUnchanged = async (source: BpmFixSource, at = sou
     source.ino !== current.ino
   )
     throw new Error('BPM_FIX_SOURCE_CHANGED')
+}
+
+const hashBpmFixFile = async (filePath: string) => {
+  const hash = createHash('sha256')
+  for await (const chunk of createReadStream(filePath)) hash.update(chunk)
+  return hash.digest('hex')
 }
 
 // Preserve the original until the playlist transaction succeeds, including when
@@ -48,9 +54,17 @@ export const publishBpmFixOutput = async (options: {
     await fs.copyFile(stagedAudio, temporary, constants.COPYFILE_EXCL)
     await assertBpmFixSourceUnchanged(source)
     if (overwrite) {
+      const originalHash = await hashBpmFixFile(source.realPath)
+      await assertBpmFixSourceUnchanged(source)
       await fs.rename(source.realPath, backup)
       backedUp = true
-      await assertBpmFixSourceUnchanged(source, backup)
+      const backupIdentity = await readBpmFixSourceIdentity(backup)
+      if (
+        source.size !== backupIdentity.size ||
+        source.mtimeMs !== backupIdentity.mtimeMs ||
+        originalHash !== (await hashBpmFixFile(backup))
+      )
+        throw new Error('BPM_FIX_SOURCE_CHANGED')
     }
     // COPYFILE_EXCL also protects a destination created during rendering.
     await fs.copyFile(temporary, destination, constants.COPYFILE_EXCL)

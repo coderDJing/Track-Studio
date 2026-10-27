@@ -7,8 +7,12 @@ import { useRuntimeStore } from '@renderer/stores/runtime'
 import { t } from '@renderer/utils/translate'
 import emitter from '@renderer/utils/mitt'
 import BottomInfoAreaTotalRow from './BottomInfoAreaTotalRow.vue'
-import BpmFixTaskButton from '@renderer/components/BpmFixTaskButton.vue'
-import { initializeBpmFix } from '@renderer/utils/bpmFixActions'
+import {
+  bpmFixSnapshot,
+  bpmFixDialogOpen,
+  initializeBpmFix,
+  restoreBpmFix
+} from '@renderer/utils/bpmFixActions'
 initializeBpmFix()
 import {
   isAnalysisRuntimeDownloadActiveStatus,
@@ -900,7 +904,11 @@ onBeforeUnmount(() => {
             <div class="progress-bar" :style="getTaskProgressStyle(task)" />
           </div>
         </div>
-        <BpmFixTaskButton v-if="task.id.startsWith('bpm_fix_')" />
+        <div v-if="task.id === bpmFixSnapshot?.id && !bpmFixDialogOpen" class="actions">
+          <button class="task-btn" type="button" @click.stop="restoreBpmFix">
+            {{ t('bpmFix.restore') }}
+          </button>
+        </div>
         <div v-if="task.cancelable" class="actions">
           <button
             class="cancel-btn"

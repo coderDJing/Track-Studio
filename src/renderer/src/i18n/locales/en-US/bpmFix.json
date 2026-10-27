@@ -1,6 +1,6 @@
 {
   "bpmFix": {
-    "menu": "Fix BPM Drift…",
+    "menu": "Fix BPM Drift",
     "title": "Fix BPM Drift",
     "pending": "Click Analyze to check the song beats",
     "startAnalysis": "Analyze",
@@ -44,7 +44,7 @@
     "selected": "{count} songs checked",
     "counts": "{total} songs · {complete} repaired · {failed} failed",
     "minimize": "Minimize to task bar",
-    "restore": "Open Fix BPM Drift",
+    "restore": "Open Workspace",
     "start": "Start repair",
     "cancel": "Cancel batch",
     "cancelling": "Cancelling…",

@@ -1,6 +1,6 @@
 {
   "bpmFix": {
-    "menu": "修复 BPM 漂移…",
+    "menu": "修复 BPM 漂移",
     "title": "修复 BPM 漂移",
     "pending": "请点击“开始分析”检查歌曲节拍",
     "startAnalysis": "开始分析",
@@ -44,7 +44,7 @@
     "selected": "已勾选 {count} 首",
     "counts": "共 {total} 首 · 已修复 {complete} · 失败 {failed}",
     "minimize": "最小化到底部",
-    "restore": "打开“修复 BPM 漂移”",
+    "restore": "打开工作台",
     "start": "开始修复",
     "cancel": "取消本批任务",
     "cancelling": "正在取消…",
