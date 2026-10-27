@@ -26,6 +26,7 @@ import RowAnalysisBar from './SongListRows/RowAnalysisBar.vue'
 import WaveformPreviewCell from './SongListRows/WaveformPreviewCell.vue'
 import { createTouchLongPressDrag } from '@renderer/utils/touchLongPressDrag'
 import { createInternalMouseDrag } from '@renderer/utils/internalMouseDrag'
+import { getBottomDropPad } from './SongListRows/dropPadGeometry'
 
 const props = defineProps({
   searchQuery: {
@@ -255,11 +256,7 @@ const updateDropPadRects = () => {
   } else {
     topPadVisible.value = false
   }
-  const listLen = totalHeight.value
-  const safeScrollTop = Math.max(0, Math.min(effectiveScrollTop.value, listLen))
-  const listEndY = rRect.top + (listLen - safeScrollTop)
-  const bottomStart = Math.min(Math.max(listEndY, rRect.top), cRect.bottom)
-  const bottomHeight = Math.max(0, cRect.bottom - bottomStart)
+  const { top: bottomStart, height: bottomHeight } = getBottomDropPad(cRect, rRect)
   if (bottomHeight > 0) {
     bottomPadVisible.value = true
     updatePadStyle(bottomPadStyle, bottomStart, cRect.left, cRect.width, bottomHeight)
