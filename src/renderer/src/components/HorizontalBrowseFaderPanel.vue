@@ -44,6 +44,7 @@ const {
   faderDragging,
   syncCrossfaderValue,
   handleFaderPointerDown,
+  handleFaderWheel,
   handleFaderDoubleClick,
   nudgeCrossfaderByKeyboard,
   resetCrossfaderByKeyboard
@@ -73,6 +74,7 @@ defineExpose({
       class="fader"
       :class="{ 'is-dragging': faderDragging }"
       @pointerdown="handleFaderPointerDown"
+      @wheel.prevent.stop="handleFaderWheel"
       @dblclick.prevent="handleFaderDoubleClick"
     >
       <div class="fader__scale">
@@ -108,7 +110,11 @@ defineExpose({
       type="button"
       :aria-expanded="props.expanded"
       :aria-label="
-        t(props.expanded ? 'horizontalBrowse.collapseFaderPanel' : 'horizontalBrowse.expandFaderPanel')
+        t(
+          props.expanded
+            ? 'horizontalBrowse.collapseFaderPanel'
+            : 'horizontalBrowse.expandFaderPanel'
+        )
       "
       @click.stop="togglePanelExpanded"
     >

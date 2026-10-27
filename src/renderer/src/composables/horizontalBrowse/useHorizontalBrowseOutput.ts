@@ -17,6 +17,7 @@ type UseHorizontalBrowseOutputParams = {
 
 const FADER_TRAVEL_INSET_RATIO = 0.17
 const CROSSFADER_KEY_STEP = 0.25
+const CROSSFADER_WHEEL_STEP = 0.05
 
 export const useHorizontalBrowseOutput = ({
   nativeTransport,
@@ -25,6 +26,8 @@ export const useHorizontalBrowseOutput = ({
   const faderRef = ref<HTMLElement | null>(null)
   const faderRailRef = ref<HTMLElement | null>(null)
   const faderDragging = ref(false)
+  let pendingWheelValue: number | null = null
+  let wheelRequestId = 0
 
   const resolveCrossfaderTravelPercentByValue = (value: number) => {
     const travelPercent = FADER_TRAVEL_INSET_RATIO * 100
@@ -47,9 +50,32 @@ export const useHorizontalBrowseOutput = ({
   }))
 
   const syncCrossfaderValue = (value: number) => {
+    pendingWheelValue = null
+    wheelRequestId += 1
     const safeValue = clampNumber(value, -1, 1)
     const masterVolume = clampVolumeValue(mainWindowVolume.value)
     void nativeTransport.setOutputState(safeValue, masterVolume)
+  }
+
+  const handleFaderWheel = (event: WheelEvent) => {
+    if (event.deltaY === 0) return
+    const value = clampNumber(
+      (pendingWheelValue ?? resolveCrossfaderValue()) -
+        Math.sign(event.deltaY) * CROSSFADER_WHEEL_STEP,
+      -1,
+      1
+    )
+    pendingWheelValue = value
+    const requestId = ++wheelRequestId
+    const clearPending = () => {
+      if (wheelRequestId === requestId) pendingWheelValue = null
+    }
+    void nativeTransport
+      .setOutputState(value, clampVolumeValue(mainWindowVolume.value))
+      .then(clearPending, (error: unknown) => {
+        clearPending()
+        console.error('Failed to adjust crossfader with wheel:', error)
+      })
   }
 
   const resolveCrossfaderValueByClientY = (clientY: number) => {
@@ -114,6 +140,7 @@ export const useHorizontalBrowseOutput = ({
     faderDragging,
     syncCrossfaderValue,
     handleFaderPointerDown,
+    handleFaderWheel,
     handleFaderDoubleClick,
     nudgeCrossfaderByKeyboard,
     resetCrossfaderByKeyboard
