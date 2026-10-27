@@ -77,12 +77,21 @@ class GridTests(unittest.TestCase):
         # still advances exactly one (covered separately above).
         self.assertEqual(grid_indices(beats)[-1], len(beats))
 
-    def test_verification_cannot_hide_bad_output_phase(self):
+    def test_verification_corrects_small_phase_but_rejects_bad_output(self):
         good = 0.4 + np.arange(180) * 0.5
         self.assertTrue(verify_grid(good, 120, 0.4)["passed"])
+        shifted = verify_grid(good + 0.013, 120, 0.4)
+        self.assertTrue(shifted["passed"])
+        self.assertAlmostEqual(shifted["phaseShiftMs"], 13)
         self.assertFalse(verify_grid(good + 0.15, 120, 0.4)["passed"])
+        self.assertEqual(verification_diagnostics(good + 0.15, 120, 0.4,
+                         verify_grid(good + 0.15, 120, 0.4))["reasons"], ["phase_shift"])
         bad = good.copy()
-        bad[60] += 0.2
+        bad += 0.013
+        bad[60] += 0.08
+        self.assertFalse(verify_grid(bad, 120, 0.4)["passed"])
+        bad = good.copy()
+        bad[90:] += 0.04
         self.assertFalse(verify_grid(bad, 120, 0.4)["passed"])
 
     def test_sparse_detection_is_rejected(self):
@@ -103,7 +112,7 @@ class GridTests(unittest.TestCase):
         self.assertEqual(details["thresholds"]["maxBeatErrorMs"], 70)
 
     def test_verification_diagnostics_distinguish_rms_and_too_few_beats(self):
-        raw = 0.4 + np.arange(180) * 0.5 + 0.02
+        raw = 0.4 + np.arange(180) * 0.5 + np.tile([-0.02, 0.02], 90)
         details = verification_diagnostics(raw, 120, 0.4, verify_grid(raw, 120, 0.4))
         self.assertEqual(details["reasons"], ["grid_rms"])
         self.assertEqual(details["thresholds"]["maxPlannedBeatErrorMs"], 25)

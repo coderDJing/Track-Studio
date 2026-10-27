@@ -11,6 +11,7 @@ MIN_VERIFICATION_BEATS = 8
 MAX_VERIFICATION_BPM_ERROR = 0.6
 MAX_VERIFICATION_RMS_MS = 14.0
 MAX_VERIFICATION_BEAT_ERROR_SEC = 0.070
+MAX_VERIFICATION_PHASE_SHIFT_SEC = 0.030
 
 
 def _line(x, y):
@@ -215,15 +216,25 @@ def plan_correction(analysis, frames, sr, target_bpm=None, tempo_factor=1.0):
     }
 
 
+def _verification_residuals(beats, target_bpm, offset):
+    period = 60.0 / target_bpm
+    initial_grid = np.rint((beats - offset) / period)
+    initial_residual = beats - (offset + initial_grid * period)
+    # A small consistent detector/rendering offset is not local tempo drift.
+    # Median prevents a few bad beats from moving the reference grid.
+    phase_shift = float(np.median(initial_residual)) if len(beats) else 0.0
+    adjusted_offset = offset + phase_shift
+    grid = np.rint((beats - adjusted_offset) / period)
+    return grid, beats - (adjusted_offset + grid * period), phase_shift
+
+
 def verify_grid(raw, target_bpm, offset):
     beats = np.asarray(raw, dtype=float)
     if len(beats) < MIN_VERIFICATION_BEATS:
         raise ValueError("BPM_FIX_VERIFICATION_FAILED")
-    period = 60.0 / target_bpm
     # Measure raw redetected beats, including outliers, so verification cannot
     # hide renderer errors by cleaning/replacing the evidence it evaluates.
-    grid = np.rint((beats - offset) / period)
-    residual = beats - (offset + grid * period)
+    grid, residual, phase_shift = _verification_residuals(beats, target_bpm, offset)
     unique = np.r_[True, np.diff(grid) > 0]
     measured_period, _ = _line(grid[unique], beats[unique])
     detected_bpm = 60.0 / measured_period
@@ -231,24 +242,27 @@ def verify_grid(raw, target_bpm, offset):
     off_grid = int(np.count_nonzero(np.abs(residual) > MAX_VERIFICATION_BEAT_ERROR_SEC))
     bpm_error = abs(detected_bpm - target_bpm)
     return {
-        "passed": bool(bpm_error <= MAX_VERIFICATION_BPM_ERROR and
+        "passed": bool(abs(phase_shift) <= MAX_VERIFICATION_PHASE_SHIFT_SEC and
+                       bpm_error <= MAX_VERIFICATION_BPM_ERROR and
                        rms_ms <= MAX_VERIFICATION_RMS_MS and off_grid == 0),
         "detectedBpm": round(detected_bpm, 4), "bpmError": round(bpm_error, 4),
         "gridRmsMs": round(rms_ms, 3), "offGridBeats": off_grid,
+        "phaseShiftMs": round(phase_shift * 1000, 3),
     }
 
 
 def verification_diagnostics(raw, target_bpm, offset, verification):
     """Bounded RC diagnostics; never filter or change the verification evidence."""
     beats = np.asarray(raw, dtype=float)
-    period = 60.0 / target_bpm
-    grid = np.rint((beats - offset) / period)
-    residual_ms = (beats - (offset + grid * period)) * 1000
+    grid, residual, phase_shift = _verification_residuals(beats, target_bpm, offset)
+    residual_ms = residual * 1000
     absolute_ms = np.abs(residual_ms)
     reasons = []
     if len(beats) < MIN_VERIFICATION_BEATS:
         reasons.append("insufficient_beats")
     if verification is not None:
+        if abs(phase_shift) > MAX_VERIFICATION_PHASE_SHIFT_SEC:
+            reasons.append("phase_shift")
         if verification["bpmError"] > MAX_VERIFICATION_BPM_ERROR:
             reasons.append("bpm_error")
         if verification["gridRmsMs"] > MAX_VERIFICATION_RMS_MS:
@@ -270,6 +284,7 @@ def verification_diagnostics(raw, target_bpm, offset, verification):
             "maxBpmError": MAX_VERIFICATION_BPM_ERROR,
             "maxGridRmsMs": MAX_VERIFICATION_RMS_MS,
             "maxBeatErrorMs": MAX_VERIFICATION_BEAT_ERROR_SEC * 1000,
+            "maxPhaseShiftMs": MAX_VERIFICATION_PHASE_SHIFT_SEC * 1000,
             "maxOffGridBeats": 0,
             "maxPlannedBeatErrorMs": MAX_PLANNED_BEAT_ERROR_SEC * 1000,
         },
