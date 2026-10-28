@@ -5,9 +5,13 @@ import filterIconAsset from '@renderer/assets/filterIcon.svg?asset'
 import { UseDraggableOptions, vDraggable } from 'vue-draggable-plus'
 import { MIN_WIDTH_BY_KEY } from './minWidth'
 import filterDialog from '@renderer/components/filterDialog.vue'
+import KeyFilterDialog from '@renderer/components/KeyFilterDialog.vue'
+import { KEY_FILTER_PREFIX, parseSelectedKeyFilter, KEY_FILTER_OPTIONS } from '@shared/keyDisplay'
+import { useRuntimeStore } from '@renderer/stores/runtime'
 import bubbleBox from '@renderer/components/bubbleBox.vue'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 import { normalizeFilterDate, resolveFilterDateBounds } from '@shared/songAddedAt'
+const runtime = useRuntimeStore()
 const filterIcon = filterIconAsset
 const filterIconMaskStyle = {
   '--icon-mask': `url("${filterIcon}")`
@@ -515,6 +519,15 @@ function formatBetweenTooltip(prefix: string, fromValue?: string, toValue?: stri
 
 function getFilterTooltip(col: ISongsAreaColumn): string {
   if (!col.filterActive) return ''
+  const keys = col.key === 'key' ? parseSelectedKeyFilter(col.filterValue || '') : null
+  if (keys !== null) {
+    const labels = keys.map((key) =>
+      runtime.setting.keyDisplayStyle === 'Camelot'
+        ? key
+        : KEY_FILTER_OPTIONS.find((option) => option.camelot === key)?.classic || key
+    )
+    return `${props.t('filters.filterByKey')}: ${labels.join(', ')}`
+  }
   if (col.filterType === 'text') {
     const includeText = (col.filterValue || '').trim()
     const excludeKeywords = parseExcludeKeywords((col.filterExcludeValue || '').trim())
@@ -731,8 +744,23 @@ const handleIndexActionClick = () => {
         />
       </div>
       <Teleport to="body">
+        <KeyFilterDialog
+          v-if="filterActiveKey === col.key && col.key === 'key'"
+          :selected="parseSelectedKeyFilter(col.filterValue || '') || []"
+          :style-name="runtime.setting.keyDisplayStyle === 'Camelot' ? 'Camelot' : 'Classic'"
+          @confirm="
+            (keys: string[]) => {
+              tempText = keys.length ? KEY_FILTER_PREFIX + keys.join(',') : ''
+              tempExcludeText = ''
+              tempCuratedOnly = false
+              applyFilterConfirm(col)
+            }
+          "
+          @clear="() => clearFilter(col)"
+          @cancel="closeFilterDialog"
+        />
         <filterDialog
-          v-if="filterActiveKey === col.key && col.filterType"
+          v-else-if="filterActiveKey === col.key && col.filterType"
           :type="resolveFilterDialogType(col)"
           :init-text="tempText"
           :init-exclude-text="tempExcludeText"

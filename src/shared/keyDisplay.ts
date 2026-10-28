@@ -28,6 +28,18 @@ const KEY_TO_CAMELOT: Record<string, string> = {
 }
 
 const CAMELOT_KEY_PATTERN = /^0?([1-9]|1[0-2])\s*([AB])$/i
+const ENHARMONIC_KEYS: Record<string, string> = {
+  'C#': 'Db',
+  'D#': 'Eb',
+  Gb: 'F#',
+  'G#': 'Ab',
+  'A#': 'Bb',
+  Dbm: 'C#m',
+  'D#m': 'Ebm',
+  Gbm: 'F#m',
+  Abm: 'G#m',
+  'A#m': 'Bbm'
+}
 
 const normalizeKeyText = (keyText: string): string => {
   const raw = typeof keyText === 'string' ? keyText.trim() : ''
@@ -50,10 +62,10 @@ const normalizeKeyText = (keyText: string): string => {
 
 const mapKeyToCamelot = (keyText: string): string => {
   const normalized = normalizeKeyText(keyText)
-  return KEY_TO_CAMELOT[normalized] || normalized
+  return KEY_TO_CAMELOT[ENHARMONIC_KEYS[normalized] || normalized] || normalized
 }
 
-const normalizeCamelotKey = (keyText: string): string => {
+export const normalizeCamelotKey = (keyText: string): string => {
   const camelot = mapKeyToCamelot(keyText)
   const match = camelot.match(CAMELOT_KEY_PATTERN)
   if (!match) return ''
@@ -103,4 +115,16 @@ export const getKeySortText = (keyText: string, style: KeyDisplayStyle): string 
     return `99Z-${display}`
   }
   return display
+}
+
+export const KEY_FILTER_PREFIX = 'keys:'
+export const KEY_FILTER_OPTIONS = Object.entries(KEY_TO_CAMELOT)
+  .map(([classic, camelot]) => ({ classic, camelot }))
+  .sort(
+    (a, b) =>
+      Number.parseInt(a.camelot) - Number.parseInt(b.camelot) || a.camelot.localeCompare(b.camelot)
+  )
+export const parseSelectedKeyFilter = (value: string): string[] | null => {
+  if (!value.startsWith(KEY_FILTER_PREFIX)) return null
+  return value.slice(KEY_FILTER_PREFIX.length).split(',').map(normalizeCamelotKey).filter(Boolean)
 }

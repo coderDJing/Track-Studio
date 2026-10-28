@@ -1,5 +1,8 @@
 {
   "filters": {
+    "filterByKey": "Filter by key",
+    "selectedKeys": "Selected keys",
+    "keyWheelHint": "Click keys to select or deselect them. Multiple keys can be selected.",
     "filterByText": "Filter by text (include/exclude)",
     "filterByDuration": "Filter by duration",
     "filterByBpm": "Filter by BPM",

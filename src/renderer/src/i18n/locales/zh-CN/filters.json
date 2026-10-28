@@ -1,5 +1,8 @@
 {
   "filters": {
+    "filterByKey": "按调性筛选",
+    "selectedKeys": "已选择调性",
+    "keyWheelHint": "点击调性选择或取消，可同时选择多个",
     "filterByText": "按文本筛选（包含/排除）",
     "filterByDuration": "按时长筛选",
     "filterByBpm": "按 BPM 筛选",

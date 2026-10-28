@@ -1,3 +1,4 @@
+import { normalizeCamelotKey, parseSelectedKeyFilter } from '@shared/keyDisplay'
 import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
 import type { ComputedRef, Ref, ShallowRef } from 'vue'
 import { normalizeBpmDisplayScaled } from '@renderer/utils/bpm'
@@ -252,6 +253,14 @@ export const usePioneerSongsProjection = (params: UsePioneerSongsProjectionParam
     let filtered = tracks.map((track) => toSongInfo(track))
     for (const col of params.columnData.value) {
       if (!col.filterActive) continue
+      const selectedKeys = col.key === 'key' ? parseSelectedKeyFilter(col.filterValue || '') : null
+      if (selectedKeys !== null) {
+        const selected = new Set(selectedKeys)
+        filtered = filtered.filter((song) =>
+          selected.has(normalizeCamelotKey(String(song.key || '')))
+        )
+        continue
+      }
       if (col.filterType === 'text' && col.key) {
         const keyword = String(col.filterValue || '').toLowerCase()
         const excludeKeywords = parseExcludeKeywords(col.filterExcludeValue)

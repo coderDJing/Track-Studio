@@ -1,3 +1,4 @@
+import { normalizeCamelotKey, parseSelectedKeyFilter } from '@shared/keyDisplay'
 import { computed, ref, toRaw, watch, type ShallowRef } from 'vue'
 import type { ISongInfo, ISongsAreaColumn } from '../../../../../../types/globals'
 import type {
@@ -189,6 +190,14 @@ export function useSongsAreaColumns(params: UseSongsAreaColumnsParams) {
     }
     for (const col of columnData.value) {
       if (!col.filterActive) continue
+      const selectedKeys = col.key === 'key' ? parseSelectedKeyFilter(col.filterValue || '') : null
+      if (selectedKeys !== null) {
+        const selected = new Set(selectedKeys)
+        filtered = filtered.filter((song) =>
+          selected.has(normalizeCamelotKey(String(song.key || '')))
+        )
+        continue
+      }
       if (col.filterType === 'text' && col.key) {
         const keyword = String(col.filterValue || '').toLowerCase()
         const excludeKeywords = parseExcludeKeywords(col.filterExcludeValue)
