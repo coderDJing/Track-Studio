@@ -668,22 +668,7 @@ impl HorizontalBrowseTransportEngine {
         config,
         move |data: &mut [T], _| {
           let mut engine = engine().lock();
-          for frame in data.chunks_mut(channels) {
-            let (left, right) = engine.mix_output_frame();
-            if let Some(sample) = frame.get_mut(0) {
-              *sample = T::from_sample(left);
-            }
-            if channels >= 2 {
-              if let Some(sample) = frame.get_mut(1) {
-                *sample = T::from_sample(right);
-              }
-              for channel in 2..channels {
-                if let Some(sample) = frame.get_mut(channel) {
-                  *sample = T::from_sample((left + right) * 0.5);
-                }
-              }
-            }
-          }
+          engine.render_output_buffer(data, channels);
         },
         err_fn,
         None,
