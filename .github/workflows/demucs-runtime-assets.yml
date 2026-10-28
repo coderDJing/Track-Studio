@@ -257,6 +257,9 @@ jobs:
             dist/demucs-runtime-assets-darwin-x64
 
   publish_runtime_assets:
+    concurrency:
+      group: demucs-runtime-publication
+      cancel-in-progress: false
     needs:
       - build_runtime_assets_win
       - build_runtime_assets_mac_arm64
@@ -279,6 +282,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Setup publisher Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Test runtime publication and retention
+        run: node --test scripts/publish-demucs-runtime-assets.spec.mjs
+
       - name: Download existing release manifest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -287,13 +298,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts/existing-release
-          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            gh release download "$TAG_NAME" \
-              --pattern demucs-runtime-manifest.json \
-              --dir artifacts/existing-release \
-              --clobber || true
-          fi
+          node scripts/publish-demucs-runtime-assets.mjs snapshot \
+            --tag "$TAG_NAME" --dir artifacts/existing-release
 
       - name: Download runtime assets (Windows)
         if: ${{ inputs.build_win }}
@@ -360,47 +366,13 @@ jobs:
       - name: Show packaged runtime assets
         run: find dist/demucs-runtime-assets -maxdepth 1 -type f | sort
 
-      - name: Create or update GitHub release
+      - name: Publish verified runtime assets and retain rollback
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           TAG_NAME: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          assets=(dist/demucs-runtime-assets/*)
-          if [ ${#assets[@]} -eq 0 ]; then
-            echo "No runtime assets found."
-            exit 1
-          fi
-
-          PRERELEASE=false
-          case "$TAG_NAME" in
-            *-rc|*-beta|*-alpha)
-              PRERELEASE=true
-              ;;
-          esac
-
-          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            gh release upload "$TAG_NAME" "${assets[@]}" --clobber
-            if [ "$PRERELEASE" = "true" ]; then
-              gh release edit "$TAG_NAME" --title "$TAG_NAME" --prerelease
-            else
-              gh release edit "$TAG_NAME" --title "$TAG_NAME"
-            fi
-          else
-            if [ "$PRERELEASE" = "true" ]; then
-              gh release create "$TAG_NAME" "${assets[@]}" --title "$TAG_NAME" --prerelease --verify-tag
-            else
-              gh release create "$TAG_NAME" "${assets[@]}" --title "$TAG_NAME" --verify-tag
-            fi
-          fi
-
-          release_id="$(gh release view "$TAG_NAME" --json databaseId --jq .databaseId)"
-          gh api --method PATCH "repos/$GH_REPO/releases/$release_id" -F make_latest=false >/dev/null
-
-          latest_tag="$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name)"
-          if [ "$latest_tag" = "$TAG_NAME" ]; then
-            echo "Runtime asset release must not be the GitHub Latest release: $TAG_NAME"
-            exit 1
-          fi
+          node scripts/publish-demucs-runtime-assets.mjs publish \
+            --tag "$TAG_NAME" --dir dist/demucs-runtime-assets \
+            --base artifacts/existing-release/demucs-runtime-manifest.json --apply
