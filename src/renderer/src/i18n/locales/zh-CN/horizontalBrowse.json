@@ -1,5 +1,10 @@
 {
   "horizontalBrowse": {
+    "elapsedTime": "已播放时间",
+    "remainingTime": "剩余时间",
+    "trackKey": "调性",
+    "trackBpm": "速度（BPM）",
+    "trackEnergy": "能量（0–100）",
     "beatSyncAction": "开启 Beat Sync",
     "beatSyncActive": "关闭 Beat Sync",
     "masterAction": "将此轨设为 Master",

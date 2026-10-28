@@ -1,5 +1,10 @@
 {
   "horizontalBrowse": {
+    "elapsedTime": "Elapsed time",
+    "remainingTime": "Time remaining",
+    "trackKey": "Key",
+    "trackBpm": "Tempo (BPM)",
+    "trackEnergy": "Energy (0–100)",
     "beatSyncAction": "Turn on Beat Sync",
     "beatSyncActive": "Turn off Beat Sync",
     "masterAction": "Make this deck the Master",

@@ -218,21 +218,39 @@ onUnmounted(() => {
       </div>
 
       <div class="deck-info-card__stats">
-        <div class="deck-info-card__meta-line">{{ elapsedText }}</div>
+        <bubbleBoxTrigger
+          class="deck-info-card__meta-line"
+          :title="t('horizontalBrowse.elapsedTime')"
+        >
+          {{ elapsedText }}
+        </bubbleBoxTrigger>
         <span class="deck-info-card__meta-gap"></span>
-        <div class="deck-info-card__meta-line">{{ remainingText }}</div>
+        <bubbleBoxTrigger
+          class="deck-info-card__meta-line"
+          :title="t('horizontalBrowse.remainingTime')"
+        >
+          {{ remainingText }}
+        </bubbleBoxTrigger>
         <span class="deck-info-card__meta-separator"></span>
-        <div
+        <bubbleBoxTrigger
           class="deck-info-card__meta-line deck-info-card__meta-line--key"
           :class="{ 'is-harmonic-match': props.keyHighlighted }"
+          :title="t('horizontalBrowse.trackKey')"
         >
           {{ keyDisplayText }}
-        </div>
+        </bubbleBoxTrigger>
         <span class="deck-info-card__meta-separator"></span>
-        <div class="deck-info-card__meta-line">{{ bpmText }}</div>
+        <bubbleBoxTrigger class="deck-info-card__meta-line" :title="t('horizontalBrowse.trackBpm')">
+          {{ bpmText }}
+        </bubbleBoxTrigger>
         <template v-if="props.showEnergy">
           <span class="deck-info-card__meta-separator"></span>
-          <div class="deck-info-card__meta-line">{{ energyText }}</div>
+          <bubbleBoxTrigger
+            class="deck-info-card__meta-line"
+            :title="t('horizontalBrowse.trackEnergy')"
+          >
+            {{ energyText }}
+          </bubbleBoxTrigger>
         </template>
       </div>
     </div>
