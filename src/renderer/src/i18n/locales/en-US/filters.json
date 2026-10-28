@@ -1,5 +1,6 @@
 {
   "filters": {
+    "keyWheelRings": "Inner A · Minor / Outer B · Major",
     "filterByKey": "Filter by key",
     "selectedKeys": "Selected keys",
     "keyWheelHint": "Click keys to select or deselect them. Multiple keys can be selected.",

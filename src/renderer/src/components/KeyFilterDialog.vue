@@ -25,7 +25,7 @@ function point(radius: number, angle: number) {
   }
 }
 function sectorPath(number: number, inner: number, outer: number) {
-  const start = (number - 1) * 30 - 15
+  const start = (number % 12) * 30 - 15
   const end = start + 30
   const a = point(outer, start)
   const b = point(outer, end)
@@ -38,9 +38,15 @@ function optionGeometry(camelot: string) {
   const minor = camelot.endsWith('A')
   return {
     path: sectorPath(number, minor ? 103 : 167, minor ? 164 : 228),
-    label: point(minor ? 133.5 : 197.5, (number - 1) * 30)
+    label: point(minor ? 133.5 : 197.5, (number % 12) * 30),
+    marker: point(minor ? 153 : 217, (number % 12) * 30)
   }
 }
+const wheelOptions = KEY_FILTER_OPTIONS.map((option) => ({
+  ...option,
+  ...optionGeometry(option.camelot),
+  hue: (Number.parseInt(option.camelot) * 30 + 210) % 360
+}))
 function toggle(key: string) {
   const next = new Set(selected.value)
   if (next.has(key)) next.delete(key)
@@ -79,13 +85,15 @@ onUnmounted(() => utils.delHotkeysScope(uuid))
     >
       <div class="dialog-title dialog-header">{{ t('filters.filterByKey') }}</div>
       <div class="wheel-hint">{{ t('filters.keyWheelHint') }}</div>
+      <div class="wheel-legend">{{ t('filters.keyWheelRings') }}</div>
       <div class="wheel-wrap">
         <svg class="key-wheel" viewBox="0 0 500 500" :aria-label="t('filters.filterByKey')">
           <g
-            v-for="option in KEY_FILTER_OPTIONS"
+            v-for="option in wheelOptions"
             :key="option.camelot"
             class="key-sector"
             :class="{ selected: selected.has(option.camelot) }"
+            :style="{ '--key-hue': option.hue }"
             role="button"
             tabindex="0"
             :aria-label="`${option.camelot} ${option.classic}`"
@@ -94,21 +102,20 @@ onUnmounted(() => utils.delHotkeysScope(uuid))
             @keydown.enter.stop.prevent="toggle(option.camelot)"
             @keydown.space.stop.prevent="toggle(option.camelot)"
           >
-            <path :d="optionGeometry(option.camelot).path" />
-            <text
-              :x="optionGeometry(option.camelot).label.x"
-              :y="optionGeometry(option.camelot).label.y - 3"
-              class="key-label"
-            >
+            <path :d="option.path" />
+            <text :x="option.label.x" :y="option.label.y - 3" class="key-label">
               {{ styleName === 'Camelot' ? option.camelot : option.classic }}
             </text>
-            <text
-              :x="optionGeometry(option.camelot).label.x"
-              :y="optionGeometry(option.camelot).label.y + 14"
-              class="key-secondary"
-            >
+            <text :x="option.label.x" :y="option.label.y + 14" class="key-secondary">
               {{ styleName === 'Camelot' ? option.classic : option.camelot }}
             </text>
+            <circle
+              v-if="selected.has(option.camelot)"
+              class="selection-marker"
+              :cx="option.marker.x"
+              :cy="option.marker.y"
+              r="3"
+            />
           </g>
           <circle class="wheel-center" cx="250" cy="250" r="96" />
           <text class="center-label" x="250" y="243">{{ t('filters.selectedKeys') }}</text>
@@ -132,10 +139,25 @@ onUnmounted(() => utils.delHotkeysScope(uuid))
 
 <style scoped lang="scss">
 .key-dialog {
+  --key-tint: 22%;
+  --key-hover-tint: 36%;
+  --key-selected-tint: 48%;
   width: min(520px, 94vw);
   color: var(--text);
   display: flex;
   flex-direction: column;
+}
+.wheel-legend {
+  margin-top: 8px;
+  text-align: center;
+  color: var(--text-weak);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+:global(.theme-light) .key-dialog {
+  --key-tint: 18%;
+  --key-hover-tint: 30%;
+  --key-selected-tint: 40%;
 }
 .wheel-hint {
   padding: 16px 20px 0;
@@ -155,26 +177,36 @@ onUnmounted(() => utils.delHotkeysScope(uuid))
   overflow: visible;
 }
 .key-sector {
+  --key-color: hsl(var(--key-hue) 68% 58%);
   cursor: pointer;
   outline: none;
 }
 .key-sector path {
-  fill: var(--hover);
+  fill: color-mix(in srgb, var(--key-color) var(--key-tint), var(--bg-elev));
   stroke: var(--bg-elev);
   stroke-width: 2;
-  transition: fill 120ms ease;
-}
-.key-sector:nth-child(even) path {
-  fill: color-mix(in srgb, var(--hover) 65%, var(--bg));
+  stroke-linejoin: round;
+  transition:
+    fill 120ms ease,
+    stroke 120ms ease;
 }
 .key-sector:hover path,
 .key-sector:focus-visible path {
-  fill: color-mix(in srgb, var(--accent) 28%, var(--hover));
+  fill: color-mix(in srgb, var(--key-color) var(--key-hover-tint), var(--bg-elev));
+  stroke: var(--text-weak);
 }
 .key-sector.selected path {
-  fill: color-mix(in srgb, var(--accent) 42%, var(--hover));
-  stroke: var(--accent);
+  fill: color-mix(in srgb, var(--key-color) var(--key-selected-tint), var(--bg-elev));
+  stroke: var(--text);
   stroke-width: 2.5;
+}
+.selection-marker {
+  fill: var(--text);
+  pointer-events: none;
+}
+.key-sector:focus-visible path {
+  stroke: var(--text);
+  stroke-width: 3.5;
 }
 .key-sector text,
 .wheel-center,

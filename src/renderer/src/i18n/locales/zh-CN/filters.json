@@ -1,5 +1,6 @@
 {
   "filters": {
+    "keyWheelRings": "内圈 A · 小调　/　外圈 B · 大调",
     "filterByKey": "按调性筛选",
     "selectedKeys": "已选择调性",
     "keyWheelHint": "点击调性选择或取消，可同时选择多个",
