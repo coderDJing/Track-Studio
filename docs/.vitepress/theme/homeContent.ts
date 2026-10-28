@@ -2,14 +2,7 @@
 // 每个章节是一个 Hot Cue：字母 + 应用 Hot Cue 槽位色（src/shared/hotCues.ts）。
 
 export type SurfaceKind =
-  | 'library'
-  | 'dedup'
-  | 'player'
-  | 'deck'
-  | 'mixtape'
-  | 'stem'
-  | 'external'
-  | 'sync'
+  'library' | 'dedup' | 'player' | 'deck' | 'mixtape' | 'stem' | 'external' | 'sync'
 
 export interface Chapter {
   id: string
@@ -95,7 +88,11 @@ const zhChapters: Omit<Chapter, 'cue' | 'color'>[] = [
           { name: '合并音乐库', detail: '歌单、曲目、分析、SET、Mixtape 一起合并，来源库不被修改' },
           { name: '移动音乐库', detail: '同盘或跨盘整体搬迁，中断可续传' },
           { name: '批量重命名', detail: '按预设规则或自定义格式统一整个歌单的文件名' },
-          { name: '歌单树排序', detail: '按名称、曲目数或手动排序；清空歌单有进度反馈' }
+          { name: '歌单树排序', detail: '按名称、曲目数或手动排序；清空歌单有进度反馈' },
+          {
+            name: '歌单独立设置',
+            detail: '为每个歌单保存排序、列布局与筛选；双歌单分别统计选中数量和时长'
+          }
         ]
       }
     ]
@@ -122,6 +119,10 @@ const zhChapters: Omit<Chapter, 'cue' | 'color'>[] = [
           {
             name: 'BPM 与节拍网格',
             detail: '速度与网格分析，Tap Tempo 手动点拍，困难曲目有更严格的候选规则'
+          },
+          {
+            name: 'BPM 漂移修复',
+            detail: '分析后确认目标 BPM，将漂移音频校正到稳定速度，可另存或检查后覆盖'
           },
           { name: '调性', detail: 'Classic（C#m）与 Camelot（1A/1B）两种显示' },
           { name: '能量与段落', detail: '综合能量、舞池能量、舞蹈性可在列表里查看和筛选' },
@@ -194,11 +195,14 @@ const zhChapters: Omit<Chapter, 'cue' | 'color'>[] = [
       {
         title: '混音',
         items: [
-          { name: 'Beat Sync 与 Master', detail: '同步双轨速度与网格，波形显示比例保持稳定' },
+          {
+            name: 'Beat Sync 与 Master',
+            detail: '同步双轨速度与网格；Master 播到曲尾时，仍在播放的另一轨自动接任'
+          },
           { name: '自动增益', detail: '按当前 Master 对齐另一轨响度，A/B 对比不被音量差误导' },
           {
             name: '交叉推子与 EQ 削减',
-            detail: '展开推子面板即可按 HI / MID / LOW 削减频段、开 CUE 监听'
+            detail: '滚轮可调横推；展开推子面板按 HI / MID / LOW 削减频段、开 CUE 监听'
           },
           { name: '双轨录音', detail: '把双轨输出录成非压缩 WAV，直接进独立录音库' }
         ]
@@ -329,7 +333,7 @@ const zhChapters: Omit<Chapter, 'cue' | 'color'>[] = [
           },
           {
             name: '歌曲筛选',
-            detail: '按标题、BPM、时长、格式、加入时间等条件筛选，可保留到重启后'
+            detail: '按标题、BPM、时长等条件筛选；调性轮支持多选，也可仅看与 Master 兼容的调性'
           },
           { name: '相似歌曲', detail: 'ListenBrainz 与 Last.fm 双源推荐，可屏蔽不想再看到的' },
           { name: '网易云 / Spotify', detail: '右键直接去网易云或 Spotify 搜当前曲目' }
@@ -383,6 +387,11 @@ const enChapters: Omit<Chapter, 'cue' | 'color'>[] = [
           },
           { name: 'Batch rename', detail: 'Rule-based or custom filenames across a playlist' },
           {
+            name: 'Playlist settings',
+            detail:
+              'Save sorting, columns, and filters per playlist; see selected counts and duration'
+          },
+          {
             name: 'Tree sorting',
             detail: 'Sort by name, track count, or manually; clearing shows progress'
           }
@@ -418,6 +427,11 @@ const enChapters: Omit<Chapter, 'cue' | 'color'>[] = [
           {
             name: 'BPM & beat grid',
             detail: 'Tempo and grid analysis, Tap Tempo, stricter rules for hard tracks'
+          },
+          {
+            name: 'BPM drift repair',
+            detail:
+              'Confirm a target BPM, correct drifting audio, then save a copy or overwrite after verification'
           },
           { name: 'Key', detail: 'Classic (C#m) or Camelot (1A/1B) notation' },
           {
@@ -519,12 +533,13 @@ const enChapters: Omit<Chapter, 'cue' | 'color'>[] = [
         items: [
           {
             name: 'Beat Sync & Master',
-            detail: 'Sync tempo and grid while waveform scale stays stable'
+            detail: 'Sync tempo and grid; the other playing deck takes over when the Master ends'
           },
           { name: 'Auto Gain', detail: 'Match loudness to the Master so A/B checks stay honest' },
           {
             name: 'Crossfader & EQ kills',
-            detail: 'Expand the fader panel for HI / MID / LOW kills and CUE monitor'
+            detail:
+              'Adjust the crossfader by mouse wheel; expand for HI / MID / LOW kills and CUE monitor'
           },
           {
             name: 'Deck recording',
@@ -707,7 +722,8 @@ const enChapters: Omit<Chapter, 'cue' | 'color'>[] = [
           },
           {
             name: 'Song filters',
-            detail: 'Filter by BPM, duration, format, date added, and more; can persist'
+            detail:
+              'Filter by BPM, duration, and more; choose keys on the wheel or match the Master deck'
           },
           {
             name: 'Similar tracks',

@@ -910,6 +910,11 @@ jobs:
     needs: [validate_release_tag, typecheck, build_win, build_mac]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout release notes
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: .github/release-notes
+
       - name: Download Windows artifacts
         uses: actions/download-artifact@v8
         with:
@@ -947,19 +952,33 @@ jobs:
             echo "No release assets found."
             exit 1
           fi
+          for asset in "${assets[@]}"; do
+            if [ ! -s "$asset" ]; then
+              echo "Missing or empty release asset: $asset"
+              exit 1
+            fi
+          done
+
+          create_notes_args=(--generate-notes)
+          edit_notes_args=()
+          notes_file=".github/release-notes/${TAG_NAME}.md"
+          if [ -f "$notes_file" ]; then
+            create_notes_args=(--notes-file "$notes_file")
+            edit_notes_args=(--notes-file "$notes_file")
+          fi
 
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
             gh release upload "$TAG_NAME" "${assets[@]}" --clobber
             if [ "$PRERELEASE" = "true" ]; then
-              gh release edit "$TAG_NAME" --title "$TAG_NAME" --prerelease
+              gh release edit "$TAG_NAME" --title "$TAG_NAME" --prerelease "${edit_notes_args[@]}"
             else
-              gh release edit "$TAG_NAME" --title "$TAG_NAME" --latest
+              gh release edit "$TAG_NAME" --title "$TAG_NAME" --latest "${edit_notes_args[@]}"
             fi
           else
             if [ "$PRERELEASE" = "true" ]; then
-              gh release create "$TAG_NAME" "${assets[@]}" --title "$TAG_NAME" --prerelease --verify-tag --generate-notes
+              gh release create "$TAG_NAME" "${assets[@]}" --title "$TAG_NAME" --prerelease --verify-tag "${create_notes_args[@]}"
             else
-              gh release create "$TAG_NAME" "${assets[@]}" --title "$TAG_NAME" --latest --verify-tag --generate-notes
+              gh release create "$TAG_NAME" "${assets[@]}" --title "$TAG_NAME" --latest --verify-tag "${create_notes_args[@]}"
             fi
           fi
 

@@ -15,6 +15,8 @@ A detailed reference for Track Studio’s library, playback, analysis, and prepa
 - **SET duration**: Estimate SET length in playlist order, using Hot Cues as start and end points when available.
 - **Merge Track Studio libraries**: Merge another Track Studio library into the current one, including playlists, tracks, analysis, SET, and Mixtape data, without modifying the source library. Integrity and disk space are checked first, and same-name playlists are kept on both sides. Curated libraries can also be merged separately.
 - **Move Track Studio library**: Relocate the current Track Studio library to a new folder, including same-disk and cross-disk transfers with resume. Settings can also open the library folder in Explorer or Finder.
+- **Playlist-specific settings**: Save sorting, column layouts, and filters for an individual playlist. Switch back to shared settings without discarding its saved configuration.
+- **Two-playlist browsing and selection**: Open another playlist on the left or right while preserving the original list position and selection. View selection counts for each pane and the total duration of selected tracks.
 - **Playlist tree sorting**: Sort the playlist tree by name or track count, or switch back to manual order.
 - **Drag-and-drop import and movement**: Import files or folders, move tracks between playlists, and drag copies out to Explorer/Finder with Ctrl/Option.
 - **Safe recycle bin**: Deleted tracks and deduplicated items go to Track Studio's recycle bin and can be restored to their original playlists.
@@ -26,6 +28,7 @@ A detailed reference for Track Studio’s library, playback, analysis, and prepa
 - **Song deduplication**: Detect duplicate tracks by content hash or whole-file hash. Content hash mode ignores metadata differences such as cover art, title, and artist.
 - **Playlist fingerprint deduplication**: Analyze a playlist and move duplicates to the recycle bin in one workflow.
 - **BPM and beat-grid analysis**: Analyze tempo and grid placement, tap BPM manually, restore system-analyzed BPM, and work with stricter grid candidate rules for difficult tracks.
+- **BPM drift repair**: Select local tracks and choose Repair BPM drift from the track menu. Analyze the full track, confirm the beat interpretation and target BPM, then correct the audio to a steady tempo. Save copies in the current playlist or overwrite originals after verification. Choose 24-bit WAV or a supported original format; lossy formats are re-encoded, and ambiguous beats require individual confirmation.
 - **Key analysis**: Display musical key in Classic notation such as `C#m` or Camelot notation such as `1A/1B`.
 - **Energy and section analysis**: View and filter tracks by overall energy, dancefloor energy, danceability, and other measures; use analyzed sections for range playback.
 - **Locate unanalyzed tracks**: Jump from the bottom status bar to the first track that still needs analysis.
@@ -54,8 +57,9 @@ A detailed reference for Track Studio’s library, playback, analysis, and prepa
 
 - **Side-by-side auditioning**: Browse two tracks at once in a DJ mixer-style interface.
 - **Deck controls**: Each deck has transport controls, waveform display, Hot Cue, Memory Cue, Loop, Quantize, and beat-grid tools.
-- **Mixer controls**: Use independent deck volume faders, channel controls, and a crossfader to judge transitions quickly.
-- **Beat Sync and Master behavior**: Sync tempo and grid behavior between decks while keeping visible waveform scale stable.
+- **Mixer controls**: Use independent deck volume faders, channel controls, and a crossfader, including mouse-wheel adjustment, to judge transitions quickly.
+- **Beat Sync and Master behavior**: Sync tempo and grid behavior between decks while keeping visible waveform scale stable. When the Master reaches the end, the other deck takes over if it is still playing. Ejecting a track preserves that deck's sync setting.
+- **Track information and locating**: Locate a loaded track in its playlist, copy track information, and hover over the figures below the cover for short explanations.
 - **Tempo nudge**: Temporarily push a deck faster or slower with hold controls, then return cleanly to the base tempo.
 - **Temporary tempo**: Temporarily change a deck's tempo during dual-deck auditioning without writing back to the source file.
 - **Auto Gain**: Match deck loudness against the current master so A/B comparisons are not distorted by level differences.
@@ -122,6 +126,8 @@ A detailed reference for Track Studio’s library, playback, analysis, and prepa
 ## Search, Discovery, And Sync
 
 - **Global track search**: Search across the app and jump back to the matching location.
+- **Key wheel and compatible keys**: Select multiple keys using Camelot or Classic notation. The wheel places 12 at the top, minor keys inside, and major keys outside. Compatible keys only filters against a reference track; dual-deck mode uses the Master deck and requires a loaded track with a valid key.
+- **Playlist search highlighting**: Matching text is highlighted in the current playlist to make results easier to locate.
 - **Song filtering**: Filter by title, artist, album, duration, format, BPM, date added, and more, with optional persistence after restart. Date-added supports a between-date range.
 - **NetEase Cloud search**: Search the selected track on NetEase Cloud Music from the context menu.
 - **Spotify search**: Search by track title, artist, or album, opening the Spotify desktop app when available or the web search otherwise.
