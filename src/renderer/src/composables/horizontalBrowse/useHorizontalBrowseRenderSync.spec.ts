@@ -6,8 +6,7 @@ import {
 import { useHorizontalBrowseRenderSync } from './useHorizontalBrowseRenderSync'
 
 const createPlayingSnapshot = () => {
-  const snapshot = createEmptyHorizontalBrowseTransportSnapshot()
-  snapshot.stateRevision = 1
+  const snapshot = { ...createEmptyHorizontalBrowseTransportSnapshot(), stateRevision: 1 }
   snapshot.top = {
     ...snapshot.top,
     label: 'top',
@@ -60,6 +59,61 @@ const createRenderSync = (linkedGridVisualPending: () => boolean) => {
 }
 
 describe('useHorizontalBrowseRenderSync', () => {
+  it.each(['top', 'bottom'] as const)('另一轨反复 Cue 不应重置 %s Master 波形', (deck) => {
+    const { snapshot, renderSync } = createRenderSync(() => false)
+    const cueDeck = deck === 'top' ? 'bottom' : 'top'
+    snapshot[cueDeck].playing = false
+    snapshot[cueDeck].leader = false
+    Object.assign(snapshot[deck], { leader: true, playbackRate: 1, renderCurrentSec: 10 })
+    const playbackRevision =
+      deck === 'top'
+        ? renderSync.topDeckPlaybackSyncRevision
+        : renderSync.bottomDeckPlaybackSyncRevision
+    const renderSeconds =
+      deck === 'top'
+        ? renderSync.topDeckRenderCurrentSeconds
+        : renderSync.bottomDeckRenderCurrentSeconds
+    renderSync.syncDeckRenderState({ nowMs: 1000, snapshotAtMs: 1000 })
+    const revision = playbackRevision.value
+    for (let step = 1; step <= 6; step += 1) {
+      snapshot.stateRevision += 1
+      snapshot[cueDeck].playing = step % 2 === 1
+      // Native output buffers and IPC timestamps can differ by a few milliseconds.
+      snapshot[deck].renderCurrentSec = 10 + step * 0.2 - 0.008
+      renderSync.syncDeckRenderState({ nowMs: 1000 + step * 200, snapshotAtMs: 1000 + step * 200 })
+      expect(playbackRevision.value).toBe(revision)
+      expect(renderSeconds.value).toBeCloseTo(10 + step * 0.2, 6)
+    }
+  })
+
+  it('跟随轨的真实相位校正仍会更新波形', () => {
+    const { snapshot, renderSync } = createRenderSync(() => false)
+    Object.assign(snapshot.bottom, { playbackRate: 1, renderCurrentSec: 10 })
+    renderSync.syncDeckRenderState({ nowMs: 1000, snapshotAtMs: 1000 })
+    const revision = renderSync.bottomDeckPlaybackSyncRevision.value
+    snapshot.stateRevision += 1
+    snapshot.bottom.renderCurrentSec = 10.208
+    renderSync.syncDeckRenderState({ nowMs: 1200, snapshotAtMs: 1200 })
+    expect(renderSync.bottomDeckPlaybackSyncRevision.value).toBe(revision + 1)
+    expect(renderSync.bottomDeckRenderCurrentSeconds.value).toBeCloseTo(10.208, 6)
+  })
+
+  it('Master 本轨的主动小幅跳转和明显偏差仍会更新波形', () => {
+    const { snapshot, renderSync } = createRenderSync(() => false)
+    snapshot.top.renderCurrentSec = 10
+    renderSync.syncDeckRenderState({ nowMs: 1000, snapshotAtMs: 1000 })
+    const revision = renderSync.topDeckPlaybackSyncRevision.value
+    snapshot.stateRevision += 1
+    snapshot.top.renderCurrentSec = 10.208
+    renderSync.syncDeckRenderState({ nowMs: 1200, snapshotAtMs: 1200, force: 'top' })
+    expect(renderSync.topDeckPlaybackSyncRevision.value).toBe(revision + 1)
+    expect(renderSync.topDeckRenderCurrentSeconds.value).toBeCloseTo(10.208, 6)
+    snapshot.top.renderCurrentSec = 20
+    renderSync.syncDeckRenderState({ nowMs: 1400, snapshotAtMs: 1400 })
+    expect(renderSync.topDeckPlaybackSyncRevision.value).toBe(revision + 2)
+    expect(renderSync.topDeckRenderCurrentSeconds.value).toBe(20)
+  })
+
   it.each([0.5, 0.125, 0.0625, 0.03125, 0.0078125])(
     '两轨短 Loop（%s 秒）每帧回环，无需等待 native 快照',
     (loopDurationSec) => {

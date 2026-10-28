@@ -124,10 +124,19 @@ export const showSongListInPane = (
       ? singleSnapshot
       : buildPaneStateWithSongList(singleSnapshot, songListUUID)
 
-  runtime.assignSongsAreaPaneState(pane, paneSnapshot)
+  // Move the live state object with its mounted view instead of cloning the retained list.
+  const retainedPane = singleSnapshot.songListUUID === songListUUID ? pane : otherPane
   if (preserveSnapshot) {
-    runtime.assignSongsAreaPaneState(otherPane, preserveSnapshot)
+    const spare = panes[retainedPane]
+    panes[retainedPane] = panes.single
+    panes.single = spare
+    if (retainedPane === pane) {
+      runtime.assignSongsAreaPaneState(otherPane, preserveSnapshot)
+    } else {
+      runtime.assignSongsAreaPaneState(pane, paneSnapshot)
+    }
   } else {
+    runtime.assignSongsAreaPaneState(pane, paneSnapshot)
     runtime.clearSongsAreaPaneState(otherPane)
   }
   runtime.songsAreaPanels.splitEnabled = true
@@ -136,7 +145,10 @@ export const showSongListInPane = (
 }
 
 export const exitSongsAreaSplit = (runtime: RuntimeStore, paneToKeep: SplitSongsAreaPaneKey) => {
-  runtime.assignSongsAreaPaneState('single', runtime.songsAreaPanels.panes[paneToKeep])
+  const panes = runtime.songsAreaPanels.panes
+  const spare = panes.single
+  panes.single = panes[paneToKeep]
+  panes[paneToKeep] = spare
   runtime.songsAreaPanels.splitEnabled = false
   runtime.setSongsAreaActivePane('single')
   syncPlayingSongListDataFromVisiblePane(runtime)

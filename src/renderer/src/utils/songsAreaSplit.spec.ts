@@ -62,13 +62,14 @@ describe('entering playlist split view', () => {
         expect(runtime.songsArea).toBe(runtime.songsAreaPanels.panes[pane])
         expect(runtime.songsArea.songListUUID).toBe('new')
         expect(runtime.songsArea.songInfoArr).toEqual([])
-        expect(preserved).toEqual(single)
-        expect(preserved.songInfoArr).not.toBe(single.songInfoArr)
+        expect(preserved).toBe(single)
+        expect(preserved.songInfoArr).toBe(single.songInfoArr)
         expect(preserved.songInfoArr[0]).toBe(currentSong)
         expect(runtime.playingData.playingSongListData).toBe(preserved.songInfoArr)
         expect(runtime.playingData.playingSong?.filePath).toBe(currentSong.filePath)
 
         exitSongsAreaSplit(runtime, otherPane)
+        expect(runtime.songsAreaPanels.panes.single).toBe(single)
         expect(runtime.songsAreaPanels.splitEnabled).toBe(false)
         expect(runtime.songsArea.songListUUID).toBe(uuid)
         expect(runtime.songsArea.scrollTop).toBe(240)
@@ -88,6 +89,22 @@ describe('entering playlist split view', () => {
     expect(runtime.songsAreaPanels.panes.right.songListUUID).toBe('songs')
     expect(runtime.songsAreaPanels.panes.right.songInfoArr).toBe(preservedSongs)
   })
+
+  it.each(['left', 'right'] as const)(
+    'keeps the live view on %s when opening the same playlist',
+    (pane) => {
+      const runtime = setupCurrentPlaylist('songs')
+      const single = runtime.songsAreaPanels.panes.single
+      showSongListInPane(runtime, pane, 'songs')
+      expect(runtime.songsAreaPanels.panes[pane]).toBe(single)
+      expect(runtime.songsAreaPanels.panes[getSongsAreaOppositePane(pane)]).not.toBe(single)
+      exitSongsAreaSplit(runtime, pane)
+      expect(runtime.songsAreaPanels.panes.single).toBe(single)
+      showSongListInPane(runtime, getSongsAreaOppositePane(pane), 'new')
+      expect(runtime.songsAreaPanels.panes[pane]).toBe(single)
+      expect(new Set(Object.values(runtime.songsAreaPanels.panes)).size).toBe(3)
+    }
+  )
 
   it.each(['', 'folder', 'missing'])('does not preserve an invalid playlist: %s', (uuid) => {
     const runtime = setupCurrentPlaylist(uuid)

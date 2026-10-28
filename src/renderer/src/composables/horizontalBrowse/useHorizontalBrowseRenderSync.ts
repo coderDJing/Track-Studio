@@ -374,8 +374,10 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
       !!recentIntent &&
       recentIntentAgeMs <= RENDER_SYNC_RECENT_INTENT_CONFIRM_MS &&
       Math.abs(snapshotSec - recentIntent.seconds) <= RENDER_SYNC_PENDING_INTENT_EPSILON_SEC
+    // Native 只校正跟随轨的相位；另一轨的 Cue 也会更新全局版本，不能因此重置 Master 时钟。
     const fullSyncPhaseChanged =
       stateRevisionChanged &&
+      !snapshot.leader &&
       snapshot.syncEnabled &&
       snapshot.syncLock === 'full' &&
       playbackSnapshotAuthoritative &&

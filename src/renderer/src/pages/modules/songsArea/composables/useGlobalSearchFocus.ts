@@ -1,4 +1,13 @@
-import { nextTick, onUnmounted, ref, watch, type Ref, type ShallowRef } from 'vue'
+import {
+  nextTick,
+  onUnmounted,
+  ref,
+  watch,
+  toValue,
+  type MaybeRefOrGetter,
+  type Ref,
+  type ShallowRef
+} from 'vue'
 import emitter from '@renderer/utils/mitt'
 import type {
   ISongsAreaPaneRuntimeState,
@@ -20,7 +29,7 @@ export type FocusSongPayload = {
 
 interface UseGlobalSearchFocusParams {
   runtime: ReturnType<typeof useRuntimeStore>
-  pane: SongsAreaPaneKey
+  pane: MaybeRefOrGetter<SongsAreaPaneKey>
   songsAreaState: ISongsAreaPaneRuntimeState
   originalSongInfoArr: ShallowRef<ISongInfo[]>
   columnData: Ref<ISongsAreaColumn[]>
@@ -103,7 +112,7 @@ export function useGlobalSearchFocus(params: UseGlobalSearchFocusParams) {
   }
 
   const applyFocusSongPayload = async (payload: FocusSongPayload, _attemptNo: number) => {
-    if (payload.pane && payload.pane !== pane) return false
+    if (payload.pane && payload.pane !== toValue(pane)) return false
     const targetPath = normalizeSongPath(payload?.filePath)
     const targetListUUID = String(payload?.songListUUID || '')
     if (!targetPath) return false
@@ -194,7 +203,7 @@ export function useGlobalSearchFocus(params: UseGlobalSearchFocusParams) {
 
   const handleFocusSongRequest = (payload?: FocusSongPayload) => {
     if (!payload) return
-    if (payload.pane && payload.pane !== pane) return
+    if (payload.pane && payload.pane !== toValue(pane)) return
     focusAttemptSeq = 0
     focusHasHit = false
     focusAutoPlayed = false

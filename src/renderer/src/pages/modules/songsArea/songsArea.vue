@@ -49,7 +49,6 @@ import { useKeyboardSelection } from '@renderer/pages/modules/songsArea/composab
 import { useAutoScrollToCurrent } from '@renderer/pages/modules/songsArea/composables/useAutoScrollToCurrent'
 import { useParentRafSampler } from '@renderer/pages/modules/songsArea/composables/useParentRafSampler'
 import { useSongsAreaEvents } from '@renderer/pages/modules/songsArea/composables/useSongsAreaEvents'
-import { useWaveformPreviewPlayer } from '@renderer/pages/modules/songsArea/composables/useWaveformPreviewPlayer'
 import { useGlobalSearchFocus } from '@renderer/pages/modules/songsArea/composables/useGlobalSearchFocus'
 import { useSongLocateFlash } from '@renderer/pages/modules/songsArea/composables/useSongLocateFlash'
 import { useSongsAreaDragAndDrop } from '@renderer/pages/modules/songsArea/composables/useSongsAreaDragAndDrop'
@@ -70,15 +69,7 @@ type OverlayScrollbarsComponentRef = InstanceType<typeof OverlayScrollbarsCompon
 const ascendingOrder = ascendingOrderAsset
 const descendingOrder = descendingOrderAsset
 
-const props = withDefaults(
-  defineProps<{
-    pane: SongsAreaPaneKey
-    enablePreviewPlayer?: boolean
-  }>(),
-  {
-    enablePreviewPlayer: false
-  }
-)
+const props = defineProps<{ pane: SongsAreaPaneKey }>()
 
 const runtime = useRuntimeStore()
 const songsAreaState = runtime.songsAreaPanels.panes[props.pane]
@@ -486,9 +477,6 @@ useSongsAreaEvents({
   activeWaveformPreviewFilePath: activePreviewFilePath,
   onUserOpenedSongList: handleUserOpenedSongList
 })
-if (props.enablePreviewPlayer) {
-  useWaveformPreviewPlayer()
-}
 emitter.on('songsArea/clipboardHint', handleClipboardHint)
 const handleWaveformPreviewState = (payload?: WaveformPreviewStatePayload) => {
   if (
@@ -758,7 +746,7 @@ const {
 
 const { focusSong } = useGlobalSearchFocus({
   runtime,
-  pane: props.pane,
+  pane: () => props.pane,
   songsAreaState,
   originalSongInfoArr,
   columnData,

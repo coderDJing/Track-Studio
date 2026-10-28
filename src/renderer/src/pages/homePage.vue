@@ -3,11 +3,14 @@ import librarySelectArea from './modules/librarySelectArea.vue'
 import libraryArea from './modules/libraryArea.vue'
 import pioneerDeviceLibraryArea from './modules/pioneerDeviceLibraryArea.vue'
 import songsArea from './modules/songsArea/songsArea.vue'
+import SongsAreaPreviewHost from './homePage/SongsAreaPreviewHost'
+import { useSongsAreaPaneViews } from './homePage/useSongsAreaPaneViews'
 import pioneerSongsArea from './modules/pioneerSongsArea.vue'
 import {
   type ISongsAreaPaneRuntimeState,
   type LibrarySelection,
   type SplitSongsAreaPaneKey,
+  type SongsAreaPaneKey,
   useRuntimeStore
 } from '@renderer/stores/runtime'
 import { onMounted, onUnmounted, ref, computed, watch } from 'vue'
@@ -164,7 +167,6 @@ onUnmounted(() => {
 
 let librarySelected = ref('FilterLibrary')
 type CoreLibraryName = 'FilterLibrary' | 'CuratedLibrary' | 'SetLibrary' | 'MixtapeLibrary'
-const splitPaneKeys: SplitSongsAreaPaneKey[] = ['left', 'right']
 const normalizeLibraryPath = (value: string) => (value || '').replace(/\\/g, '/')
 const isCoreLibraryName = (value: string): value is CoreLibraryName =>
   ['FilterLibrary', 'CuratedLibrary', 'SetLibrary', 'MixtapeLibrary'].includes(value)
@@ -385,6 +387,7 @@ const showMainSongPlayer = computed(
 const isSongsAreaSplit = computed(
   () => runtime.songsAreaPanels.splitEnabled && !isPioneerDeviceLibraryView.value
 )
+const visiblePaneViews = useSongsAreaPaneViews(runtime.songsAreaPanels.panes, isSongsAreaSplit)
 const showEmptyRecycleBinButton = computed(
   () =>
     isRecycleBinView.value &&
@@ -438,9 +441,8 @@ watch(
     singlePaneHeaderRevealPending.value = false
   }
 )
-const isSplitPaneActive = (pane: SplitSongsAreaPaneKey) =>
-  runtime.songsAreaPanels.activePane === pane
-const handleSplitPaneMouseDown = (pane: SplitSongsAreaPaneKey) => {
+const isSplitPaneActive = (pane: SongsAreaPaneKey) => runtime.songsAreaPanels.activePane === pane
+const handleSplitPaneMouseDown = (pane: SongsAreaPaneKey) => {
   // 激活歌曲操作的目标面板，不联动左侧正在浏览的库。
   activateSongsAreaPane(runtime, pane)
 }
@@ -760,34 +762,41 @@ const drop = async (e: DragEvent) => {
             style="width: 100%; height: 100%; min-width: 0"
           />
           <div
-            v-else-if="isSongsAreaSplit"
+            v-else
             ref="splitSongsAreaRef"
-            class="splitSongsArea"
-            :style="splitSongsAreaStyle"
+            :class="isSongsAreaSplit ? 'splitSongsArea' : 'singleSongsAreaShell'"
+            :style="isSongsAreaSplit ? splitSongsAreaStyle : undefined"
           >
+            <SongsAreaPreviewHost />
             <div
-              v-for="pane in splitPaneKeys"
-              :key="pane"
-              class="splitSongsAreaPane"
-              :class="[`splitSongsAreaPane--${pane}`, { 'is-active': isSplitPaneActive(pane) }]"
+              v-for="{ pane, viewId } in visiblePaneViews"
+              :key="viewId"
+              :class="
+                isSongsAreaSplit
+                  ? [
+                      'splitSongsAreaPane',
+                      `splitSongsAreaPane--${pane}`,
+                      { 'is-active': isSplitPaneActive(pane) }
+                    ]
+                  : 'singleSongsAreaShell'
+              "
+              :style="!isSongsAreaSplit ? { flex: 1, minHeight: 0 } : undefined"
               @mousedown.capture="handleSplitPaneMouseDown(pane)"
             >
               <SongsAreaPaneHeader
+                v-if="isSongsAreaSplit || showSingleSongsAreaHeader"
                 :pane="pane"
                 v-model:search-query="runtime.songsAreaPanels.panes[pane].searchQuery"
                 v-model:compatible-key-only="runtime.songsAreaPanels.panes[pane].compatibleKeyOnly"
                 :title="resolveSongsPaneTitle(pane)"
                 :show-empty-recycle-bin-button="showEmptyRecycleBinButton"
                 @empty-recycle-bin="emptyRecycleBinWithOptimisticUpdate(runtime)"
-                @close="handleSplitPaneClose(pane)"
+                @close="pane === 'single' ? handleSinglePaneClose() : handleSplitPaneClose(pane)"
               />
-              <songsArea
-                :pane="pane"
-                :enable-preview-player="pane === 'left'"
-                style="flex: 1; min-width: 0; min-height: 0"
-              />
+              <songsArea :pane="pane" style="flex: 1; min-width: 0; min-height: 0" />
             </div>
             <div
+              v-if="isSongsAreaSplit"
               class="splitSongsAreaDivider"
               :class="{
                 'is-hovered': splitDividerHovered,
@@ -799,23 +808,6 @@ const drop = async (e: DragEvent) => {
               @mouseenter="splitDividerHovered = true"
               @mouseleave="splitDividerHovered = isSongsAreaSplitDividerResizing"
             ></div>
-          </div>
-          <div v-else class="singleSongsAreaShell">
-            <SongsAreaPaneHeader
-              v-if="showSingleSongsAreaHeader"
-              pane="single"
-              v-model:search-query="runtime.songsAreaPanels.panes.single.searchQuery"
-              v-model:compatible-key-only="runtime.songsAreaPanels.panes.single.compatibleKeyOnly"
-              :title="resolveSongsPaneTitle('single')"
-              :show-empty-recycle-bin-button="showEmptyRecycleBinButton"
-              @empty-recycle-bin="emptyRecycleBinWithOptimisticUpdate(runtime)"
-              @close="handleSinglePaneClose"
-            />
-            <songsArea
-              pane="single"
-              :enable-preview-player="true"
-              style="flex: 1; min-width: 0; min-height: 0"
-            />
           </div>
         </div>
       </div>
