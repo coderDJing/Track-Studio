@@ -44,6 +44,10 @@ const scrollbarOptions = {
   scrollbars: { autoHide: 'leave' as const, autoHideDelay: 50, clickScroll: true },
   overflow: { x: 'hidden', y: 'scroll' } as const
 }
+const tableScrollbarOptions = {
+  ...scrollbarOptions,
+  overflow: { x: 'scroll', y: 'scroll' } as const
+}
 const busy = computed(
   () => snapshot.value?.status === 'analyzing' || snapshot.value?.status === 'repairing'
 )
@@ -142,21 +146,22 @@ onUnmounted(() => {
         element="div"
       >
         <div class="bpm-body">
-          <p class="hint">{{ t('bpmFix.intro') }}</p>
-          <div class="task-status" role="status">
-            <strong>{{ t(`bpmFix.${snapshot.stage}`) }}</strong>
-            <span v-if="busy"
-              >{{ snapshot.current }} / {{ snapshot.tracks.length }} ·
-              {{
-                t('bpmFix.currentProgress', { percent: Math.floor(snapshot.currentPercent || 0) })
-              }}</span
-            >
-            <span v-else>{{
-              t('bpmFix.counts', { complete, failed, total: snapshot.tracks.length })
-            }}</span>
-          </div>
-          <div v-if="busy" class="bpm-progress">
-            <div :style="{ width: `${snapshot.percent}%` }" />
+          <div class="task-card">
+            <div class="task-status" role="status">
+              <strong>{{ t(`bpmFix.${snapshot.stage}`) }}</strong>
+              <span v-if="busy"
+                >{{ snapshot.current }} / {{ snapshot.tracks.length }} ·
+                {{
+                  t('bpmFix.currentProgress', { percent: Math.floor(snapshot.currentPercent || 0) })
+                }}</span
+              >
+              <span v-else>{{
+                t('bpmFix.counts', { complete, failed, total: snapshot.tracks.length })
+              }}</span>
+            </div>
+            <div v-if="busy" class="bpm-progress">
+              <div :style="{ width: `${snapshot.percent}%` }" />
+            </div>
           </div>
           <div v-if="editable" class="batch-tools">
             <button class="button" @click="selectReliable(true)">
@@ -165,27 +170,37 @@ onUnmounted(() => {
             <button class="button" @click="selectReliable(false)">
               {{ t('bpmFix.selectNone') }}
             </button>
-            <BaseSelect
-              v-model="applyFactor"
-              :options="tempoOptions"
-              :width="72"
-              :aria-label="t('bpmFix.interpretation')"
-            />
-            <input
-              v-model="applyTarget"
-              type="number"
-              min="30"
-              max="300"
-              step="0.01"
-              :placeholder="t('bpmFix.auto')"
-              :aria-label="t('bpmFix.target')"
-            />
+            <div class="batch-field">
+              <span>{{ t('bpmFix.interpretation') }}</span>
+              <BaseSelect
+                v-model="applyFactor"
+                :options="tempoOptions"
+                :width="72"
+                :aria-label="t('bpmFix.interpretation')"
+              />
+            </div>
+            <label class="batch-field">
+              <span>{{ t('bpmFix.target') }}</span>
+              <input
+                v-model="applyTarget"
+                type="number"
+                min="30"
+                max="300"
+                step="0.01"
+                :placeholder="t('bpmFix.auto')"
+                :aria-label="t('bpmFix.target')"
+              />
+            </label>
             <button class="button" @click="applyToSelection">
               {{ t('bpmFix.applySelection') }}
             </button>
             <span class="selection-count">{{ t('bpmFix.selected', { count: selected }) }}</span>
           </div>
-          <OverlayScrollbarsComponent class="track-table" :options="scrollbarOptions" element="div">
+          <OverlayScrollbarsComponent
+            class="track-table"
+            :options="tableScrollbarOptions"
+            element="div"
+          >
             <table>
               <thead>
                 <tr>
@@ -239,7 +254,7 @@ onUnmounted(() => {
                       v-if="draft.tracks[track.id]"
                       v-model="draft.tracks[track.id].tempoFactor"
                       :options="tempoOptions"
-                      :width="66"
+                      :width="76"
                       :disabled="!editable || track.status !== 'ready'"
                       :aria-label="t('bpmFix.interpretation')"
                     />
@@ -285,7 +300,6 @@ onUnmounted(() => {
                   >{{ t('bpmFix.drift') }} <b>{{ number(focused.analysis.driftMs, 1) }} ms</b></span
                 >
               </div>
-              <p class="hint">{{ t('bpmFix.confidenceHint') }}</p>
               <p v-if="focused.analysis.tempoAmbiguous" class="warning">
                 {{ t('bpmFix.ambiguityHint') }}
               </p>
@@ -350,8 +364,8 @@ onUnmounted(() => {
               />
             </div>
           </div>
-          <p class="hint">
-            {{ draft.saveMode === 'overwrite' ? t('bpmFix.overwriteHint') : t('bpmFix.copyHint') }}
+          <p v-if="draft.saveMode === 'overwrite' || draft.format === 'original'" class="hint">
+            {{ draft.saveMode === 'overwrite' ? t('bpmFix.overwriteHint') : '' }}
             {{ draft.format === 'original' ? t('bpmFix.lossyHint') : '' }}
           </p>
           <p v-if="error || snapshot.error" class="error" role="alert">
@@ -386,8 +400,8 @@ onUnmounted(() => {
 .bpm-fix-dialog {
   --bpm-fix-warning: #dba143;
   --bpm-fix-error: #ef8585;
-  width: min(1060px, 95vw);
-  max-height: 92vh;
+  width: min(1060px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
   display: flex;
   flex-direction: column;
   color: var(--text);
@@ -402,7 +416,7 @@ onUnmounted(() => {
   min-height: 0;
 }
 .bpm-body {
-  padding: 16px 20px;
+  padding: 16px 20px 12px;
   font-size: 13px;
 }
 .hint {
@@ -410,7 +424,6 @@ onUnmounted(() => {
   font-size: 12px;
   line-height: 1.6;
 }
-.task-status,
 .batch-tools,
 .save-options {
   display: flex;
@@ -419,8 +432,21 @@ onUnmounted(() => {
   margin: 12px 0;
   flex-wrap: wrap;
 }
+.task-card {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--waveform-bg-elev);
+}
 .task-status {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  color: var(--text-secondary);
+}
+.task-status strong {
+  color: var(--text);
 }
 .selection-count {
   margin-left: auto;
@@ -431,6 +457,7 @@ onUnmounted(() => {
 }
 .bpm-progress {
   height: 5px;
+  margin-top: 8px;
   background: var(--bg-elev);
   border-radius: 4px;
   overflow: hidden;
@@ -444,17 +471,18 @@ onUnmounted(() => {
   max-height: 290px;
   overflow: auto;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: 8px;
 }
 table {
   width: 100%;
+  min-width: 780px;
   border-collapse: collapse;
   table-layout: fixed;
 }
 th {
   position: sticky;
   top: 0;
-  background: var(--bg-elev);
+  background: var(--bg);
   z-index: 1;
   text-align: left;
   color: var(--text-secondary);
@@ -471,11 +499,15 @@ th:nth-child(2) {
   width: 28%;
 }
 th:nth-child(5) {
-  width: 66px;
+  width: 76px;
 }
 th:nth-child(6) {
   width: 88px;
 }
+tbody tr {
+  cursor: pointer;
+}
+tbody tr:hover,
 tr.focused {
   background: var(--hover);
 }
@@ -486,14 +518,33 @@ tr.focused {
   white-space: nowrap;
 }
 input[type='number'] {
+  box-sizing: border-box;
   width: 76px;
-}
-input[type='number'] {
-  background: var(--bg);
+  height: 28px;
+  background: var(--bg-elev);
   color: var(--text);
   border: 1px solid var(--border);
-  padding: 5px 7px;
-  border-radius: 4px;
+  padding: 0 7px;
+  border-radius: 5px;
+  font: inherit;
+}
+.batch-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+input[type='number']:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 button {
   cursor: pointer;
@@ -527,8 +578,8 @@ button.link {
   margin: 14px 0;
   padding: 12px;
   border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--bg-elev);
+  border-radius: 8px;
+  background: var(--waveform-bg-elev);
 }
 .metrics {
   display: flex;
@@ -546,6 +597,14 @@ button.link {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+@media (max-width: 560px) {
+  .bpm-body {
+    padding: 14px 12px 10px;
+  }
+  .selection-count {
+    margin-left: 0;
+  }
 }
 .bpm-footer .button {
   min-width: 90px;
