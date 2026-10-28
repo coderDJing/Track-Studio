@@ -47,6 +47,8 @@ extraResources:
     to: demucs/bootstrap
     filter:
       - bpm_fix.py
+      - bpm_fix_detection.py
+      - bpm_fix_transients.py
       - bpm_fix_grid.py
       - bpm_fix_crosscheck.py
       - bpm_fix_rubberband.py

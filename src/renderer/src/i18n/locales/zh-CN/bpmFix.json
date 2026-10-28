@@ -53,6 +53,7 @@
     "invalidOptions": "请检查目标 BPM（30–300），并逐首确认低置信度歌曲。",
     "result": "原 BPM {source} → 目标 BPM {target}",
     "verified": "输出 BPM {bpm}",
+    "localBeatWarning": "整体节拍检查已通过，有 {count} 个检测拍点的局部偏差较大，建议试听确认。",
     "stretchWarning": "有 {count} 段变速幅度较大，建议试听确认音质。",
     "peakAdjusted": "已降低整体音量，防止峰值削波。",
     "busy": "已有 BPM 漂移修复任务，请在底部恢复它或等待任务完成。",

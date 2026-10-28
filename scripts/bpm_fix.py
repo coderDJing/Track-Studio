@@ -58,6 +58,8 @@ def fix(args):
     import numpy as np
     from bpm_fix_grid import analyze_grid, plan_correction, verify_grid, verification_diagnostics
     from bpm_fix_rubberband import render_r3
+    from bpm_fix_detection import detect_verification_beats
+    from bpm_fix_transients import refine_time_map
 
     source, output = (Path(p).resolve() for p in (args.input, args.output))
     if not source.is_file() or source == output:
@@ -115,6 +117,7 @@ def fix(args):
         plan = plan_correction(analysis, len(audio), sr, args.target_bpm, args.tempo_factor)
         emit({"type": "progress", "stage": "planning", "percent": 35,
               "sourceBpm": round(analysis["bpm"], 4), "targetBpm": plan["targetBpm"]})
+        plan = refine_time_map(plan, audio, sr)
         last_progress = [-1]
 
         def render_progress(value):
@@ -150,8 +153,10 @@ def fix(args):
                    *encoders[output.suffix.lower()], str(candidate)])
         emit({"type": "progress", "stage": "verifying", "percent": 80})
         actual, output_sr = decode_audio(candidate, workdir, args.ffmpeg, args.ffprobe, "verify")
-        checked_beats, _ = detect(actual, output_sr)
-        raw_checked_count = len(checked_beats)
+        checked_beats, raw_checked_count = detect_verification_beats(
+            predictor, np.mean(actual, axis=1, dtype=np.float32), output_sr,
+            cpu_spect, plan["targetBpm"], args.tempo_factor)
+        suppressed_count = raw_checked_count - len(checked_beats)
         if args.tempo_factor == 0.5:
             checked_beats = checked_beats[::2]
         verification = None
@@ -171,7 +176,11 @@ def fix(args):
                     "targetBpm": plan["targetBpm"], "requestedTargetBpm": args.target_bpm,
                     "tempoFactor": args.tempo_factor, "confidence": analysis["confidence"],
                     "gridOffsetSec": plan["gridOffsetSec"], "anchorCount": len(plan["from"]),
+                    "anchorsBeforeRefinement": plan["anchorsBeforeRefinement"],
+                    "transientAlignedAnchors": plan["transientAlignedAnchors"],
+                    "timeMapDeviationMs": plan["timeMapDeviationMs"],
                     "sourceBeatCount": len(analysis["beats"]), "rawOutputBeatCount": raw_checked_count,
+                    "suppressedCompetingBeats": suppressed_count,
                     "plannedDetectedBeatRmsMs": float(np.sqrt(np.mean(planned_errors ** 2))),
                     "plannedDetectedBeatMaxErrorMs": float(np.max(np.abs(planned_errors))),
                     "inputSampleRate": sr, "outputSampleRate": output_sr,

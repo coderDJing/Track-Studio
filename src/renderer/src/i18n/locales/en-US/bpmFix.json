@@ -53,6 +53,7 @@
     "invalidOptions": "Check target BPM (30–300) and confirm each low-confidence song.",
     "result": "Source BPM {source} → target BPM {target}",
     "verified": "Output BPM {bpm}",
+    "localBeatWarning": "Overall beat checks passed, but {count} detected beats have larger local timing deviations. Listen to confirm the result.",
     "stretchWarning": "{count} segments require substantial stretching. Listen to confirm audio quality.",
     "peakAdjusted": "Overall gain was reduced to avoid clipping.",
     "busy": "A BPM drift repair session already exists. Restore it from the task bar.",

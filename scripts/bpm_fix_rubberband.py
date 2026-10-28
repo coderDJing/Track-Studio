@@ -42,7 +42,10 @@ def render_r3(samples, sr, plan, library_path, progress=None):
         try:
             if version(state) != 3:
                 raise RuntimeError("BPM_FIX_R3_REQUIRED")
-            block = 8192
+            # R3 updates key-frame ratios once per process() call. 8192 frames
+            # delays a map change by up to 186 ms at 44.1 kHz. Bound calls to
+            # one standard 512-frame DSP block and at most 10 ms at any rate.
+            block = max(1, min(512, sr // 100))
             set_block(state, block)
             set_duration(state, frames)
             # Endpoints are expressed by the duration/ratio. Passing the final

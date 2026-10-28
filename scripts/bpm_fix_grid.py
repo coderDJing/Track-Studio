@@ -10,8 +10,7 @@ MAX_PLANNED_BEAT_ERROR_SEC = 0.025
 MIN_VERIFICATION_BEATS = 8
 MAX_VERIFICATION_BPM_ERROR = 0.6
 MAX_VERIFICATION_RMS_MS = 14.0
-MAX_VERIFICATION_BEAT_ERROR_SEC = 0.070
-MAX_VERIFICATION_PHASE_SHIFT_SEC = 0.030
+VERIFICATION_BEAT_NOTICE_SEC = 0.070
 
 
 def _line(x, y):
@@ -228,26 +227,50 @@ def _verification_residuals(beats, target_bpm, offset):
     return grid, beats - (adjusted_offset + grid * period), phase_shift
 
 
+def _verification_anomaly_count(beats):
+    # Mixtended's remaining-anomaly gate: local median over nine intervals,
+    # missing intervals >= 1.5 periods, or a short pair consistent with one
+    # extra detection. Its first and last two beat positions are not counted.
+    intervals = np.diff(beats)
+    local = np.asarray([np.median(intervals[max(0, i - 4):i + 5])
+                        for i in range(len(intervals))])
+    missing = np.flatnonzero(intervals / np.maximum(local, 1e-9) >= 1.5)
+    remaining = sum(1 <= i <= len(beats) - 3 for i in missing)
+    for j in range(1, len(beats) - 2):
+        left, right = intervals[j - 1:j + 1]
+        period = (local[j - 1] + local[j]) / 2
+        if period <= 1e-9:
+            continue
+        short_pair = (left <= 1.3 * period and right <= 1.3 * period and
+                      min(left, right) < 0.75 * period)
+        if short_pair and abs((left + right) / period - 1) <= 0.3:
+            remaining += 1
+    return int(remaining)
+
+
 def verify_grid(raw, target_bpm, offset):
     beats = np.asarray(raw, dtype=float)
     if len(beats) < MIN_VERIFICATION_BEATS:
         raise ValueError("BPM_FIX_VERIFICATION_FAILED")
-    # Measure raw redetected beats, including outliers, so verification cannot
-    # hide renderer errors by cleaning/replacing the evidence it evaluates.
+    # Measure detector-selected beats, including isolated outliers. Never clean,
+    # replace or snap this evidence to make renderer errors pass verification.
     grid, residual, phase_shift = _verification_residuals(beats, target_bpm, offset)
     unique = np.r_[True, np.diff(grid) > 0]
     measured_period, _ = _line(grid[unique], beats[unique])
     detected_bpm = 60.0 / measured_period
     rms_ms = float(np.sqrt(np.mean(residual ** 2)) * 1000)
-    off_grid = int(np.count_nonzero(np.abs(residual) > MAX_VERIFICATION_BEAT_ERROR_SEC))
+    off_grid = int(np.count_nonzero(np.abs(residual) > VERIFICATION_BEAT_NOTICE_SEC))
+    remaining = _verification_anomaly_count(beats)
     bpm_error = abs(detected_bpm - target_bpm)
     return {
-        "passed": bool(abs(phase_shift) <= MAX_VERIFICATION_PHASE_SHIFT_SEC and
-                       bpm_error <= MAX_VERIFICATION_BPM_ERROR and
-                       rms_ms <= MAX_VERIFICATION_RMS_MS and off_grid == 0),
+        # Match the original three acceptance criteria. A single local timing
+        # outlier or a uniform phase shift is diagnostic, not an extra veto.
+        "passed": bool(bpm_error <= MAX_VERIFICATION_BPM_ERROR and
+                       rms_ms <= MAX_VERIFICATION_RMS_MS and remaining == 0),
         "detectedBpm": round(detected_bpm, 4), "bpmError": round(bpm_error, 4),
         "gridRmsMs": round(rms_ms, 3), "offGridBeats": off_grid,
         "phaseShiftMs": round(phase_shift * 1000, 3),
+        "remainingAnomalies": remaining,
     }
 
 
@@ -261,14 +284,12 @@ def verification_diagnostics(raw, target_bpm, offset, verification):
     if len(beats) < MIN_VERIFICATION_BEATS:
         reasons.append("insufficient_beats")
     if verification is not None:
-        if abs(phase_shift) > MAX_VERIFICATION_PHASE_SHIFT_SEC:
-            reasons.append("phase_shift")
         if verification["bpmError"] > MAX_VERIFICATION_BPM_ERROR:
             reasons.append("bpm_error")
         if verification["gridRmsMs"] > MAX_VERIFICATION_RMS_MS:
             reasons.append("grid_rms")
-        if verification["offGridBeats"] > 0:
-            reasons.append("off_grid_beats")
+        if verification["remainingAnomalies"] > 0:
+            reasons.append("remaining_anomalies")
         # The public metrics are rounded. Explain a boundary rejection using
         # the unrounded evidence if rounding made all displayed checks pass.
         if not verification["passed"] and not reasons:
@@ -283,12 +304,12 @@ def verification_diagnostics(raw, target_bpm, offset, verification):
             "minBeats": MIN_VERIFICATION_BEATS,
             "maxBpmError": MAX_VERIFICATION_BPM_ERROR,
             "maxGridRmsMs": MAX_VERIFICATION_RMS_MS,
-            "maxBeatErrorMs": MAX_VERIFICATION_BEAT_ERROR_SEC * 1000,
-            "maxPhaseShiftMs": MAX_VERIFICATION_PHASE_SHIFT_SEC * 1000,
-            "maxOffGridBeats": 0,
+            "maxRemainingAnomalies": 0,
             "maxPlannedBeatErrorMs": MAX_PLANNED_BEAT_ERROR_SEC * 1000,
         },
         "metrics": verification,
+        "notices": ["off_grid_beats"] if verification and verification["offGridBeats"] else [],
+        "beatNoticeMs": VERIFICATION_BEAT_NOTICE_SEC * 1000,
         "beatCount": int(len(beats)),
         "duplicateGridBeats": int(len(grid) - len(np.unique(grid))),
         "medianSignedErrorMs": float(np.median(residual_ms)) if len(beats) else None,

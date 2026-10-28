@@ -315,6 +315,13 @@ onUnmounted(() => {
                   })
                 }}
               </p>
+              <p v-if="focused.summary.verification.offGridBeats" class="warning">
+                {{
+                  t('bpmFix.localBeatWarning', {
+                    count: focused.summary.verification.offGridBeats
+                  })
+                }}
+              </p>
               <p v-if="focused.summary.noticeableSegments" class="warning">
                 {{ t('bpmFix.stretchWarning', { count: focused.summary.noticeableSegments }) }}
               </p>
