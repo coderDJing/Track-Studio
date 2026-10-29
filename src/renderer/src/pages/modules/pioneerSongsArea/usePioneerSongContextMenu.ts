@@ -43,7 +43,8 @@ type UsePioneerSongContextMenuParams = {
 
 const buildPioneerSongMenuGroups = (
   canRemoveTracksFromDesktopPlaylist: boolean,
-  canEditUsbPlaylist: boolean
+  canEditUsbPlaylist: boolean,
+  showCalculateSetDuration: boolean
 ): IMenu[][] => {
   const groups: IMenu[][] = []
   if (canEditUsbPlaylist) {
@@ -70,6 +71,9 @@ const buildPioneerSongMenuGroups = (
   groups.push([{ menuName: 'fingerprints.analyzeAndAdd' }])
   groups.push([{ menuName: 'tracks.clearTrackCache' }])
   groups.push([{ menuName: 'stemSeparation.menu' }])
+  if (showCalculateSetDuration) {
+    groups.push([{ menuName: 'playlist.calculateSetDuration' }])
+  }
   return groups
 }
 
@@ -93,11 +97,13 @@ export const usePioneerSongContextMenu = (params: UsePioneerSongContextMenuParam
     const menuSourceKey = params.selectedSourceCacheKey.value
     const menuPlaylistKey = params.currentPlaybackListKey.value
     const usbMenu = params.canEditUsbPlaylist.value
+    const selectedTracksForSetDuration = params.resolveSelectedTracks(song)
 
     const result = await rightClickMenu({
       menuArr: buildPioneerSongMenuGroups(
         params.canRemoveTracksFromDesktopPlaylist.value,
-        params.canEditUsbPlaylist.value
+        params.canEditUsbPlaylist.value,
+        selectedTracksForSetDuration.length > 1
       ),
       clickEvent: event
     })
@@ -108,6 +114,13 @@ export const usePioneerSongContextMenu = (params: UsePioneerSongContextMenuParam
         menuPlaylistKey !== params.currentPlaybackListKey.value)
     )
       return
+
+    if (result.menuName === 'playlist.calculateSetDuration') {
+      const { default: openSetDurationDialog } =
+        await import('@renderer/components/setDurationDialog')
+      await openSetDurationDialog(selectedTracksForSetDuration)
+      return
+    }
 
     const musicSearchAction = resolveMusicSearchMenuAction(result.menuName, song)
     if (musicSearchAction) {

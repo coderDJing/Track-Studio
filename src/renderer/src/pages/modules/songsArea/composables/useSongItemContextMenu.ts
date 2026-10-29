@@ -246,10 +246,14 @@ export function useSongItemContextMenu(
         : isSetView()
           ? createSetMenuArr(songsAreaState.songListUUID)
           : createDefaultMenuArr(songsAreaState.songListUUID)
+    const selectedSongsForSetDuration = resolveSelectedSongs()
     const menuWithSourceLabel = isRecordingLibraryView
       ? withoutRecordingAnalysisMenus(baseMenuArr)
       : baseMenuArr
     menuArr.value = buildSongItemMenuArr(menuWithSourceLabel, matchedCuratedArtists)
+    if (selectedSongsForSetDuration.length > 1) {
+      menuArr.value.push([{ menuName: 'playlist.calculateSetDuration' }])
+    }
     if (isExternalView)
       menuArr.value = menuArr.value
         .map((group) => group.filter((item) => item.menuName !== 'bpmFix.menu'))
@@ -260,6 +264,13 @@ export function useSongItemContextMenu(
     })
 
     if (result === 'cancel') return null
+
+    if (result.menuName === 'playlist.calculateSetDuration') {
+      const { default: openSetDurationDialog } =
+        await import('@renderer/components/setDurationDialog')
+      await openSetDurationDialog(selectedSongsForSetDuration)
+      return null
+    }
 
     const musicSearchAction = resolveMusicSearchMenuAction(result.menuName, song)
     if (musicSearchAction) {

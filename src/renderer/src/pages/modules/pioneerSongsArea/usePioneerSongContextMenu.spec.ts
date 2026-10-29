@@ -3,14 +3,16 @@ import { computed, ref } from 'vue'
 import { usePioneerSongContextMenu } from './usePioneerSongContextMenu'
 import type { ISongInfo } from '../../../../../types/globals'
 
-const { menu, openEditor, resolveSelection } = vi.hoisted(() => ({
+const { menu, openEditor, openSetDuration, resolveSelection } = vi.hoisted(() => ({
   menu: vi.fn(),
   openEditor: vi.fn(),
+  openSetDuration: vi.fn(),
   resolveSelection: vi.fn()
 }))
 vi.mock('@renderer/components/rightClickMenu', () => ({ default: menu }))
 vi.mock('@renderer/components/exportDialog', () => ({ default: vi.fn() }))
 vi.mock('@renderer/components/confirmDialog', () => ({ default: vi.fn() }))
+vi.mock('@renderer/components/setDurationDialog', () => ({ default: openSetDuration }))
 vi.mock('@renderer/utils/fingerprintActions', () => ({ analyzeFingerprintsForPaths: vi.fn() }))
 vi.mock('@renderer/utils/rekordboxDesktopPlaylist', () => ({
   openRekordboxDesktopPlaylistForSelectedTracks: vi.fn()
@@ -58,6 +60,22 @@ beforeEach(() => {
 })
 
 describe('USB song context menu keeps its originating library and playlist', () => {
+  it('calculates SET duration for a multi-track selection', async () => {
+    const state = fixture()
+    const secondSong = { filePath: 'D:\\Contents\\8.mp3', mixtapeItemId: 'usb:11:8' } as ISongInfo
+    resolveSelection.mockReturnValue([song, secondSong])
+    menu.mockResolvedValue({ menuName: 'playlist.calculateSetDuration' })
+
+    await state.handleSongContextMenu({} as MouseEvent, song)
+
+    expect(menu).toHaveBeenCalledWith(
+      expect.objectContaining({
+        menuArr: expect.arrayContaining([[{ menuName: 'playlist.calculateSetDuration' }]])
+      })
+    )
+    expect(openSetDuration).toHaveBeenCalledExactlyOnceWith([song, secondSong])
+  })
+
   it('deletes selected tracks using the existing delete menu', async () => {
     const state = fixture()
     menu.mockResolvedValue({ menuName: 'common.delete' })
@@ -74,7 +92,7 @@ describe('USB song context menu keeps its originating library and playlist', () 
         return { menuName: 'common.delete' }
       })
       await state.handleSongContextMenu({} as MouseEvent, song)
-      expect(resolveSelection).not.toHaveBeenCalled()
+      expect(resolveSelection).toHaveBeenCalledExactlyOnceWith(song)
       expect(openEditor).not.toHaveBeenCalled()
     }
   )
