@@ -43,6 +43,7 @@ import {
   uniqueFilePaths
 } from './libraryContextMenuHelpers'
 import { handleRekordboxXmlPlaylistExport } from './handleRekordboxXmlPlaylistExport'
+import { exportSetPackageForPlaylist, importSetPackageIntoLibrary } from './setPackageTransfer'
 import type { IDir, IMenu, IMetadataAutoFillSummary } from '../../../../types/globals'
 import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 
@@ -543,6 +544,18 @@ export function useLibraryContextMenu({
             }
           }
         }
+        break
+      }
+      case 'library.exportSetPackage': {
+        await exportSetPackageForPlaylist(runtime, props.uuid)
+        break
+      }
+      case 'library.importSetPackage': {
+        const currentDirData = getDirData()
+        if (!currentDirData) break
+        dirChildRendered.value = true
+        dirChildShow.value = true
+        await importSetPackageIntoLibrary(runtime, currentDirData)
         break
       }
       case 'rekordboxXmlExport.menuExportPlaylist': {

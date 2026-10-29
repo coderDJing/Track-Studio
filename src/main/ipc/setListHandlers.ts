@@ -10,7 +10,14 @@ import { notifyCuratedFilePathChanged } from '../curatedLibrarySync/identityDb'
 import { getCuratedLibraryAbsRoot, isPathInside } from '../curatedLibrarySync/paths'
 import { notifyLibraryFsChanged } from '../libraryTreeWatcher'
 import { loadLibraryNodes, type LibraryNodeRow } from '../libraryTreeDb'
-import { scanSongList } from '../services/scanSongs'
+import { discardStaleAnalysisFields, scanSongList } from '../services/scanSongs'
+import { runWithConcurrency } from '../utils'
+import {
+  combineCurrentSetSongCache,
+  loadSetSongCacheCandidates,
+  pickCurrentSetSongCache,
+  setSongCacheLookupKey
+} from '../services/setListCachedSongScan'
 import { findSongListRoot, transferTrackCaches } from '../services/cacheMaintenance'
 import { moveFileToRecycleBin } from '../recycleBinService'
 import * as LibraryCacheDb from '../libraryCacheDb'
@@ -336,6 +343,31 @@ async function enrichSetSongFromSourceAnalysis(
     : mergeSetAnalysisFields(next, parseSetItemAnalysisJson(item.analysisJson))
 }
 
+function resolveSetItemAbsPath(filePath: string): string {
+  return path.isAbsolute(filePath)
+    ? filePath
+    : path.join(store.databaseDir || '', 'library', filePath)
+}
+
+function toCachedSetSong(info: ISongInfo, filePath: string, waveformRoot: string): ISongInfo {
+  const fileName = typeof info.fileName === 'string' ? info.fileName.trim() : ''
+  const fileFormat = typeof info.fileFormat === 'string' ? info.fileFormat.trim() : ''
+  const container = typeof info.container === 'string' ? info.container.trim() : ''
+  const next: ISongInfo = {
+    ...info,
+    filePath,
+    fileName: fileName ? info.fileName : path.basename(filePath),
+    fileFormat: (fileFormat || path.extname(filePath).slice(1) || container).toUpperCase(),
+    waveformPreviewListRoot: waveformRoot || undefined
+  }
+  delete next.setItemId
+  delete next.playlistTrackNumber
+  delete next.addedAtMs
+  delete next.fileMissing
+  if (!waveformRoot) delete next.waveformPreviewListRoot
+  return discardStaleAnalysisFields(next)
+}
+
 function getSetLibraryDirAbs(): string {
   const dbRoot = store.databaseDir
   const setDirName = getCoreFsDirName('SetLibrary')
@@ -349,7 +381,19 @@ function getSetCustodyDirAbs(): string {
 function isSetCustodyFilePath(filePath: string): boolean {
   const fileKey = normalizeSetFilePathKey(path.resolve(filePath || ''))
   const custodyKey = normalizeSetFilePathKey(path.resolve(getSetCustodyDirAbs()))
-  return fileKey === custodyKey || fileKey.startsWith(`${custodyKey}${path.sep}`)
+  return fileKey === custodyKey || fileKey.startsWith(`${custodyKey}/`)
+}
+
+// 导入 SET 包时每个包有自己的子目录；文件回收后把空掉的子目录一并清掉，托管根目录保留。
+async function removeEmptySetCustodySubdirs(filePath: string): Promise<void> {
+  const custodyKey = normalizeSetFilePathKey(path.resolve(getSetCustodyDirAbs()))
+  let dir = path.dirname(path.resolve(filePath))
+  while (normalizeSetFilePathKey(dir).startsWith(`${custodyKey}/`)) {
+    const entries = await fs.readdir(dir).catch(() => null)
+    if (!entries || entries.length > 0) return
+    await fs.rmdir(dir)
+    dir = path.dirname(dir)
+  }
 }
 
 async function recycleOrphanedSetCustodyFiles(items: SetItemRecord[]): Promise<void> {
@@ -369,7 +413,9 @@ async function recycleOrphanedSetCustodyFiles(items: SetItemRecord[]): Promise<v
           filePath,
           error: result.error
         })
+        continue
       }
+      await removeEmptySetCustodySubdirs(filePath)
     } catch (error) {
       log.error('[setList] recycle orphan custody file failed', { filePath, error })
     }
@@ -654,45 +700,111 @@ export function registerSetListHandlers() {
       if (items.length === 0) return { scanData: [], songListUUID: playlistUuid }
 
       const audioExts = store.settingConfig?.audioExt || []
-      const existingPaths: string[] = []
+      const located = items.map((item) => ({
+        item,
+        absPath: resolveSetItemAbsPath(item.filePath)
+      }))
+      // 文件是否还在只看 stat。缓存对得上的曲目不再读标签；只有没命中的才扫描。
+      const statResults = await runWithConcurrency(
+        located.map((entry) => async () => {
+          try {
+            const stats = await fs.stat(entry.absPath)
+            if (!stats.isFile()) return null
+            return { size: stats.size, mtimeMs: stats.mtimeMs }
+          } catch {
+            return null
+          }
+        }),
+        { concurrency: 16 }
+      )
+      const existing: Array<{ index: number; absPath: string; size: number; mtimeMs: number }> = []
       const missingIndices = new Set<number>()
-
-      for (let i = 0; i < items.length; i++) {
-        const absPath = path.isAbsolute(items[i].filePath)
-          ? items[i].filePath
-          : path.join(store.databaseDir || '', 'library', items[i].filePath)
-        if (await fs.pathExists(absPath)) {
-          existingPaths.push(absPath)
-        } else {
-          missingIndices.add(i)
+      for (let index = 0; index < located.length; index += 1) {
+        const stat = statResults.results[index]
+        if (!stat || stat instanceof Error) {
+          missingIndices.add(index)
+          continue
         }
+        existing.push({
+          index,
+          absPath: located[index].absPath,
+          size: stat.size,
+          mtimeMs: stat.mtimeMs
+        })
       }
 
-      const scanned: ISongInfo[] = []
-      if (existingPaths.length > 0) {
-        const result = await scanSongList(existingPaths, audioExts, playlistUuid)
-        scanned.push(...result.scanData)
+      const cacheCandidates = await loadSetSongCacheCandidates(existing.map((file) => file.absPath))
+      const playlistRootByUuid = buildPlaylistRootByUuidMap()
+      const waveformRootByDir = new Map<string, Promise<string>>()
+      const waveformRootFor = (filePath: string, originRoot: string) => {
+        const custodyRoot = getSetCustodyDirAbs()
+        if (isPathUnderDirectory(filePath, custodyRoot)) return Promise.resolve(custodyRoot)
+        if (originRoot) return Promise.resolve(originRoot)
+        const dirKey = normalizeSetFilePathKey(path.dirname(filePath))
+        const pending = waveformRootByDir.get(dirKey)
+        if (pending) return pending
+        const created = findSongListRoot(path.dirname(filePath)).then((root) => root || '')
+        waveformRootByDir.set(dirKey, created)
+        return created
+      }
+      const cachedByIndex = new Map<number, { song: ISongInfo; sourceInfo: ISongInfo }>()
+      const parsePaths: string[] = []
+      const parseKeys = new Set<string>()
+      for (const file of existing) {
+        const item = items[file.index]
+        const originRoot = item.originPlaylistUuid
+          ? playlistRootByUuid.get(item.originPlaylistUuid) || ''
+          : ''
+        const candidates = cacheCandidates.get(setSongCacheLookupKey(file.absPath)) || []
+        const picked = pickCurrentSetSongCache(candidates, file, originRoot)
+        if (!picked) {
+          const key = normalizeSetFilePathKey(file.absPath)
+          if (!parseKeys.has(key)) {
+            parseKeys.add(key)
+            parsePaths.push(file.absPath)
+          }
+          continue
+        }
+        const waveformRoot = await waveformRootFor(file.absPath, originRoot)
+        const sourceInfo = combineCurrentSetSongCache(
+          picked,
+          candidates,
+          file,
+          mergeSetAnalysisFields
+        )
+        cachedByIndex.set(file.index, {
+          sourceInfo,
+          song: toCachedSetSong(sourceInfo, file.absPath, waveformRoot)
+        })
       }
 
       const scanByPath = new Map<string, ISongInfo>()
-      for (const song of scanned) {
-        const normalized = normalizeSetFilePathKey(song.filePath)
-        scanByPath.set(normalized, song)
+      if (parsePaths.length > 0) {
+        const result = await scanSongList(parsePaths, audioExts, playlistUuid)
+        for (const song of result.scanData) {
+          scanByPath.set(normalizeSetFilePathKey(song.filePath), song)
+        }
       }
 
-      const playlistRootByUuid = buildPlaylistRootByUuidMap()
       const ordered: ISongInfo[] = []
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i]
-        if (missingIndices.has(i)) {
+      for (let index = 0; index < items.length; index += 1) {
+        const item = items[index]
+        if (missingIndices.has(index)) {
           ordered.push(createMissingSetSong(item))
           continue
         }
-        const absPath = path.isAbsolute(item.filePath)
-          ? item.filePath
-          : path.join(store.databaseDir || '', 'library', item.filePath)
-        const normalized = normalizeSetFilePathKey(absPath)
-        const scannedSong = scanByPath.get(normalized)
+        const cached = cachedByIndex.get(index)
+        if (cached) {
+          persistSetAnalysisSnapshotIfChanged(item, buildSetAnalysisSnapshot(cached.sourceInfo))
+          ordered.push({
+            ...cached.song,
+            setItemId: item.id,
+            playlistTrackNumber: item.sortOrder,
+            addedAtMs: normalizeAddedAtMs(item.createdAtMs)
+          })
+          continue
+        }
+        const scannedSong = scanByPath.get(normalizeSetFilePathKey(located[index].absPath))
         if (!scannedSong) {
           ordered.push(createMissingSetSong(item))
           continue

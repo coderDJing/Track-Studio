@@ -129,7 +129,7 @@ const hasCurrentKeyAnalysis = (info: CachedKeyInfo | null | undefined) =>
   hasUsableKeyAnalysis(info) && shouldAcceptKeyAnalysisCacheVersion(info)
 const hasCompleteGrid = (info: CachedGridInfo | null | undefined) =>
   resolveCanonicalSongBeatGridV2(info).kind !== 'missing'
-const discardStaleAnalysisFields = (info: ISongInfo): ISongInfo => {
+export const discardStaleAnalysisFields = (info: ISongInfo): ISongInfo => {
   const next = { ...info }
   if (!hasUsableKeyAnalysis(next)) {
     delete next.key

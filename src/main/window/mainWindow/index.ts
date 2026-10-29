@@ -20,6 +20,7 @@ import { registerImportHandlers } from './importHandlers'
 import { registerMainWindowFilesystemHandlers } from './mainWindowFilesystemHandlers'
 import { registerAudioConversionHandlers } from './audioConversionHandlers'
 import { registerSetListHandlers } from '../../ipc/setListHandlers'
+import { registerSetPackageHandlers } from '../../ipc/setPackageHandlers'
 import { isLibraryMergeActive } from '../../services/libraryMerge'
 import { createProgressSender } from './progress'
 import { startLibraryTreeWatcher, stopLibraryTreeWatcher } from '../../libraryTreeWatcher'
@@ -427,6 +428,7 @@ function ensureSharedHandlersRegistered() {
   registerMainWindowFilesystemHandlers(getMainWindow)
   registerAudioConversionHandlers(getMainWindow)
   registerSetListHandlers()
+  registerSetPackageHandlers(getMainWindow)
   sharedHandlersRegistered = true
 }
 

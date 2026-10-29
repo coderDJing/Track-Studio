@@ -23,6 +23,7 @@ type SetAppendItem = {
   originPlaylistUuid?: string | null
   originPathSnapshot?: string | null
   analysis?: Record<string, unknown> | null
+  createdAtMs?: number | null
 }
 
 function toRecord(row: unknown): SetItemRecord | null {
@@ -145,6 +146,12 @@ export function appendSetItems(playlistUuid: string, items: SetAppendItem[]): Se
         currentOrder += 1
         const id = uuidV4()
         const analysisJson = stringifyAnalysisJson(item.analysis)
+        const createdAtMs =
+          typeof item.createdAtMs === 'number' &&
+          Number.isFinite(item.createdAtMs) &&
+          item.createdAtMs > 0
+            ? Math.floor(item.createdAtMs)
+            : now
         insert.run(
           id,
           playlistUuid,
@@ -153,7 +160,7 @@ export function appendSetItems(playlistUuid: string, items: SetAppendItem[]): Se
           item.originPlaylistUuid || null,
           item.originPathSnapshot || null,
           analysisJson,
-          now
+          createdAtMs
         )
         inserted.push({
           id,
@@ -163,7 +170,7 @@ export function appendSetItems(playlistUuid: string, items: SetAppendItem[]): Se
           originPlaylistUuid: item.originPlaylistUuid || null,
           originPathSnapshot: item.originPathSnapshot || null,
           analysisJson,
-          createdAtMs: now
+          createdAtMs
         })
       }
     })

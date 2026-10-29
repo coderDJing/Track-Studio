@@ -68,6 +68,7 @@ export const buildLibraryContextMenuArr = ({
     if (libraryAreaSelected === 'SetLibrary') {
       return [
         [{ menuName: 'library.createSetPlaylist' }, { menuName: 'library.createSetFolder' }],
+        [{ menuName: 'library.importSetPackage' }],
         [{ menuName: 'common.rename' }, { menuName: 'common.delete' }],
         [{ menuName: 'similarTracks.menu' }]
       ]
@@ -91,7 +92,7 @@ export const buildLibraryContextMenuArr = ({
   }
   if (dirData.type === 'setList') {
     return [
-      [{ menuName: 'tracks.exportTracks' }],
+      [{ menuName: 'library.exportSetPackage' }, { menuName: 'tracks.exportTracks' }],
       [
         { menuName: 'common.rename' },
         { menuName: 'playlist.deletePlaylist' },

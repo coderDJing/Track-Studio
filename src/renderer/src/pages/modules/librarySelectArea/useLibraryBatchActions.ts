@@ -20,6 +20,7 @@ import {
 } from '@renderer/utils/manualKeyAnalysis'
 import { emptyRecycleBinWithOptimisticUpdate } from '@renderer/utils/recycleBinActions'
 import { collectSongsForSimilarBatch } from '@renderer/components/libraryItem/libraryContextMenuHelpers'
+import { importSetPackageIntoLibrary } from '@renderer/components/libraryItem/setPackageTransfer'
 import { openBatchSimilarTracksDialogForSeeds } from '@renderer/utils/similarTracksActions'
 import type { Icon, IDir, IMetadataAutoFillSummary } from '../../../../../types/globals'
 
@@ -197,7 +198,10 @@ export function useLibraryBatchActions(options: {
     if (item.name === 'RecycleBin') {
       return [[{ menuName: 'recycleBin.emptyRecycleBin' }], ...commonMenus]
     }
-    if (item.name === 'SetLibrary' || item.name === 'MixtapeLibrary') {
+    if (item.name === 'SetLibrary') {
+      return [[{ menuName: 'library.importSetPackage' }], ...similarMenu]
+    }
+    if (item.name === 'MixtapeLibrary') {
       return similarMenu
     }
     return commonMenus
@@ -313,6 +317,9 @@ export function useLibraryBatchActions(options: {
         break
       case 'recycleBin.emptyRecycleBin':
         await emptyRecycleBinHandleClick()
+        break
+      case 'library.importSetPackage':
+        await importSetPackageIntoLibrary(runtime, findLibraryNode('SetLibrary'))
         break
     }
   }
