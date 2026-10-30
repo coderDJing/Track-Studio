@@ -6,6 +6,7 @@ import path from 'node:path'
 import type { ISongInfo } from '../../../types/globals'
 
 const ipcHandlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()
+const cleanupMocks = vi.hoisted(() => ({ trashItem: vi.fn<() => Promise<void>>() }))
 
 vi.mock('electron', () => ({
   app: {
@@ -27,7 +28,7 @@ vi.mock('electron', () => ({
     }
   },
   screen: {},
-  shell: {},
+  shell: { trashItem: cleanupMocks.trashItem },
   dialog: {},
   nativeImage: {},
   Notification: class {}
@@ -50,6 +51,7 @@ import { createSongBeatGridMapV2FromFixedGrid } from '../../../shared/songBeatGr
 import { exportSetPackage } from './exportSetPackage'
 import { importSetPackage } from './importSetPackage'
 import { readSetPackageManifest } from './manifest'
+import { cleanupImportedPackage } from './cleanupImportedPackage'
 
 const coreDirNames = {
   FilterLibrary: 'FilterLibrary',
@@ -176,6 +178,7 @@ const exportFromComputerA = async (): Promise<ExportFixture> => {
 
 beforeEach(() => {
   ipcHandlers.clear()
+  cleanupMocks.trashItem.mockReset().mockResolvedValue(undefined)
 })
 
 afterEach(async () => {
@@ -204,6 +207,7 @@ describe('SET package export/import', () => {
       playlistUuid: 'set-b'
     })
     expect(result).toEqual({ trackCount: 3, fileCount: 2 })
+    expect(cleanupMocks.trashItem).not.toHaveBeenCalled()
 
     const imported = listSetItemsByPlaylist('set-b')
     expect(imported.map((item) => item.createdAtMs)).toEqual(fixture.sourceCreatedAt)
@@ -255,12 +259,75 @@ describe('SET package export/import', () => {
     const rootB = await makeTempDir('frkb-set-pkg-b-')
     await openLibrary(rootB, 'set-b', 'Friday Set')
     await expect(
-      importSetPackage({ manifestPath: fixture.manifestPath, playlistUuid: 'set-b' })
+      importSetPackage({
+        manifestPath: fixture.manifestPath,
+        playlistUuid: 'set-b',
+        deleteSourceAfterImport: true
+      })
     ).rejects.toMatchObject({ code: 'PACKAGE_FILE_CORRUPTED' })
     expect(listSetItemsByPlaylist('set-b')).toEqual([])
     const custodyRoot = path.join(rootB, 'library', 'SetLibrary', '__set_custody__')
     const leftovers = await fs.readdir(custodyRoot).catch(() => [])
     expect(leftovers).toEqual([])
+    expect(cleanupMocks.trashItem).not.toHaveBeenCalled()
+    expect(await fs.stat(fixture.manifestPath)).toBeTruthy()
+  })
+
+  it('recycles the source package only after all tracks have been imported', async () => {
+    const fixture = await exportFromComputerA()
+    await openLibrary(await makeTempDir('frkb-set-pkg-b-'), 'set-b', 'Friday Set')
+    cleanupMocks.trashItem.mockImplementationOnce(async () => {
+      const imported = listSetItemsByPlaylist('set-b')
+      expect(imported).toHaveLength(3)
+      for (const item of imported) expect(await fs.stat(item.filePath)).toBeTruthy()
+    })
+    const result = await importSetPackage({
+      manifestPath: fixture.manifestPath,
+      playlistUuid: 'set-b',
+      deleteSourceAfterImport: true
+    })
+    expect(cleanupMocks.trashItem).toHaveBeenCalledWith(await fs.realpath(fixture.packageDir))
+    expect(result.sourceCleanup).toBe('deleted')
+  })
+
+  it('keeps the imported SET when recycling the source fails', async () => {
+    const fixture = await exportFromComputerA()
+    await openLibrary(await makeTempDir('frkb-set-pkg-b-'), 'set-b', 'Friday Set')
+    cleanupMocks.trashItem.mockRejectedValueOnce(new Error('recycle failed'))
+    const result = await importSetPackage({
+      manifestPath: fixture.manifestPath,
+      playlistUuid: 'set-b',
+      deleteSourceAfterImport: true
+    })
+    expect(result).toEqual({ trackCount: 3, fileCount: 2, sourceCleanup: 'failed' })
+    expect(listSetItemsByPlaylist('set-b')).toHaveLength(3)
+    expect(await fs.stat(fixture.manifestPath)).toBeTruthy()
+  })
+
+  it('does not recycle unrelated files mixed into the package folder', async () => {
+    const fixture = await exportFromComputerA()
+    await fs.writeFile(path.join(fixture.packageDir, 'notes.txt'), 'keep me')
+    await openLibrary(await makeTempDir('frkb-set-pkg-b-'), 'set-b', 'Friday Set')
+    const result = await importSetPackage({
+      manifestPath: fixture.manifestPath,
+      playlistUuid: 'set-b',
+      deleteSourceAfterImport: true
+    })
+    expect(result.sourceCleanup).toBe('failed')
+    expect(cleanupMocks.trashItem).not.toHaveBeenCalled()
+    expect(listSetItemsByPlaylist('set-b')).toHaveLength(3)
+    expect(await fs.readFile(path.join(fixture.packageDir, 'notes.txt'), 'utf8')).toBe('keep me')
+  })
+
+  it('does not recycle folders that overlap the active music library', async () => {
+    const fixture = await exportFromComputerA()
+    const manifest = await readSetPackageManifest(fixture.manifestPath)
+    for (const libraryRoot of [fixture.packageDir, path.dirname(fixture.packageDir)]) {
+      await expect(
+        cleanupImportedPackage(fixture.manifestPath, manifest, libraryRoot)
+      ).rejects.toThrow('当前音乐库重叠')
+    }
+    expect(cleanupMocks.trashItem).not.toHaveBeenCalled()
   })
 
   it('refuses to export when a track file is missing', async () => {

@@ -16,6 +16,7 @@ export default defineConfig({
             '**/CoverThumbnailImage.spec.ts',
             '**/CuratedLibrarySyncSettings.spec.ts',
             '**/trackReanalysisDialog.spec.ts',
+            '**/setPackageImportDialog.spec.ts',
             '**/rightClickMenu.spec.ts'
           ]
         }
@@ -28,6 +29,7 @@ export default defineConfig({
             '**/CoverThumbnailImage.spec.ts',
             '**/CuratedLibrarySyncSettings.spec.ts',
             '**/trackReanalysisDialog.spec.ts',
+            '**/setPackageImportDialog.spec.ts',
             '**/rightClickMenu.spec.ts'
           ],
           environment: './tests/vueClientEnvironment.ts'

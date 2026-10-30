@@ -112,7 +112,9 @@ export function registerSetPackageHandlers(getWindow: () => BrowserWindow | null
 
   ipcMain.handle('setList:pick-package', async (): Promise<SetPackagePickResult> => {
     const selection = await showOpenDialog(getWindow, {
-      title: isEnglish() ? 'Choose a SET package file' : '选择 SET 描述文件',
+      title: isEnglish()
+        ? 'Choose a SET description file (.frkbset)'
+        : '选择 SET 描述文件（.frkbset）',
       properties: ['openFile'],
       filters: [
         {
@@ -143,7 +145,11 @@ export function registerSetPackageHandlers(getWindow: () => BrowserWindow | null
     'setList:import-package',
     async (
       _e,
-      payload?: { manifestPath?: unknown; playlistUuid?: unknown }
+      payload?: {
+        manifestPath?: unknown
+        playlistUuid?: unknown
+        deleteSourceAfterImport?: unknown
+      }
     ): Promise<SetPackageImportResult> => {
       const manifestPath = typeof payload?.manifestPath === 'string' ? payload.manifestPath : ''
       const playlistUuid = typeof payload?.playlistUuid === 'string' ? payload.playlistUuid : ''
@@ -163,6 +169,7 @@ export function registerSetPackageHandlers(getWindow: () => BrowserWindow | null
         const summary = await importSetPackage({
           manifestPath,
           playlistUuid,
+          deleteSourceAfterImport: payload?.deleteSourceAfterImport === true,
           onProgress: progress.update
         })
         return { ok: true, ...summary }

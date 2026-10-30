@@ -1,21 +1,20 @@
 import { v4 as uuidV4 } from 'uuid'
 import confirm from '@renderer/components/confirmDialog'
+import openSetPackageImportDialog from '@renderer/components/setPackageImportDialog'
 import libraryUtils from '@renderer/utils/libraryUtils'
 import emitter from '@renderer/utils/mitt'
 import { t } from '@renderer/utils/translate'
+import { getSetPackageFailureLines } from '@renderer/utils/setPackageMessages'
 import type { useRuntimeStore } from '@renderer/stores/runtime'
 import type {
   SetPackageExportResult,
   SetPackageFailure,
-  SetPackageImportResult,
-  SetPackagePickResult
+  SetPackageImportResult
 } from '@shared/setPackage'
 import type { IDir, ISongInfo } from '../../../../types/globals'
 import { loadSetPlaylistSongs } from './libraryContextMenuHelpers'
 
 type RuntimeStore = ReturnType<typeof useRuntimeStore>
-
-const MAX_LISTED_FILES = 10
 
 const confirmTaskBusy = async () => {
   await confirm({
@@ -25,31 +24,10 @@ const confirmTaskBusy = async () => {
   })
 }
 
-const buildFileNameLines = (fileNames: string[] | undefined): string[] => {
-  const names = Array.isArray(fileNames) ? fileNames.filter(Boolean) : []
-  const lines = names.slice(0, MAX_LISTED_FILES)
-  if (names.length > MAX_LISTED_FILES) {
-    lines.push(t('library.setPackageMoreFiles', { count: names.length - MAX_LISTED_FILES }))
-  }
-  return lines
-}
-
 const showFailure = async (titleKey: string, failure: SetPackageFailure) => {
-  const headlineByCode: Record<string, string> = {
-    EMPTY_SET: t('library.setPackageEmptySet'),
-    MISSING_FILES: t('library.setPackageMissingFiles'),
-    TRACKS_MISMATCH: t('library.setPackageTracksChanged'),
-    PACKAGE_FILE_MISSING: t('library.setPackageFileMissing'),
-    PACKAGE_FILE_CORRUPTED: t('library.setPackageFileCorrupted'),
-    MANIFEST_VERSION_UNSUPPORTED: t('library.setPackageVersionUnsupported'),
-    NO_SPACE: t('library.setPackageNoSpace')
-  }
-  const headline =
-    headlineByCode[failure.code] ||
-    t('library.setPackageFailedReason', { message: failure.message || t('common.unknownError') })
   await confirm({
     title: t(titleKey),
-    content: [headline, ...buildFileNameLines(failure.fileNames)],
+    content: getSetPackageFailureLines(failure),
     confirmShow: false
   })
 }
@@ -133,7 +111,8 @@ const removeChildNode = (parent: IDir, uuid: string) => {
 const createPlaylistAndImport = async (
   parent: IDir,
   playlistUuid: string,
-  manifestPath: string
+  manifestPath: string,
+  deleteSourceAfterImport: boolean
 ): Promise<SetPackageImportResult> => {
   const created = await libraryUtils.diffLibraryTreeExecuteFileOperation()
   if (!created) {
@@ -141,7 +120,8 @@ const createPlaylistAndImport = async (
   }
   const result = (await window.electron.ipcRenderer.invoke('setList:import-package', {
     manifestPath,
-    playlistUuid
+    playlistUuid,
+    deleteSourceAfterImport
   })) as SetPackageImportResult
   if (!result.ok) {
     removeChildNode(parent, playlistUuid)
@@ -159,14 +139,13 @@ export async function importSetPackageIntoLibrary(runtime: RuntimeStore, parentN
   const parent =
     parentNode || runtime.libraryTree.children?.find((item) => item.dirName === 'SetLibrary')
   if (!parent) return
-  const picked = (await window.electron.ipcRenderer.invoke(
-    'setList:pick-package'
-  )) as SetPackagePickResult
-  if (!picked.ok) {
-    await showFailure('library.setPackageImportFailedTitle', picked)
+  const options = await openSetPackageImportDialog()
+  if (!options) return
+  if (runtime.isProgressing) {
+    await confirmTaskBusy()
     return
   }
-  if (picked.canceled) return
+  const { picked, deleteSourceAfterImport } = options
 
   parent.children = parent.children || []
   const playlistUuid = uuidV4()
@@ -179,7 +158,12 @@ export async function importSetPackageIntoLibrary(runtime: RuntimeStore, parentN
   runtime.isProgressing = true
   let imported: SetPackageImportResult
   try {
-    imported = await createPlaylistAndImport(parent, playlistUuid, picked.manifestPath)
+    imported = await createPlaylistAndImport(
+      parent,
+      playlistUuid,
+      picked.manifestPath,
+      deleteSourceAfterImport
+    )
   } finally {
     runtime.isProgressing = false
   }
@@ -192,7 +176,8 @@ export async function importSetPackageIntoLibrary(runtime: RuntimeStore, parentN
   await confirm({
     title: t('library.setPackageImportSuccessTitle'),
     content: [
-      t('library.setPackageImportSuccessCount', { name: dirName, count: imported.trackCount })
+      t('library.setPackageImportSuccessCount', { name: dirName, count: imported.trackCount }),
+      ...(imported.sourceCleanup === 'failed' ? [t('library.setPackageDeleteSourceFailed')] : [])
     ],
     confirmShow: false
   })

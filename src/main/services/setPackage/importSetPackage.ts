@@ -20,10 +20,13 @@ import {
   type SetPackageManifest
 } from './manifest'
 import { toSafeSetPackageName } from './exportSetPackage'
+import { cleanupImportedPackage } from './cleanupImportedPackage'
+import type { SetPackageImportSummary } from '../../../shared/setPackage'
 
 export type ImportSetPackageParams = {
   manifestPath: string
   playlistUuid: string
+  deleteSourceAfterImport?: boolean
   onProgress?: (done: number, total: number) => void
 }
 
@@ -66,7 +69,7 @@ function assertTargetPlaylist(playlistUuid: string) {
 
 export async function importSetPackage(
   params: ImportSetPackageParams
-): Promise<{ trackCount: number; fileCount: number }> {
+): Promise<SetPackageImportSummary> {
   if (!store.databaseDir) throw new SetPackageError('FAILED', '音乐库尚未就绪')
   assertTargetPlaylist(params.playlistUuid)
   const packageDir = path.dirname(params.manifestPath)
@@ -79,6 +82,7 @@ export async function importSetPackage(
     `${toSafeSetPackageName(manifest.set.name)}_${uuidV4().slice(0, 8)}`
   )
   const importedById = new Map<string, ImportedFile>()
+  let summary: SetPackageImportSummary
   const releaseWatcher = beginLibraryTreeWatcherBulkOperation()
   try {
     const usedNames = new Set<string>()
@@ -135,7 +139,7 @@ export async function importSetPackage(
       throw new SetPackageError('FAILED', '写入 SET 曲目失败')
     }
     markGlobalSongSearchDirty('setList:import-package')
-    return { trackCount: inserted.length, fileCount: importedById.size }
+    summary = { trackCount: inserted.length, fileCount: importedById.size }
   } catch (error) {
     removeSetItemsByPlaylist(params.playlistUuid)
     for (const imported of importedById.values()) {
@@ -148,4 +152,15 @@ export async function importSetPackage(
   } finally {
     releaseWatcher()
   }
+  // 回收源目录必须在导入提交成功之后，清理失败不能回滚已导入的曲目。
+  if (params.deleteSourceAfterImport === true) {
+    try {
+      await cleanupImportedPackage(params.manifestPath, manifest, store.databaseDir)
+      summary.sourceCleanup = 'deleted'
+    } catch (error) {
+      log.error('[setPackage] 导入成功但删除源文件夹失败', { packageDir, error })
+      summary.sourceCleanup = 'failed'
+    }
+  }
+  return summary
 }

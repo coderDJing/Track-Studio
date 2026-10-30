@@ -1,4 +1,4 @@
-// SET 包：把一个 SET 歌单连同音频与分析结果（网格、Cue、调性等）导出为可在另一台电脑导入的文件夹。
+// SET 包：把 SET 歌单、音频与分析结果导出为可导入 Track Studio 音乐库的文件夹。
 export const SET_PACKAGE_FORMAT = 'frkb-set-package'
 export const SET_PACKAGE_VERSION = 1
 export const SET_PACKAGE_EXTENSION = 'frkbset'
@@ -48,5 +48,15 @@ export type SetPackagePickResult =
     }
   | SetPackageFailure
 
-export type SetPackageImportResult =
-  { ok: true; trackCount: number; fileCount: number } | SetPackageFailure
+export type SetPackageImportSummary = {
+  trackCount: number
+  fileCount: number
+  sourceCleanup?: 'deleted' | 'failed'
+}
+
+export type SetPackageImportResult = ({ ok: true } & SetPackageImportSummary) | SetPackageFailure
+
+export type SetPackageImportDialogResult = {
+  picked: Extract<SetPackagePickResult, { ok: true; canceled: false }>
+  deleteSourceAfterImport: boolean
+}
