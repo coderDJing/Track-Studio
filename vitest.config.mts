@@ -15,6 +15,7 @@ export default defineConfig({
             '**/rust_package/**',
             '**/CoverThumbnailImage.spec.ts',
             '**/CuratedLibrarySyncSettings.spec.ts',
+            '**/trackReanalysisDialog.spec.ts',
             '**/rightClickMenu.spec.ts'
           ]
         }
@@ -26,6 +27,7 @@ export default defineConfig({
           include: [
             '**/CoverThumbnailImage.spec.ts',
             '**/CuratedLibrarySyncSettings.spec.ts',
+            '**/trackReanalysisDialog.spec.ts',
             '**/rightClickMenu.spec.ts'
           ],
           environment: './tests/vueClientEnvironment.ts'

@@ -79,10 +79,6 @@ const dependencyHintText = computed(() => {
   return t('tracks.reanalysisStructureUnavailableHint')
 })
 
-const applySelection = (next: TrackReanalysisUserSelection) => {
-  selection.value = applyTrackReanalysisSelectionDependencies(next, props.canSelectStructureAlone)
-}
-
 const confirm = () => {
   if (!canConfirm.value) return
   const next = applyTrackReanalysisSelectionDependencies(
@@ -102,12 +98,10 @@ const cancel = () => {
   closeWithAnimation(() => props.cancelCallback?.())
 }
 
-watch(
-  () => [selection.value.structure, selection.value.energy],
-  () => {
-    applySelection(selection.value)
-  }
-)
+// 只补选依赖网格，避免替换整个 selection 后再次触发同一个监听器。
+watch(beatGridLocked, (locked) => {
+  if (locked) selection.value.beatGrid = true
+})
 
 onMounted(() => {
   runtime.confirmShow = true
