@@ -1,5 +1,7 @@
 {
   "horizontalBrowse": {
+    "crossfaderKeyboardHint": "Move the crossfader up/down; hold Shift with the same keys to center it",
+    "playbackRangeKeyboardHint": "Toggle the playback range (shortcut works in the main browser player and edit mode)",
     "elapsedTime": "Elapsed time",
     "remainingTime": "Time remaining",
     "trackKey": "Key",
@@ -34,8 +36,8 @@
     "cueMonitorOff": "Turn on deck monitoring",
     "collapseFaderPanel": "Collapse dual-track control panel",
     "expandFaderPanel": "Expand dual-track control panel",
-    "transportSyncOn": "Turn off dual-track link sync",
-    "transportSyncOff": "Turn on dual-track link sync",
+    "transportSyncOn": "Disable dual-track link",
+    "transportSyncOff": "Enable dual-track link",
     "editModeBpmInputTitle": "Grid BPM: changes analysis results and grid lines, not playback speed",
     "dualModeBpmInputTitle": "Target BPM: temporarily changes playback speed, not grid lines",
     "editModeTapBpmTitle": "Tap: click along with the beat to update grid BPM without changing playback speed",

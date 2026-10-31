@@ -733,14 +733,18 @@ onUnmounted(() => {
         <div ref="previousSongRef" class="buttonIcon" @click="handlePreviousSong()">
           <img :src="previousSong" draggable="false" />
         </div>
-        <bubbleBox :dom="previousSongRef || undefined" :title="t('player.previous')" shortcut="W" />
+        <bubbleBox
+          :dom="previousSongRef || undefined"
+          :title="t('player.previous')"
+          shortcut="W / ↑"
+        />
         <div ref="fastBackwardRef" class="buttonIcon" @mousedown="handleFastBackward()">
           <img :src="fastBackward" draggable="false" />
         </div>
         <bubbleBox
           :dom="fastBackwardRef || undefined"
           :title="t('player.fastBackward')"
-          shortcut="A"
+          shortcut="A / ←"
         />
         <div v-show="!isPlaying" ref="playRef" class="buttonIcon" @click="handlePlay()">
           <img :src="play" draggable="false" />
@@ -756,12 +760,12 @@ onUnmounted(() => {
         <bubbleBox
           :dom="fastForwardRef || undefined"
           :title="t('player.fastForward')"
-          shortcut="D"
+          shortcut="D / →"
         />
         <div ref="nextSongRef" class="buttonIcon" @click="handleNextSong()">
           <img :src="nextSong" draggable="false" />
         </div>
-        <bubbleBox :dom="nextSongRef || undefined" :title="t('player.next')" shortcut="S" />
+        <bubbleBox :dom="nextSongRef || undefined" :title="t('player.next')" shortcut="S / ↓" />
         <div class="buttonIcon" @click.stop="handleMoreButtonClick()">
           <img :src="more" draggable="false" />
         </div>

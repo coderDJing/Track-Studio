@@ -440,13 +440,17 @@ const traktorTrackStorageDirText = computed(
             <label class="setting-block" for="setting-checkbox-enablePlaybackRange"
               >{{ t('player.enablePlaybackRange') }}：</label
             >
-            <div class="setting-control">
+            <bubbleBoxTrigger
+              class="setting-control"
+              :title="t('horizontalBrowse.playbackRangeKeyboardHint')"
+              shortcut="R"
+            >
               <singleCheckbox
                 id="setting-checkbox-enablePlaybackRange"
                 v-model="runtime.setting.enablePlaybackRange"
                 @change="setSetting()"
               />
-            </div>
+            </bubbleBoxTrigger>
 
             <template v-if="runtime.setting.enablePlaybackRange">
               <div class="setting-block">{{ t('player.playbackRangeMode') }}：</div>

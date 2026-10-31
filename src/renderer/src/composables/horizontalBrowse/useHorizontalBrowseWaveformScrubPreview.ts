@@ -14,6 +14,7 @@ type UseHorizontalBrowseWaveformScrubPreviewOptions = {
   dragging: Ref<boolean>
   resolveAnchorSec: () => number
   emitPreview: (payload: HorizontalBrowseScrubPreviewPayload) => void
+  immediate?: () => boolean
 }
 
 const SCRUB_IDLE_STOP_MS = 80
@@ -63,6 +64,13 @@ export const useHorizontalBrowseWaveformScrubPreview = (
   }
 
   const schedulePreviewEmit = (anchorSec: number, playbackRate: number) => {
+    // The source canvas moves in pointermove. Publish the linked lane's position in
+    // that same event so it does not trail the source by an animation frame.
+    if (options.immediate?.()) {
+      clearPreviewRaf()
+      emitPreview(anchorSec, playbackRate)
+      return
+    }
     pendingPreviewAnchorSec = Number(anchorSec) || 0
     pendingPreviewPlaybackRate = Number(playbackRate) || 0
     if (previewRaf) return

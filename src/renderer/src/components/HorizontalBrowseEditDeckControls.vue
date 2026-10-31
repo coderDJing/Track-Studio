@@ -75,7 +75,9 @@ const handleBeatStepChange = (event: Event) => {
         shortcut="S"
         type="button"
         :disabled="disabled || !canNextSong"
-        :aria-label="canNextSong ? t('horizontalBrowse.loadNextSong') : t('horizontalBrowse.noNextSong')"
+        :aria-label="
+          canNextSong ? t('horizontalBrowse.loadNextSong') : t('horizontalBrowse.noNextSong')
+        "
         @click="emit('next-song')"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -99,6 +101,7 @@ const handleBeatStepChange = (event: Event) => {
         type="button"
         :disabled="disabled || !songPresent"
         :aria-label="t('horizontalBrowse.jumpBackward', { beats: beatStep })"
+        shortcut="A / ←"
         @click="emit('jump-beats', -1)"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -120,6 +123,7 @@ const handleBeatStepChange = (event: Event) => {
         type="button"
         :disabled="disabled || !songPresent"
         :aria-label="t('horizontalBrowse.jumpForward', { beats: beatStep })"
+        shortcut="D / →"
         @click="emit('jump-beats', 1)"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">

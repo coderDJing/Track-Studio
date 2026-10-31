@@ -1,4 +1,4 @@
-import { onUnmounted } from 'vue'
+import { computed, onUnmounted, shallowReactive } from 'vue'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 
 /** 侧栏搜索和浮层搜索叠在一起时，浮层优先。 */
@@ -36,8 +36,20 @@ const WINDOW_GLOBAL_SCOPE = 'windowGlobal'
 
 export const SEARCH_FOCUS_WINDOW_SCOPE = WINDOW_GLOBAL_SCOPE
 
-const targets: SearchFocusTarget[] = []
+const targets = shallowReactive<SearchFocusTarget[]>([])
+const hintIds = new WeakMap<SearchFocusTarget, number>()
+let nextHintId = 0
 let shortcutInstalled = false
+
+export function useSearchFocusHintTargets() {
+  return computed(() =>
+    targets.flatMap((target) => {
+      const input = target.getInput()
+      const id = hintIds.get(target)
+      return input && id !== undefined ? [{ id, input }] : []
+    })
+  )
+}
 
 export function isSearchFocusShortcut(event: SearchFocusShortcutEvent) {
   if (event.repeat || event.isComposing) return false
@@ -178,6 +190,7 @@ export function uninstallSearchFocusShortcut() {
 }
 
 export function useSearchFocusTarget(target: SearchFocusTarget) {
+  hintIds.set(target, ++nextHintId)
   targets.push(target)
   onUnmounted(() => {
     const index = targets.indexOf(target)

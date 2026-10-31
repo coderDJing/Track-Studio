@@ -1,5 +1,6 @@
 {
   "search": {
+    "focusSearch": "Focus search field",
     "globalSongPlaceholder": "Type keywords (title / artist / album / composer / year / genre / key / BPM / filename / path)",
     "globalSongLocateHint": "Enter: locate and select",
     "globalSongPlayHint": "Ctrl+Enter: play now",

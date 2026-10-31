@@ -4,10 +4,12 @@ import { v4 as uuidV4 } from 'uuid'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { t } from '@renderer/utils/translate'
 import type { LibraryTransferActionMode } from '@renderer/utils/libraryTransfer'
+import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 
 type MoveSongsLibraryName = 'CuratedLibrary' | 'FilterLibrary' | 'MixtapeLibrary'
 
 const props = defineProps<{
+  deck: 'top' | 'bottom'
   disabled: boolean
   readOnlySource: boolean
 }>()
@@ -23,6 +25,7 @@ const emit = defineEmits<{
 const runtime = useRuntimeStore()
 const menuUuid = `horizontal-browse-deck-move-${uuidV4()}`
 const menuOpen = ref(false)
+const transferShortcut = (key: 'Q' | 'E') => (props.deck === 'bottom' ? `Shift+${key}` : key)
 
 watch(
   () => runtime.activeMenuUUID,
@@ -81,36 +84,48 @@ onUnmounted(() => {
 
     <transition name="fade">
       <div v-if="menuOpen" class="deck-move-button__menu">
-        <button
+        <bubbleBoxTrigger
           v-if="!props.readOnlySource"
+          tag="button"
+          :title="t('library.moveToFilter')"
+          :shortcut="transferShortcut('Q')"
           type="button"
           class="deck-move-button__menu-item"
           @click.stop="handleSelectTarget('FilterLibrary', 'move')"
         >
           {{ t('library.moveToFilter') }}
-        </button>
-        <button
+        </bubbleBoxTrigger>
+        <bubbleBoxTrigger
           v-if="!props.readOnlySource"
+          tag="button"
+          :title="t('library.moveToCurated')"
+          :shortcut="transferShortcut('E')"
           type="button"
           class="deck-move-button__menu-item"
           @click.stop="handleSelectTarget('CuratedLibrary', 'move')"
         >
           {{ t('library.moveToCurated') }}
-        </button>
-        <button
+        </bubbleBoxTrigger>
+        <bubbleBoxTrigger
+          tag="button"
+          :title="props.readOnlySource ? t('library.copyToFilter') : ''"
+          :shortcut="props.readOnlySource ? transferShortcut('Q') : ''"
           type="button"
           class="deck-move-button__menu-item"
           @click.stop="handleSelectTarget('FilterLibrary', 'copy')"
         >
           {{ t('library.copyToFilter') }}
-        </button>
-        <button
+        </bubbleBoxTrigger>
+        <bubbleBoxTrigger
+          tag="button"
+          :title="props.readOnlySource ? t('library.copyToCurated') : ''"
+          :shortcut="props.readOnlySource ? transferShortcut('E') : ''"
           type="button"
           class="deck-move-button__menu-item"
           @click.stop="handleSelectTarget('CuratedLibrary', 'copy')"
         >
           {{ t('library.copyToCurated') }}
-        </button>
+        </bubbleBoxTrigger>
         <button
           type="button"
           class="deck-move-button__menu-item"

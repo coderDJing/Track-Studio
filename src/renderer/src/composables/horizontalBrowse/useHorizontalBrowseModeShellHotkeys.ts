@@ -20,6 +20,7 @@ type UseHorizontalBrowseModeShellHotkeysParams = {
   ejectDeckSong: (deck: DeckKey) => Promise<unknown>
   openDeckMoveDialog: (deck: DeckKey, target: HorizontalBrowseDeckMoveTargetLibrary) => void
   onTogglePlayPause: (deck: DeckKey) => void
+  onToggleTransportSync: () => void
   onCueKeyDown: (deck: DeckKey) => boolean
   onCueKeyUp: (deck: DeckKey) => void
   onJumpBar: (deck: DeckKey, direction: -1 | 1) => void
@@ -58,6 +59,7 @@ export const useHorizontalBrowseModeShellHotkeys = (
     runtime: params.runtime,
     onPlayerInteraction: params.onPlayerInteraction,
     onTogglePlayPause: params.onTogglePlayPause,
+    onToggleTransportSync: params.onToggleTransportSync,
     onCueKeyDown: params.onCueKeyDown,
     onCueKeyUp: params.onCueKeyUp,
     onJumpBar: params.onJumpBar,

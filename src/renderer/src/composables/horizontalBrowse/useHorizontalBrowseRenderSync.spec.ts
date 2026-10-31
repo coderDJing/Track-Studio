@@ -59,6 +59,79 @@ const createRenderSync = (linkedGridVisualPending: () => boolean) => {
 }
 
 describe('useHorizontalBrowseRenderSync', () => {
+  it.each(['top', 'bottom'] as const)(
+    '%s Master 关闭 Sync 时，从轨起播沿用主轨时钟并保留 native 相对位置',
+    (leader) => {
+      const { snapshot, renderSync } = createRenderSync(() => false)
+      const follower = leader === 'top' ? 'bottom' : 'top'
+      Object.assign(snapshot[leader], {
+        leader: true,
+        syncEnabled: false,
+        syncLock: 'off',
+        playbackRate: 1.2,
+        renderCurrentSec: 10
+      })
+      Object.assign(snapshot[follower], {
+        leader: false,
+        playing: false,
+        playingAudible: false,
+        playbackRate: 0.8,
+        renderCurrentSec: 4
+      })
+      renderSync.syncDeckRenderState({ nowMs: 1000, snapshotAtMs: 1000 })
+      const leaderRevision =
+        leader === 'top'
+          ? renderSync.topDeckPlaybackSyncRevision
+          : renderSync.bottomDeckPlaybackSyncRevision
+      const revision = leaderRevision.value
+
+      // 同一音频缓冲中的主从位置；主轨显示时钟仍平滑外推到 10.12。
+      snapshot.stateRevision += 1
+      snapshot[leader].renderCurrentSec = 10.108
+      Object.assign(snapshot[follower], {
+        playing: true,
+        playingAudible: true,
+        renderCurrentSec: 4.072
+      })
+      renderSync.syncDeckRenderState({ nowMs: 1100, snapshotAtMs: 1100 })
+      // 模拟播放命令返回后再次 force 从轨；不能把 IPC 的 20ms 单独加到从轨时钟。
+      renderSync.syncDeckRenderState({ nowMs: 1120, force: follower, useLeaderClock: true })
+      const clock = vi.spyOn(performance, 'now').mockReturnValue(1120)
+      try {
+        const leaderSec = renderSync.resolveDeckRenderCurrentSeconds(leader)
+        const followerSec = renderSync.resolveDeckRenderCurrentSeconds(follower)
+        expect(leaderSec).toBeCloseTo(10.144, 9)
+        expect(followerSec).toBeCloseTo(4.096, 9)
+        expect((followerSec - 4.072) / 0.8).toBeCloseTo((leaderSec - 10.108) / 1.2, 9)
+        expect(leaderRevision.value).toBe(revision)
+      } finally {
+        clock.mockRestore()
+      }
+    }
+  )
+
+  it.each(['sync-off', 'tempo-only', 'leader-paused', 'follower-loop', 'leader-loop'] as const)(
+    '起播显示校正不介入 %s',
+    (mode) => {
+      const { snapshot, renderSync } = createRenderSync(() => false)
+      Object.assign(snapshot.top, { playbackRate: 1, renderCurrentSec: 10 })
+      Object.assign(snapshot.bottom, { playbackRate: 1, renderCurrentSec: 4 })
+      renderSync.syncDeckRenderState({ nowMs: 1000, snapshotAtMs: 1000 })
+      if (mode === 'sync-off') snapshot.bottom.syncEnabled = false
+      if (mode === 'tempo-only') snapshot.bottom.syncLock = 'tempo-only'
+      if (mode === 'leader-paused') snapshot.top.playingAudible = false
+      if (mode === 'follower-loop') snapshot.bottom.loopActive = true
+      if (mode === 'leader-loop') snapshot.top.loopActive = true
+      renderSync.syncDeckRenderState({ nowMs: 1120, force: 'bottom', useLeaderClock: true })
+      const clock = vi.spyOn(performance, 'now').mockReturnValue(1120)
+      try {
+        expect(renderSync.resolveDeckRenderCurrentSeconds('bottom')).toBeCloseTo(4, 9)
+      } finally {
+        clock.mockRestore()
+      }
+    }
+  )
+
   it.each(['top', 'bottom'] as const)('另一轨反复 Cue 不应重置 %s Master 波形', (deck) => {
     const { snapshot, renderSync } = createRenderSync(() => false)
     const cueDeck = deck === 'top' ? 'bottom' : 'top'

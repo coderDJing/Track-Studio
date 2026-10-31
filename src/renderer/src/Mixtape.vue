@@ -465,6 +465,7 @@ onBeforeUnmount(() => {
                     class="timeline-stop-btn"
                     type="button"
                     :title="t('mixtape.stop')"
+                    shortcut="Space"
                     :aria-label="t('mixtape.stop')"
                     @mousedown.stop.prevent
                     @click.stop="handleTransportStop"
@@ -479,6 +480,7 @@ onBeforeUnmount(() => {
                     class="timeline-stop-btn"
                     type="button"
                     :title="t('player.play')"
+                    shortcut="Space"
                     :aria-label="t('player.play')"
                     @mousedown.stop.prevent
                     @click.stop="handleTransportPlayFromStart"

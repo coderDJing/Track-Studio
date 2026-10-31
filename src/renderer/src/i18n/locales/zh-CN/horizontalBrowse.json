@@ -1,5 +1,7 @@
 {
   "horizontalBrowse": {
+    "crossfaderKeyboardHint": "上下移动 Crossfader；按住 Shift 使用相同按键回正",
+    "playbackRangeKeyboardHint": "开启 / 关闭区间播放（快捷键在普通播放和编辑模式的主界面生效）",
     "elapsedTime": "已播放时间",
     "remainingTime": "剩余时间",
     "trackKey": "调性",
@@ -34,8 +36,8 @@
     "cueMonitorOff": "开启该轨监听",
     "collapseFaderPanel": "收起双轨控制面板",
     "expandFaderPanel": "展开双轨控制面板",
-    "transportSyncOn": "关闭双轨连接同步",
-    "transportSyncOff": "开启双轨连接同步",
+    "transportSyncOn": "关闭联结",
+    "transportSyncOff": "开启联结",
     "editModeBpmInputTitle": "网格 BPM：修改分析结果和网格线，不改变播放速度",
     "dualModeBpmInputTitle": "目标 BPM：临时改变播放速度，不修改网格线",
     "editModeTapBpmTitle": "Tap：按节拍连续点击，实时修改网格 BPM，不改变播放速度",

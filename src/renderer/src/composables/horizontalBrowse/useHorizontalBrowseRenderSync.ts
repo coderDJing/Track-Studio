@@ -21,6 +21,7 @@ export type HorizontalBrowseRenderSyncOptions = {
   force?: HorizontalBrowseRenderSyncTarget
   forceRevision?: boolean
   preserveRevision?: boolean
+  useLeaderClock?: boolean
 }
 
 type UseHorizontalBrowseRenderSyncParams = {
@@ -190,7 +191,8 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
     return renderLimitSec > 0 ? Math.min(renderLimitSec, nextSec) : nextSec
   }
 
-  const resolveDeckRenderCurrentSeconds = (deck: DeckKey) => estimateDeckRenderCurrentSeconds(deck)
+  const resolveDeckRenderCurrentSeconds = (deck: DeckKey, nowMs?: number) =>
+    estimateDeckRenderCurrentSeconds(deck, nowMs)
 
   // 只有时间线坐标会变的字段才能触发渲染重锚；解码/可听状态变化不能打断负时间外推。
   const buildDeckRenderTimelineSignature = (snapshot: HorizontalBrowseTransportDeckSnapshot) =>
@@ -226,13 +228,49 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
     bottomDeckPlaybackSyncRevision.value += 1
   }
 
+  const resolveSnapshotSecondsOnLeaderClock = (
+    deck: DeckKey,
+    snapshotAtMs: number,
+    snapshotSec: number
+  ) => {
+    const follower = params.resolveTransportDeckSnapshot(deck)
+    const leaderDeck = deck === 'top' ? 'bottom' : 'top'
+    const leader = params.resolveTransportDeckSnapshot(leaderDeck)
+    if (
+      follower.leader ||
+      !follower.syncEnabled ||
+      follower.syncLock !== 'full' ||
+      !follower.playingAudible ||
+      !leader.leader ||
+      !leader.playingAudible ||
+      follower.loopActive ||
+      leader.loopActive ||
+      pendingRenderSeekIntent[leaderDeck] ||
+      pendingRenderPositionHold[leaderDeck] ||
+      params.nativeTransport.resolveLiveClockPlaybackRate?.(deck) != null ||
+      params.nativeTransport.resolveLiveClockPlaybackRate?.(leaderDeck) != null
+    ) {
+      return snapshotSec
+    }
+    const leaderRate = Number(leader.playbackRate)
+    const followerRate = Number(follower.playbackRate)
+    if (!(leaderRate > 0) || !(followerRate > 0)) return snapshotSec
+    // 同一快照里的两轨属于同一音频缓冲。用其相对位置接入 Master 的平滑时钟，
+    // 避免单独 force 从轨时把 IPC 延迟/缓冲采样差变成永久显示偏移；不改变音频相位。
+    const leaderClockDeltaSec =
+      estimateDeckRenderCurrentSeconds(leaderDeck, snapshotAtMs) -
+      normalizeTimelineSeconds(leader.renderCurrentSec)
+    return snapshotSec + leaderClockDeltaSec * (followerRate / leaderRate)
+  }
+
   const syncDeckFromSnapshot = (
     deck: DeckKey,
     snapshotAtMs: number,
     renderNowMs: number,
     force: boolean,
     forceRevision: boolean,
-    preserveRevision: boolean
+    preserveRevision: boolean,
+    useLeaderClock = false
   ) => {
     if (auditionPresentationSuspended.value) {
       assignDeckRenderCurrentSeconds(
@@ -245,7 +283,10 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
       return
     }
     const snapshot = params.resolveTransportDeckSnapshot(deck)
-    const snapshotSec = normalizeTimelineSeconds(snapshot.renderCurrentSec)
+    const rawSnapshotSec = normalizeTimelineSeconds(snapshot.renderCurrentSec)
+    const snapshotSec = useLeaderClock
+      ? resolveSnapshotSecondsOnLeaderClock(deck, snapshotAtMs, rawSnapshotSec)
+      : rawSnapshotSec
     const estimatedSec = estimateDeckRenderCurrentSeconds(deck, snapshotAtMs)
     const renderEstimatedSec = estimateDeckRenderCurrentSeconds(deck, renderNowMs)
     const pendingHold = pendingRenderPositionHold[deck]
@@ -443,9 +484,18 @@ export const useHorizontalBrowseRenderSync = (params: UseHorizontalBrowseRenderS
     const forcedDecks = resolveForcedDecks(typeof input === 'number' ? undefined : input.force)
     const forceRevision = typeof input === 'number' ? false : input.forceRevision === true
     const preserveRevision = typeof input === 'number' ? false : input.preserveRevision === true
+    const useLeaderClock = typeof input !== 'number' && input.useLeaderClock === true
     if (forcedDecks.size > 0) {
       for (const deck of forcedDecks) {
-        syncDeckFromSnapshot(deck, snapshotAtMs, nowMs, true, forceRevision, preserveRevision)
+        syncDeckFromSnapshot(
+          deck,
+          snapshotAtMs,
+          nowMs,
+          true,
+          forceRevision,
+          preserveRevision,
+          useLeaderClock
+        )
       }
       return
     }

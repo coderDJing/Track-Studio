@@ -1,5 +1,6 @@
 {
   "search": {
+    "focusSearch": "聚焦搜索框",
     "globalSongPlaceholder": "输入任意关键词（标题/艺人/专辑/作曲/年份/流派/调号/BPM/文件名/路径）",
     "globalSongLocateHint": "Enter：定位并选中",
     "globalSongPlayHint": "Ctrl+Enter：立即播放",

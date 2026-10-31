@@ -371,6 +371,7 @@ const applyLocalGridShiftPhaseCompensation = (deltaMs: number) => {
 }
 const scrubPreview = useHorizontalBrowseWaveformScrubPreview({
   dragging,
+  immediate: () => presentationLinkedDragActive.value,
   resolveAnchorSec: resolvePreviewAnchorSec,
   emitPreview: (payload) => emit('drag-session-preview', payload)
 })

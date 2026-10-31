@@ -9,6 +9,7 @@ import type { LibraryTransferActionMode } from '@renderer/utils/libraryTransfer'
 import type { HorizontalBrowseTempoNudgeDirection } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseDeckTempoNudge'
 
 const props = defineProps<{
+  deck: 'top' | 'bottom'
   disabled: boolean
   bpmInputDisabled: boolean
   showGridControls: boolean
@@ -306,6 +307,7 @@ const handleTempoNudgeKeyUp = (direction: HorizontalBrowseTempoNudgeDirection) =
         </div>
         <div class="overview__toolbar-group">
           <HorizontalBrowseDeckMoveButton
+            :deck="props.deck"
             :disabled="!props.songPresent"
             :read-only-source="props.readOnlySource"
             @select-target="(target, actionMode) => emit('select-move-target', target, actionMode)"

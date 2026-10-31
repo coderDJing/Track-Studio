@@ -183,6 +183,7 @@ const isTop = props.position === 'top'
       />
       <HorizontalBrowseDeckToolbarRow
         v-else-if="(isTop && regionId === 3) || (!isTop && regionId === 6)"
+        :deck="props.deck"
         :data-user-guide-target="isTop ? 'horizontal-tools' : undefined"
         :disabled="props.toolbarState.disabled"
         :bpm-input-disabled="props.toolbarState.bpmInputDisabled"

@@ -153,6 +153,7 @@ if ((rekordboxEnsureResult.status ?? 1) !== 0) {
 }
 
 const ensureArgs = [path.resolve('./scripts/ensure-demucs-runtime.mjs')]
+if (!releaseRuntime) ensureArgs.push('--dev')
 if (releaseRuntime) {
   env.FRKB_DEMUCS_ROOT = releaseRuntimeRoot
   ensureArgs.push(

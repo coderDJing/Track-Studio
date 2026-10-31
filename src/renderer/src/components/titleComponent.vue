@@ -4,6 +4,7 @@ import logoAsset from '@renderer/assets/logo.png?asset'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { ref, computed, watch } from 'vue'
 import menuComponent from './menu.vue'
+import SearchFocusShortcutHints from '@renderer/components/SearchFocusShortcutHints.vue'
 import confirm from '@renderer/components/confirmDialog'
 import { openNewSongsImport } from '@renderer/utils/newSongsImport'
 import { t } from '@renderer/utils/translate'
@@ -412,6 +413,7 @@ const titleMenuButtonMouseEnter = (item: Menu) => {
 }
 </script>
 <template>
+  <SearchFocusShortcutHints />
   <div class="title unselectable">
     <span class="title__main">{{ titleMeta.base }}</span>
     <span v-if="titleMeta.instance" class="title__dev-badge">

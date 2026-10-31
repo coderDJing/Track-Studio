@@ -10,11 +10,13 @@ const props = withDefaults(
     size?: number
     step?: number
     disabled?: boolean
+    shortcut?: string
   }>(),
   {
     size: 28,
     step: 0.05,
-    disabled: false
+    disabled: false,
+    shortcut: ''
   }
 )
 
@@ -141,6 +143,7 @@ onUnmounted(() => {
     :aria-valuenow="volumePercent"
     :aria-valuetext="volumeLabel"
     :title="dialTitle"
+    :shortcut="props.shortcut"
     :style="dialStyle"
     :disabled="disabled"
     @pointerdown="handlePointerDown"

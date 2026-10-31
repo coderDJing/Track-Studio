@@ -736,6 +736,7 @@ useHorizontalBrowseModeShellHotkeys({
   ejectDeckSong: handleDeckEjectSong,
   openDeckMoveDialog,
   onTogglePlayPause: handleDeckPlayPauseToggle,
+  onToggleTransportSync: handleDualTransportSyncToggle,
   onCueKeyDown: (deck) => (isEditMode.value ? false : handleDeckCueHotkeyDown(deck)),
   onCueKeyUp: (deck) => {
     if (!isEditMode.value) handleDeckCueHotkeyUp(deck)

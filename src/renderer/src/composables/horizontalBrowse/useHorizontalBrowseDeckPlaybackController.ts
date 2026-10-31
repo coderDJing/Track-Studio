@@ -37,6 +37,10 @@ import {
 import { createHorizontalBrowseSectionSeekPlayHandler } from '@renderer/composables/horizontalBrowse/horizontalBrowseSectionSeekPlay'
 import { createHorizontalBrowseBeatJumpHandlers } from '@renderer/composables/horizontalBrowse/horizontalBrowseBeatJumpHandlers'
 import { queueHorizontalBrowseDeckAnalysis } from '@renderer/composables/horizontalBrowse/horizontalBrowseExternalDjAnalysis'
+import {
+  createHorizontalBrowseWaveformDragStart,
+  pauseHorizontalBrowseLinkedPlayback
+} from './horizontalBrowseWaveformDragStart'
 
 type DeckKey = HorizontalBrowseDeckKey
 
@@ -231,13 +235,6 @@ export const useHorizontalBrowseDeckPlaybackController = (
     return duration > 0 ? Math.min(numeric, duration) : numeric
   }
 
-  const resolveSnapshotAnchorSec = (snapshot: HorizontalBrowseTransportDeckSnapshot) => {
-    const renderCurrentSec = Number(snapshot.renderCurrentSec)
-    if (Number.isFinite(renderCurrentSec)) return renderCurrentSec
-    const currentSec = Number(snapshot.currentSec)
-    return Number.isFinite(currentSec) ? currentSec : 0
-  }
-
   const isSyncedSeekTokenCurrent = (deck: DeckKey, token: number, _source: string) =>
     deckSeekActionToken[deck] === token
 
@@ -423,57 +420,12 @@ export const useHorizontalBrowseDeckPlaybackController = (
     })
   }
 
-  const pauseDeckRawWaveformDragPlayback = (deck: DeckKey) => {
-    const dragState = deckWaveformDragState[deck]
-    if (!dragState.active || !dragState.wasPlaying || dragState.pausePromise) return
-
-    const token = dragState.token
-    dragState.pausePromise = params.nativeTransport
-      .setPlaying(deck, false)
-      .then(() => {
-        const stale =
-          !deckWaveformDragState[deck].active || deckWaveformDragState[deck].token !== token
-        if (stale) {
-          return
-        }
-        params.syncDeckRenderState({ force: deck })
-      })
-      .catch(() => {})
-  }
-
-  const startSingleDeckRawWaveformDrag = (deck: DeckKey, pausePlayback = true) => {
-    params.touchDeckInteraction(deck)
-    const dragState = deckWaveformDragState[deck]
-    if (dragState.active) {
-      return
-    }
-
-    const snapshot = params.resolveTransportDeckSnapshot(deck)
-    dragState.active = true
-    dragState.wasPlaying = snapshot.playing
-    dragState.startAnchorSec = clampDeckTimelineSeconds(deck, resolveSnapshotAnchorSec(snapshot))
-    dragState.anchorSec = dragState.startAnchorSec
-    dragState.visualPlaybackRate = normalizeLinkedDragVisualPlaybackRate(snapshot.playbackRate)
-    dragState.cueCommittedDuringDrag = false
-    dragState.token += 1
-
-    if (pausePlayback) {
-      pauseDeckRawWaveformDragPlayback(deck)
-    }
-  }
-
-  const handleDeckRawWaveformDragStart = (deck: DeckKey) => {
-    if (!isDualTransportSyncActive()) {
-      startSingleDeckRawWaveformDrag(deck)
-      return
-    }
-    const otherDeck = resolveOtherDeck(deck)
-    const playbackOrder = resolveLinkedDeckPlaybackOrder(deck)
-    startSingleDeckRawWaveformDrag(deck, false)
-    startSingleDeckRawWaveformDrag(otherDeck, false)
-    pauseDeckRawWaveformDragPlayback(playbackOrder.follower)
-    pauseDeckRawWaveformDragPlayback(playbackOrder.leader)
-  }
+  const handleDeckRawWaveformDragStart = createHorizontalBrowseWaveformDragStart({
+    ...params,
+    dragStates: deckWaveformDragState,
+    isLinked: isDualTransportSyncActive,
+    clampTimelineSeconds: clampDeckTimelineSeconds
+  })
 
   const runLatestDeckScrubPreviewRequest = (deck: DeckKey) => {
     if (deckScrubPreviewInFlight[deck]) return
@@ -938,15 +890,7 @@ export const useHorizontalBrowseDeckPlaybackController = (
           return
         }
 
-        const playbackOrder = resolveLinkedDeckPlaybackOrder(deck)
-        params.holdDeckRenderCurrentSeconds(deck, params.resolveDeckRenderCurrentSeconds(deck))
-        params.holdDeckRenderCurrentSeconds(
-          otherDeck,
-          params.resolveDeckRenderCurrentSeconds(otherDeck)
-        )
-        await params.nativeTransport.setPlaying(playbackOrder.follower, false)
-        await params.nativeTransport.setPlaying(playbackOrder.leader, false)
-        params.syncDeckRenderState()
+        await pauseHorizontalBrowseLinkedPlayback(params)
       } finally {
         finishTiming()
       }
@@ -1013,7 +957,7 @@ export const useHorizontalBrowseDeckPlaybackController = (
           )
         })
       }
-      params.syncDeckRenderState(nextPlaying ? { force: deck } : undefined)
+      params.syncDeckRenderState(nextPlaying ? { force: deck, useLeaderClock: true } : undefined)
     } finally {
       finishTiming()
     }
@@ -1035,6 +979,10 @@ export const useHorizontalBrowseDeckPlaybackController = (
   const pauseAllDeckPlayback = () => {
     deckPendingPlayOnLoad.top = false
     deckPendingPlayOnLoad.bottom = false
+    if (isDualTransportSyncActive()) {
+      void pauseHorizontalBrowseLinkedPlayback(params)
+      return
+    }
     void executeDeckPlayPauseToggle('top', false)
     void executeDeckPlayPauseToggle('bottom', false)
   }

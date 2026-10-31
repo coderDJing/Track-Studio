@@ -274,7 +274,7 @@ export const useHorizontalBrowseFaderControls = (
   }
 
   const handleDualTransportSyncToggle = () => {
-    if (dualTransportSyncDeactivating.value) return
+    if (dualTransportSyncActivating.value || dualTransportSyncDeactivating.value) return
     if (dualTransportSyncEnabled.value || dualTransportSyncActivating.value) {
       deactivateDualTransportSync()
       return

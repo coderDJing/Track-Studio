@@ -981,6 +981,7 @@ onBeforeUnmount(() => {
           :limiter-overload="horizontalBrowseMasterMeter.limiterOverload"
         />
         <WindowVolumeDial
+          :shortcut="runtime.mainWindowBrowseMode === 'browser' ? '+ / −' : ''"
           :model-value="mainWindowVolume"
           :label="t('player.volumeControl')"
           :size="28"

@@ -16,6 +16,7 @@ type UseHorizontalBrowseHotkeysParams = {
   runtime: ReturnType<typeof useRuntimeStore>
   onPlayerInteraction?: () => void
   onTogglePlayPause: (deck: HorizontalBrowseDeckKey) => void
+  onToggleTransportSync: () => void
   onCueKeyDown: (deck: HorizontalBrowseDeckKey) => boolean
   onCueKeyUp: (deck: HorizontalBrowseDeckKey) => void
   onJumpBar: (deck: HorizontalBrowseDeckKey, direction: -1 | 1) => void
@@ -184,6 +185,19 @@ export const useHorizontalBrowseHotkeys = (params: UseHorizontalBrowseHotkeysPar
     if (event.defaultPrevented || !isHotkeysContextActive(event)) return
 
     const code = event.code
+    if (code === 'KeyX') {
+      if (
+        params.runtime.mainWindowBrowseMode !== 'horizontal' ||
+        event.shiftKey ||
+        event.isComposing
+      )
+        return
+      stopKeyboardEvent(event)
+      if (event.repeat) return
+      params.onPlayerInteraction?.()
+      params.onToggleTransportSync()
+      return
+    }
     if (previewMoveTarget) {
       if (code === 'KeyQ') {
         stopKeyboardEvent(event)

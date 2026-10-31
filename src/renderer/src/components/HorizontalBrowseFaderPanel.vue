@@ -3,6 +3,8 @@ import { computed, toRef } from 'vue'
 import type { CSSProperties } from 'vue'
 import { useHorizontalBrowseOutput } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseOutput'
 import { t } from '@renderer/utils/translate'
+import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
+import bubbleBox from '@renderer/components/bubbleBox.vue'
 
 type HorizontalBrowseOutputTransport = {
   state: {
@@ -55,6 +57,13 @@ const {
 
 const resolvedFaderTicks = computed(() => faderTicks as FaderTick[])
 const resolvedFaderThumbStyle = computed(() => faderThumbStyle.value as CSSProperties)
+const transportSyncLabel = computed(() =>
+  t(
+    props.transportSyncEnabled
+      ? 'horizontalBrowse.transportSyncOn'
+      : 'horizontalBrowse.transportSyncOff'
+  )
+)
 
 const togglePanelExpanded = () => {
   emit('update:expanded', !props.expanded)
@@ -68,6 +77,11 @@ defineExpose({
 </script>
 
 <template>
+  <bubbleBox
+    :dom="faderRef || undefined"
+    :title="t('horizontalBrowse.crossfaderKeyboardHint')"
+    shortcut="W / S / ↑ / ↓"
+  />
   <div class="fader-panel" :class="{ 'is-expanded': props.expanded }">
     <div
       ref="faderRef"
@@ -130,10 +144,12 @@ defineExpose({
       </svg>
     </button>
 
-    <div
+    <bubbleBoxTrigger
       v-if="props.expanded"
       class="fader-panel__sync-slot"
       data-user-guide-target="horizontal-link"
+      :title="transportSyncLabel"
+      shortcut="X"
     >
       <button
         class="fader-panel__sync-button"
@@ -141,13 +157,8 @@ defineExpose({
         type="button"
         :disabled="props.transportSyncDisabled"
         :aria-pressed="props.transportSyncEnabled"
-        :aria-label="
-          t(
-            props.transportSyncEnabled
-              ? 'horizontalBrowse.transportSyncOn'
-              : 'horizontalBrowse.transportSyncOff'
-          )
-        "
+        :aria-label="transportSyncLabel"
+        aria-keyshortcuts="X"
         @click.stop="emit('toggle-transport-sync')"
       >
         <svg
@@ -162,7 +173,7 @@ defineExpose({
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
         </svg>
       </button>
-    </div>
+    </bubbleBoxTrigger>
   </div>
 </template>
 

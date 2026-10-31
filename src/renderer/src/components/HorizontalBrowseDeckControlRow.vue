@@ -42,6 +42,7 @@ const handleToggleBand = (
 <template>
   <div class="deck-control-row">
     <HorizontalBrowseDeckButtons
+      :deck="props.deck"
       :playing="props.playing"
       :decoding="props.decoding"
       :pending-play="props.pendingPlay"

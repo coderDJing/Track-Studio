@@ -1,5 +1,9 @@
 <script setup lang="ts">
+import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
+import { t } from '@renderer/utils/translate'
+
 const props = defineProps<{
+  deck: 'top' | 'bottom'
   playing: boolean
   decoding?: boolean
   pendingPlay?: boolean
@@ -18,8 +22,12 @@ const emit = defineEmits<{
 
 <template>
   <div class="deck-controls">
-    <button
+    <bubbleBoxTrigger
       v-if="props.showCue !== false"
+      tag="button"
+      wrapper-tag="span"
+      :title="t('shortcuts.horizontalCue')"
+      :shortcut="props.deck === 'bottom' ? 'Shift+C' : 'C'"
       type="button"
       class="deck-button deck-button--cue"
       :class="{
@@ -32,8 +40,12 @@ const emit = defineEmits<{
       @click="emit('cue-click')"
     >
       CUE
-    </button>
-    <button
+    </bubbleBoxTrigger>
+    <bubbleBoxTrigger
+      tag="button"
+      wrapper-tag="span"
+      :title="t(props.playing ? 'player.pause' : 'player.play')"
+      :shortcut="props.deck === 'bottom' ? 'Shift+Space' : 'Space'"
       type="button"
       class="deck-button deck-button--play"
       :class="{
@@ -52,7 +64,7 @@ const emit = defineEmits<{
       <svg v-else viewBox="0 0 16 16" aria-hidden="true" focusable="false">
         <polygon points="5,3.5 12.5,8 5,12.5"></polygon>
       </svg>
-    </button>
+    </bubbleBoxTrigger>
   </div>
 </template>
 

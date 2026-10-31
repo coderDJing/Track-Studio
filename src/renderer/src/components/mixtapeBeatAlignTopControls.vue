@@ -50,6 +50,7 @@ const emit = defineEmits<{
         class="playback-icon-btn"
         type="button"
         :disabled="!canTogglePreviewPlayback"
+        shortcut="Space"
         :title="
           previewDecoding
             ? t('mixtape.transportDecoding')

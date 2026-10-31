@@ -11,6 +11,7 @@ import {
 import { ensureDemucsModels } from './lib/demucs-model-ensure.mjs'
 import { bootstrapPortableDarwinPython } from './lib/demucs-standalone-python.mjs'
 import { validatePortableDarwinRuntime } from './lib/demucs-runtime-portability.mjs'
+import { selectDevRuntimeProfiles, tryReuseDemucsDevRuntime } from './lib/demucs-dev-runtime.mjs'
 
 const runtimeProfilesPath = path.resolve('./scripts/demucs-runtime-profiles.json')
 const runtimeProfilesRaw = fs.readFileSync(runtimeProfilesPath, 'utf8')
@@ -71,6 +72,7 @@ const install = !hasFlag('--no-install')
 const strict = hasFlag('--strict') || hasFlag('--ci')
 const force = hasFlag('--force')
 const modelsOnly = hasFlag('--models-only')
+const dev = hasFlag('--dev')
 const syncRemoteAssets = hasFlag('--sync-remote-assets')
 const preferRemoteAssets =
   syncRemoteAssets ||
@@ -824,17 +826,62 @@ const main = async () => {
     return
   }
 
-  const baseRuntimeInfo = syncRemoteAssets
-    ? {
-        basePipInstallArgs: []
-      }
-    : await ensureBaseRuntime(platformArg, platformConfig)
-
   const explicitProfiles = parseCsv(profileArg)
-  const selectedProfiles =
+  let selectedProfiles =
     explicitProfiles.length > 0
       ? explicitProfiles.filter((profileName) => !!platformConfig.profiles?.[profileName])
       : resolveAutoProfiles(platformArg, platformConfig)
+  if (dev && explicitProfiles.length === 0) {
+    selectedProfiles = selectDevRuntimeProfiles(selectedProfiles)
+  }
+
+  if (dev && !syncRemoteAssets && !force) {
+    const needsPreparation = []
+    for (const profileName of selectedProfiles) {
+      const profileConfig = platformConfig.profiles[profileName]
+      const runtimeDir = path.resolve(runtimeRoot, platformArg, profileConfig.targetDir)
+      const reused = await tryReuseDemucsDevRuntime({
+        profileName,
+        runtimeDir,
+        pythonPath: resolveRuntimePythonPath(runtimeDir),
+        platform: platformArg,
+        basePipInstallArgs: normalizeList(platformConfig.basePipInstall),
+        pipInstallArgs: normalizeList(profileConfig.pipInstall),
+        install,
+        pipTimeoutSec,
+        validateRuntimePortability,
+        buildRuntimeEnv,
+        runQuiet,
+        run,
+        probeModules: () =>
+          probeRuntimeModules({
+            pythonPath: resolveRuntimePythonPath(runtimeDir),
+            runtimeDir,
+            buildRuntimeEnv,
+            runQuiet,
+            toShortText
+          })
+      })
+      if (!reused) needsPreparation.push(profileName)
+    }
+    selectedProfiles = needsPreparation
+    if (selectedProfiles.length === 0) {
+      await ensureDemucsModels({
+        runtimeRoot,
+        modelManifestPath,
+        modelsArg,
+        modelRetriesArg,
+        modelTimeoutSecArg,
+        toShortText
+      })
+      console.log('[demucs-runtime-ensure] Development runtime ready (no base/CPU preparation)')
+      return
+    }
+  }
+
+  const baseRuntimeInfo = syncRemoteAssets
+    ? { basePipInstallArgs: [] }
+    : await ensureBaseRuntime(platformArg, platformConfig)
 
   if (selectedProfiles.length === 0) {
     console.log('[demucs-runtime-ensure] No matching profiles selected, skip')
@@ -998,7 +1045,7 @@ void (async () => {
     await main()
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error || '')
-    if (strict) {
+    if (strict || dev) {
       console.error(`[demucs-runtime-ensure] Failed: ${message}`)
       process.exit(1)
     }

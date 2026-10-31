@@ -121,7 +121,7 @@ const saveHint = () => {
         wrapper-tag="span"
         wrapper-class="audio-edit-toolbar__anchor"
         :title="t('audioEdit.redo')"
-        shortcut="Ctrl+Shift+Z"
+        shortcut="Ctrl+Shift+Z / Ctrl+Y"
       >
         <button
           type="button"
