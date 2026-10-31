@@ -2,8 +2,7 @@ import { shell } from 'electron'
 import path = require('path')
 import fs = require('fs-extra')
 import { normalizeFilePathForComparison } from '../../../shared/filePathComparison'
-import { SET_PACKAGE_AUDIO_DIR_NAME } from '../../../shared/setPackage'
-import type { SetPackageManifest } from './manifest'
+import { listSetPackageAssets, type SetPackageManifest } from './manifest'
 
 const pathKey = (value: string) =>
   normalizeFilePathForComparison(path.resolve(value), process.platform === 'win32')
@@ -32,9 +31,9 @@ export async function cleanupImportedPackage(
   }
   const expectedFiles = new Set([pathKey(path.join(packageDir, path.basename(manifestPath)))])
   const expectedDirs = new Set<string>()
-  for (const file of manifest.files) {
-    if (!file.path.startsWith(`${SET_PACKAGE_AUDIO_DIR_NAME}/`)) {
-      throw new Error('SET 音频不在包内 audio 文件夹中，不能删除源文件夹')
+  for (const file of listSetPackageAssets(manifest)) {
+    if (!file.path.startsWith('audio/') && !file.path.startsWith('analysis/')) {
+      throw new Error('SET 文件不在包内 audio 或 analysis 文件夹中，不能删除源文件夹')
     }
     const absolute = path.resolve(packageDir, ...file.path.split('/'))
     if (!containsPath(packageDir, absolute) || pathKey(absolute) === pathKey(packageDir)) {

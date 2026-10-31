@@ -4,6 +4,8 @@ import fs = require('fs-extra')
 import store from '../../store'
 import { listSetItemsByPlaylist } from '../../setListDb'
 import { hashFileSha256 } from '../../curatedLibrarySync/hashFile'
+import { loadSetSongCacheCandidates, setSongCacheLookupKey } from '../setListCachedSongScan'
+import { exportTrackWaveforms } from './waveformTransfer'
 import { normalizeFilePathForComparison } from '../../../shared/filePathComparison'
 import {
   SET_PACKAGE_AUDIO_DIR_NAME,
@@ -99,7 +101,12 @@ export async function exportSetPackage(
     if (id) songBySetItemId.set(id, song)
   }
 
-  type PlannedTrack = { absPath: string; song: ISongInfo; addedAtMs: number }
+  type PlannedTrack = {
+    absPath: string
+    song: ISongInfo
+    addedAtMs: number
+    stat: { size: number; mtimeMs: number }
+  }
   const planned: PlannedTrack[] = []
   const missing: string[] = []
   for (const item of items) {
@@ -113,7 +120,12 @@ export async function exportSetPackage(
       missing.push(path.basename(absPath))
       continue
     }
-    planned.push({ absPath, song, addedAtMs: item.createdAtMs })
+    planned.push({
+      absPath,
+      song,
+      addedAtMs: item.createdAtMs,
+      stat: { size: stat.size, mtimeMs: stat.mtimeMs }
+    })
   }
   if (missing.length > 0) {
     throw new SetPackageError('MISSING_FILES', 'SET 中有曲目的音频文件不存在', missing)
@@ -127,8 +139,12 @@ export async function exportSetPackage(
   const fileByPathKey = new Map<string, SetPackageFileEntry>()
   const sourceByFileId = new Map<string, string>()
   const usedFileNames = new Set<string>()
+  const tracksByFile = new Map<string, PlannedTrack[]>()
   for (const track of planned) {
     const key = filePathKey(track.absPath)
+    const sourceTracks = tracksByFile.get(key) || []
+    sourceTracks.push(track)
+    tracksByFile.set(key, sourceTracks)
     if (fileByPathKey.has(key)) continue
     const fileName = resolveDisplayFileName(track.song, track.absPath)
     const targetName = resolveUnusedFileName(fileName, usedFileNames)
@@ -144,6 +160,7 @@ export async function exportSetPackage(
   }
 
   const files = [...fileByPathKey.values()]
+  const cacheCandidates = await loadSetSongCacheCandidates(planned.map((track) => track.absPath))
   try {
     await fs.ensureDir(audioDir)
     params.onProgress?.(0, files.length)
@@ -155,6 +172,35 @@ export async function exportSetPackage(
       const [stat, sha256] = await Promise.all([fs.stat(targetPath), hashFileSha256(targetPath)])
       entry.size = stat.size
       entry.sha256 = sha256
+      const sourceTracks = tracksByFile.get(filePathKey(sourcePath)) || []
+      const sourceStat = await fs.stat(sourcePath)
+      if (
+        sourceTracks.some(
+          (track) =>
+            track.stat.size !== sourceStat.size ||
+            Math.abs(track.stat.mtimeMs - sourceStat.mtimeMs) > 1
+        )
+      ) {
+        throw new SetPackageError('TRACKS_MISMATCH', '导出期间音频文件已变化')
+      }
+      const candidates = cacheCandidates.get(setSongCacheLookupKey(sourcePath)) || []
+      entry.waveform = await exportTrackWaveforms({
+        filePath: sourcePath,
+        stat: sourceStat,
+        rootHints: [
+          ...sourceTracks.map((track) => track.song.waveformPreviewListRoot || ''),
+          ...candidates
+            .filter(
+              (candidate) =>
+                candidate.size === sourceStat.size &&
+                Math.abs(candidate.mtimeMs - sourceStat.mtimeMs) <= 1
+            )
+            .map((candidate) => candidate.listRoot)
+        ],
+        packageDir,
+        audioSha256: entry.sha256,
+        fileId: entry.id
+      })
       params.onProgress?.(index + 1, files.length)
     }
 

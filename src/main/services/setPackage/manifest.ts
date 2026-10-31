@@ -3,17 +3,22 @@ import fs = require('fs-extra')
 import type { ISongInfo } from '../../../types/globals'
 import {
   SET_PACKAGE_FORMAT,
+  SET_PACKAGE_ANALYSIS_DIR_NAME,
   SET_PACKAGE_VERSION,
   type SetPackageErrorCode
 } from '../../../shared/setPackage'
 
-export type SetPackageFileEntry = {
-  id: string
+export type SetPackageAssetEntry = {
   /** 相对包目录的路径，统一用 / 分隔 */
   path: string
-  fileName: string
   size: number
   sha256: string
+}
+
+export type SetPackageFileEntry = SetPackageAssetEntry & {
+  id: string
+  fileName: string
+  waveform?: SetPackageAssetEntry
 }
 
 export type SetPackageTrackEntry = {
@@ -111,8 +116,32 @@ function parseFileEntry(raw: unknown, index: number): SetPackageFileEntry {
   }
   if (!Number.isSafeInteger(size) || size < 0) return invalid(`files[${index}] size 非法`)
   if (!SHA256_PATTERN.test(sha256)) return invalid(`files[${index}] sha256 非法`)
-  return { id, path: relPath, fileName, size, sha256 }
+  let waveform: SetPackageAssetEntry | undefined
+  if (raw.waveform !== undefined) {
+    if (!isPlainObject(raw.waveform)) return invalid(`files[${index}] waveform 非法`)
+    const asset = raw.waveform
+    if (
+      typeof asset.path !== 'string' ||
+      !asset.path.startsWith(`${SET_PACKAGE_ANALYSIS_DIR_NAME}/`) ||
+      !resolvePackageFilePath(path.resolve('.'), asset.path) ||
+      !Number.isSafeInteger(asset.size) ||
+      Number(asset.size) <= 0 ||
+      typeof asset.sha256 !== 'string' ||
+      !SHA256_PATTERN.test(asset.sha256)
+    )
+      return invalid(`files[${index}] waveform 路径或身份非法`)
+    waveform = { path: asset.path, size: Number(asset.size), sha256: asset.sha256 }
+  }
+  return { id, path: relPath, fileName, size, sha256, ...(waveform ? { waveform } : {}) }
 }
+
+export const listSetPackageAssets = (manifest: SetPackageManifest) =>
+  manifest.files.flatMap((file) => [
+    { path: file.path, size: file.size, sha256: file.sha256, fileName: file.fileName },
+    ...(file.waveform
+      ? [{ ...file.waveform, fileName: path.posix.basename(file.waveform.path) }]
+      : [])
+  ])
 
 const SONG_STRING_KEYS = [
   'fileName',
@@ -221,9 +250,15 @@ export async function readSetPackageManifest(manifestPath: string): Promise<SetP
   }
   const files = raw.files.map((entry, index) => parseFileEntry(entry, index))
   const fileIds = new Set<string>()
+  const assetPaths = new Set<string>()
   for (const file of files) {
     if (fileIds.has(file.id)) return invalid(`文件 id 重复：${file.id}`)
     fileIds.add(file.id)
+    for (const asset of [file, ...(file.waveform ? [file.waveform] : [])]) {
+      const key = asset.path.toLowerCase()
+      if (assetPaths.has(key)) return invalid(`包内文件路径重复：${asset.path}`)
+      assetPaths.add(key)
+    }
   }
   const tracks = raw.tracks.map((entry, index) => parseTrackEntry(entry, index, fileIds))
   if (tracks.length === 0) return invalid('SET 包里没有曲目')
@@ -245,7 +280,7 @@ export async function assertSetPackageFilesPresent(
 ): Promise<void> {
   const missing: string[] = []
   const mismatched: string[] = []
-  for (const file of manifest.files) {
+  for (const file of listSetPackageAssets(manifest)) {
     const absPath = resolvePackageFilePath(packageDir, file.path)
     if (!absPath) return invalid(`文件路径非法：${file.path}`)
     const stat = await fs.stat(absPath).catch(() => null)
@@ -256,9 +291,9 @@ export async function assertSetPackageFilesPresent(
     if (stat.size !== file.size) mismatched.push(file.fileName)
   }
   if (missing.length > 0) {
-    throw new SetPackageError('PACKAGE_FILE_MISSING', 'SET 包内缺少音频文件', missing)
+    throw new SetPackageError('PACKAGE_FILE_MISSING', 'SET 包内缺少文件', missing)
   }
   if (mismatched.length > 0) {
-    throw new SetPackageError('PACKAGE_FILE_CORRUPTED', 'SET 包内音频文件已损坏', mismatched)
+    throw new SetPackageError('PACKAGE_FILE_CORRUPTED', 'SET 包内文件已损坏', mismatched)
   }
 }

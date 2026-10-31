@@ -52,6 +52,12 @@ import { exportSetPackage } from './exportSetPackage'
 import { importSetPackage } from './importSetPackage'
 import { readSetPackageManifest } from './manifest'
 import { cleanupImportedPackage } from './cleanupImportedPackage'
+import * as LibraryCacheDb from '../../libraryCacheDb'
+import { buildWaveformSurfaceCacheDataFromUnifiedDisplay } from '../../../shared/waveformSurfaceCache'
+import { hasUsableCoreSongAnalysis } from '../../../shared/songAnalysisCompleteness'
+import { CURRENT_SONG_ENERGY_ALGORITHM_VERSION } from '../../../shared/songEnergy'
+import { CURRENT_SONG_STRUCTURE_ALGORITHM_VERSION } from '../../../shared/songStructure'
+import { createPackageWaveformFixture } from './waveformTestFixtures'
 
 const coreDirNames = {
   FilterLibrary: 'FilterLibrary',
@@ -105,8 +111,9 @@ const gridMap = (bpm: number, firstBeatMs: number) => {
   return map
 }
 
-const buildSong = (filePath: string, setItemId: string, title: string, bpm: number): ISongInfo =>
-  ({
+const buildSong = (filePath: string, setItemId: string, title: string, bpm: number): ISongInfo => {
+  const beatGridMap = gridMap(bpm, 123.4)
+  return {
     filePath,
     fileName: path.basename(filePath),
     fileFormat: 'MP3',
@@ -121,8 +128,43 @@ const buildSong = (filePath: string, setItemId: string, title: string, bpm: numb
     container: 'MPEG',
     key: '8A',
     keyAnalysisAlgorithmVersion: 1,
-    beatGridMap: gridMap(bpm, 123.4),
+    beatGridMap,
     beatGridAlgorithmVersion: 1,
+    energyScore: 7,
+    energyAlgorithmVersion: CURRENT_SONG_ENERGY_ALGORITHM_VERSION,
+    energyAnalysis: {
+      version: 11,
+      model: 'musicnn-deam-emomusic-structure-v11',
+      sustainedScore: 7,
+      averageScore: 6,
+      medianScore: 6,
+      peakScore: 8,
+      rangeScore: 4,
+      confidence: 0.9,
+      patchCount: 20,
+      energyCurve: [{ timeMs: 0, score: 7, role: 'drop' }]
+    },
+    songStructure: {
+      formatVersion: 2,
+      algorithmVersion: CURRENT_SONG_STRUCTURE_ALGORITHM_VERSION,
+      source: 'algorithmic',
+      durationSec: 360,
+      beatGridSignature: beatGridMap.signature,
+      sections: [
+        {
+          startSec: 0,
+          endSec: 360,
+          startDownbeatOrdinal: 0,
+          endDownbeatOrdinal: 192,
+          kind: 'groove',
+          confidence: 0.8,
+          energy: 0.7,
+          low: 0.6,
+          high: 0.4,
+          novelty: 0.2
+        }
+      ]
+    },
     timeBasisOffsetMs: 12.5,
     timeBasisOffsetAlgorithmVersion: 1,
     hotCues: [
@@ -132,7 +174,8 @@ const buildSong = (filePath: string, setItemId: string, title: string, bpm: numb
     memoryCues: [{ sec: 64, order: 1, comment: 'Break' }],
     setItemId,
     playlistTrackNumber: 1
-  }) as ISongInfo
+  }
+}
 
 type ExportFixture = {
   manifestPath: string
@@ -141,7 +184,7 @@ type ExportFixture = {
   sourceCreatedAt: number[]
 }
 
-const exportFromComputerA = async (): Promise<ExportFixture> => {
+const exportFromComputerA = async (withWaveforms = false): Promise<ExportFixture> => {
   const rootA = await makeTempDir('frkb-set-pkg-a-')
   await openLibrary(rootA, 'set-a', 'Friday Set')
   const trackA = path.join(rootA, 'library', 'FilterLibrary', 'House', 'Same Name.mp3')
@@ -158,6 +201,24 @@ const exportFromComputerA = async (): Promise<ExportFixture> => {
     buildSong(trackA, items[1].id, 'Track A', 132.5),
     buildSong(trackB, items[2].id, 'Track B', 128)
   ]
+  if (withWaveforms) {
+    for (const [index, filePath] of [trackB, trackA].entries()) {
+      const root = path.dirname(filePath)
+      await fs.utimes(filePath, 1_600_000_000, 1_600_000_000)
+      const stat = await fs.stat(filePath)
+      const detail = createPackageWaveformFixture(index + 1)
+      const surfaces = buildWaveformSurfaceCacheDataFromUnifiedDisplay(detail)
+      if (!surfaces) throw new Error('surface fixture failed')
+      expect(
+        await LibraryCacheDb.upsertUnifiedDisplayWaveformCacheEntry(root, filePath, stat, detail)
+      ).toBe(true)
+      expect(
+        await LibraryCacheDb.upsertWaveformSurfaceCacheEntry(root, filePath, stat, surfaces)
+      ).toBe(true)
+      for (const song of songs.filter((song) => song.filePath === filePath))
+        song.waveformPreviewListRoot = root
+    }
+  }
   const exportParent = await makeTempDir('frkb-set-pkg-out-')
   const summary = await exportSetPackage({
     playlistUuid: 'set-a',
@@ -232,9 +293,131 @@ describe('SET package export/import', () => {
       expect(song.key).toBe(source.key)
       expect(song.beatGridMap).toEqual(source.beatGridMap)
       expect(song.timeBasisOffsetMs).toBe(source.timeBasisOffsetMs)
+      expect(song.timeBasisOffsetAlgorithmVersion).toBe(source.timeBasisOffsetAlgorithmVersion)
+      expect(song.keyAnalysisAlgorithmVersion).toBe(source.keyAnalysisAlgorithmVersion)
+      expect(song.energyScore).toBe(source.energyScore)
+      expect(song.energyAlgorithmVersion).toBe(source.energyAlgorithmVersion)
+      expect(song.energyAnalysis).toEqual(source.energyAnalysis)
+      expect(song.songStructure).toEqual(source.songStructure)
       expect(song.hotCues).toEqual(source.hotCues)
       expect(song.memoryCues).toEqual(source.memoryCues)
       expect(song.addedAtMs).toBe(fixture.sourceCreatedAt[index])
+    })
+  })
+
+  it('restores all waveform caches in a different library with the copied audio identity', async () => {
+    const fixture = await exportFromComputerA(true)
+    const manifest = await readSetPackageManifest(fixture.manifestPath)
+    expect(manifest.version).toBe(2)
+    expect(manifest.files.every((file) => file.waveform?.path.startsWith('analysis/'))).toBe(true)
+    expect(await fs.readdir(path.join(fixture.packageDir, 'analysis'))).toHaveLength(2)
+    await openLibrary(await makeTempDir('frkb-set-pkg-b-'), 'set-b', 'Imported')
+    await importSetPackage({
+      manifestPath: fixture.manifestPath,
+      playlistUuid: 'set-b',
+      deleteSourceAfterImport: true
+    })
+    expect(cleanupMocks.trashItem).toHaveBeenCalledOnce()
+    registerSetListHandlers()
+    const loadItems = ipcHandlers.get('setList:load-items')
+    if (!loadItems) throw new Error('load-items missing')
+    const loaded = (await loadItems({}, 'set-b')) as { scanData: ISongInfo[] }
+    for (const [index, song] of loaded.scanData.entries()) {
+      const root = song.waveformPreviewListRoot
+      if (!root) throw new Error('imported waveform root missing')
+      const stat = await fs.stat(song.filePath)
+      const detail = createPackageWaveformFixture(index === 1 ? 2 : 1)
+      const surfaces = buildWaveformSurfaceCacheDataFromUnifiedDisplay(detail)
+      expect(
+        await LibraryCacheDb.loadUnifiedDisplayWaveformCacheData(root, song.filePath, stat)
+      ).toEqual(detail)
+      expect(
+        await LibraryCacheDb.loadWaveformListPreviewCacheData(root, song.filePath, stat)
+      ).toEqual(surfaces?.listPreview)
+      expect(
+        await LibraryCacheDb.loadWaveformGlobalOverviewCacheData(root, song.filePath, stat)
+      ).toEqual(surfaces?.globalOverview)
+      const available = await LibraryCacheDb.hasWaveformSurfaceCacheEntryByMeta(
+        root,
+        song.filePath,
+        stat.size,
+        stat.mtimeMs
+      )
+      expect(available).toBe(true)
+      expect(
+        hasUsableCoreSongAnalysis(song, { includeStructure: true, waveformAvailable: available })
+      ).toBe(true)
+    }
+  })
+
+  it('keeps v1 packages importable without inventing waveform caches', async () => {
+    const fixture = await exportFromComputerA()
+    const manifest = await readSetPackageManifest(fixture.manifestPath)
+    await fs.writeFile(fixture.manifestPath, JSON.stringify({ ...manifest, version: 1 }))
+    await openLibrary(await makeTempDir('frkb-set-pkg-b-'), 'set-b', 'Imported')
+    await expect(
+      importSetPackage({ manifestPath: fixture.manifestPath, playlistUuid: 'set-b' })
+    ).resolves.toEqual({ trackCount: 3, fileCount: 2 })
+    const custodyRoot = path.join(store.databaseDir!, 'library', 'SetLibrary', '__set_custody__')
+    const item = listSetItemsByPlaylist('set-b')[0]
+    const stat = await fs.stat(item.filePath)
+    expect(
+      await LibraryCacheDb.hasWaveformSurfaceCacheEntryByMeta(
+        custodyRoot,
+        item.filePath,
+        stat.size,
+        stat.mtimeMs
+      )
+    ).toBe(false)
+  })
+
+  it('rolls back audio and waveform caches if a later waveform asset is corrupted', async () => {
+    const fixture = await exportFromComputerA(true)
+    const manifest = await readSetPackageManifest(fixture.manifestPath)
+    const asset = manifest.files[1].waveform
+    if (!asset) throw new Error('waveform asset missing')
+    await fs.writeFile(
+      path.join(fixture.packageDir, ...asset.path.split('/')),
+      Buffer.alloc(asset.size)
+    )
+    await openLibrary(await makeTempDir('frkb-set-pkg-b-'), 'set-b', 'Imported')
+    await expect(
+      importSetPackage({
+        manifestPath: fixture.manifestPath,
+        playlistUuid: 'set-b',
+        deleteSourceAfterImport: true
+      })
+    ).rejects.toMatchObject({ code: 'PACKAGE_FILE_CORRUPTED' })
+    expect(listSetItemsByPlaylist('set-b')).toEqual([])
+    expect(cleanupMocks.trashItem).not.toHaveBeenCalled()
+    expect(
+      (await import('../../libraryDb'))
+        .getLibraryDb()
+        ?.prepare('SELECT count(*) AS count FROM waveform_surface_cache')
+        .get()
+    ).toEqual({ count: 0 })
+    expect(
+      (await import('../../libraryDb'))
+        .getLibraryDb()
+        ?.prepare('SELECT count(*) AS count FROM unified_display_waveform_cache')
+        .get()
+    ).toEqual({ count: 0 })
+  })
+
+  it('rejects missing waveform assets and waveform paths outside the package', async () => {
+    const fixture = await exportFromComputerA(true)
+    const manifest = await readSetPackageManifest(fixture.manifestPath)
+    const asset = manifest.files[0].waveform
+    if (!asset) throw new Error('waveform asset missing')
+    await fs.unlink(path.join(fixture.packageDir, ...asset.path.split('/')))
+    await openLibrary(await makeTempDir('frkb-set-pkg-b-'), 'set-b', 'Imported')
+    await expect(
+      importSetPackage({ manifestPath: fixture.manifestPath, playlistUuid: 'set-b' })
+    ).rejects.toMatchObject({ code: 'PACKAGE_FILE_MISSING' })
+    asset.path = 'analysis/../../outside.frkbwave'
+    await fs.writeFile(fixture.manifestPath, JSON.stringify(manifest))
+    await expect(readSetPackageManifest(fixture.manifestPath)).rejects.toMatchObject({
+      code: 'MANIFEST_INVALID'
     })
   })
 
@@ -356,6 +539,15 @@ describe('SET package export/import', () => {
       'Shown Name_1a2b3c4d.mp3'
     )
     await writeAudio(custodyPath, 7)
+    const custodyRoot = path.dirname(custodyPath)
+    expect(
+      await LibraryCacheDb.upsertUnifiedDisplayWaveformCacheEntry(
+        custodyRoot,
+        custodyPath,
+        await fs.stat(custodyPath),
+        createPackageWaveformFixture()
+      )
+    ).toBe(true)
     const [item] = appendSetItems('set-a', [{ filePath: custodyPath }])
     const summary = await exportSetPackage({
       playlistUuid: 'set-a',
@@ -366,6 +558,7 @@ describe('SET package export/import', () => {
     const manifest = await readSetPackageManifest(summary.manifestPath)
     expect(manifest.files[0].fileName).toBe('Shown Name.mp3')
     expect(manifest.files[0].path).toBe('audio/Shown Name.mp3')
+    expect(manifest.files[0].waveform?.path).toBe('analysis/f1.frkbwave')
   })
 
   it('rejects a package whose track fields have the wrong type', async () => {

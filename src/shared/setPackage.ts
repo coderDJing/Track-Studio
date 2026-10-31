@@ -1,8 +1,9 @@
 // SET 包：把 SET 歌单、音频与分析结果导出为可导入 Track Studio 音乐库的文件夹。
 export const SET_PACKAGE_FORMAT = 'frkb-set-package'
-export const SET_PACKAGE_VERSION = 1
+export const SET_PACKAGE_VERSION = 2
 export const SET_PACKAGE_EXTENSION = 'frkbset'
 export const SET_PACKAGE_AUDIO_DIR_NAME = 'audio'
+export const SET_PACKAGE_ANALYSIS_DIR_NAME = 'analysis'
 
 export type SetPackageErrorCode =
   | 'PLAYLIST_NOT_FOUND'

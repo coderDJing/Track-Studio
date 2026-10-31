@@ -22,6 +22,7 @@ import {
 import { toSafeSetPackageName } from './exportSetPackage'
 import { cleanupImportedPackage } from './cleanupImportedPackage'
 import type { SetPackageImportSummary } from '../../../shared/setPackage'
+import { importTrackWaveforms } from './waveformTransfer'
 
 export type ImportSetPackageParams = {
   manifestPath: string
@@ -104,6 +105,16 @@ export async function importSetPackage(
         ])
       }
       importedById.set(file.id, { absPath: targetPath, size: stat.size, mtimeMs: stat.mtimeMs })
+      if (file.waveform) {
+        await importTrackWaveforms({
+          packageDir,
+          asset: file.waveform,
+          listRoot: custodyRoot,
+          filePath: targetPath,
+          audioSha256: file.sha256,
+          stat
+        })
+      }
       params.onProgress?.(index + 1, manifest.files.length)
     }
 
@@ -144,6 +155,13 @@ export async function importSetPackage(
     removeSetItemsByPlaylist(params.playlistUuid)
     for (const imported of importedById.values()) {
       await LibraryCacheDb.removeSongCacheEntry(custodyRoot, imported.absPath).catch(() => false)
+      await LibraryCacheDb.removeUnifiedDisplayWaveformCacheEntry(
+        custodyRoot,
+        imported.absPath
+      ).catch(() => false)
+      await LibraryCacheDb.removeWaveformSurfaceCacheEntry(custodyRoot, imported.absPath).catch(
+        () => false
+      )
     }
     await fs.remove(importDir).catch((removeError) => {
       log.error('[setPackage] 回滚导入目录失败', { importDir, error: removeError })
