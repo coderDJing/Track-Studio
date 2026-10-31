@@ -307,9 +307,11 @@ export function useWaveformPreview(params: {
   const requestWaveformPreview = (song: ISongInfo, startPercent: number) => {
     const filePath = typeof song?.filePath === 'string' ? song.filePath : ''
     if (!filePath) return
+    const start = clamp01(startPercent)
+    previewPercent.value = start
     emitter.emit('waveform-preview:play', {
       filePath,
-      startPercent: clamp01(startPercent),
+      startPercent: start,
       song: { ...song },
       sourceLibraryName: String(sourceLibraryName.value || ''),
       sourceSongListUUID: String(sourceSongListUUID.value || ''),
@@ -317,7 +319,6 @@ export function useWaveformPreview(params: {
     })
     previewActive.value = true
     previewFilePath.value = filePath
-    previewPercent.value = clamp01(startPercent)
   }
   const requestWaveformPreviewAtSeconds = (song: ISongInfo, startSeconds: number) => {
     const durationSec = parseDurationToSeconds(song?.duration)
@@ -945,8 +946,12 @@ export function useWaveformPreview(params: {
       return
     }
     if (filePath) {
+      const previousFilePath = previewFilePath.value
       previewActive.value = true
       previewFilePath.value = filePath
+      if (previousFilePath && !sameRendererFilePath(previousFilePath, filePath)) {
+        drawWaveform(previousFilePath)
+      }
       drawWaveform(filePath)
     }
   }
@@ -954,9 +959,13 @@ export function useWaveformPreview(params: {
     const filePath = typeof payload?.filePath === 'string' ? payload.filePath : ''
     if (!filePath) return
     const percentRaw = typeof payload?.percent === 'number' ? payload.percent : 0
+    const previousFilePath = previewFilePath.value
     previewActive.value = true
     previewFilePath.value = filePath
     previewPercent.value = clamp01(percentRaw)
+    if (previousFilePath && !sameRendererFilePath(previousFilePath, filePath)) {
+      drawWaveform(previousFilePath)
+    }
     drawWaveform(filePath)
   }
   watch(

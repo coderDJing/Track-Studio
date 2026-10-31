@@ -334,6 +334,33 @@ describe('list waveform redraw work follows changed surfaces', () => {
     expect(renders()[0].payload.playedPercent).toBe(0.4)
   })
 
+  it('clears the previous row highlight when preview switches songs without stopping', async () => {
+    const mounted = mountWaveforms()
+    await flushLoad()
+    const relayPlayToState = (payload: unknown) => {
+      const filePath =
+        payload && typeof payload === 'object' && 'filePath' in payload
+          ? String((payload as { filePath?: unknown }).filePath || '')
+          : ''
+      emitter.emit('waveform-preview:state', { filePath, active: true })
+    }
+    emitter.on('waveform-preview:play', relayPlayToState)
+    try {
+      mounted.preview.requestWaveformPreview(songFor(0), 0)
+      emitter.emit('waveform-preview:progress', { filePath: pathFor(0), percent: 0.4 })
+      worker.postMessage.mockClear()
+      mounted.preview.requestWaveformPreview(songFor(1), 0.15)
+      expect(
+        renders().map((message) => [message.payload.filePath, message.payload.playedPercent])
+      ).toEqual([
+        [pathFor(0), 0],
+        [pathFor(1), 0.15]
+      ])
+    } finally {
+      emitter.off('waveform-preview:play', relayPlayToState)
+    }
+  })
+
   it('redraws the changed timeline duration while preserving unchanged rows and bindings', async () => {
     const mounted = mountWaveforms()
     await flushLoad()
