@@ -113,7 +113,6 @@
     "setPackageChooseFile": "选择文件",
     "setPackageSelectedSummary": "{name} · {count} 首曲目",
     "setPackageDeleteSource": "导入成功后删除源文件夹",
-    "setPackageDeleteSourceHint": "将描述文件所在的整个文件夹移至回收站。",
     "setPackageStartImport": "开始导入",
     "setPackageInvalidManifest": "请选择 Track Studio 导出的 .frkbset 描述文件。",
     "setPackageReadFailed": "无法读取 SET 描述文件，请重新选择。",

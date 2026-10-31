@@ -170,7 +170,7 @@ export async function importSetPackage(
   } finally {
     releaseWatcher()
   }
-  // 回收源目录必须在导入提交成功之后，清理失败不能回滚已导入的曲目。
+  // 删除源目录必须在导入提交成功之后，清理失败不能回滚已导入的曲目。
   if (params.deleteSourceAfterImport === true) {
     try {
       await cleanupImportedPackage(params.manifestPath, manifest, store.databaseDir)

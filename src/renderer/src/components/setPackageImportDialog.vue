@@ -97,9 +97,6 @@ onUnmounted(() => {
           <singleCheckbox v-model="deleteSourceAfterImport">
             {{ t('library.setPackageDeleteSource') }}
           </singleCheckbox>
-          <p class="set-package-import-dialog__hint">
-            {{ t('library.setPackageDeleteSourceHint') }}
-          </p>
         </div>
       </div>
       <div class="dialog-footer">
@@ -162,11 +159,6 @@ p {
 }
 .set-package-import-dialog__cleanup {
   margin-top: 22px;
-}
-.set-package-import-dialog__hint {
-  margin-top: 6px;
-  color: var(--text-secondary);
-  font-size: 12px;
 }
 .button {
   flex-shrink: 0;

@@ -6,7 +6,6 @@ import path from 'node:path'
 import type { ISongInfo } from '../../../types/globals'
 
 const ipcHandlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()
-const cleanupMocks = vi.hoisted(() => ({ trashItem: vi.fn<() => Promise<void>>() }))
 
 vi.mock('electron', () => ({
   app: {
@@ -28,7 +27,6 @@ vi.mock('electron', () => ({
     }
   },
   screen: {},
-  shell: { trashItem: cleanupMocks.trashItem },
   dialog: {},
   nativeImage: {},
   Notification: class {}
@@ -239,7 +237,6 @@ const exportFromComputerA = async (withWaveforms = false): Promise<ExportFixture
 
 beforeEach(() => {
   ipcHandlers.clear()
-  cleanupMocks.trashItem.mockReset().mockResolvedValue(undefined)
 })
 
 afterEach(async () => {
@@ -268,7 +265,7 @@ describe('SET package export/import', () => {
       playlistUuid: 'set-b'
     })
     expect(result).toEqual({ trackCount: 3, fileCount: 2 })
-    expect(cleanupMocks.trashItem).not.toHaveBeenCalled()
+    await expect(fs.stat(fixture.packageDir)).resolves.toBeTruthy()
 
     const imported = listSetItemsByPlaylist('set-b')
     expect(imported.map((item) => item.createdAtMs)).toEqual(fixture.sourceCreatedAt)
@@ -317,7 +314,7 @@ describe('SET package export/import', () => {
       playlistUuid: 'set-b',
       deleteSourceAfterImport: true
     })
-    expect(cleanupMocks.trashItem).toHaveBeenCalledOnce()
+    await expect(fs.stat(fixture.packageDir)).rejects.toThrow()
     registerSetListHandlers()
     const loadItems = ipcHandlers.get('setList:load-items')
     if (!loadItems) throw new Error('load-items missing')
@@ -389,7 +386,7 @@ describe('SET package export/import', () => {
       })
     ).rejects.toMatchObject({ code: 'PACKAGE_FILE_CORRUPTED' })
     expect(listSetItemsByPlaylist('set-b')).toEqual([])
-    expect(cleanupMocks.trashItem).not.toHaveBeenCalled()
+    await expect(fs.stat(fixture.packageDir)).resolves.toBeTruthy()
     expect(
       (await import('../../libraryDb'))
         .getLibraryDb()
@@ -452,42 +449,28 @@ describe('SET package export/import', () => {
     const custodyRoot = path.join(rootB, 'library', 'SetLibrary', '__set_custody__')
     const leftovers = await fs.readdir(custodyRoot).catch(() => [])
     expect(leftovers).toEqual([])
-    expect(cleanupMocks.trashItem).not.toHaveBeenCalled()
-    expect(await fs.stat(fixture.manifestPath)).toBeTruthy()
+    await expect(fs.stat(fixture.manifestPath)).resolves.toBeTruthy()
+    await expect(fs.stat(fixture.packageDir)).resolves.toBeTruthy()
   })
 
-  it('recycles the source package only after all tracks have been imported', async () => {
+  it('deletes the source package and keeps every imported track', async () => {
     const fixture = await exportFromComputerA()
     await openLibrary(await makeTempDir('frkb-set-pkg-b-'), 'set-b', 'Friday Set')
-    cleanupMocks.trashItem.mockImplementationOnce(async () => {
-      const imported = listSetItemsByPlaylist('set-b')
-      expect(imported).toHaveLength(3)
-      for (const item of imported) expect(await fs.stat(item.filePath)).toBeTruthy()
-    })
     const result = await importSetPackage({
       manifestPath: fixture.manifestPath,
       playlistUuid: 'set-b',
       deleteSourceAfterImport: true
     })
-    expect(cleanupMocks.trashItem).toHaveBeenCalledWith(await fs.realpath(fixture.packageDir))
     expect(result.sourceCleanup).toBe('deleted')
+    await expect(fs.stat(fixture.packageDir)).rejects.toThrow()
+    const imported = listSetItemsByPlaylist('set-b')
+    expect(imported).toHaveLength(3)
+    for (const item of imported) {
+      await expect(fs.stat(item.filePath)).resolves.toBeTruthy()
+    }
   })
 
-  it('keeps the imported SET when recycling the source fails', async () => {
-    const fixture = await exportFromComputerA()
-    await openLibrary(await makeTempDir('frkb-set-pkg-b-'), 'set-b', 'Friday Set')
-    cleanupMocks.trashItem.mockRejectedValueOnce(new Error('recycle failed'))
-    const result = await importSetPackage({
-      manifestPath: fixture.manifestPath,
-      playlistUuid: 'set-b',
-      deleteSourceAfterImport: true
-    })
-    expect(result).toEqual({ trackCount: 3, fileCount: 2, sourceCleanup: 'failed' })
-    expect(listSetItemsByPlaylist('set-b')).toHaveLength(3)
-    expect(await fs.stat(fixture.manifestPath)).toBeTruthy()
-  })
-
-  it('does not recycle unrelated files mixed into the package folder', async () => {
+  it('does not delete unrelated files mixed into the package folder', async () => {
     const fixture = await exportFromComputerA()
     await fs.writeFile(path.join(fixture.packageDir, 'notes.txt'), 'keep me')
     await openLibrary(await makeTempDir('frkb-set-pkg-b-'), 'set-b', 'Friday Set')
@@ -497,12 +480,11 @@ describe('SET package export/import', () => {
       deleteSourceAfterImport: true
     })
     expect(result.sourceCleanup).toBe('failed')
-    expect(cleanupMocks.trashItem).not.toHaveBeenCalled()
     expect(listSetItemsByPlaylist('set-b')).toHaveLength(3)
     expect(await fs.readFile(path.join(fixture.packageDir, 'notes.txt'), 'utf8')).toBe('keep me')
   })
 
-  it('does not recycle folders that overlap the active music library', async () => {
+  it('does not delete folders that overlap the active music library', async () => {
     const fixture = await exportFromComputerA()
     const manifest = await readSetPackageManifest(fixture.manifestPath)
     for (const libraryRoot of [fixture.packageDir, path.dirname(fixture.packageDir)]) {
@@ -510,7 +492,7 @@ describe('SET package export/import', () => {
         cleanupImportedPackage(fixture.manifestPath, manifest, libraryRoot)
       ).rejects.toThrow('当前音乐库重叠')
     }
-    expect(cleanupMocks.trashItem).not.toHaveBeenCalled()
+    await expect(fs.stat(fixture.packageDir)).resolves.toBeTruthy()
   })
 
   it('refuses to export when a track file is missing', async () => {

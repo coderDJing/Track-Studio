@@ -113,7 +113,6 @@
     "setPackageChooseFile": "Choose file",
     "setPackageSelectedSummary": "{name} · {count} tracks",
     "setPackageDeleteSource": "Delete source folder after successful import",
-    "setPackageDeleteSourceHint": "Moves the entire folder containing the description file to the Recycle Bin or Trash.",
     "setPackageStartImport": "Start import",
     "setPackageInvalidManifest": "Select a .frkbset description file exported by Track Studio.",
     "setPackageReadFailed": "Unable to read the SET description file. Please select it again.",

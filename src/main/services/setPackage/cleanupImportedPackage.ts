@@ -1,4 +1,3 @@
-import { shell } from 'electron'
 import path = require('path')
 import fs = require('fs-extra')
 import { normalizeFilePathForComparison } from '../../../shared/filePathComparison'
@@ -15,7 +14,7 @@ const containsPath = (parent: string, child: string) => {
   )
 }
 
-/** 只回收完整的独立 SET 包；混入其他文件、链接或与当前音乐库重叠时保留源目录。 */
+/** 只删除完整的独立 SET 包；混入其他文件、链接或与当前音乐库重叠时保留源目录。 */
 export async function cleanupImportedPackage(
   manifestPath: string,
   manifest: SetPackageManifest,
@@ -65,5 +64,5 @@ export async function cleanupImportedPackage(
   }
   await visit(packageDir)
   if (expectedFiles.size > 0) throw new Error('SET 源文件夹内容已变化，不能删除')
-  await shell.trashItem(packageDir)
+  await fs.remove(packageDir)
 }
