@@ -134,6 +134,7 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
   }
 
   const clearSetMappingsForPlaylists = async (playlistUuids: string[]) => {
+    // 必须在 removeLibraryNode 前执行；级联删除 set_items 后就无法定位托管孤儿文件。
     for (const uuid of playlistUuids) {
       await removeSetItemsByPlaylistWithCustodyCleanup(uuid)
     }
@@ -465,8 +466,8 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
           if (isEmpty) {
             rememberCuratedLibraryNodeDeletion(item.uuid, dirPath)
             await fs.remove(dirPath)
-            removeLibraryNode(item.uuid)
             await clearSetMappingsForPlaylists(setListUuidsToClear)
+            removeLibraryNode(item.uuid)
             operationStatus = 'removed'
             if (item.nodeType === 'mixtapeList') {
               await finalizeMixtapePlaylistRemoval(item.uuid, mixtapeFilePaths)
@@ -537,8 +538,8 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
               if (allAudioMoved) {
                 rememberCuratedLibraryNodeDeletion(item.uuid, dirPath)
                 await fs.remove(dirPath)
-                removeLibraryNode(item.uuid)
                 await clearSetMappingsForPlaylists(setListUuidsToClear)
+                removeLibraryNode(item.uuid)
                 if (item.nodeType === 'mixtapeList') {
                   await finalizeMixtapePlaylistRemoval(item.uuid, mixtapeFilePaths)
                 }
@@ -594,8 +595,8 @@ export function registerMainWindowFilesystemHandlers(getWindow: () => BrowserWin
           } else {
             rememberCuratedLibraryNodeDeletion(item.uuid, absPath)
             await fs.remove(absPath)
-            removeLibraryNode(item.uuid)
             await clearSetMappingsForPlaylists(setListUuidsToClear)
+            removeLibraryNode(item.uuid)
             operationStatus = 'permanently_deleted'
             if (item.nodeType === 'mixtapeList') {
               await finalizeMixtapePlaylistRemoval(item.uuid, mixtapeFilePaths)
