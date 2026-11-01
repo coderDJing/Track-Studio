@@ -62,7 +62,7 @@
     "recommended": "推荐",
     "newVersionHint": "自动命名为 {name}，插入当前歌曲下一序号",
     "outputFormat": "输出格式",
-    "keepFormat": "保持原格式",
+    "keepFormat": "保持原格式（{format}）",
     "keepFormatLossy": "文件较小、兼容性保持不变；MP3 / AAC / M4A 会高质量重新编码，可能产生轻微二次有损。",
     "keepFormatLossless": "保持原格式，不会增加有损压缩。",
     "pcmWav": "PCM WAV",

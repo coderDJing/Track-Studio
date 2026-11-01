@@ -26,6 +26,7 @@
     "back": "Back",
     "required": "Required",
     "loading": "Loading...",
-    "unknownError": "Unknown error"
+    "unknownError": "Unknown error",
+    "labelColon": "{label}:"
   }
 }

@@ -37,6 +37,7 @@ import { usePioneerSongDrag } from './pioneerSongsArea/usePioneerSongDrag'
 import { usePioneerSongContextMenu } from './pioneerSongsArea/usePioneerSongContextMenu'
 import { usePioneerSongsPlaceholder } from './pioneerSongsArea/usePioneerSongsPlaceholder'
 import { usePioneerSongsProjection } from './pioneerSongsArea/usePioneerSongsProjection'
+import { getPlaylistNodeDisplayName } from '@renderer/composables/rekordboxDesktop/playlistNodeDisplayName'
 import {
   usePioneerTrackCopyDialog,
   type PioneerTransferTarget
@@ -223,7 +224,7 @@ const harmonicReferenceKeyForRows = computed(() => {
 })
 const originPathSnapshot = computed(() => {
   const driveLabel = selectedSourceName.value || 'Pioneer USB'
-  const playlistLabel = selectedPlaylistNode.value?.name || ''
+  const playlistLabel = getPlaylistNodeDisplayName(selectedPlaylistNode.value)
   return playlistLabel ? `${driveLabel} / ${playlistLabel}` : driveLabel
 })
 

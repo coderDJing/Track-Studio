@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted, useTemplateRef } from 'vue'
 import { v4 as uuidV4 } from 'uuid'
 import hotkeys from 'hotkeys-js'
 import utils from '../utils/utils'
-import { t } from '@renderer/utils/translate'
+import { t, tLabel } from '@renderer/utils/translate'
 import bubbleBox from '@renderer/components/bubbleBox.vue'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
 const uuid = uuidV4()
@@ -32,8 +32,7 @@ const clickChooseDir = async () => {
   }
   clickChooseDirFlag = true
   const folderPath = (await window.electron.ipcRenderer.invoke('select-folder', false)) as
-    | string[]
-    | null
+    string[] | null
   clickChooseDirFlag = false
   if (folderPath) {
     folderPathVal.value = folderPath
@@ -98,7 +97,7 @@ onUnmounted(() => {
         <span>{{ t('fingerprints.exportDatabase') }}</span>
       </div>
       <div style="padding: 20px; font-size: 14px; flex: 1; overflow-y: auto">
-        <div>{{ t('export.exportTo') }}：</div>
+        <div>{{ tLabel('export.exportTo') }}</div>
         <div style="margin-top: 10px">
           <div
             ref="chooseDirRef"

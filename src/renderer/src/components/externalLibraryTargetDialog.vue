@@ -140,7 +140,7 @@ const createPlaylist = async () => {
   await runMutation(async () => {
     const response = await mutate({ operation: 'create-playlist', name })
     if (!response?.ok) {
-      showFailure(response?.summary?.errorMessage || '创建播放列表失败。')
+      showFailure(response?.summary?.errorMessage || t('library.externalPlaylistCreateFailed'))
       return
     }
     search.value = ''
@@ -166,7 +166,7 @@ const createNode = async (
       name
     })
     if (!response.ok) {
-      showFailure(response.summary.errorMessage || '外部歌单操作失败。')
+      showFailure(response.summary.errorMessage || t('library.externalPlaylistOperationFailed'))
       return false
     }
     search.value = ''
@@ -187,7 +187,7 @@ const renameNode = async (node: IPioneerPlaylistTreeNode, nextName: string) => {
   const result = await runMutation(async () => {
     const response = await mutate({ operation: 'rename', externalId: node.externalId, name })
     if (!response.ok) {
-      showFailure(response.summary.errorMessage || '外部歌单重命名失败。')
+      showFailure(response.summary.errorMessage || t('library.externalPlaylistRenameFailed'))
       return false
     }
     await loadTree(String(response.summary.playlistId || ''))
@@ -201,7 +201,7 @@ const deleteNode = async (node: IPioneerPlaylistTreeNode) => {
   const result = await runMutation(async () => {
     const response = await mutate({ operation: 'delete', externalId: node.externalId })
     if (!response.ok) {
-      showFailure(response.summary.errorMessage || '外部歌单删除失败。')
+      showFailure(response.summary.errorMessage || t('library.externalPlaylistDeleteFailed'))
       return false
     }
     await loadTree()
@@ -369,7 +369,7 @@ const persistMove = async (moved: MoveTreeNodeResult) => {
       seq: moved.seq
     })
     if (!response.ok) {
-      showFailure(response.summary.errorMessage || '外部歌单移动失败。')
+      showFailure(response.summary.errorMessage || t('library.externalPlaylistMoveFailed'))
       return false
     }
     await loadTree(String(moved.playlistId))

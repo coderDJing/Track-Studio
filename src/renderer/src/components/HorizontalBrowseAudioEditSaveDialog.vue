@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import hotkeys from 'hotkeys-js'
 import { v4 as uuidV4 } from 'uuid'
-import { t } from '@renderer/utils/translate'
+import { t, tLabel } from '@renderer/utils/translate'
 import utils from '@renderer/utils/utils'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
 import { useRuntimeStore } from '@renderer/stores/runtime'
@@ -45,7 +45,7 @@ const targetOptions = computed(() => {
 
 const formatOptions = computed(() => [
   {
-    label: `${t('audioEdit.keepFormat')}（${props.originalFormat}）`,
+    label: t('audioEdit.keepFormat', { format: props.originalFormat }),
     value: 'original'
   },
   { label: t('audioEdit.pcmWav'), value: 'wav' }
@@ -109,7 +109,7 @@ onUnmounted(() => {
       </div>
       <div class="audio-edit-save">
         <div class="audio-edit-save__song">{{ originalTitle }}</div>
-        <div class="audio-edit-save__label">{{ t('audioEdit.saveTarget') }}：</div>
+        <div class="audio-edit-save__label">{{ tLabel('audioEdit.saveTarget') }}</div>
         <singleRadioGroup
           v-model="target"
           class="audio-edit-save__target"
@@ -135,7 +135,7 @@ onUnmounted(() => {
           {{ t('audioEdit.formatChangeForced') }}
         </p>
 
-        <div class="audio-edit-save__label">{{ t('audioEdit.outputFormat') }}：</div>
+        <div class="audio-edit-save__label">{{ tLabel('audioEdit.outputFormat') }}</div>
         <singleRadioGroup
           v-model="format"
           class="audio-edit-save__format"

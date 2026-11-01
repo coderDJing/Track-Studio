@@ -47,5 +47,10 @@ export function t(text: string, valuesOrIndex?: number | Record<string, unknown>
   }
 }
 
+// 表单标签加冒号：中文用全角“：”，英文用半角“:”
+export function tLabel(key: string): string {
+  return t('common.labelColon', { label: t(key) })
+}
+
 export const translate = { t }
 export default translate

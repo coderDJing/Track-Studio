@@ -4,7 +4,7 @@ import hotkeys from 'hotkeys-js'
 import { v4 as uuidV4 } from 'uuid'
 import utils from '../utils/utils'
 import { ref, onUnmounted, onMounted } from 'vue'
-import { t } from '@renderer/utils/translate'
+import { t, tLabel } from '@renderer/utils/translate'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
 const uuid = uuidV4()
@@ -159,7 +159,7 @@ onUnmounted(() => {
       >
         <div style="display: flex">
           <div class="formLabel">
-            <span>{{ t('tracks.exportToFolder') }}：</span>
+            <span>{{ tLabel('tracks.exportToFolder') }}</span>
           </div>
           <div style="width: 290px">
             <bubbleBoxTrigger
@@ -178,9 +178,9 @@ onUnmounted(() => {
         </div>
         <div v-if="!props.forceCopyOnly" style="display: flex">
           <div class="formLabel" style="text-align: right">
-            <label for="export-checkbox-deleteAfterExport" style="user-select: none"
-              >{{ t('tracks.deleteAfterExport') }}：</label
-            >
+            <label for="export-checkbox-deleteAfterExport" style="user-select: none">{{
+              tLabel('tracks.deleteAfterExport')
+            }}</label>
           </div>
           <div style="flex: 1; width: 21px; height: 21px; display: flex; align-items: center">
             <singleCheckbox

@@ -12,7 +12,7 @@ import customFileSelector from './customFileSelector/customFileSelector.vue'
 import hotkeys from 'hotkeys-js'
 import { v4 as uuidV4 } from 'uuid'
 import utils from '../utils/utils'
-import { t, toLibraryDisplayName } from '@renderer/utils/translate'
+import { t, tLabel, toLibraryDisplayName } from '@renderer/utils/translate'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
 const hintIcon = hintIconAsset
 
@@ -265,7 +265,7 @@ onUnmounted(() => {
       </div>
       <div style="padding: 20px; font-size: 14px; flex: 1; overflow-y: auto">
         <template v-if="props.mode === 'scan'">
-          <div>{{ t('library.selectFilesAndFolders') }}：</div>
+          <div>{{ tLabel('library.selectFilesAndFolders') }}</div>
           <div style="margin-top: 10px">
             <div
               ref="fileSelectRef"
@@ -283,7 +283,7 @@ onUnmounted(() => {
           </div>
         </template>
 
-        <div style="margin-top: 20px">{{ t('library.selectPlaylist') }}：</div>
+        <div style="margin-top: 20px">{{ tLabel('library.selectPlaylist') }}</div>
         <div style="margin-top: 10px">
           <div
             ref="songListSelectRef"
@@ -301,9 +301,9 @@ onUnmounted(() => {
         </div>
 
         <div style="margin-top: 20px">
-          <label for="import-checkbox-deleteAfterImport" style="user-select: none"
-            >{{ t('library.deleteAfterImport') }}：</label
-          >
+          <label for="import-checkbox-deleteAfterImport" style="user-select: none">{{
+            tLabel('library.deleteAfterImport')
+          }}</label>
         </div>
         <div style="margin-top: 10px">
           <singleCheckbox
@@ -313,9 +313,9 @@ onUnmounted(() => {
         </div>
 
         <div style="margin-top: 20px">
-          <label for="import-checkbox-addToFingerprintLibrary" style="user-select: none"
-            >{{ t('library.addToFingerprintLibrary') }}：</label
-          >
+          <label for="import-checkbox-addToFingerprintLibrary" style="user-select: none">{{
+            tLabel('library.addToFingerprintLibrary')
+          }}</label>
         </div>
         <div style="margin-top: 10px; display: inline-flex; align-items: center; gap: 6px">
           <singleCheckbox
@@ -336,7 +336,7 @@ onUnmounted(() => {
           />
         </div>
 
-        <div style="margin-top: 20px">{{ t('library.deduplicateMode') }}：</div>
+        <div style="margin-top: 20px">{{ tLabel('library.deduplicateMode') }}</div>
         <div style="margin-top: 10px">
           <singleRadioGroup
             v-model="settingData.deduplicateMode"

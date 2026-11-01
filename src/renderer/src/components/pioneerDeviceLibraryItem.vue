@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import listIconAsset from '@renderer/assets/listIcon.svg?asset'
 import type { IPioneerPlaylistTreeNode } from '../../../types/globals'
+import { getPlaylistNodeDisplayName } from '@renderer/composables/rekordboxDesktop/playlistNodeDisplayName'
 
 const listIconMaskStyle = {
   '--icon-mask': `url("${listIconAsset}")`
@@ -200,7 +201,7 @@ const handleChildDragEnd = (event: DragEvent, node: IPioneerPlaylistTreeNode) =>
       </div>
       <div style="height: 23px; width: calc(100% - 20px)">
         <div class="nameRow">
-          <span class="nameText">{{ node.name }}</span>
+          <span class="nameText">{{ getPlaylistNodeDisplayName(node) }}</span>
         </div>
       </div>
     </div>

@@ -10,6 +10,7 @@ import {
 } from '@renderer/utils/songCueTransfer'
 import { loadRekordboxPlaylistTracks } from '@renderer/composables/rekordboxDesktop/useRekordboxTrackLoader'
 import { v4 as uuidV4 } from 'uuid'
+import { getPlaylistNodeDisplayName } from '@renderer/composables/rekordboxDesktop/playlistNodeDisplayName'
 import type { useRuntimeStore } from '@renderer/stores/runtime'
 import type { RekordboxSourceKind, RekordboxSourceLibraryType } from '@shared/rekordboxSources'
 import type {
@@ -141,7 +142,7 @@ const stageCopyPlan = (
   parentPath: string
 ): StagedLibraryNode => {
   const fallbackName = plan.type === 'dir' ? 'Folder' : 'Playlist'
-  const baseName = normalizeLocalLibraryName(plan.source.name, fallbackName)
+  const baseName = normalizeLocalLibraryName(getPlaylistNodeDisplayName(plan.source), fallbackName)
   const uniqueName = findUniqueChildName(parent, baseName)
   const staged: StagedLibraryNode = {
     uuid: uuidV4(),
@@ -318,7 +319,7 @@ export const copyPioneerNodeToLibrary = async ({
   const playlistCount = countPlaylists(plan)
   const targetDisplayName =
     targetLibrary === 'FilterLibrary' ? t('library.filter') : t('library.curated')
-  const sourceName = String(node.name || '').trim()
+  const sourceName = getPlaylistNodeDisplayName(node).trim()
   const confirmMessage =
     plan.type === 'songList'
       ? t('pioneer.copySinglePlaylistConfirm', {

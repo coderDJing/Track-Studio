@@ -26,6 +26,7 @@
     "back": "上一步",
     "required": "必选",
     "loading": "加载中...",
-    "unknownError": "发生未知错误"
+    "unknownError": "发生未知错误",
+    "labelColon": "{label}："
   }
 }

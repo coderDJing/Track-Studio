@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { useRuntimeStore } from '@renderer/stores/runtime'
+import { t } from '@renderer/utils/translate'
 import { useDjLibrarySongDrop } from './useDjLibrarySongDrop'
 import type { IPioneerPlaylistTreeNode } from '../../../../types/globals'
 import { ensureRekordboxDesktopWriteAvailable } from '@renderer/utils/rekordboxDesktopWriteAvailability'
@@ -204,7 +205,9 @@ export function usePioneerDeviceTreeDrag(
         })) as { ok: boolean; summary: { errorMessage?: string } }
         if (!response.ok) {
           syncRuntimeDesktopTree(previousTree, preferredPlaylistId)
-          await showFailureDialog(response.summary.errorMessage || '外部歌单移动失败。')
+          await showFailureDialog(
+            response.summary.errorMessage || t('library.externalPlaylistMoveFailed')
+          )
           return
         }
         await refreshDesktopTree(0)

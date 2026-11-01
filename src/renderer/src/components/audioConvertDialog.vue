@@ -3,7 +3,7 @@ import { RendererFilePathSet, sameRendererFilePath } from '@renderer/utils/fileP
 
 import { ref, onMounted, onUnmounted, computed, useTemplateRef, watch } from 'vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
-import { t } from '@renderer/utils/translate'
+import { t, tLabel } from '@renderer/utils/translate'
 import singleCheckbox from '@renderer/components/singleCheckbox.vue'
 import singleRadioGroup from '@renderer/components/singleRadioGroup.vue'
 import BaseSelect from '@renderer/components/BaseSelect.vue'
@@ -341,7 +341,7 @@ const cancel = () => {
       >
         <div class="dialog-content">
           <template v-if="isStandaloneMode">
-            <div>{{ t('convert.sourceFiles') }}：</div>
+            <div>{{ tLabel('convert.sourceFiles') }}</div>
             <div class="standalone-actions">
               <bubbleBoxTrigger
                 tag="div"
@@ -411,7 +411,7 @@ const cancel = () => {
             </div>
 
             <template v-if="shouldShowOutputDir">
-              <div style="margin-top: 20px">{{ t('convert.outputDir') }}：</div>
+              <div style="margin-top: 20px">{{ tLabel('convert.outputDir') }}</div>
               <div style="margin-top: 10px">
                 <bubbleBoxTrigger
                   tag="div"
@@ -427,7 +427,7 @@ const cancel = () => {
           </template>
 
           <div :style="{ marginTop: isStandaloneMode ? '20px' : '0' }">
-            {{ t('convert.targetFormat') }}：
+            {{ tLabel('convert.targetFormat') }}
           </div>
           <div style="margin-top: 10px">
             <BaseSelect
@@ -440,7 +440,7 @@ const cancel = () => {
             />
           </div>
 
-          <div style="margin-top: 20px">{{ t('convert.strategy') }}：</div>
+          <div style="margin-top: 20px">{{ tLabel('convert.strategy') }}</div>
           <div style="margin-top: 10px">
             <singleRadioGroup
               v-model="form.strategy"
@@ -454,9 +454,9 @@ const cancel = () => {
           </div>
 
           <div style="margin-top: 20px">
-            <label for="convert-checkbox-preserveMetadata" style="user-select: none"
-              >{{ t('convert.preserveMetadata') }}：</label
-            >
+            <label for="convert-checkbox-preserveMetadata" style="user-select: none">{{
+              tLabel('convert.preserveMetadata')
+            }}</label>
             <img
               ref="metadataHintRef"
               :src="hintIcon"
@@ -474,9 +474,9 @@ const cancel = () => {
           </div>
 
           <div style="margin-top: 20px">
-            <label for="convert-checkbox-addFingerprint" style="user-select: none"
-              >{{ t('convert.addFingerprint') }}：</label
-            >
+            <label for="convert-checkbox-addFingerprint" style="user-select: none">{{
+              tLabel('convert.addFingerprint')
+            }}</label>
           </div>
           <div style="margin-top: 10px">
             <singleCheckbox id="convert-checkbox-addFingerprint" v-model="addFingerprintModel" />

@@ -2,6 +2,7 @@ import confirm from '@renderer/components/confirmDialog'
 import { loadRekordboxPlaylistTracks } from '@renderer/composables/rekordboxDesktop/useRekordboxTrackLoader'
 import { copyPioneerTracksToMixtape } from '@renderer/utils/mixtapePlaylistAppend'
 import { t } from '@renderer/utils/translate'
+import { getPlaylistNodeDisplayName } from '@renderer/composables/rekordboxDesktop/playlistNodeDisplayName'
 import type { RekordboxSourceKind, RekordboxSourceLibraryType } from '@shared/rekordboxSources'
 import type { IPioneerPlaylistTreeNode } from '../../../../types/globals'
 
@@ -39,7 +40,7 @@ export const copyPioneerPlaylistToMixtape = async ({
       const tracks = Array.isArray(loadResult?.tracks) ? loadResult.tracks : []
       await copyPioneerTracksToMixtape({
         tracks,
-        originPathSnapshot: `${sourceName || 'Pioneer'} / ${node.name || 'Playlist'}`
+        originPathSnapshot: `${sourceName || 'Pioneer'} / ${getPlaylistNodeDisplayName(node) || 'Playlist'}`
       })
     } catch (error: unknown) {
       const messageCode = error instanceof Error ? error.message : String(error || '')

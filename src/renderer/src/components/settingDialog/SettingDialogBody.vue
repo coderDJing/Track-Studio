@@ -7,7 +7,7 @@ import singleCheckbox from '@renderer/components/singleCheckbox.vue'
 import singleRadioGroup from '@renderer/components/singleRadioGroup.vue'
 import BaseSelect from '@renderer/components/BaseSelect.vue'
 import ColorPicker from '@renderer/components/ColorPicker.vue'
-import { t } from '@renderer/utils/translate'
+import { t, tLabel } from '@renderer/utils/translate'
 import {
   settingDialogContextKey,
   type SettingDialogContext
@@ -314,7 +314,7 @@ const traktorTrackStorageDirText = computed(
           <div class="settings-section">
             <div class="section-title">{{ t('settings.layout.sectionCommonTitle') }}</div>
 
-            <div class="setting-block">{{ t('theme.mode') }}：</div>
+            <div class="setting-block">{{ tLabel('theme.mode') }}</div>
             <div class="setting-control">
               <BaseSelect
                 v-model="runtime.setting.themeMode"
@@ -324,7 +324,7 @@ const traktorTrackStorageDirText = computed(
               />
             </div>
 
-            <div class="setting-block">{{ t('theme.accentColor') }}：</div>
+            <div class="setting-block">{{ tLabel('theme.accentColor') }}</div>
             <div class="setting-control accent-color-control">
               <div class="accent-swatches">
                 <button
@@ -348,7 +348,7 @@ const traktorTrackStorageDirText = computed(
               }}</span>
             </div>
 
-            <div class="setting-block">{{ t('common.language') }}：</div>
+            <div class="setting-block">{{ tLabel('common.language') }}</div>
             <div class="setting-control">
               <BaseSelect
                 v-model="runtime.setting.language"
@@ -358,7 +358,7 @@ const traktorTrackStorageDirText = computed(
               />
             </div>
 
-            <div class="setting-block">{{ t('player.browserPlayerRightTrackInfo') }}：</div>
+            <div class="setting-block">{{ tLabel('player.browserPlayerRightTrackInfo') }}</div>
             <div class="setting-control">
               <BaseSelect
                 v-model="browserPlayerRightTrackInfoModel"
@@ -369,7 +369,7 @@ const traktorTrackStorageDirText = computed(
               />
             </div>
 
-            <div class="setting-block">{{ t('player.audioOutputDevice') }}：</div>
+            <div class="setting-block">{{ tLabel('player.audioOutputDevice') }}</div>
             <div class="setting-control">
               <BaseSelect
                 v-model="runtime.setting.audioOutputDeviceId"
@@ -381,7 +381,7 @@ const traktorTrackStorageDirText = computed(
               <div v-if="audioOutputError" class="error-text">{{ audioOutputError }}</div>
             </div>
 
-            <div class="setting-block">{{ t('shortcuts.globalCallShortcut') }}：</div>
+            <div class="setting-block">{{ tLabel('shortcuts.globalCallShortcut') }}</div>
             <div class="setting-control">
               <bubbleBoxTrigger
                 tag="div"
@@ -393,9 +393,9 @@ const traktorTrackStorageDirText = computed(
               </bubbleBoxTrigger>
             </div>
 
-            <label class="setting-block" for="setting-checkbox-autoPlayNext"
-              >{{ t('player.autoPlayNext') }}：</label
-            >
+            <label class="setting-block" for="setting-checkbox-autoPlayNext">{{
+              tLabel('player.autoPlayNext')
+            }}</label>
             <div class="setting-control">
               <singleCheckbox
                 id="setting-checkbox-autoPlayNext"
@@ -404,9 +404,9 @@ const traktorTrackStorageDirText = computed(
               />
             </div>
 
-            <label class="setting-block" for="setting-checkbox-autoCenterSong"
-              >{{ t('player.autoCenterSong') }}：</label
-            >
+            <label class="setting-block" for="setting-checkbox-autoCenterSong">{{
+              tLabel('player.autoCenterSong')
+            }}</label>
             <div class="setting-control">
               <singleCheckbox
                 id="setting-checkbox-autoCenterSong"
@@ -415,7 +415,7 @@ const traktorTrackStorageDirText = computed(
               />
             </div>
 
-            <div class="setting-block">{{ t('player.recentPlaylistCache') }}：</div>
+            <div class="setting-block">{{ tLabel('player.recentPlaylistCache') }}</div>
             <div class="setting-control">
               <input
                 v-model="runtime.setting.recentDialogSelectedSongListMaxCount"
@@ -437,9 +437,9 @@ const traktorTrackStorageDirText = computed(
           <div class="settings-section">
             <div class="section-title">{{ t('settings.layout.sectionPlaybackRangeTitle') }}</div>
 
-            <label class="setting-block" for="setting-checkbox-enablePlaybackRange"
-              >{{ t('player.enablePlaybackRange') }}：</label
-            >
+            <label class="setting-block" for="setting-checkbox-enablePlaybackRange">{{
+              tLabel('player.enablePlaybackRange')
+            }}</label>
             <bubbleBoxTrigger
               class="setting-control"
               :title="t('horizontalBrowse.playbackRangeKeyboardHint')"
@@ -453,7 +453,7 @@ const traktorTrackStorageDirText = computed(
             </bubbleBoxTrigger>
 
             <template v-if="runtime.setting.enablePlaybackRange">
-              <div class="setting-block">{{ t('player.playbackRangeMode') }}：</div>
+              <div class="setting-block">{{ tLabel('player.playbackRangeMode') }}</div>
               <div class="setting-control">
                 <BaseSelect
                   v-model="playbackRangeModeModel"
@@ -464,7 +464,7 @@ const traktorTrackStorageDirText = computed(
               </div>
 
               <template v-if="playbackRangeModeModel === 'section'">
-                <div class="setting-block">{{ t('player.playbackRangeSectionKinds') }}：</div>
+                <div class="setting-block">{{ tLabel('player.playbackRangeSectionKinds') }}</div>
                 <div class="setting-control section-kind-list">
                   <singleCheckbox
                     v-for="option in playbackRangeSectionKindOptions"
@@ -480,7 +480,9 @@ const traktorTrackStorageDirText = computed(
                   </singleCheckbox>
                 </div>
 
-                <div class="setting-block">{{ t('player.playbackRangeSectionMatchMode') }}：</div>
+                <div class="setting-block">
+                  {{ tLabel('player.playbackRangeSectionMatchMode') }}
+                </div>
                 <div class="setting-control">
                   <BaseSelect
                     v-model="playbackRangeSectionMatchModeModel"
@@ -496,9 +498,9 @@ const traktorTrackStorageDirText = computed(
           <div class="settings-section">
             <div class="section-title">{{ t('settings.layout.sectionLibraryTitle') }}</div>
 
-            <label class="setting-block" for="setting-checkbox-curatedArtistTracking"
-              >{{ t('settings.curatedArtistTracking.title') }}：</label
-            >
+            <label class="setting-block" for="setting-checkbox-curatedArtistTracking">{{
+              tLabel('settings.curatedArtistTracking.title')
+            }}</label>
             <div class="setting-control">
               <singleCheckbox
                 id="setting-checkbox-curatedArtistTracking"
@@ -529,9 +531,9 @@ const traktorTrackStorageDirText = computed(
               </div>
             </div>
 
-            <label class="setting-block" for="setting-checkbox-persistFiltersAfterRestart"
-              >{{ t('filters.persistFiltersAfterRestart') }}：</label
-            >
+            <label class="setting-block" for="setting-checkbox-persistFiltersAfterRestart">{{
+              tLabel('filters.persistFiltersAfterRestart')
+            }}</label>
             <div class="setting-control">
               <singleCheckbox
                 id="setting-checkbox-persistFiltersAfterRestart"
@@ -540,9 +542,9 @@ const traktorTrackStorageDirText = computed(
               />
             </div>
 
-            <label class="setting-block" for="setting-checkbox-showPlaylistTrackCount"
-              >{{ t('settings.showPlaylistTrackCount') }}：</label
-            >
+            <label class="setting-block" for="setting-checkbox-showPlaylistTrackCount">{{
+              tLabel('settings.showPlaylistTrackCount')
+            }}</label>
             <div class="setting-control">
               <singleCheckbox
                 id="setting-checkbox-showPlaylistTrackCount"
@@ -552,9 +554,9 @@ const traktorTrackStorageDirText = computed(
             </div>
 
             <template v-if="isWindowsPlatform">
-              <label class="setting-block" for="setting-checkbox-enableExplorerContextMenu"
-                >{{ t('settings.enableExplorerContextMenu') }}：</label
-              >
+              <label class="setting-block" for="setting-checkbox-enableExplorerContextMenu">{{
+                tLabel('settings.enableExplorerContextMenu')
+              }}</label>
               <div class="setting-control">
                 <singleCheckbox
                   id="setting-checkbox-enableExplorerContextMenu"
@@ -564,7 +566,7 @@ const traktorTrackStorageDirText = computed(
               </div>
             </template>
 
-            <div class="setting-block">{{ t('settings.songListBubble.title') }}：</div>
+            <div class="setting-block">{{ tLabel('settings.songListBubble.title') }}</div>
             <div class="setting-control">
               <singleRadioGroup
                 v-model="songListBubbleMode"
@@ -583,7 +585,7 @@ const traktorTrackStorageDirText = computed(
               <div class="setting-hint">{{ t('settings.songListBubble.hint') }}</div>
             </div>
 
-            <div class="setting-block">{{ t('settings.currentLibraryPath') }}：</div>
+            <div class="setting-block">{{ tLabel('settings.currentLibraryPath') }}</div>
             <div class="setting-control">
               <bubbleBoxTrigger tag="div" class="path-display" :title="currentLibraryPathText">
                 {{ currentLibraryPathText }}
@@ -596,7 +598,7 @@ const traktorTrackStorageDirText = computed(
               </div>
             </div>
 
-            <div class="setting-block">{{ t('database.reselectLocation') }}：</div>
+            <div class="setting-block">{{ tLabel('database.reselectLocation') }}</div>
             <div class="setting-control">
               <div class="button settings-inline-button" @click="reSelectLibrary()">
                 {{ t('dialog.reselect') }}
@@ -604,7 +606,7 @@ const traktorTrackStorageDirText = computed(
             </div>
 
             <div class="setting-block">
-              {{ t('settings.rekordboxDesktopTrackStorageDir.title') }}：
+              {{ tLabel('settings.rekordboxDesktopTrackStorageDir.title') }}
             </div>
             <div class="setting-control">
               <bubbleBoxTrigger
@@ -627,7 +629,7 @@ const traktorTrackStorageDirText = computed(
               </div>
             </div>
 
-            <div class="setting-block">{{ t('settings.seratoTrackStorageDir.title') }}：</div>
+            <div class="setting-block">{{ tLabel('settings.seratoTrackStorageDir.title') }}</div>
             <div class="setting-control">
               <bubbleBoxTrigger tag="div" class="path-display" :title="seratoTrackStorageDirText">
                 {{ seratoTrackStorageDirText }}
@@ -640,7 +642,7 @@ const traktorTrackStorageDirText = computed(
               </div>
             </div>
 
-            <div class="setting-block">{{ t('settings.traktorTrackStorageDir.title') }}：</div>
+            <div class="setting-block">{{ tLabel('settings.traktorTrackStorageDir.title') }}</div>
             <div class="setting-control">
               <bubbleBoxTrigger tag="div" class="path-display" :title="traktorTrackStorageDirText">
                 {{ traktorTrackStorageDirText }}
@@ -657,9 +659,9 @@ const traktorTrackStorageDirText = computed(
           <div class="settings-section">
             <div class="section-title">{{ t('settings.layout.sectionPlaybackTitle') }}</div>
 
-            <label class="setting-block" for="setting-checkbox-hideControlsShowWaveform"
-              >{{ t('player.hideControlsShowWaveform') }}：</label
-            >
+            <label class="setting-block" for="setting-checkbox-hideControlsShowWaveform">{{
+              tLabel('player.hideControlsShowWaveform')
+            }}</label>
             <div class="setting-control">
               <singleCheckbox
                 id="setting-checkbox-hideControlsShowWaveform"
@@ -668,7 +670,7 @@ const traktorTrackStorageDirText = computed(
               />
             </div>
 
-            <div class="setting-block">{{ t('player.waveformMode') }}：</div>
+            <div class="setting-block">{{ tLabel('player.waveformMode') }}</div>
             <div class="setting-control">
               <BaseSelect
                 v-model="runtime.setting.waveformMode"
@@ -678,7 +680,7 @@ const traktorTrackStorageDirText = computed(
               />
             </div>
 
-            <div class="setting-block">{{ t('player.keyDisplayStyle') }}：</div>
+            <div class="setting-block">{{ tLabel('player.keyDisplayStyle') }}</div>
             <div class="setting-control">
               <BaseSelect
                 v-model="runtime.setting.keyDisplayStyle"
@@ -688,9 +690,9 @@ const traktorTrackStorageDirText = computed(
               />
             </div>
 
-            <label class="setting-block" for="setting-checkbox-showTitleAudioVisualizer"
-              >{{ t('player.showTitleAudioVisualizer') }}：</label
-            >
+            <label class="setting-block" for="setting-checkbox-showTitleAudioVisualizer">{{
+              tLabel('player.showTitleAudioVisualizer')
+            }}</label>
             <div class="setting-control">
               <singleCheckbox
                 id="setting-checkbox-showTitleAudioVisualizer"
@@ -699,7 +701,7 @@ const traktorTrackStorageDirText = computed(
               />
             </div>
 
-            <div class="setting-block">{{ t('shortcuts.playerGlobalShortcuts') }}：</div>
+            <div class="setting-block">{{ tLabel('shortcuts.playerGlobalShortcuts') }}</div>
             <div class="setting-control">
               <div class="playerShortcutList">
                 <div class="playerShortcutRow">
@@ -783,7 +785,7 @@ const traktorTrackStorageDirText = computed(
               </div>
             </div>
 
-            <div class="setting-block">{{ t('player.fastForwardTime') }}：</div>
+            <div class="setting-block">{{ tLabel('player.fastForwardTime') }}</div>
             <div class="setting-control number-row">
               <input
                 v-model="runtime.setting.fastForwardTime"
@@ -802,7 +804,7 @@ const traktorTrackStorageDirText = computed(
               <span>{{ t('player.seconds') }}</span>
             </div>
 
-            <div class="setting-block">{{ t('player.fastBackwardTime') }}：</div>
+            <div class="setting-block">{{ tLabel('player.fastBackwardTime') }}</div>
             <div class="setting-control number-row">
               <input
                 v-model="runtime.setting.fastBackwardTime"
@@ -825,7 +827,7 @@ const traktorTrackStorageDirText = computed(
           <div class="settings-section">
             <div class="section-title">{{ t('settings.layout.sectionAnalysisTitle') }}</div>
 
-            <div class="setting-block">{{ t('settings.analysisBpmRange.label') }}：</div>
+            <div class="setting-block">{{ tLabel('settings.analysisBpmRange.label') }}</div>
             <div class="setting-control">
               <BaseSelect
                 v-model="analysisBpmRangeModel"
@@ -840,9 +842,9 @@ const traktorTrackStorageDirText = computed(
               </div>
             </div>
 
-            <label class="setting-block" for="setting-checkbox-showIdleAnalysisStatus"
-              >{{ t('player.showIdleAnalysisStatus') }}：</label
-            >
+            <label class="setting-block" for="setting-checkbox-showIdleAnalysisStatus">{{
+              tLabel('player.showIdleAnalysisStatus')
+            }}</label>
             <div class="setting-control">
               <singleCheckbox
                 id="setting-checkbox-showIdleAnalysisStatus"
@@ -851,7 +853,7 @@ const traktorTrackStorageDirText = computed(
               />
             </div>
 
-            <div class="setting-block">{{ t('settings.ultraStemModel.title') }}：</div>
+            <div class="setting-block">{{ tLabel('settings.ultraStemModel.title') }}</div>
             <div class="setting-control">
               <div class="setting-hint">{{ t('settings.ultraStemModel.desc') }}</div>
               <div class="model-manager-row">
@@ -875,7 +877,7 @@ const traktorTrackStorageDirText = computed(
           <div class="settings-section">
             <div class="section-title">{{ t('settings.layout.sectionMetadataTitle') }}</div>
 
-            <div class="setting-block">{{ t('metadata.acoustidSettingTitle') }}：</div>
+            <div class="setting-block">{{ tLabel('metadata.acoustidSettingTitle') }}</div>
             <div class="setting-control">
               <div class="setting-hint">{{ t('metadata.acoustidSettingDesc1') }}</div>
               <div class="setting-hint">{{ t('metadata.acoustidSettingDesc2') }}</div>
@@ -902,9 +904,9 @@ const traktorTrackStorageDirText = computed(
               <div class="setting-hint">{{ t('metadata.acoustidSettingRateHint') }}</div>
             </div>
 
-            <label class="setting-block" for="setting-checkbox-autoFillSkipCompleted"
-              >{{ t('metadata.autoFillSkipCompleted') }}：</label
-            >
+            <label class="setting-block" for="setting-checkbox-autoFillSkipCompleted">{{
+              tLabel('metadata.autoFillSkipCompleted')
+            }}</label>
             <div class="setting-control">
               <singleCheckbox
                 id="setting-checkbox-autoFillSkipCompleted"
@@ -914,7 +916,7 @@ const traktorTrackStorageDirText = computed(
               <div class="setting-hint">{{ t('metadata.autoFillSkipCompletedHint') }}</div>
             </div>
 
-            <div class="setting-block">{{ t('fingerprints.mode') }}：</div>
+            <div class="setting-block">{{ tLabel('fingerprints.mode') }}</div>
             <div class="setting-control">
               <singleRadioGroup
                 v-model="fingerprintModeModel"
@@ -947,7 +949,7 @@ const traktorTrackStorageDirText = computed(
               <div class="setting-hint">{{ t('fingerprints.modeIncompatibleWarning') }}</div>
             </div>
 
-            <div class="setting-block">{{ t('fingerprints.scanFormats') }}：</div>
+            <div class="setting-block">{{ tLabel('fingerprints.scanFormats') }}</div>
             <div class="setting-control">
               <div class="formatList">
                 <template v-for="fmt in allFormats" :key="fmt">
@@ -969,7 +971,7 @@ const traktorTrackStorageDirText = computed(
           <div class="settings-section">
             <div class="section-title">{{ t('settings.layout.sectionUserGuideTitle') }}</div>
 
-            <div class="setting-block">{{ t('userGuide.settingTitle') }}：</div>
+            <div class="setting-block">{{ tLabel('userGuide.settingTitle') }}</div>
             <div class="setting-control">
               <singleRadioGroup
                 v-model="rekordboxUserMode"
@@ -985,9 +987,9 @@ const traktorTrackStorageDirText = computed(
           <div class="settings-section settings-section--danger">
             <div class="section-title">{{ t('settings.layout.sectionSafetyTitle') }}</div>
 
-            <label class="setting-block" for="setting-checkbox-enableErrorReport"
-              >{{ t('errorReport.enable') }}：</label
-            >
+            <label class="setting-block" for="setting-checkbox-enableErrorReport">{{
+              tLabel('errorReport.enable')
+            }}</label>
             <div class="setting-control">
               <singleCheckbox
                 id="setting-checkbox-enableErrorReport"
@@ -997,7 +999,7 @@ const traktorTrackStorageDirText = computed(
               <div class="setting-hint">{{ t('errorReport.hint') }}</div>
             </div>
 
-            <div class="setting-block">{{ t('fingerprints.clear') }}：</div>
+            <div class="setting-block">{{ tLabel('fingerprints.clear') }}</div>
             <div class="setting-control">
               <div class="setting-hint">
                 {{ t('fingerprints.currentCount', { count: songFingerprintListLength }) }}
@@ -1012,7 +1014,7 @@ const traktorTrackStorageDirText = computed(
               </div>
             </div>
 
-            <div class="setting-block">{{ t('cloudSync.reset.sectionTitle') }}：</div>
+            <div class="setting-block">{{ tLabel('cloudSync.reset.sectionTitle') }}</div>
             <div class="setting-control">
               <div class="setting-hint">{{ t('cloudSync.reset.description') }}</div>
               <div class="actionRow">
@@ -1023,7 +1025,7 @@ const traktorTrackStorageDirText = computed(
             </div>
 
             <template v-if="isDevOrPrerelease">
-              <div class="setting-block">{{ t('settings.clearDirtyData.title') }}：</div>
+              <div class="setting-block">{{ tLabel('settings.clearDirtyData.title') }}</div>
               <div class="setting-control">
                 <div class="setting-hint">{{ t('settings.clearDirtyData.desc') }}</div>
                 <div class="actionRow">
@@ -1033,7 +1035,7 @@ const traktorTrackStorageDirText = computed(
                 </div>
               </div>
 
-              <div class="setting-block">{{ t('settings.clearAnalysisRuntime.title') }}：</div>
+              <div class="setting-block">{{ tLabel('settings.clearAnalysisRuntime.title') }}</div>
               <div class="setting-control">
                 <div class="setting-hint">{{ t('settings.clearAnalysisRuntime.desc') }}</div>
                 <div class="actionRow">

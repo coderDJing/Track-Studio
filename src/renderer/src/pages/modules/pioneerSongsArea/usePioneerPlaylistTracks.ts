@@ -7,6 +7,7 @@ import {
 } from '@renderer/utils/rekordboxLibraryCache'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import emitter from '@renderer/utils/mitt'
+import { t } from '@renderer/utils/translate'
 import {
   createSongListItemComparator,
   type SongListItemComparator
@@ -173,7 +174,7 @@ export const usePioneerPlaylistTracks = (params: UsePioneerPlaylistTracksParams)
           )
     ) as { revision?: string }
     const revision = String(result?.revision || '')
-    if (!revision) throw new Error('DJ 曲库文件版本为空。')
+    if (!revision) throw new Error(t('pioneer.sourceRevisionEmpty'))
     return revision
   }
 

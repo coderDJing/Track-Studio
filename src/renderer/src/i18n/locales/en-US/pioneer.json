@@ -1,6 +1,8 @@
 {
   "pioneer": {
+    "allTracks": "All Tracks",
     "loadTreeFailed": "Failed to load the Rekordbox USB library.",
+    "sourceRevisionEmpty": "The DJ library file revision is empty.",
     "loadingPlaylistTree": "Loading the Rekordbox USB playlist tree...",
     "noMatchingPlaylists": "No matching playlists.",
     "emptyPlaylistTree": "There are no visible playlists on this USB drive yet.",

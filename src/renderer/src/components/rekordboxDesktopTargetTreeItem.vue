@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import listIconAsset from '@renderer/assets/listIcon.svg?asset'
 import type { IPioneerPlaylistTreeNode } from '../../../types/globals'
+import { getPlaylistNodeDisplayName } from '@renderer/composables/rekordboxDesktop/playlistNodeDisplayName'
 
 const listIcon = listIconAsset
 
@@ -170,7 +171,7 @@ const handleDragStart = (event: DragEvent) => {
       </div>
       <div class="nameBox">
         <div class="nameRow">
-          <span class="nameText">{{ node.name }}</span>
+          <span class="nameText">{{ getPlaylistNodeDisplayName(node) }}</span>
           <span v-if="node.isSmartPlaylist" class="smartBadge">Smart</span>
         </div>
       </div>

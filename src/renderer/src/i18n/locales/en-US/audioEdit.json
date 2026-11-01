@@ -62,7 +62,7 @@
     "recommended": "Recommended",
     "newVersionHint": "Automatically named {name} and inserted after the current track",
     "outputFormat": "Output format",
-    "keepFormat": "Keep original format",
+    "keepFormat": "Keep original format ({format})",
     "keepFormatLossy": "Smaller file, same compatibility. MP3 / AAC / M4A will be re-encoded with slight extra loss.",
     "keepFormatLossless": "Keeps the original lossless format.",
     "pcmWav": "PCM WAV",

@@ -1,6 +1,8 @@
 {
   "pioneer": {
+    "allTracks": "全部曲目",
     "loadTreeFailed": "读取 Rekordbox U 盘库失败",
+    "sourceRevisionEmpty": "DJ 曲库文件版本为空。",
     "loadingPlaylistTree": "正在读取 Rekordbox U 盘库歌单树...",
     "noMatchingPlaylists": "没有匹配的歌单。",
     "emptyPlaylistTree": "这个 U 盘里暂时没有可显示的歌单树。",

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { t } from '@renderer/utils/translate'
+import { t, tLabel } from '@renderer/utils/translate'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
 import BaseSelect from '@renderer/components/BaseSelect.vue'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
@@ -52,8 +52,7 @@ const formatOptions = computed(() => [
 
 const handlePickOutputPath = async () => {
   const result = (await window.electron.ipcRenderer.invoke('select-folder', false)) as
-    | string[]
-    | null
+    string[] | null
   const nextPath = Array.isArray(result) ? result[0] : ''
   if (nextPath) {
     draftPath.value = nextPath
@@ -83,7 +82,7 @@ const cancel = () => {
       </div>
       <div class="dialog-body">
         <div class="form-row">
-          <div class="form-label">{{ t('mixtape.outputPath') }}：</div>
+          <div class="form-label">{{ tLabel('mixtape.outputPath') }}</div>
           <div class="form-field">
             <bubbleBoxTrigger
               tag="div"
@@ -97,13 +96,13 @@ const cancel = () => {
           </div>
         </div>
         <div class="form-row">
-          <div class="form-label">{{ t('mixtape.outputFormat') }}：</div>
+          <div class="form-label">{{ tLabel('mixtape.outputFormat') }}</div>
           <div class="form-field">
             <BaseSelect v-model="draftFormat" :options="formatOptions" :width="140" />
           </div>
         </div>
         <div class="form-row">
-          <div class="form-label">{{ t('mixtape.outputFilename') }}：</div>
+          <div class="form-label">{{ tLabel('mixtape.outputFilename') }}</div>
           <div class="form-field">
             <input v-model="draftFilename" class="dialog-input" type="text" />
           </div>

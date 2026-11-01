@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { t } from '@renderer/utils/translate'
+import { t, tLabel } from '@renderer/utils/translate'
 import singleCheckbox from '@renderer/components/singleCheckbox.vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import {
@@ -265,15 +265,15 @@ const {
               <div v-else-if="currentSuggestion" class="musicbrainz-suggestion-body">
                 <div class="musicbrainz-suggestion-meta">
                   <div>
-                    {{ t('metadata.musicbrainzChosenRelease') }}：
+                    {{ tLabel('metadata.musicbrainzChosenRelease') }}
                     {{ currentSuggestion.releaseTitle || '--' }}
                   </div>
                   <div>
-                    {{ t('metadata.musicbrainzReleaseDate') }}：
+                    {{ tLabel('metadata.musicbrainzReleaseDate') }}
                     {{ currentSuggestion.releaseDate || '--' }}
                   </div>
                   <div>
-                    {{ t('metadata.musicbrainzLabel') }}：
+                    {{ tLabel('metadata.musicbrainzLabel') }}
                     {{ currentSuggestion.label || '--' }}
                   </div>
                 </div>

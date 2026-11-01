@@ -4,7 +4,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { v4 as uuidV4 } from 'uuid'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
-import { t } from '@renderer/utils/translate'
+import { t, tLabel } from '@renderer/utils/translate'
 import utils from '@renderer/utils/utils'
 import type { RekordboxXmlExportMode } from '@shared/rekordboxXmlExport'
 
@@ -165,7 +165,7 @@ onUnmounted(() => {
       </div>
       <div class="dialog-content">
         <div class="form-row">
-          <div class="form-label">{{ t('rekordboxXmlExport.exportRootDir') }}：</div>
+          <div class="form-label">{{ tLabel('rekordboxXmlExport.exportRootDir') }}</div>
           <div class="form-control">
             <bubbleBoxTrigger
               tag="div"
@@ -180,7 +180,7 @@ onUnmounted(() => {
         </div>
 
         <div class="form-row">
-          <div class="form-label">{{ t('rekordboxXmlExport.exportMode') }}：</div>
+          <div class="form-label">{{ tLabel('rekordboxXmlExport.exportMode') }}</div>
           <div class="form-control mode-options">
             <div
               v-for="option in modeOptions"
@@ -199,7 +199,7 @@ onUnmounted(() => {
         </div>
 
         <div class="form-row">
-          <div class="form-label">{{ t('rekordboxXmlExport.exportDirName') }}：</div>
+          <div class="form-label">{{ tLabel('rekordboxXmlExport.exportDirName') }}</div>
           <div class="form-control">
             <input
               v-model.trim="exportDirName"
@@ -211,7 +211,7 @@ onUnmounted(() => {
         </div>
 
         <div class="form-row">
-          <div class="form-label">{{ t('rekordboxXmlExport.xmlFileName') }}：</div>
+          <div class="form-label">{{ tLabel('rekordboxXmlExport.xmlFileName') }}</div>
           <div class="form-control">
             <input
               v-model.trim="xmlFileName"
@@ -223,7 +223,7 @@ onUnmounted(() => {
         </div>
 
         <div class="form-row">
-          <div class="form-label">{{ t('rekordboxXmlExport.xmlPlaylistName') }}：</div>
+          <div class="form-label">{{ tLabel('rekordboxXmlExport.xmlPlaylistName') }}</div>
           <div class="form-control">
             <input
               v-model.trim="xmlPlaylistName"
