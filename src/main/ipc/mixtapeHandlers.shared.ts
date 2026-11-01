@@ -14,6 +14,7 @@ import {
 import { upsertMixtapeItemStemStateById, type MixtapeStemStatus } from '../mixtapeStemDb'
 import store from '../store'
 import { loadLibraryNodes, type LibraryNodeRow } from '../libraryTreeDb'
+import { listSetItemsByPlaylist } from '../setListDb'
 import { queueMixtapeRawWaveforms } from '../services/mixtapeRawWaveformQueue'
 import { queueUnifiedDisplayWaveforms } from '../services/unifiedDisplayWaveformQueue'
 import {
@@ -545,7 +546,7 @@ type OriginPlaylistSnapshot =
       rootPath: string
     }
   | {
-      nodeType: 'mixtapeList'
+      nodeType: 'mixtapeList' | 'setList'
       filePathKeys: Set<string>
     }
 
@@ -682,6 +683,22 @@ const createOriginPlaylistResolver = (): OriginPlaylistResolver => {
               .filter(Boolean)
           )
         }
+      } else if (node?.nodeType === 'setList') {
+        // SET 条目可能存相对 library 的托管路径，需与 setList:load-items 一致地解析为绝对路径
+        snapshot = {
+          nodeType: 'setList',
+          filePathKeys: new Set(
+            listSetItemsByPlaylist(normalizedUuid)
+              .map((item) =>
+                normalizeFilePathKey(
+                  path.isAbsolute(item.filePath)
+                    ? item.filePath
+                    : path.join(libraryRoot, 'library', item.filePath)
+                )
+              )
+              .filter(Boolean)
+          )
+        }
       }
 
       snapshotCache.set(normalizedUuid, snapshot)
@@ -734,7 +751,10 @@ export const reconcileMixtapeMissingFiles = async (
       if (originSnapshot?.nodeType === 'songList') {
         existsInOrigin =
           isPathUnderRoot(originSnapshot.rootPath, filePath) && fs.existsSync(filePath)
-      } else if (originSnapshot?.nodeType === 'mixtapeList') {
+      } else if (
+        originSnapshot?.nodeType === 'mixtapeList' ||
+        originSnapshot?.nodeType === 'setList'
+      ) {
         const filePathKey = normalizeFilePathKey(filePath)
         existsInOrigin = !!filePathKey && originSnapshot.filePathKeys.has(filePathKey)
       }
