@@ -483,6 +483,11 @@ export async function pruneOrphanedSongListCaches(dbRoot?: string): Promise<{
     }
     keepRoots.add(path.join(rootDir, mapRendererPathToFsPath('library/RecycleBin')))
     keepRoots.add(path.join(rootDir, mapRendererPathToFsPath('library/RecordingLibrary')))
+    // SET 导入/托管曲目的分析与波形共用此根目录，它不属于 songList 节点。
+    // 必须与 findSongListRoot 的托管根一致，否则读取库树会误删 Mixtape 依赖的缓存。
+    keepRoots.add(
+      path.join(rootDir, 'library', getCoreFsDirName('SetLibrary'), SET_CUSTODY_DIR_NAME)
+    )
     // 歌单没了就把视图快照一起清掉，否则 UUID 万一被复用会读到上一张歌单的内容。
     // 这里保留所有节点类型的 uuid（不只 songList），避免误删别的节点将来用到的行。
     // 歌单还在但路径已经变了（磁盘改名、云同步搬家）时，list_root / items_json
