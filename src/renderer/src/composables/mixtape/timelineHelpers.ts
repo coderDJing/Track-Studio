@@ -84,6 +84,7 @@ type TimelineHelpersContext = {
   mixtapeStemMode?: ValueRef<unknown>
   t: (key: string) => string
   libraryUtils: {
+    getLibraryTreeByUUID: (uuid: string) => { type: string } | null
     findDirPathByUuid: (uuid: string) => string
   }
   waveformDataMap: Map<string, StemWaveformData | UnifiedDisplayWaveformDetailData | null>
@@ -636,6 +637,9 @@ export const createTimelineHelpersModule = (ctx: TimelineHelpersContext) => {
   const resolveWaveformListRoot = (track: MixtapeTrack) => {
     const originUuid = track.originPlaylistUuid
     if (!originUuid) return ''
+    // SET / Mixtape 是逻辑歌单，音频可能在托管目录或其他来源目录。
+    // 不把逻辑路径作为缓存根传下去，让主进程按音频实际位置解析。
+    if (libraryUtils.getLibraryTreeByUUID(originUuid)?.type !== 'songList') return ''
     return libraryUtils.findDirPathByUuid(originUuid) || ''
   }
 
