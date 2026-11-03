@@ -3,6 +3,22 @@ import { createSongBeatGridMapV2FromFixedGrid } from '@shared/songBeatGridMapV2'
 import { parseSnapshot } from './mixtapeTrackSnapshot'
 
 describe('mixtape track snapshot', () => {
+  it('keeps Hot Cue and Memory Cue metadata for the timeline overlay', () => {
+    const track = parseSnapshot(
+      {
+        infoJson: JSON.stringify({
+          hotCues: [{ slot: 1, sec: 12, label: 'Drop', color: '#20c997', comment: 'First drop' }],
+          memoryCues: [{ sec: 30, order: 0, comment: 'Mix out' }, { sec: -1 }]
+        })
+      },
+      0,
+      'Unknown'
+    )
+    expect(track.hotCues).toMatchObject([
+      { slot: 1, sec: 12, label: 'Drop', color: '#20c997', comment: 'First drop' }
+    ])
+    expect(track.memoryCues).toMatchObject([{ sec: 30, order: 0, comment: 'Mix out' }])
+  })
   it('uses the transient canonical v2 grid instead of an item JSON grid copy', () => {
     const beatGridMap = createSongBeatGridMapV2FromFixedGrid({
       bpm: 128,

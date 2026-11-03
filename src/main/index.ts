@@ -460,6 +460,7 @@ songHotCueEvents.on('hot-cues-updated', (payload) => {
       mainWindow.instance.webContents.send('song-hot-cues-updated', payload)
     } catch {}
   }
+  mixtapeWindow.broadcast?.('song-hot-cues-updated', payload)
 })
 
 songMemoryCueEvents.on('memory-cues-updated', (payload) => {
@@ -469,6 +470,7 @@ songMemoryCueEvents.on('memory-cues-updated', (payload) => {
       mainWindow.instance.webContents.send('song-memory-cues-updated', payload)
     } catch {}
   }
+  mixtapeWindow.broadcast?.('song-memory-cues-updated', payload)
 })
 
 keyAnalysisEvents.on('waveform-updated', (payload) => {

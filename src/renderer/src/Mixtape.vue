@@ -9,6 +9,8 @@ import MixtapeDialogsLayer from '@renderer/components/MixtapeDialogsLayer.vue'
 import MixtapeEnvelopePreviewTrack from '@renderer/components/mixtape/MixtapeEnvelopePreviewTrack.vue'
 import MixtapeGlobalBpmEditor from '@renderer/components/mixtape/MixtapeGlobalBpmEditor.vue'
 import MixtapeTrackLoopOverlay from '@renderer/components/mixtape/MixtapeTrackLoopOverlay.vue'
+import MixtapeTrackCueOverlay from '@renderer/components/mixtape/MixtapeTrackCueOverlay.vue'
+import MixtapeTrackEnvelopeCurve from '@renderer/components/mixtape/MixtapeTrackEnvelopeCurve.vue'
 import { useMixtape } from '@renderer/composables/useMixtape'
 import { useMixtapePageUi } from '@renderer/composables/mixtape/useMixtapePageUi'
 import { useMixtapeWindowUserGuide } from '@renderer/composables/mixtape/useMixtapeWindowUserGuide'
@@ -643,38 +645,12 @@ onBeforeUnmount(() => {
                               @mousedown.stop="handleLaneTrackMouseDown(item, $event)"
                               @contextmenu.stop.prevent="handleTrackContextMenu(item, $event)"
                             >
-                              <svg
-                                class="lane-track__envelope-svg"
-                                viewBox="0 0 100 100"
-                                preserveAspectRatio="none"
-                              >
-                                <line
-                                  class="lane-track__envelope-midline"
-                                  :class="{ 'is-hidden': !showEnvelopeCurve }"
-                                  x1="0"
-                                  y1="50"
-                                  x2="100"
-                                  y2="50"
-                                ></line>
-                                <polygon
-                                  class="lane-track__envelope-fill"
-                                  :class="{ 'is-hidden': !showEnvelopeCurve }"
-                                  :points="resolveActiveEnvelopePolygon(item)"
-                                ></polygon>
-                                <polyline
-                                  class="lane-track__envelope-line"
-                                  :class="{ 'is-hidden': !showEnvelopeCurve }"
-                                  :points="resolveActiveEnvelopePolyline(item)"
-                                ></polyline>
-                                <polyline
-                                  class="lane-track__envelope-segment-hit"
-                                  :class="{ 'is-hidden': !showEnvelopeCurve }"
-                                  :points="resolveActiveEnvelopePolyline(item)"
-                                  @mousedown.stop.prevent="
-                                    handleEnvelopeSegmentMouseDown(item, $event)
-                                  "
-                                ></polyline>
-                              </svg>
+                              <MixtapeTrackEnvelopeCurve
+                                :visible="showEnvelopeCurve"
+                                :polygon="resolveActiveEnvelopePolygon(item)"
+                                :polyline="resolveActiveEnvelopePolyline(item)"
+                                @segment-mousedown="handleEnvelopeSegmentMouseDown(item, $event)"
+                              />
                               <div class="lane-track__mute-segments">
                                 <template v-if="isStemParamMode">
                                   <div
@@ -715,6 +691,11 @@ onBeforeUnmount(() => {
                                 :handle-track-loop-select-loop="handleTrackLoopSelectLoop"
                                 :handle-track-loop-repeat-step="handleTrackLoopRepeatStep"
                                 :handle-track-loop-remove="handleRemoveTrackLoop"
+                              />
+                              <MixtapeTrackCueOverlay
+                                :item="item"
+                                :source-duration-sec="resolveTrackSourceDurationSeconds(item.track)"
+                                :render-zoom="renderZoomLevel"
                               />
                               <div
                                 v-if="showTrackEnvelopeEditor"

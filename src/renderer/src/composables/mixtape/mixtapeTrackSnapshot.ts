@@ -1,4 +1,6 @@
 import { RendererFilePathSet } from '@renderer/utils/filePathComparison'
+import { normalizeSongHotCues } from '@shared/hotCues'
+import { normalizeSongMemoryCues } from '@shared/memoryCues'
 import {
   normalizeGainEnvelopePoints,
   normalizeMixEnvelopePoints
@@ -162,6 +164,8 @@ export const parseSnapshot = (
     filePath,
     originPath: String(raw?.originPathSnapshot || ''),
     originPlaylistUuid: raw?.originPlaylistUuid ? String(raw.originPlaylistUuid) : null,
+    hotCues: normalizeSongHotCues(info?.hotCues),
+    memoryCues: normalizeSongMemoryCues(info?.memoryCues),
     key: parsedKey || undefined,
     originalKey: parsedOriginalKey,
     bpm: parsedBpm,

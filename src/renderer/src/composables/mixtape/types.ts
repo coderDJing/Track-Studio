@@ -2,6 +2,7 @@ import type { UnifiedDisplayWaveformDetailData } from '@shared/unifiedDisplayWav
 import { FIXED_MIXTAPE_STEM_MODE } from '@shared/mixtapeStemMode'
 import type { MixtapeStemProfile as SharedMixtapeStemProfile } from '@shared/mixtapeStemProfiles'
 import type { SongBeatGridMapV2 } from '@shared/songBeatGridMapV2'
+import type { ISongHotCue, ISongMemoryCue } from 'src/types/globals'
 
 export type StemWaveformBand = {
   left: Uint8Array
@@ -43,15 +44,7 @@ export type MixtapeStemStatus = 'idle' | 'pending' | 'running' | 'ready' | 'fail
 export type MixtapeWaveformStemId = 'vocal' | 'inst' | 'bass' | 'drums'
 
 export type MixtapeEnvelopeParamId =
-  | 'gain'
-  | 'high'
-  | 'mid'
-  | 'low'
-  | 'vocal'
-  | 'inst'
-  | 'bass'
-  | 'drums'
-  | 'volume'
+  'gain' | 'high' | 'mid' | 'low' | 'vocal' | 'inst' | 'bass' | 'drums' | 'volume'
 
 export type MixtapeTrack = {
   id: string
@@ -62,6 +55,8 @@ export type MixtapeTrack = {
   filePath: string
   originPath: string
   originPlaylistUuid?: string | null
+  hotCues?: ISongHotCue[]
+  memoryCues?: ISongMemoryCue[]
   // 调性（如 8A / C#m）
   key?: string
   // 首次加载时的原始调性

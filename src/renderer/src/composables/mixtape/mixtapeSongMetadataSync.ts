@@ -1,4 +1,6 @@
 import { normalizeSongBeatGridMapV2 } from '@shared/songBeatGridMapV2'
+import { normalizeSongHotCues } from '@shared/hotCues'
+import { normalizeSongMemoryCues } from '@shared/memoryCues'
 import type { MixtapeRawItem, MixtapeTrack } from '@renderer/composables/mixtape/types'
 import {
   isCurrentRendererWindowsPathPlatform,
@@ -73,6 +75,37 @@ const patchMixtapeRawItemsByFilePath = (
 }
 
 export const createMixtapeSongMetadataSync = (ctx: SongMetadataSyncContext) => {
+  const applyCueUpdate = (
+    field: 'hotCues' | 'memoryCues',
+    eventPayload: { filePath?: string; hotCues?: unknown; memoryCues?: unknown }
+  ) => {
+    const filePath = ctx.normalizeMixtapeFilePath(eventPayload?.filePath)
+    if (!filePath || !Object.prototype.hasOwnProperty.call(eventPayload, field)) return
+    const targetPath = normalizeMixtapeComparePath(ctx, filePath)
+    const cues =
+      field === 'hotCues'
+        ? normalizeSongHotCues(eventPayload[field])
+        : normalizeSongMemoryCues(eventPayload[field])
+    const nextJson = JSON.stringify(cues)
+    // Cue 只更新标记数据，复用轨道/布局引用，不重载工程、播放状态或波形。
+    for (const track of ctx.tracks.value) {
+      if (normalizeMixtapeComparePath(ctx, track.filePath) !== targetPath) continue
+      if (JSON.stringify(track[field] || []) === nextJson) continue
+      Object.assign(track, { [field]: cues })
+    }
+    patchMixtapeRawItemsByFilePath(ctx, filePath, (info) =>
+      JSON.stringify(info[field] || []) === nextJson ? null : { ...info, [field]: cues }
+    )
+  }
+  const handleSongHotCuesUpdated = (
+    _e: unknown,
+    payload: { filePath?: string; hotCues?: unknown }
+  ) => applyCueUpdate('hotCues', payload)
+  const handleSongMemoryCuesUpdated = (
+    _e: unknown,
+    payload: { filePath?: string; memoryCues?: unknown }
+  ) => applyCueUpdate('memoryCues', payload)
+
   const handleSongKeyUpdated = (
     _e: unknown,
     eventPayload: { filePath?: string; keyText?: string }
@@ -181,6 +214,8 @@ export const createMixtapeSongMetadataSync = (ctx: SongMetadataSyncContext) => {
   }
 
   return {
+    handleSongHotCuesUpdated,
+    handleSongMemoryCuesUpdated,
     handleSongKeyUpdated,
     handleSongGridUpdated,
     handleSongGridBatchUpdated

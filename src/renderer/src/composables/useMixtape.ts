@@ -328,16 +328,21 @@ export const useMixtape = (options: UseMixtapeOptions = {}) => {
     scheduleFullPreRender()
     scheduleWorkerPreRender()
   }
-  const { handleSongKeyUpdated, handleSongGridUpdated, handleSongGridBatchUpdated } =
-    createMixtapeSongMetadataSync({
-      tracks,
-      mixtapeRawItems,
-      normalizeMixtapeFilePath,
-      normalizeBpm,
-      normalizeFirstBeatMs,
-      normalizeDownbeatBeatOffset,
-      refreshMixtapeTrackDerivedUi
-    })
+  const {
+    handleSongKeyUpdated,
+    handleSongGridUpdated,
+    handleSongGridBatchUpdated,
+    handleSongHotCuesUpdated,
+    handleSongMemoryCuesUpdated
+  } = createMixtapeSongMetadataSync({
+    tracks,
+    mixtapeRawItems,
+    normalizeMixtapeFilePath,
+    normalizeBpm,
+    normalizeFirstBeatMs,
+    normalizeDownbeatBeatOffset,
+    refreshMixtapeTrackDerivedUi
+  })
   const buildBpmTargets = () => buildMixtapeBpmTargets(tracks.value)
   const resolveMissingBpmCount = (bpmTargets: Set<string>) =>
     resolveMissingBpmTrackCount(tracks.value, bpmTargets)
@@ -520,8 +525,7 @@ export const useMixtape = (options: UseMixtapeOptions = {}) => {
     nextTick(() => {
       requestAnimationFrame(() => {
         const viewport = timelineScrollRef.value?.osInstance()?.elements().viewport as
-          | HTMLElement
-          | undefined
+          HTMLElement | undefined
         if (!viewport) return
         viewport.scrollLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth)
       })
@@ -673,6 +677,8 @@ export const useMixtape = (options: UseMixtapeOptions = {}) => {
   onMounted(() => {
     applyPayload(resolveInitialMixtapePayload())
     window.electron.ipcRenderer.on('song-key-updated', handleSongKeyUpdated)
+    window.electron.ipcRenderer.on('song-hot-cues-updated', handleSongHotCuesUpdated)
+    window.electron.ipcRenderer.on('song-memory-cues-updated', handleSongMemoryCuesUpdated)
     window.electron.ipcRenderer.on('song-grid-batch-updated', handleSongGridBatchUpdated)
     window.electron.ipcRenderer.on('song-grid-updated', handleSongGridUpdated)
     window.electron.ipcRenderer.on('mixtape-open', handleOpen)
@@ -695,6 +701,11 @@ export const useMixtape = (options: UseMixtapeOptions = {}) => {
     window.addEventListener('keydown', handleWindowKeydown)
   })
   onBeforeUnmount(() => {
+    window.electron.ipcRenderer.removeListener('song-hot-cues-updated', handleSongHotCuesUpdated)
+    window.electron.ipcRenderer.removeListener(
+      'song-memory-cues-updated',
+      handleSongMemoryCuesUpdated
+    )
     try {
       window.electron.ipcRenderer.removeListener('song-key-updated', handleSongKeyUpdated)
     } catch {}
