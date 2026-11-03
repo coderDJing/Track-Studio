@@ -1,6 +1,6 @@
 import { onMounted, onUnmounted } from 'vue'
 import { RendererFilePathSet } from '@renderer/utils/filePathComparison'
-import hotkeys from 'hotkeys-js'
+import hotkeys, { type KeyHandler } from 'hotkeys-js'
 import confirm from '@renderer/components/confirmDialog'
 import { t } from '@renderer/utils/translate'
 import type { ISongInfo } from '../../../../../../types/globals'
@@ -31,7 +31,8 @@ type WaveformPreviewStatePayload = {
   song?: ISongInfo | null
 }
 
-let windowHotkeyBinderCount = 0
+const windowKeyboardOwners = new Map<ISongsAreaPaneRuntimeState, Map<string, KeyHandler>>()
+const boundWindowHotkeys = new Set<string>()
 let windowPreviewHotkeysLocked = false
 
 interface UseKeyboardSelectionParams {
@@ -556,11 +557,19 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
   }
 
   onMounted(() => {
-    const shouldBindWindowHotkeys = windowHotkeyBinderCount === 0
-    windowHotkeyBinderCount += 1
+    const handlers = new Map<string, KeyHandler>()
+    windowKeyboardOwners.set(songsAreaState, handlers)
+    const bindHotkey = (keys: string, _scope: string, handler: KeyHandler) => {
+      handlers.set(keys, handler)
+      if (boundWindowHotkeys.has(keys)) return
+      boundWindowHotkeys.add(keys)
+      hotkeys(keys, 'windowGlobal', (event, keyEvent) => {
+        const activeHandlers = windowKeyboardOwners.get(runtime.songsArea)
+        return activeHandlers?.get(keys)?.(event, keyEvent)
+      })
+    }
     emitter.on('waveform-preview:state', handleWaveformPreviewState)
-    if (!shouldBindWindowHotkeys) return
-    hotkeys('ctrl+a, command+a', 'windowGlobal', () => {
+    bindHotkey('ctrl+a, command+a', 'windowGlobal', () => {
       if (windowPreviewHotkeysLocked) return false
 
       if (runtime.focusArea === 'library') {
@@ -587,19 +596,19 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
       return false
     })
     if (readOnly && params.onDeleteSelection) {
-      hotkeys('delete', 'windowGlobal', () => {
+      bindHotkey('delete', 'windowGlobal', () => {
         if (!windowPreviewHotkeysLocked && runtime.focusArea === 'songsArea')
           void params.onDeleteSelection?.()
         return false
       })
     }
     if (!readOnly) {
-      hotkeys('delete', 'windowGlobal', () => {
+      bindHotkey('delete', 'windowGlobal', () => {
         if (windowPreviewHotkeysLocked) return false
         handleDeleteKey()
         return false
       })
-      hotkeys('ctrl+c, command+c', 'windowGlobal', (event) => {
+      bindHotkey('ctrl+c, command+c', 'windowGlobal', (event) => {
         if (shouldSkipClipboardHotkey(event)) return true
         if (windowPreviewHotkeysLocked) return false
         const selectedKeys = [...songsAreaState.selectedSongFilePath]
@@ -609,7 +618,7 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
         void writeFilesToClipboard('copy', selectedPaths)
         return false
       })
-      hotkeys('ctrl+x, command+x', 'windowGlobal', (event) => {
+      bindHotkey('ctrl+x, command+x', 'windowGlobal', (event) => {
         if (windowPreviewHotkeysLocked) return false
         if (shouldSkipClipboardHotkey(event)) return true
         const selectedKeys = [...songsAreaState.selectedSongFilePath]
@@ -620,22 +629,22 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
         return false
       })
     }
-    hotkeys('shift+home', 'windowGlobal', () => {
+    bindHotkey('shift+home', 'windowGlobal', () => {
       if (windowPreviewHotkeysLocked) return false
       handleShiftHome()
       return false
     })
-    hotkeys('shift+end', 'windowGlobal', () => {
+    bindHotkey('shift+end', 'windowGlobal', () => {
       if (windowPreviewHotkeysLocked) return false
       handleShiftEnd()
       return false
     })
-    hotkeys('shift+pageup', 'windowGlobal', () => {
+    bindHotkey('shift+pageup', 'windowGlobal', () => {
       if (windowPreviewHotkeysLocked) return false
       handleShiftPageUp()
       return false
     })
-    hotkeys('shift+pagedown', 'windowGlobal', () => {
+    bindHotkey('shift+pagedown', 'windowGlobal', () => {
       if (windowPreviewHotkeysLocked) return false
       handleShiftPageDown()
       return false
@@ -646,20 +655,12 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
     emitter.off('waveform-preview:state', handleWaveformPreviewState)
     cancelPendingRepeatSingleClickDeselect()
     cancelPendingShiftSelect()
-    windowHotkeyBinderCount = Math.max(0, windowHotkeyBinderCount - 1)
-    if (windowHotkeyBinderCount > 0) return
+    stopCutPolling()
+    windowKeyboardOwners.delete(songsAreaState)
+    if (windowKeyboardOwners.size > 0) return
     windowPreviewHotkeysLocked = false
-    hotkeys.unbind('ctrl+a, command+a', 'windowGlobal')
-    hotkeys.unbind('shift+home', 'windowGlobal')
-    hotkeys.unbind('shift+end', 'windowGlobal')
-    hotkeys.unbind('shift+pageup', 'windowGlobal')
-    hotkeys.unbind('shift+pagedown', 'windowGlobal')
-    if (!readOnly || params.onDeleteSelection) hotkeys.unbind('delete', 'windowGlobal')
-    if (!readOnly) {
-      hotkeys.unbind('ctrl+c, command+c', 'windowGlobal')
-      hotkeys.unbind('ctrl+x, command+x', 'windowGlobal')
-      stopCutPolling()
-    }
+    for (const keys of boundWindowHotkeys) hotkeys.unbind(keys, 'windowGlobal')
+    boundWindowHotkeys.clear()
   })
 
   return {

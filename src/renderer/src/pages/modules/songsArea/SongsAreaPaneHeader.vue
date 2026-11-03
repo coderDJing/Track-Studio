@@ -25,7 +25,9 @@ const viewSettings = usePlaylistViewSettingsStore()
 const paneState = computed(() => runtime.songsAreaPanels.panes[props.pane])
 const playlistNode = computed(() => libraryUtils.getLibraryTreeByUUID(paneState.value.songListUUID))
 const canCustomize = computed(
-  () => !!runtime.libraryTree.uuid && isPlaylistViewNode(playlistNode.value)
+  () =>
+    !!runtime.libraryTree.uuid &&
+    (Boolean(paneState.value.djPlaylist) || isPlaylistViewNode(playlistNode.value))
 )
 const independentSettings = computed({
   get: () =>
@@ -166,7 +168,7 @@ const clearSearch = () => {
   min-width: 0;
   padding: 0 10px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg) 90%, var(--font-color) 10%);
+  background: color-mix(in srgb, var(--bg) 90%, var(--text) 10%);
   flex-shrink: 0;
 }
 
@@ -188,7 +190,7 @@ const clearSearch = () => {
   flex: 1;
   min-width: 0;
   font-size: 12px;
-  color: var(--font-color);
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -203,12 +205,12 @@ const clearSearch = () => {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--font-color);
+  color: var(--text);
   cursor: pointer;
   flex-shrink: 0;
 
   &:hover {
-    background: color-mix(in srgb, var(--main-color) 18%, transparent);
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
   }
 }
 
@@ -255,7 +257,7 @@ const clearSearch = () => {
   border: 1px solid var(--border);
   border-radius: 5px;
   background: var(--bg);
-  color: var(--font-color);
+  color: var(--text);
 
   &:focus-within {
     border-color: var(--accent);
@@ -284,7 +286,7 @@ const clearSearch = () => {
     -webkit-user-select: text;
 
     &::placeholder {
-      color: var(--font-color);
+      color: var(--text);
       opacity: 0.55;
     }
   }

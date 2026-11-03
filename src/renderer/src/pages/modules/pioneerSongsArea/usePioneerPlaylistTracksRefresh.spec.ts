@@ -65,17 +65,23 @@ const fixture = (sourceKind: 'usb' | 'desktop' = 'usb') => {
   const selectedSourceRootPath = computed(() => 'E:\\')
   const selectedSourceKind = computed(() => sourceKind)
   const selectedExternalKind = computed(() => null)
+  const searchQuery = ref('')
+  const compatibleKey = ref<string | null>(null)
   const projection = usePioneerSongsProjection({
     originalTracks,
     visibleSongs,
     selectedRowKeys,
-    columnData: ref<ISongsAreaColumn[]>([]),
+    columnData: ref<ISongsAreaColumn[]>([
+      { key: 'title', columnName: 'title', show: true, width: 120 }
+    ]),
     selectedSourceRootPath,
     selectedSourceKind,
     selectedLibraryType: computed(() => 'deviceLibrary'),
     selectedExternalKind,
     isExternalSource: computed(() => false),
     getKeyDisplayStyle: () => '',
+    getSearchQuery: () => searchQuery.value,
+    getCompatibleKey: () => compatibleKey.value,
     getCurrentPlaybackListKey: () => currentPlaybackListKey.value,
     getPlayingSongListUUID: () => testRuntime.playingData.playingSongListUUID,
     setPlayingSongListData: (songs) => {
@@ -102,6 +108,9 @@ const fixture = (sourceKind: 'usb' | 'desktop' = 'usb') => {
   })
   return {
     ...loader,
+    ...projection,
+    searchQuery,
+    compatibleKey,
     originalTracks,
     visibleSongs,
     selectedRowKeys,
@@ -135,6 +144,31 @@ beforeEach(() => {
 })
 
 describe('USB playlist refresh', () => {
+  it('searches each pane separately and clears an empty search result without losing the loaded roster', async () => {
+    const left = fixture()
+    const right = fixture()
+    left.originalTracks.value = diskTracks
+    right.originalTracks.value = diskTracks
+    left.searchQuery.value = 'Track 1'
+    await left.applyFiltersAndSorting()
+    await right.applyFiltersAndSorting()
+    expect(left.visibleSongs.value.map((song) => song.title)).toEqual(['Track 1'])
+    expect(right.visibleSongs.value).toHaveLength(2)
+    left.searchQuery.value = 'no matching track'
+    await left.applyFiltersAndSorting()
+    expect(left.visibleSongs.value).toEqual([])
+    expect(left.originalTracks.value).toHaveLength(2)
+    left.searchQuery.value = ''
+    await left.applyFiltersAndSorting()
+    expect(left.visibleSongs.value).toHaveLength(2)
+    left.compatibleKey.value = '8A'
+    left.originalTracks.value = diskTracks.map((track, index) => ({
+      ...track,
+      key: index === 0 ? 'Am' : 'C#'
+    }))
+    await left.applyFiltersAndSorting()
+    expect(left.visibleSongs.value.map((song) => song.key)).toEqual(['Am'])
+  })
   it('keeps fresh desktop SQL cue metadata while reusing the loaded ANLZ grid', async () => {
     const state = fixture('desktop')
     invoke.mockImplementation(async (channel: string) =>

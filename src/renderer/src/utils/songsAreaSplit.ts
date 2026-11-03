@@ -1,5 +1,6 @@
 import type {
   ISongsAreaPaneRuntimeState,
+  SongsAreaDjPlaylist,
   SongsAreaPaneKey,
   SplitSongsAreaPaneKey
 } from '@renderer/stores/runtime'
@@ -8,10 +9,13 @@ import libraryUtils from '@renderer/utils/libraryUtils'
 
 type RuntimeStore = ReturnType<typeof useRuntimeStore>
 
-const cloneSongsAreaPaneState = (
+export const cloneSongsAreaPaneState = (
   state: ISongsAreaPaneRuntimeState
 ): ISongsAreaPaneRuntimeState => ({
   songListUUID: String(state.songListUUID || ''),
+  djPlaylist: state.djPlaylist
+    ? { ...state.djPlaylist, browser: { ...state.djPlaylist.browser } }
+    : undefined,
   searchQuery: String(state.searchQuery || ''),
   compatibleKeyOnly: !!state.compatibleKeyOnly,
   songInfoArr: Array.isArray(state.songInfoArr) ? [...state.songInfoArr] : [],
@@ -38,6 +42,7 @@ const buildPaneStateWithSongList = (
 ): ISongsAreaPaneRuntimeState => ({
   ...cloneSongsAreaPaneState(source),
   songListUUID,
+  djPlaylist: undefined,
   searchQuery: '',
   compatibleKeyOnly: false,
   songInfoArr: [],
@@ -49,6 +54,7 @@ const buildPaneStateWithSongList = (
 })
 
 const isPanePlaylistUUID = (uuid: string) => {
+  if (/^(usb|desktop|serato|traktor):/.test(uuid)) return true
   const type = libraryUtils.getLibraryTreeByUUID(uuid)?.type
   return type === 'songList' || type === 'setList' || type === 'mixtapeList'
 }
@@ -86,20 +92,23 @@ export const clearSongsAreaPaneBySongListUUID = (runtime: RuntimeStore, songList
 export const replaceSongsAreaPaneSongList = (
   runtime: RuntimeStore,
   pane: SongsAreaPaneKey,
-  songListUUID: string
+  songListUUID: string,
+  djPlaylist?: SongsAreaDjPlaylist
 ) => {
   const paneState = runtime.songsAreaPanels.panes[pane]
   const nextState =
     paneState.songListUUID === songListUUID
       ? cloneSongsAreaPaneState(paneState)
       : buildPaneStateWithSongList(paneState, songListUUID)
+  nextState.djPlaylist = djPlaylist
   runtime.assignSongsAreaPaneState(pane, nextState)
 }
 
 export const showSongListInPane = (
   runtime: RuntimeStore,
   pane: SplitSongsAreaPaneKey,
-  songListUUID: string
+  songListUUID: string,
+  djPlaylist?: SongsAreaDjPlaylist
 ) => {
   const panes = runtime.songsAreaPanels.panes
   const otherPane = getSongsAreaOppositePane(pane)
@@ -110,7 +119,7 @@ export const showSongListInPane = (
       syncPlayingSongListDataFromVisiblePane(runtime)
       return
     }
-    replaceSongsAreaPaneSongList(runtime, pane, songListUUID)
+    replaceSongsAreaPaneSongList(runtime, pane, songListUUID, djPlaylist)
     runtime.setSongsAreaActivePane(pane)
     syncPlayingSongListDataFromVisiblePane(runtime)
     return
@@ -123,6 +132,7 @@ export const showSongListInPane = (
     currentIsPlaylist && singleSnapshot.songListUUID === songListUUID
       ? singleSnapshot
       : buildPaneStateWithSongList(singleSnapshot, songListUUID)
+  paneSnapshot.djPlaylist = djPlaylist
 
   // Move the live state object with its mounted view instead of cloning the retained list.
   const retainedPane = singleSnapshot.songListUUID === songListUUID ? pane : otherPane

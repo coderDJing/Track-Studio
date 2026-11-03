@@ -20,6 +20,7 @@ export const usePioneerDesktopPlaylistActions = (params: {
   selectedSourceCacheKey: Ref<string>
   currentPlaybackListKey: Ref<string>
   visibleSongs: Ref<ISongInfo[]>
+  selectedTreeNodes?: Ref<IPioneerPlaylistTreeNode[]>
   refreshPlaylistTracks: (options?: { reuseRuntime?: boolean }) => Promise<void>
 }) => {
   const {
@@ -56,7 +57,7 @@ export const usePioneerDesktopPlaylistActions = (params: {
       }
       return undefined
     }
-    return walk(runtime.pioneerDeviceLibrary.treeNodes || [])
+    return walk(params.selectedTreeNodes?.value || runtime.pioneerDeviceLibrary.treeNodes || [])
   }
 
   const invokeExternalMutation = async (payload: Record<string, unknown>) =>
@@ -191,9 +192,7 @@ export const usePioneerDesktopPlaylistActions = (params: {
     await runWithPlaylistMutationPending(async () => {
       try {
         let response:
-          | ExternalLibraryMutationResponse
-          | RekordboxDesktopRemovePlaylistTracksResponse
-          | null
+          ExternalLibraryMutationResponse | RekordboxDesktopRemovePlaylistTracksResponse | null
         if (isExternalLibrary()) {
           response = await invokeExternalMutation({ operation: 'remove-tracks', rowKeys })
         } else {
@@ -236,9 +235,7 @@ export const usePioneerDesktopPlaylistActions = (params: {
     await runWithPlaylistMutationPending(async () => {
       try {
         let response:
-          | ExternalLibraryMutationResponse
-          | RekordboxDesktopReorderPlaylistTracksResponse
-          | null
+          ExternalLibraryMutationResponse | RekordboxDesktopReorderPlaylistTracksResponse | null
         if (isExternalLibrary()) {
           response = await invokeExternalMutation({
             operation: 'reorder-tracks',
@@ -281,9 +278,7 @@ export const usePioneerDesktopPlaylistActions = (params: {
     await runWithPlaylistMutationPending(async () => {
       try {
         let response:
-          | ExternalLibraryMutationResponse
-          | RekordboxDesktopReorderPlaylistTracksResponse
-          | null
+          ExternalLibraryMutationResponse | RekordboxDesktopReorderPlaylistTracksResponse | null
         if (isExternalLibrary()) {
           response = await invokeExternalMutation({
             operation: 'reorder-tracks',

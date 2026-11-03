@@ -40,6 +40,11 @@ export type SongsAreaPaneKey = 'single' | 'left' | 'right'
 export type SplitSongsAreaPaneKey = 'left' | 'right'
 export type SongsAreaColumnMode = 'default' | 'recycle' | 'recording' | 'mixtape'
 
+export type SongsAreaDjPlaylist = {
+  browser: IRekordboxLibraryBrowserState
+  externalKind: ExternalLibraryKind | null
+}
+
 interface ISongsAreaState {
   songListUUID: string
   songInfoArr: ISongInfo[]
@@ -51,6 +56,7 @@ interface ISongsAreaState {
 }
 
 export interface ISongsAreaPaneRuntimeState extends ISongsAreaState {
+  djPlaylist?: SongsAreaDjPlaylist
   searchQuery: string
   compatibleKeyOnly: boolean
   columnCacheByMode: Partial<Record<SongsAreaColumnMode, ISongsAreaColumn[]>>
@@ -74,6 +80,9 @@ const assignSongsAreaState = (
   source?: Partial<ISongsAreaPaneRuntimeState> | null
 ) => {
   target.songListUUID = String(source?.songListUUID || '')
+  target.djPlaylist = source?.djPlaylist
+    ? { ...source.djPlaylist, browser: { ...source.djPlaylist.browser } }
+    : undefined
   target.searchQuery = String(source?.searchQuery || '')
   target.compatibleKeyOnly = !!source?.compatibleKeyOnly
   target.songInfoArr = Array.isArray(source?.songInfoArr) ? [...source.songInfoArr] : []

@@ -2,7 +2,7 @@
 import { createSongRowPlaybackLookup } from '@renderer/utils/songRowPlaybackIdentity'
 import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 
-import { computed, nextTick, onUnmounted, ref, shallowRef, watch, useTemplateRef } from 'vue'
+import { computed, nextTick, onUnmounted, ref, shallowRef, watch, useTemplateRef, toRef } from 'vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import SongListHeader from '@renderer/pages/modules/songsArea/SongListHeader.vue'
@@ -17,18 +17,16 @@ import { matchesPioneerUsbPlaylistDeleteRequest } from '@renderer/utils/pioneerU
 import { sendHorizontalBrowseInteractionTrace } from '@renderer/composables/horizontalBrowse/horizontalBrowseInteractionTrace'
 import { beginHorizontalBrowseDeckInteraction } from '@renderer/composables/horizontalBrowse/horizontalBrowseInteractionTimeline'
 import { t } from '@renderer/utils/translate'
-import {
-  buildRekordboxSourceCacheKey,
-  rememberRekordboxSourceSelectedPlaylist
-} from '@renderer/utils/rekordboxLibraryCache'
-import { buildSongsAreaDefaultColumns } from '@renderer/pages/modules/songsArea/composables/useSongsAreaColumns'
+import { rememberRekordboxSourceSelectedPlaylist } from '@renderer/utils/rekordboxLibraryCache'
+import { usePlaylistColumnSettings } from '@renderer/pages/modules/songsArea/composables/usePlaylistColumnSettings'
+import { usePioneerPaneSource } from './pioneerSongsArea/usePioneerPaneSource'
+import { useHarmonicReferenceKey } from '@renderer/composables/useHarmonicReferenceKey'
 import { useColumnDragPreview } from '@renderer/pages/modules/songsArea/composables/useColumnDragPreview'
 import ColumnHeaderContextMenu from '@renderer/pages/modules/songsArea/ColumnHeaderContextMenu.vue'
-import { useWaveformPreviewPlayer } from '@renderer/pages/modules/songsArea/composables/useWaveformPreviewPlayer'
 import { useKeyboardSelection } from '@renderer/pages/modules/songsArea/composables/useKeyboardSelection'
 import { useAutoScrollToCurrent } from '@renderer/pages/modules/songsArea/composables/useAutoScrollToCurrent'
 import { useSongLocateFlash } from '@renderer/pages/modules/songsArea/composables/useSongLocateFlash'
-import type { ISongsAreaPaneRuntimeState, SongsAreaPaneKey } from '@renderer/stores/runtime'
+import type { SongsAreaPaneKey } from '@renderer/stores/runtime'
 import { useParentRafSampler } from '@renderer/pages/modules/songsArea/composables/useParentRafSampler'
 import { usePioneerDesktopPlaylistActions } from './pioneerSongsArea/usePioneerDesktopPlaylistActions'
 import { usePioneerUsbPlaylistActions } from './pioneerSongsArea/usePioneerUsbPlaylistActions'
@@ -42,66 +40,41 @@ import {
   usePioneerTrackCopyDialog,
   type PioneerTransferTarget
 } from './pioneerSongsArea/usePioneerTrackCopyDialog'
-import type {
-  IPioneerPlaylistTrack,
-  IPioneerPlaylistTreeNode,
-  IRekordboxSourceKind,
-  ISongInfo,
-  ISongsAreaColumn
-} from '../../../../types/globals'
+import type { IPioneerPlaylistTrack, ISongInfo, ISongsAreaColumn } from '../../../../types/globals'
 
 type OverlayScrollbarsComponentRef = InstanceType<typeof OverlayScrollbarsComponent> | null
 
+const props = defineProps<{ pane: SongsAreaPaneKey }>()
 const runtime = useRuntimeStore()
+let disposed = false
+const pioneerSongsAreaState = runtime.songsAreaPanels.panes[props.pane]
+const isActivePane = computed(
+  () => !runtime.songsAreaPanels.splitEnabled || runtime.songsAreaPanels.activePane === props.pane
+)
 const songsAreaRef = useTemplateRef<OverlayScrollbarsComponentRef>('songsAreaRef')
 const handleOverlayClick = (e: MouseEvent) => {
   if (e.button === 0) selectedRowKeys.value = []
 }
 const originalTracks = shallowRef<IPioneerPlaylistTrack[]>([])
-const visibleSongs = ref<ISongInfo[]>([])
+const visibleSongs = toRef(pioneerSongsAreaState, 'songInfoArr')
 const loading = ref(false)
-const selectedRowKeys = ref<string[]>([])
-const columnData = ref<ISongsAreaColumn[]>(
-  buildSongsAreaDefaultColumns('default').map((column) =>
-    column.key === 'index' ? { ...column, width: Math.max(column.width, 74) } : column
-  )
-)
+const selectedRowKeys = toRef(pioneerSongsAreaState, 'selectedSongFilePath')
+const { columnData, persistColumnData, independentSettings, resetToSharedSettings } =
+  usePlaylistColumnSettings({
+    runtime,
+    songsAreaState: pioneerSongsAreaState,
+    columnMode: computed(() => 'default' as const),
+    shouldPersistToLocalStorage: () => true,
+    onSettingsChange: () => {
+      void applyFiltersAndSorting('view-settings-changed')
+    }
+  })
+const harmonicReferenceKey = useHarmonicReferenceKey(runtime)
 
 const ascendingOrder = ascendingOrderAsset
 const descendingOrder = descendingOrderAsset
 const { externalScrollTop, externalViewportHeight } = useParentRafSampler({ songsAreaRef })
-useWaveformPreviewPlayer()
 
-const pioneerSongsAreaState = {
-  get songListUUID() {
-    return currentPlaybackListKey?.value || ''
-  },
-  get songInfoArr() {
-    return visibleSongs.value
-  },
-  get totalSongCount() {
-    return visibleSongs.value.length
-  },
-  get selectedSongFilePath() {
-    return selectedRowKeys.value
-  },
-  set selectedSongFilePath(v: string[]) {
-    selectedRowKeys.value = v
-  },
-  get scrollTop() {
-    return 0
-  },
-  set scrollTop(value: number) {
-    void value
-  },
-  get scrollLeft() {
-    return 0
-  },
-  set scrollLeft(value: number) {
-    void value
-  },
-  columnCacheByMode: {}
-} as unknown as ISongsAreaPaneRuntimeState
 const { songClick, cancelPendingRepeatSingleClickDeselect, cancelPendingShiftSelect } =
   useKeyboardSelection({
     runtime,
@@ -113,82 +86,58 @@ const { songClick, cancelPendingRepeatSingleClickDeselect, cancelPendingShiftSel
         await deleteUsbTracks(resolveSelectedTracks())
     }
   })
+watch(songsAreaRef, async (host, _previous, onCleanup) => {
+  let cancelled = false
+  let detach: (() => void) | undefined
+  onCleanup(() => {
+    cancelled = true
+    detach?.()
+  })
+  await nextTick()
+  if (cancelled) return
+  const viewport = host?.osInstance()?.elements().viewport
+  if (!viewport) return
+  viewport.scrollTop = pioneerSongsAreaState.scrollTop
+  viewport.scrollLeft = pioneerSongsAreaState.scrollLeft
+  const persist = () => {
+    pioneerSongsAreaState.scrollTop = viewport.scrollTop
+    pioneerSongsAreaState.scrollLeft = viewport.scrollLeft
+  }
+  viewport.addEventListener('scroll', persist, { passive: true })
+  detach = () => viewport.removeEventListener('scroll', persist)
+})
+watch(
+  () => pioneerSongsAreaState.songListUUID,
+  async () => {
+    await nextTick()
+    const viewport = songsAreaRef.value?.osInstance()?.elements().viewport
+    if (viewport) {
+      viewport.scrollTop = 0
+      viewport.scrollLeft = 0
+    }
+  }
+)
 const selectedRowKeysForTemplate = computed(() => [...selectedRowKeys.value])
 
-const selectedSourceKey = computed(() => runtime.pioneerDeviceLibrary.selectedSourceKey || '')
-const selectedSourceKind = computed<IRekordboxSourceKind | ''>(
-  () => runtime.pioneerDeviceLibrary.selectedSourceKind || ''
-)
-const selectedExternalKind = computed(() => runtime.externalDjLibrary.selectedKind)
-const isExternalSource = computed(
-  () =>
-    Boolean(selectedExternalKind.value) &&
-    runtime.externalDjLibrary.selectedSourceKey === selectedSourceKey.value
-)
-const isSeratoSource = computed(
-  () => isExternalSource.value && selectedExternalKind.value === 'serato'
-)
-const isTraktorSource = computed(
-  () => isExternalSource.value && selectedExternalKind.value === 'traktor'
-)
-const isDesktopSource = computed(() => selectedSourceKind.value === 'desktop')
-const selectedSourceName = computed(() => {
-  if (runtime.pioneerDeviceLibrary.selectedSourceName) {
-    return runtime.pioneerDeviceLibrary.selectedSourceName
-  }
-  if (isTraktorSource.value) return t('library.traktorLibrary')
-  if (isSeratoSource.value) return t('library.seratoLibrary')
-  return isDesktopSource.value ? t('pioneer.desktopLibraryName') : 'Pioneer USB'
-})
-const selectedPlaylistId = computed(() => runtime.pioneerDeviceLibrary.selectedPlaylistId || 0)
-const selectedSourceRootPath = computed(
-  () => runtime.pioneerDeviceLibrary.selectedSourceRootPath || ''
-)
-const selectedLibraryType = computed(
-  () => runtime.pioneerDeviceLibrary.selectedLibraryType || 'deviceLibrary'
-)
-
-const selectedPlaylistNode = computed(() => {
-  const targetId = selectedPlaylistId.value
-  if (!targetId) return null
-  const walk = (items: IPioneerPlaylistTreeNode[]): IPioneerPlaylistTreeNode | null => {
-    for (const item of items) {
-      if (item.id === targetId) return item
-      if (Array.isArray(item.children) && item.children.length > 0) {
-        const found = walk(item.children)
-        if (found) return found
-      }
-    }
-    return null
-  }
-  return walk(runtime.pioneerDeviceLibrary.treeNodes || [])
-})
-const canEditUsbPlaylist = computed(
-  () =>
-    selectedSourceKind.value === 'usb' &&
-    !isExternalSource.value &&
-    Boolean(selectedPlaylistNode.value) &&
-    !selectedPlaylistNode.value?.isFolder &&
-    !selectedPlaylistNode.value?.isSmartPlaylist &&
-    (selectedLibraryType.value === 'deviceLibrary' || selectedLibraryType.value === 'oneLibrary')
-)
-const currentPlaybackListKey = computed(() => {
-  if (!selectedPlaylistId.value) return ''
-  const sourceKey = selectedSourceKey.value || selectedSourceRootPath.value || 'rekordbox'
-  const sourceKind = selectedExternalKind.value || selectedSourceKind.value || 'usb'
-  return `${sourceKind}:${sourceKey}:${selectedPlaylistId.value}`
-})
-const selectedSourceCacheKey = computed(() => {
-  if (selectedExternalKind.value && selectedSourceKey.value) {
-    return `external-library::${selectedExternalKind.value}::${selectedSourceKey.value}`
-  }
-  return buildRekordboxSourceCacheKey({
-    sourceKind: selectedSourceKind.value,
-    sourceKey: selectedSourceKey.value,
-    rootPath: selectedSourceRootPath.value,
-    libraryType: selectedLibraryType.value
-  })
-})
+const {
+  browser,
+  selectedSourceKey,
+  selectedSourceKind,
+  selectedExternalKind,
+  isExternalSource,
+  isSeratoSource,
+  isTraktorSource,
+  isDesktopSource,
+  selectedSourceName,
+  selectedPlaylistId,
+  selectedSourceRootPath,
+  selectedLibraryType,
+  selectedPlaylistNode,
+  canEditUsbPlaylist,
+  currentPlaybackListKey,
+  selectedSourceCacheKey,
+  treeNodes
+} = usePioneerPaneSource(pioneerSongsAreaState)
 
 const visibleColumns = computed(() => columnData.value.filter((item) => item.show))
 const { rowsVisibleColumns, handleColumnDragPreview } = useColumnDragPreview(visibleColumns)
@@ -247,6 +196,11 @@ const {
   selectedSourceKind,
   selectedExternalKind,
   isExternalSource,
+  getSearchQuery: () => pioneerSongsAreaState.searchQuery,
+  getCompatibleKey: () =>
+    pioneerSongsAreaState.compatibleKeyOnly && runtime.mainWindowBrowseMode !== 'browser'
+      ? harmonicReferenceKey.value
+      : null,
   getKeyDisplayStyle: () => runtime.setting.keyDisplayStyle || '',
   getCurrentPlaybackListKey: () => currentPlaybackListKey.value,
   selectedLibraryType,
@@ -275,7 +229,8 @@ type FocusSongPayload = {
 }
 
 const handleFocusSongRequest = async (payload?: FocusSongPayload) => {
-  if (payload?.pane !== 'pioneer') return
+  if (payload?.pane !== props.pane && payload?.pane !== 'pioneer') return
+  if (payload?.pane === 'pioneer' && !isActivePane.value) return
   const targetListUUID = String(payload.songListUUID || '').trim()
   if (targetListUUID && targetListUUID !== currentPlaybackListKey.value) return
   const targetPath = normalizePath(String(payload.filePath || ''))
@@ -316,8 +271,10 @@ const canRemoveTracksFromDesktopPlaylist = computed(
     !selectedPlaylistNode.value?.isAllTracks &&
     !selectedPlaylistNode.value?.isSmartPlaylist
 )
-const hasActiveTrackFilters = computed(() =>
-  columnData.value.some((col) => Boolean(col.filterActive))
+const hasActiveTrackFilters = computed(
+  () =>
+    Boolean(pioneerSongsAreaState.searchQuery.trim() || pioneerSongsAreaState.compatibleKeyOnly) ||
+    columnData.value.some((col) => Boolean(col.filterActive))
 )
 const sortedTrackColumn = computed(() => columnData.value.find((col) => Boolean(col.order)) || null)
 const canReorderDesktopTracks = computed(
@@ -421,9 +378,25 @@ const {
 
 const handleColumnsUpdate = (nextColumns: ISongsAreaColumn[]) => {
   columnData.value = nextColumns
+  persistColumnData()
   applyFiltersAndSorting('columns-updated')
   selectedRowKeys.value = []
 }
+
+watch(columnData, () => persistColumnData(), { deep: true })
+watch(
+  () => [
+    pioneerSongsAreaState.searchQuery,
+    pioneerSongsAreaState.compatibleKeyOnly,
+    harmonicReferenceKey.value
+  ],
+  () => {
+    void applyFiltersAndSorting('search-or-compatible-key-changed')
+  }
+)
+watch(visibleSongs, () => {
+  pioneerSongsAreaState.totalSongCount = originalTracks.value.length
+})
 
 // --- 列头右键菜单 ---
 const colRightClickMenuShow = ref(false)
@@ -452,11 +425,15 @@ const handleColumnClick = (column: ISongsAreaColumn) => {
     const nextOrder = item.order === 'asc' ? 'desc' : item.order === 'desc' ? 'asc' : 'asc'
     return { ...item, order: nextOrder as 'asc' | 'desc' }
   })
+  persistColumnData()
   applyFiltersAndSorting('column-sort-click')
 }
 
 const isCurrentPlaylistLoadTarget = (sourceCacheKey: string, playlistId: number) =>
-  selectedSourceCacheKey.value === sourceCacheKey && selectedPlaylistId.value === playlistId
+  !disposed &&
+  Boolean(pioneerSongsAreaState.djPlaylist) &&
+  selectedSourceCacheKey.value === sourceCacheKey &&
+  selectedPlaylistId.value === playlistId
 
 const { loadPlaylistTracks, refreshPlaylistTracks } = usePioneerPlaylistTracks({
   selectedSourceCacheKey,
@@ -496,6 +473,7 @@ const {
   selectedSourceRootPath,
   selectedSourceCacheKey,
   currentPlaybackListKey,
+  selectedTreeNodes: treeNodes,
   visibleSongs,
   refreshPlaylistTracks
 })
@@ -517,6 +495,10 @@ const {
   selectedLibraryType,
   selectedSourceCacheKey,
   selectedPlaylistNode,
+  onTreeUpdated: (nodes, selectedId) => {
+    browser.value.treeNodes = nodes
+    if (!selectedId) runtime.clearSongsAreaPaneState(props.pane)
+  },
   refreshPlaylistTracks
 })
 const playlistMutationPending = computed(
@@ -564,9 +546,7 @@ watch(
     [
       selectedSourceCacheKey.value,
       selectedPlaylistId.value,
-      Array.isArray(runtime.pioneerDeviceLibrary.treeNodes)
-        ? runtime.pioneerDeviceLibrary.treeNodes.length
-        : 0
+      Array.isArray(treeNodes.value) ? treeNodes.value.length : 0
     ] as const,
   ([sourceCacheKey, playlistId, treeNodeCount]) => {
     if (!sourceCacheKey) return
@@ -581,25 +561,6 @@ watch(
   () => {
     applyFiltersAndSorting('key-display-style-changed')
   }
-)
-
-watch(
-  selectedRowKeys,
-  (keys) => {
-    runtime.pioneerSelectedRowKeys = [...keys]
-  },
-  { deep: true }
-)
-
-watch(
-  [selectedRowKeys, visibleSongs],
-  ([keys, songs]) => {
-    const selected = new Set(keys)
-    runtime.pioneerSelectedDurations = songs
-      .filter((song) => selected.has(song.mixtapeItemId || song.filePath))
-      .map((song) => song.duration)
-  },
-  { immediate: true, deep: true }
 )
 
 const handleSongClick = (event: MouseEvent, song: ISongInfo) => {
@@ -624,6 +585,11 @@ const handlePreviewMoveRequest = (
 }
 emitter.on('preview-transfer:open-dialog', handlePreviewMoveRequest)
 const handleUsbDeletePlaylistRequest = (payload: unknown) => {
+  const panes = runtime.songsAreaPanels.splitEnabled
+    ? [runtime.songsArea, runtime.songsAreaPanels.panes.left, runtime.songsAreaPanels.panes.right]
+    : [runtime.songsAreaPanels.panes.single]
+  const owner = panes.find((state) => state.songListUUID === currentPlaybackListKey.value)
+  if (owner !== pioneerSongsAreaState) return
   if (
     !canEditUsbPlaylist.value ||
     !matchesPioneerUsbPlaylistDeleteRequest(
@@ -780,6 +746,7 @@ const handleSongDblClick = async (song: ISongInfo, event?: MouseEvent) => {
 }
 
 onUnmounted(() => {
+  disposed = true
   cancelPendingRepeatSingleClickDeselect()
   emitter.off('songsArea/focus-song', handleFocusSongRequest)
   emitter.off('dj-library:refresh-selected-playlist', handleDjPlaylistRefresh)
@@ -792,7 +759,7 @@ onUnmounted(() => {
 
 <template>
   <div class="songsAreaShell">
-    <div v-if="placeholderText" class="songsAreaPlaceholder">
+    <div v-if="placeholderText && (loading || !originalTracks.length)" class="songsAreaPlaceholder">
       <span v-if="loading" class="songsAreaLoadingSpinner" aria-hidden="true"></span>
       <span>{{ placeholderText }}</span>
     </div>
@@ -832,6 +799,7 @@ onUnmounted(() => {
 
       <SongListRows
         :songs="visibleSongs"
+        :search-query="pioneerSongsAreaState.searchQuery"
         :visible-columns="rowsVisibleColumns"
         :selected-song-file-paths="selectedRowKeysForTemplate"
         :playing-song-file-path="playingSongFilePathForRows"
@@ -865,12 +833,17 @@ onUnmounted(() => {
         @song-dragend="handleSongDragEnd"
         @playlist-reorder="handlePlaylistReorder"
       />
+      <div v-if="!visibleSongs.length" class="songsAreaPlaceholder songsAreaPlaceholder--filtered">
+        {{ t('filters.noResults') }}
+      </div>
     </OverlayScrollbarsComponent>
     <ColumnHeaderContextMenu
       v-model="colRightClickMenuShow"
       :target-event="triggeringColContextEvent"
       :columns="columnData"
+      :independent-settings="independentSettings"
       @toggle-column-visibility="handleToggleColumnVisibility"
+      @reset-to-shared-settings="resetToSharedSettings"
     />
     <RekordboxDesktopWritingOverlay v-if="desktopPlaylistMutationPending" />
     <Teleport to="body">
@@ -887,6 +860,7 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 .songsAreaShell {
+  color: var(--text);
   width: 100%;
   height: 100%;
   display: flex;
@@ -915,6 +889,10 @@ onUnmounted(() => {
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: songsAreaLoadingSpin 0.7s linear infinite;
+}
+
+.songsAreaPlaceholder--filtered {
+  min-height: 100px;
 }
 
 @keyframes songsAreaLoadingSpin {

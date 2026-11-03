@@ -37,6 +37,7 @@ export const usePioneerUsbPlaylistActions = (params: {
   selectedLibraryType: Ref<string>
   selectedSourceCacheKey: Ref<string>
   selectedPlaylistNode: Ref<IPioneerPlaylistTreeNode | null>
+  onTreeUpdated?: (nodes: IPioneerPlaylistTreeNode[], selectedId: number) => void
   refreshPlaylistTracks: (options?: { reuseRuntime?: boolean }) => Promise<void>
 }) => {
   const usbMutationPending = ref(false)
@@ -100,6 +101,21 @@ export const usePioneerUsbPlaylistActions = (params: {
     const selectedId = hasPlaylist(nodes) ? context.playlistId : 0
     setCachedRekordboxSourceTree(context.sourceCacheKey, nodes, { selectedPlaylistId: selectedId })
     if (disposed || params.selectedSourceCacheKey.value !== context.sourceCacheKey) return
+    if (params.onTreeUpdated) {
+      params.onTreeUpdated(nodes, selectedId)
+      const navigator = params.runtime.pioneerDeviceLibrary
+      if (
+        sameRendererFilePath(navigator.selectedSourceRootPath, context.rootPath) &&
+        navigator.selectedLibraryType === context.libraryType
+      ) {
+        navigator.treeNodes = nodes
+        if (!selectedId && navigator.selectedPlaylistId === context.playlistId)
+          navigator.selectedPlaylistId = 0
+      }
+      if (selectedId && params.selectedPlaylistId.value === context.playlistId)
+        await params.refreshPlaylistTracks({ reuseRuntime: options?.reuseRuntime === true })
+      return
+    }
     if (JSON.stringify(params.runtime.pioneerDeviceLibrary.treeNodes) !== JSON.stringify(nodes)) {
       params.runtime.pioneerDeviceLibrary.treeNodes = nodes
     }

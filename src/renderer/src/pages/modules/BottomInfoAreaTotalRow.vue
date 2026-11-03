@@ -16,13 +16,11 @@ const runtime = useRuntimeStore()
 
 const normalizeAnalysisPath = (value: string) => rendererFilePathKey(String(value || ''))
 
-const isPioneerView = computed(() => runtime.libraryAreaSelected === 'PioneerDeviceLibrary')
+const isPioneerView = computed(() => Boolean(runtime.songsArea.djPlaylist))
 const currentLocale = computed(() => i18n.global.locale.value)
 const totalDurationLabel = computed(() => t('bottomInfo.totalDurationLabel'))
-const selectedSongCount = computed(() =>
-  isPioneerView.value
-    ? runtime.pioneerSelectedRowKeys.filter(Boolean).length
-    : runtime.songsArea.selectedSongFilePath.filter(Boolean).length
+const selectedSongCount = computed(
+  () => runtime.songsArea.selectedSongFilePath.filter(Boolean).length
 )
 const selectedSongsText = computed(() =>
   t('bottomInfo.selectedSongs', {
@@ -63,9 +61,7 @@ const manualPendingAnalysisPathSet = computed(
     )
 )
 const manualPendingAnalysisCount = computed(() => manualPendingAnalysisPathSet.value.size)
-const pioneerPendingAnalysisCount = computed(() =>
-  Math.max(0, Number(runtime.pioneerDeviceLibrary.pendingAnalysisCount) || 0)
-)
+const pioneerPendingAnalysisCount = computed(() => pendingAnalysisFiles.value.length)
 const splitLeftPendingFiles = computed(() =>
   collectPendingAnalysisFiles(runtime.songsAreaPanels.panes.left.songInfoArr)
 )
@@ -101,9 +97,7 @@ const firstSplitRightPendingFile = computed(() =>
     splitRightPendingFiles.value
   )
 )
-const firstPioneerPendingAnalysisFile = computed(() =>
-  String(runtime.pioneerDeviceLibrary.firstPendingAnalysisFilePath || '').trim()
-)
+const firstPioneerPendingAnalysisFile = computed(() => firstPendingAnalysisFile.value)
 const displayPendingAnalysisCount = computed(() =>
   manualPendingAnalysisCount.value > 0
     ? manualPendingAnalysisCount.value
@@ -116,9 +110,6 @@ const displayPioneerPendingAnalysisCount = computed(() =>
 )
 const hasTotalRowContent = computed(() => {
   if (manualPendingAnalysisCount.value > 0) return true
-  if (isPioneerView.value) {
-    return selectedSongCount.value > 0 || pioneerPendingAnalysisCount.value > 0
-  }
   if (runtime.songsAreaPanels.splitEnabled) {
     return (
       runtime.songsAreaPanels.panes.left.songInfoArr.length > 0 ||
@@ -183,7 +174,8 @@ const selectedDuration = (songs: ISongInfo[], keys: string[], songListUUID: stri
     songs
       .filter((song) => {
         const key =
-          listType === 'mixtapeList' && song.mixtapeItemId
+          (listType === 'mixtapeList' || /^(usb|desktop|serato|traktor):/.test(songListUUID)) &&
+          song.mixtapeItemId
             ? song.mixtapeItemId
             : listType === 'setList' && song.setItemId
               ? song.setItemId
@@ -195,13 +187,11 @@ const selectedDuration = (songs: ISongInfo[], keys: string[], songListUUID: stri
 }
 const selectedDurationText = computed(() =>
   formatTotalDuration(
-    isPioneerView.value
-      ? sumDurations(runtime.pioneerSelectedDurations)
-      : selectedDuration(
-          runtime.songsArea.songInfoArr,
-          runtime.songsArea.selectedSongFilePath,
-          runtime.songsArea.songListUUID
-        )
+    selectedDuration(
+      runtime.songsArea.songInfoArr,
+      runtime.songsArea.selectedSongFilePath,
+      runtime.songsArea.songListUUID
+    )
   )
 )
 const splitSelectedDurationText = (pane: 'left' | 'right') => {
@@ -217,7 +207,7 @@ const playlistTotalDaysHoursSeconds = computed(() =>
 
 <template>
   <div v-if="hasTotalRowContent" class="total-row">
-    <template v-if="!isPioneerView && runtime.songsAreaPanels.splitEnabled">
+    <template v-if="runtime.songsAreaPanels.splitEnabled">
       <div v-if="splitLeftSelectedCount > 0" class="selected-count-text">
         {{
           t('bottomInfo.selectedSongsLeft', {
@@ -236,11 +226,7 @@ const playlistTotalDaysHoursSeconds = computed(() =>
       </div>
     </template>
     <div v-else-if="selectedSongCount > 0" class="selected-count-text">{{ selectedSongsText }}</div>
-    <template
-      v-if="
-        !isPioneerView && runtime.songsAreaPanels.splitEnabled && manualPendingAnalysisCount <= 0
-      "
-    >
+    <template v-if="runtime.songsAreaPanels.splitEnabled && manualPendingAnalysisCount <= 0">
       <bubbleBoxTrigger
         v-if="splitLeftPendingCount > 0"
         tag="button"
@@ -296,9 +282,7 @@ const playlistTotalDaysHoursSeconds = computed(() =>
         {{ t('bottomInfo.pendingAnalysis', { count: displayPendingAnalysisCount }) }}
       </bubbleBoxTrigger>
     </template>
-    <div v-if="!isPioneerView" class="total-text">
-      {{ totalDurationLabel }}{{ playlistTotalDaysHoursSeconds }}
-    </div>
+    <div class="total-text">{{ totalDurationLabel }}{{ playlistTotalDaysHoursSeconds }}</div>
   </div>
 </template>
 <style lang="scss" scoped src="./BottomInfoAreaTotalRow.scss"></style>

@@ -91,6 +91,31 @@ afterEach(() => {
 })
 
 describe('playlist list settings', () => {
+  it('persists independent USB playlist settings separately from local playlists and survives local tree pruning', () => {
+    const runtime = useRuntimeStore()
+    const state = runtime.songsAreaPanels.panes.left
+    state.djPlaylist = {
+      browser: {
+        ...runtime.pioneerDeviceLibrary,
+        selectedSourceKey: 'USB-A',
+        selectedPlaylistId: 11
+      },
+      externalKind: null
+    }
+    const usb = mount('usb:USB-A:11', 'left')
+    usb.toggle(true)
+    usb.update('title', { width: 460, filterActive: true, filterValue: 'One' })
+    const local = mount('a', 'right')
+    expect(local.col('title').width).not.toBe(460)
+    const settings = usePlaylistViewSettingsStore()
+    settings.pruneDeletedPlaylists(tree(), false)
+    expect(
+      settings
+        .getPlaylist('library-id', 'usb:USB-A:11', false)
+        ?.columns.find((col) => col.key === 'title')?.width
+    ).toBe(460)
+    expect(memory.get('playlistViewSettings:v1:library-id')).toContain('usb:USB-A:11')
+  })
   it('copies the visible shared settings without changing rows, selection or scroll', () => {
     const view = mount()
     view.update('title', { width: 420 })

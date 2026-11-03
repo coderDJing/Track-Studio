@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { reactive } from 'vue'
 import type { IDir, ISongsAreaColumn } from 'src/types/globals'
 import type { SongsAreaColumnMode } from './runtime'
+import { isDjPlaylistKey } from '@renderer/utils/djPlaylist'
 import {
   cloneSongColumns,
   normalizeSongColumns,
@@ -160,7 +161,7 @@ export const usePlaylistViewSettingsStore = defineStore('playlistViewSettings', 
     walk(tree)
     removePlaylists(
       tree.uuid,
-      Object.keys(settings).filter((uuid) => !keep.has(uuid)),
+      Object.keys(settings).filter((uuid) => !isDjPlaylistKey(uuid) && !keep.has(uuid)),
       persistFilters
     )
   }

@@ -18,6 +18,7 @@ import {
 import { t } from '@renderer/utils/translate'
 import { usePioneerUsbPlaylistDelete } from '@renderer/composables/rekordboxDesktop/usePioneerUsbPlaylistDelete'
 import emitter from '@renderer/utils/mitt'
+import { usePioneerPlaylistPaneNavigation } from './pioneerSongsArea/usePioneerPlaylistPaneNavigation'
 import { buildRekordboxSourceChannel } from '@shared/rekordboxSources'
 import { copyPioneerNodeToLibrary } from '@renderer/composables/rekordboxDesktop/usePioneerCopyToLibrary'
 import { copyPioneerPlaylistToMixtape } from '@renderer/composables/rekordboxDesktop/usePioneerCopyToMixtape'
@@ -25,7 +26,6 @@ import { importCuratedArtistsFromPioneerSource } from '@renderer/composables/rek
 import { usePioneerDeviceTreeDrag } from '@renderer/composables/rekordboxDesktop/usePioneerDeviceTreeDrag'
 import { filterPlaylistTreeByName } from '@renderer/composables/rekordboxDesktop/filterPlaylistTree'
 import { useExternalPlaylistActions } from '@renderer/composables/externalLibrary/useExternalPlaylistActions'
-import { useExternalPlaylistContextMenu } from '@renderer/composables/externalLibrary/useExternalPlaylistContextMenu'
 import { openSetDurationForRekordboxPlaylist } from '@renderer/utils/rekordboxPlaylistSetDuration'
 import {
   collectRekordboxSimilarTracksSeeds,
@@ -65,7 +65,6 @@ useSearchFocusTarget({
 const expandedFolderIds = ref<Set<number>>(new Set())
 const dialogWriting = ref(false)
 const localLibraryCopying = ref(false)
-const { contextMenuNodeId, showNodeContextMenu } = useExternalPlaylistContextMenu()
 const isDesktopSource = computed(
   () => runtime.pioneerDeviceLibrary.selectedSourceKind === 'desktop'
 )
@@ -577,19 +576,15 @@ const handlePlaylistDrop = async (event: DragEvent, node: IPioneerPlaylistTreeNo
   if (!(await usbPlaylistDrop.drop(event, node))) await handleDropNode(event, node)
 }
 
-const selectPlaylist = (node: IPioneerPlaylistTreeNode) => {
-  if (shouldSuppressClick()) return
-  if (dialogWriting.value || node.isFolder || node.isSmartPlaylist) return
-  if (isEditableSource.value && runtime.pioneerDeviceLibrary.selectedPlaylistId === node.id) {
-    emitter.emit('dj-library:refresh-selected-playlist', {
-      sourceKey: runtime.pioneerDeviceLibrary.selectedSourceKey,
-      playlistId: node.id
-    })
-    return
+const { contextMenuNodeId, showNodeContextMenu, selectPlaylist } = usePioneerPlaylistPaneNavigation(
+  {
+    runtime,
+    treeNodes: originalTreeNodes,
+    isBusy: () => dialogWriting.value,
+    isEditable: () => isEditableSource.value,
+    shouldSuppressClick
   }
-  runtime.pioneerDeviceLibrary.selectedPlaylistId =
-    runtime.pioneerDeviceLibrary.selectedPlaylistId === node.id ? 0 : node.id
-}
+)
 
 const collapseAllHandleClick = async () => {
   if (dialogWriting.value) return

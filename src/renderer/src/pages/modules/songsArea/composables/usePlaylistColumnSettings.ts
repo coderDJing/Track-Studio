@@ -26,7 +26,8 @@ export const usePlaylistColumnSettings = (params: PlaylistColumnSettingsParams) 
   const canCustomize = computed(
     () =>
       !!libraryUuid.value &&
-      isPlaylistViewNode(libraryUtils.getLibraryTreeByUUID(songsAreaState.songListUUID))
+      (Boolean(songsAreaState.djPlaylist) ||
+        isPlaylistViewNode(libraryUtils.getLibraryTreeByUUID(songsAreaState.songListUUID)))
   )
   const playlistSettings = computed(() =>
     canCustomize.value

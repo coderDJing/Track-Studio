@@ -2,7 +2,8 @@ import { normalizeCamelotKey, parseSelectedKeyFilter } from '@shared/keyDisplay'
 import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
 import type { ComputedRef, Ref, ShallowRef } from 'vue'
 import { normalizeBpmDisplayScaled } from '@renderer/utils/bpm'
-import { getKeyDisplayText, getKeySortText } from '@shared/keyDisplay'
+import { getKeyDisplayText, getKeySortText, isHarmonicMixCompatible } from '@shared/keyDisplay'
+import { filterSongsByPlaylistSearch } from '@renderer/utils/playlistSongSearch'
 import { normalizeAddedAtMs, matchTimestampByDateFilter } from '@shared/songAddedAt'
 import { matchComparableByFilter } from '@shared/filterCompare'
 import { planSongListMerge } from '@shared/playlistViewMerge'
@@ -55,6 +56,8 @@ type UsePioneerSongsProjectionParams = {
   selectedExternalKind: ComputedRef<ExternalLibraryKind | null>
   isExternalSource: ComputedRef<boolean>
   getKeyDisplayStyle: () => string
+  getSearchQuery?: () => string
+  getCompatibleKey?: () => string | null
   getCurrentPlaybackListKey: () => string
   getPlayingSongListUUID: () => string
   setPlayingSongListData: (songs: ISongInfo[]) => void
@@ -251,6 +254,21 @@ export const usePioneerSongsProjection = (params: UsePioneerSongsProjectionParam
 
   const buildProjectedSongs = (tracks: IPioneerPlaylistTrack[]) => {
     let filtered = tracks.map((track) => toSongInfo(track))
+    filtered = filterSongsByPlaylistSearch(
+      filtered,
+      params.getSearchQuery?.() || '',
+      params.columnData.value.map((col) => col.key),
+      {
+        keyDisplayStyle: params.getKeyDisplayStyle() === 'Camelot' ? 'Camelot' : 'Classic',
+        isDesktopRekordboxSong: params.selectedSourceKind.value === 'desktop'
+      }
+    )
+    const compatibleKey = params.getCompatibleKey?.()
+    if (compatibleKey !== null && compatibleKey !== undefined) {
+      filtered = filtered.filter((song) =>
+        isHarmonicMixCompatible(compatibleKey, String(song.key || ''))
+      )
+    }
     for (const col of params.columnData.value) {
       if (!col.filterActive) continue
       const selectedKeys = col.key === 'key' ? parseSelectedKeyFilter(col.filterValue || '') : null

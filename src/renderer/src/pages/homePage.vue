@@ -18,6 +18,7 @@ import songPlayer from './modules/songPlayer/songPlayer.vue'
 import dropIntoDialog from '../components/dropIntoDialog'
 import SongsAreaPaneHeader from './modules/songsArea/SongsAreaPaneHeader.vue'
 import libraryUtils from '@renderer/utils/libraryUtils'
+import { openDjPlaylist, syncDjPlaylistTree } from '@renderer/utils/djPlaylist'
 import confirm from '@renderer/components/confirmDialog'
 import { t } from '@renderer/utils/translate'
 import { appendExternalPlaylistFromPaths } from '@renderer/utils/externalPlaylist'
@@ -28,6 +29,7 @@ import { emptyRecycleBinWithOptimisticUpdate } from '@renderer/utils/recycleBinA
 import emitter from '@renderer/utils/mitt'
 import {
   activateSongsAreaPane,
+  cloneSongsAreaPaneState,
   exitSongsAreaSplit,
   getSongsAreaOppositePane
 } from '@renderer/utils/songsAreaSplit'
@@ -234,6 +236,18 @@ const resolveLibraryLabel = (libraryName: LibrarySelection | '') => {
 }
 const resolveSongsPaneTitle = (pane: SplitSongsAreaPaneKey | 'single') => {
   const paneState = runtime.songsAreaPanels.panes[pane]
+  if (paneState.djPlaylist) {
+    const browser = paneState.djPlaylist.browser
+    const find = (nodes: typeof browser.treeNodes): string => {
+      for (const node of nodes) {
+        if (node.id === browser.selectedPlaylistId) return node.name
+        const found = node.children?.length ? find(node.children) : ''
+        if (found) return found
+      }
+      return ''
+    }
+    return [browser.selectedSourceName, find(browser.treeNodes)].filter(Boolean).join(' / ')
+  }
   const uuid = paneState.songListUUID
   if (!uuid) return t('playlist.noPanePlaylist')
   const libraryLabel = resolveLibraryLabel(resolveLibrarySelectionBySongListUUID(uuid))
@@ -242,29 +256,6 @@ const resolveSongsPaneTitle = (pane: SplitSongsAreaPaneKey | 'single') => {
   if (!dirName) return libraryLabel
   return `${libraryLabel} / ${dirName}`
 }
-const cloneSongsAreaPaneState = (
-  state: ISongsAreaPaneRuntimeState
-): ISongsAreaPaneRuntimeState => ({
-  songListUUID: String(state.songListUUID || ''),
-  searchQuery: String(state.searchQuery || ''),
-  compatibleKeyOnly: !!state.compatibleKeyOnly,
-  songInfoArr: Array.isArray(state.songInfoArr) ? [...state.songInfoArr] : [],
-  missingWaveformFilePaths: Array.isArray(state.missingWaveformFilePaths)
-    ? [...state.missingWaveformFilePaths]
-    : [],
-  totalSongCount: Number(state.totalSongCount || 0),
-  selectedSongFilePath: Array.isArray(state.selectedSongFilePath)
-    ? [...state.selectedSongFilePath]
-    : [],
-  scrollTop: Number.isFinite(state.scrollTop) ? state.scrollTop : 0,
-  scrollLeft: Number.isFinite(state.scrollLeft) ? state.scrollLeft : 0,
-  columnCacheByMode: Object.fromEntries(
-    Object.entries(state.columnCacheByMode || {}).map(([key, value]) => [
-      key,
-      Array.isArray(value) ? value.map((item) => ({ ...item })) : []
-    ])
-  ) as ISongsAreaPaneRuntimeState['columnCacheByMode']
-})
 const suspendSplitForSpecialLibrary = () => {
   if (!runtime.songsAreaPanels.splitEnabled) return
   const activePane = runtime.songsAreaPanels.activePane
@@ -384,8 +375,23 @@ const isLibraryPanelHidden = computed(
 const showMainSongPlayer = computed(
   () => runtime.mainWindowBrowseMode === 'browser' && Boolean(runtime.playingData.playingSong)
 )
-const isSongsAreaSplit = computed(
-  () => runtime.songsAreaPanels.splitEnabled && !isPioneerDeviceLibraryView.value
+const isSongsAreaSplit = computed(() => runtime.songsAreaPanels.splitEnabled)
+watch(
+  () => [runtime.pioneerDeviceLibrary.treeNodes, runtime.pioneerDeviceLibrary.loading],
+  () => syncDjPlaylistTree(runtime)
+)
+watch(
+  () => [
+    runtime.pioneerDeviceLibrary.selectedSourceKey,
+    runtime.pioneerDeviceLibrary.selectedSourceRootPath,
+    runtime.pioneerDeviceLibrary.selectedLibraryType,
+    runtime.pioneerDeviceLibrary.selectedPlaylistId
+  ],
+  () => {
+    if (isPioneerDeviceLibraryView.value && runtime.pioneerDeviceLibrary.selectedPlaylistId > 0)
+      openDjPlaylist(runtime, runtime.pioneerDeviceLibrary.selectedPlaylistId)
+  },
+  { flush: 'post', immediate: true }
 )
 const visiblePaneViews = useSongsAreaPaneViews(runtime.songsAreaPanels.panes, isSongsAreaSplit)
 const showEmptyRecycleBinButton = computed(
@@ -397,7 +403,6 @@ const showEmptyRecycleBinButton = computed(
 const showSingleSongsAreaHeader = computed(
   () =>
     !isSongsAreaSplit.value &&
-    !isPioneerDeviceLibraryView.value &&
     !singlePaneHeaderRevealPending.value &&
     Boolean(runtime.songsAreaPanels.panes.single.songListUUID)
 )
@@ -508,7 +513,7 @@ const dragover = (e: DragEvent) => {
     return
   }
 
-  if (isRecycleBinView.value || isRecordingLibraryView.value) {
+  if (isRecycleBinView.value || isRecordingLibraryView.value || runtime.songsArea.djPlaylist) {
     e.dataTransfer.dropEffect = 'none'
     dragOverSongsArea.value = false
     return
@@ -551,7 +556,7 @@ const dragleave = (e: DragEvent) => {
     return
   }
 
-  if (isRecycleBinView.value || isRecordingLibraryView.value) {
+  if (isRecycleBinView.value || isRecordingLibraryView.value || runtime.songsArea.djPlaylist) {
     dragOverSongsArea.value = false
     return
   }
@@ -592,7 +597,7 @@ const drop = async (e: DragEvent) => {
     return
   }
 
-  if (isRecycleBinView.value || isRecordingLibraryView.value) {
+  if (isRecycleBinView.value || isRecordingLibraryView.value || runtime.songsArea.djPlaylist) {
     dragOverSongsArea.value = false
     return
   }
@@ -757,12 +762,7 @@ const drop = async (e: DragEvent) => {
           @dragleave.stop="dragleave"
           @drop.stop.prevent="drop"
         >
-          <pioneerSongsArea
-            v-if="isPioneerDeviceLibraryView"
-            style="width: 100%; height: 100%; min-width: 0"
-          />
           <div
-            v-else
             ref="splitSongsAreaRef"
             :class="isSongsAreaSplit ? 'splitSongsArea' : 'singleSongsAreaShell'"
             :style="isSongsAreaSplit ? splitSongsAreaStyle : undefined"
@@ -793,7 +793,12 @@ const drop = async (e: DragEvent) => {
                 @empty-recycle-bin="emptyRecycleBinWithOptimisticUpdate(runtime)"
                 @close="pane === 'single' ? handleSinglePaneClose() : handleSplitPaneClose(pane)"
               />
-              <songsArea :pane="pane" style="flex: 1; min-width: 0; min-height: 0" />
+              <pioneerSongsArea
+                v-if="runtime.songsAreaPanels.panes[pane].djPlaylist"
+                :pane="pane"
+                style="flex: 1; min-width: 0; min-height: 0"
+              />
+              <songsArea v-else :pane="pane" style="flex: 1; min-width: 0; min-height: 0" />
             </div>
             <div
               v-if="isSongsAreaSplit"
@@ -928,10 +933,10 @@ const drop = async (e: DragEvent) => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: color-mix(in srgb, var(--bg) 97%, var(--font-color) 3%);
+  background: color-mix(in srgb, var(--bg) 97%, var(--text) 3%);
 
   &.is-active {
-    background: color-mix(in srgb, var(--bg) 92%, var(--main-color) 8%);
+    background: color-mix(in srgb, var(--bg) 92%, var(--accent) 8%);
   }
 }
 
