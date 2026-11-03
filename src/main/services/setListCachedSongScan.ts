@@ -109,9 +109,10 @@ const parseCacheInfo = (raw: unknown): ISongInfo | null => {
 }
 
 /** 按文件路径一次取出各歌单里的曲目缓存。Set 的成员分散在多个歌单，不能按单个目录整表装载。 */
-export const loadSetSongCacheCandidates = async (
-  filePaths: readonly string[]
-): Promise<Map<string, SetSongCacheCandidate[]>> => {
+export const readSetSongCacheCandidates = (
+  filePaths: readonly string[],
+  strict = false
+): Map<string, SetSongCacheCandidate[]> => {
   const result = new Map<string, SetSongCacheCandidate[]>()
   const db = getLibraryDb()
   const uniquePaths = [...new Set(filePaths.map((filePath) => filePath.trim()).filter(Boolean))]
@@ -164,6 +165,11 @@ export const loadSetSongCacheCandidates = async (
     }
   } catch (error) {
     log.error('[setList] song cache lookup failed', error)
+    if (strict) throw error
   }
   return result
 }
+
+export const loadSetSongCacheCandidates = async (
+  filePaths: readonly string[]
+): Promise<Map<string, SetSongCacheCandidate[]>> => readSetSongCacheCandidates(filePaths)

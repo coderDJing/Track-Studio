@@ -1,5 +1,6 @@
 import fs = require('fs-extra')
 import path = require('path')
+import { recoverSetTreeTransaction } from './setLibrarySync/treeTransaction'
 import { ensureEnglishCoreLibraries, getCoreFsDirName } from './utils'
 import {
   ensureLibraryTreeBaseline,
@@ -67,6 +68,7 @@ export async function initDatabaseStructure(
   await fs.ensureDir(recordingLibraryPath)
   await fs.ensureDir(mixtapeLibraryPath)
 
+  await recoverSetTreeTransaction(dirPath)
   await ensureLibraryTreeBaseline(dirPath, {
     coreDirNames: {
       FilterLibrary: getCoreFsDirName('FilterLibrary'),

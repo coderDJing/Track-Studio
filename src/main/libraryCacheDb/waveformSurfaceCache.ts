@@ -510,12 +510,12 @@ export function loadWaveformSurfaceAvailabilityByMeta(
   return result
 }
 
-export async function upsertWaveformSurfaceCacheEntry(
+export function writePreparedWaveformSurface(
   listRoot: string,
   filePath: string,
   stat: { size: number; mtimeMs: number },
   data: WaveformSurfaceCacheData
-): Promise<boolean> {
+): boolean {
   const db = getLibraryDb()
   const keys = resolveCacheKeys(listRoot, filePath)
   if (!db || !keys || !data) return false
@@ -580,6 +580,15 @@ export async function upsertWaveformSurfaceCacheEntry(
     log.error('[sqlite] waveform surface cache upsert failed', error)
     return false
   }
+}
+
+export async function upsertWaveformSurfaceCacheEntry(
+  listRoot: string,
+  filePath: string,
+  stat: { size: number; mtimeMs: number },
+  data: WaveformSurfaceCacheData
+): Promise<boolean> {
+  return writePreparedWaveformSurface(listRoot, filePath, stat, data)
 }
 
 export async function updateWaveformSurfaceCacheStat(

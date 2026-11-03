@@ -57,6 +57,8 @@ import {
   queueExternalAudioFiles
 } from './services/externalOpenQueue'
 import { registerSettingsHandlers } from './ipc/settingsHandlers'
+import { registerSetLibrarySyncIpc } from './setLibrarySync/ipc'
+import { stopSetLibrarySync } from './setLibrarySync/engine'
 import { registerCuratedLibrarySyncIpc } from './curatedLibrarySync/ipc'
 import { registerLibraryMaintenanceHandlers } from './ipc/libraryMaintenanceHandlers'
 import { registerPlaylistHandlers } from './ipc/playlistHandlers'
@@ -352,6 +354,7 @@ registerSettingsHandlers({
   }
 })
 registerCuratedLibrarySyncIpc()
+registerSetLibrarySyncIpc()
 registerLibraryMaintenanceHandlers()
 registerPlaylistHandlers()
 registerMediaMetadataHandlers()
@@ -391,6 +394,7 @@ const cleanupAppRuntimeResources = () => {
   if (appRuntimeCleanupDone) return
   appRuntimeCleanupDone = true
   stopCloudSyncScheduler()
+  stopSetLibrarySync()
   stopCuratedLibraryLiveSync()
   stopPlaylistViewSnapshotIdleVerification()
   stopRecycleBinCacheTransferQueue()

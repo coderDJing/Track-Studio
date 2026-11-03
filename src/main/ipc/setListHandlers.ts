@@ -294,7 +294,8 @@ async function loadSetAnalysisSnapshotFromCache(
 async function enrichSetSongFromSourceAnalysis(
   item: SetItemRecord,
   song: ISongInfo,
-  playlistRootByUuid: Map<string, string>
+  playlistRootByUuid: Map<string, string>,
+  persistSnapshot = true
 ): Promise<ISongInfo> {
   let next = song
   const stats = await readFileStatsForAnalysisSnapshot(song.filePath)
@@ -322,7 +323,8 @@ async function enrichSetSongFromSourceAnalysis(
       if (!cached?.info || !isCurrentCacheEntry(cached, stats)) continue
       foundCurrentCache = true
       next = mergeSetAnalysisFields(next, cached.info)
-      persistSetAnalysisSnapshotIfChanged(item, buildSetAnalysisSnapshot(cached.info))
+      if (persistSnapshot)
+        persistSetAnalysisSnapshotIfChanged(item, buildSetAnalysisSnapshot(cached.info))
       if (
         hasCompleteKeyAnalysis(next) &&
         hasUsableSongEnergyAnalysis(next) &&
@@ -388,7 +390,7 @@ async function removeEmptySetCustodySubdirs(filePath: string): Promise<void> {
   }
 }
 
-async function recycleOrphanedSetCustodyFiles(items: SetItemRecord[]): Promise<void> {
+export async function recycleOrphanedSetCustodyFiles(items: SetItemRecord[]): Promise<void> {
   const candidatePaths = normalizeRequestedFilePaths(
     items.map((item) => item.filePath).filter((filePath) => isSetCustodyFilePath(filePath))
   )
@@ -685,6 +687,147 @@ export async function protectSetReferencedFilesForDeletion(
   return { protectedFiles, unprotectedFiles: unprotectedPaths }
 }
 
+export async function loadSetPlaylistSongs(
+  playlistUuid: string,
+  persistSnapshot = true
+): Promise<{ scanData: ISongInfo[]; songListUUID: string }> {
+  try {
+    const items = listSetItemsByPlaylist(playlistUuid)
+    if (items.length === 0) return { scanData: [], songListUUID: playlistUuid }
+
+    const audioExts = store.settingConfig?.audioExt || []
+    const located = items.map((item) => ({
+      item,
+      absPath: resolveSetItemAbsPath(item.filePath)
+    }))
+    // 文件是否还在只看 stat。缓存对得上的曲目不再读标签；只有没命中的才扫描。
+    const statResults = await runWithConcurrency(
+      located.map((entry) => async () => {
+        try {
+          const stats = await fs.stat(entry.absPath)
+          if (!stats.isFile()) return null
+          return { size: stats.size, mtimeMs: stats.mtimeMs }
+        } catch {
+          return null
+        }
+      }),
+      { concurrency: 16 }
+    )
+    const existing: Array<{ index: number; absPath: string; size: number; mtimeMs: number }> = []
+    const missingIndices = new Set<number>()
+    for (let index = 0; index < located.length; index += 1) {
+      const stat = statResults.results[index]
+      if (!stat || stat instanceof Error) {
+        missingIndices.add(index)
+        continue
+      }
+      existing.push({
+        index,
+        absPath: located[index].absPath,
+        size: stat.size,
+        mtimeMs: stat.mtimeMs
+      })
+    }
+
+    const cacheCandidates = await loadSetSongCacheCandidates(existing.map((file) => file.absPath))
+    const playlistRootByUuid = buildPlaylistRootByUuidMap()
+    const waveformRootByDir = new Map<string, Promise<string>>()
+    const waveformRootFor = (filePath: string, originRoot: string) => {
+      const custodyRoot = getSetCustodyDirAbs()
+      if (isPathUnderDirectory(filePath, custodyRoot)) return Promise.resolve(custodyRoot)
+      if (originRoot) return Promise.resolve(originRoot)
+      const dirKey = normalizeSetFilePathKey(path.dirname(filePath))
+      const pending = waveformRootByDir.get(dirKey)
+      if (pending) return pending
+      const created = findSongListRoot(path.dirname(filePath)).then((root) => root || '')
+      waveformRootByDir.set(dirKey, created)
+      return created
+    }
+    const cachedByIndex = new Map<number, { song: ISongInfo; sourceInfo: ISongInfo }>()
+    const parsePaths: string[] = []
+    const parseKeys = new Set<string>()
+    for (const file of existing) {
+      const item = items[file.index]
+      const originRoot = item.originPlaylistUuid
+        ? playlistRootByUuid.get(item.originPlaylistUuid) || ''
+        : ''
+      const candidates = cacheCandidates.get(setSongCacheLookupKey(file.absPath)) || []
+      const picked = pickCurrentSetSongCache(candidates, file, originRoot)
+      if (!picked) {
+        const key = normalizeSetFilePathKey(file.absPath)
+        if (!parseKeys.has(key)) {
+          parseKeys.add(key)
+          parsePaths.push(file.absPath)
+        }
+        continue
+      }
+      const waveformRoot = await waveformRootFor(file.absPath, originRoot)
+      const sourceInfo = combineCurrentSetSongCache(
+        picked,
+        candidates,
+        file,
+        mergeSetAnalysisFields
+      )
+      cachedByIndex.set(file.index, {
+        sourceInfo,
+        song: toCachedSetSong(sourceInfo, file.absPath, waveformRoot)
+      })
+    }
+
+    const scanByPath = new Map<string, ISongInfo>()
+    if (parsePaths.length > 0) {
+      const result = await scanSongList(parsePaths, audioExts, playlistUuid)
+      for (const song of result.scanData) {
+        scanByPath.set(normalizeSetFilePathKey(song.filePath), song)
+      }
+    }
+
+    const ordered: ISongInfo[] = []
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index]
+      if (missingIndices.has(index)) {
+        ordered.push(createMissingSetSong(item))
+        continue
+      }
+      const cached = cachedByIndex.get(index)
+      if (cached) {
+        if (persistSnapshot)
+          persistSetAnalysisSnapshotIfChanged(item, buildSetAnalysisSnapshot(cached.sourceInfo))
+        ordered.push({
+          ...cached.song,
+          setItemId: item.id,
+          playlistTrackNumber: item.sortOrder,
+          addedAtMs: normalizeAddedAtMs(item.createdAtMs)
+        })
+        continue
+      }
+      const scannedSong = scanByPath.get(normalizeSetFilePathKey(located[index].absPath))
+      if (!scannedSong) {
+        ordered.push(createMissingSetSong(item))
+        continue
+      }
+      ordered.push(
+        await enrichSetSongFromSourceAnalysis(
+          item,
+          {
+            ...scannedSong,
+            setItemId: item.id,
+            playlistTrackNumber: item.sortOrder,
+            addedAtMs: normalizeAddedAtMs(item.createdAtMs)
+          },
+          playlistRootByUuid,
+          persistSnapshot
+        )
+      )
+    }
+
+    return { scanData: ordered, songListUUID: playlistUuid }
+  } catch (error) {
+    log.error('[setList] load-items failed', error)
+    throw error
+  }
+}
+
 export function registerSetListHandlers() {
   // preload 的 invokePrefixes 已放行 setList:，复制和加入在主进程统一完成。
   ipcMain.handle('setList:append-custody-items', async (_e, payload: SetCustodyAppendPayload) => {
@@ -708,136 +851,8 @@ export function registerSetListHandlers() {
 
   ipcMain.handle('setList:load-items', async (_e, playlistUuid: string) => {
     try {
-      const items = listSetItemsByPlaylist(playlistUuid)
-      if (items.length === 0) return { scanData: [], songListUUID: playlistUuid }
-
-      const audioExts = store.settingConfig?.audioExt || []
-      const located = items.map((item) => ({
-        item,
-        absPath: resolveSetItemAbsPath(item.filePath)
-      }))
-      // 文件是否还在只看 stat。缓存对得上的曲目不再读标签；只有没命中的才扫描。
-      const statResults = await runWithConcurrency(
-        located.map((entry) => async () => {
-          try {
-            const stats = await fs.stat(entry.absPath)
-            if (!stats.isFile()) return null
-            return { size: stats.size, mtimeMs: stats.mtimeMs }
-          } catch {
-            return null
-          }
-        }),
-        { concurrency: 16 }
-      )
-      const existing: Array<{ index: number; absPath: string; size: number; mtimeMs: number }> = []
-      const missingIndices = new Set<number>()
-      for (let index = 0; index < located.length; index += 1) {
-        const stat = statResults.results[index]
-        if (!stat || stat instanceof Error) {
-          missingIndices.add(index)
-          continue
-        }
-        existing.push({
-          index,
-          absPath: located[index].absPath,
-          size: stat.size,
-          mtimeMs: stat.mtimeMs
-        })
-      }
-
-      const cacheCandidates = await loadSetSongCacheCandidates(existing.map((file) => file.absPath))
-      const playlistRootByUuid = buildPlaylistRootByUuidMap()
-      const waveformRootByDir = new Map<string, Promise<string>>()
-      const waveformRootFor = (filePath: string, originRoot: string) => {
-        const custodyRoot = getSetCustodyDirAbs()
-        if (isPathUnderDirectory(filePath, custodyRoot)) return Promise.resolve(custodyRoot)
-        if (originRoot) return Promise.resolve(originRoot)
-        const dirKey = normalizeSetFilePathKey(path.dirname(filePath))
-        const pending = waveformRootByDir.get(dirKey)
-        if (pending) return pending
-        const created = findSongListRoot(path.dirname(filePath)).then((root) => root || '')
-        waveformRootByDir.set(dirKey, created)
-        return created
-      }
-      const cachedByIndex = new Map<number, { song: ISongInfo; sourceInfo: ISongInfo }>()
-      const parsePaths: string[] = []
-      const parseKeys = new Set<string>()
-      for (const file of existing) {
-        const item = items[file.index]
-        const originRoot = item.originPlaylistUuid
-          ? playlistRootByUuid.get(item.originPlaylistUuid) || ''
-          : ''
-        const candidates = cacheCandidates.get(setSongCacheLookupKey(file.absPath)) || []
-        const picked = pickCurrentSetSongCache(candidates, file, originRoot)
-        if (!picked) {
-          const key = normalizeSetFilePathKey(file.absPath)
-          if (!parseKeys.has(key)) {
-            parseKeys.add(key)
-            parsePaths.push(file.absPath)
-          }
-          continue
-        }
-        const waveformRoot = await waveformRootFor(file.absPath, originRoot)
-        const sourceInfo = combineCurrentSetSongCache(
-          picked,
-          candidates,
-          file,
-          mergeSetAnalysisFields
-        )
-        cachedByIndex.set(file.index, {
-          sourceInfo,
-          song: toCachedSetSong(sourceInfo, file.absPath, waveformRoot)
-        })
-      }
-
-      const scanByPath = new Map<string, ISongInfo>()
-      if (parsePaths.length > 0) {
-        const result = await scanSongList(parsePaths, audioExts, playlistUuid)
-        for (const song of result.scanData) {
-          scanByPath.set(normalizeSetFilePathKey(song.filePath), song)
-        }
-      }
-
-      const ordered: ISongInfo[] = []
-      for (let index = 0; index < items.length; index += 1) {
-        const item = items[index]
-        if (missingIndices.has(index)) {
-          ordered.push(createMissingSetSong(item))
-          continue
-        }
-        const cached = cachedByIndex.get(index)
-        if (cached) {
-          persistSetAnalysisSnapshotIfChanged(item, buildSetAnalysisSnapshot(cached.sourceInfo))
-          ordered.push({
-            ...cached.song,
-            setItemId: item.id,
-            playlistTrackNumber: item.sortOrder,
-            addedAtMs: normalizeAddedAtMs(item.createdAtMs)
-          })
-          continue
-        }
-        const scannedSong = scanByPath.get(normalizeSetFilePathKey(located[index].absPath))
-        if (!scannedSong) {
-          ordered.push(createMissingSetSong(item))
-          continue
-        }
-        ordered.push(
-          await enrichSetSongFromSourceAnalysis(
-            item,
-            {
-              ...scannedSong,
-              setItemId: item.id,
-              playlistTrackNumber: item.sortOrder,
-              addedAtMs: normalizeAddedAtMs(item.createdAtMs)
-            },
-            playlistRootByUuid
-          )
-        )
-      }
-
-      return { scanData: ordered, songListUUID: playlistUuid }
-    } catch (error) {
-      log.error('[setList] load-items failed', error)
+      return await loadSetPlaylistSongs(playlistUuid)
+    } catch {
       return { scanData: [], songListUUID: playlistUuid }
     }
   })

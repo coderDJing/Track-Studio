@@ -19,10 +19,8 @@ import importSongFingerprintDialog from './components/importSongFingerprintDialo
 import confirm from '@renderer/components/confirmDialog'
 import { t } from '@renderer/utils/translate'
 import pkg from '../../../package.json'
-import cloudSyncSettingsDialog from './components/cloudSyncSettingsDialog.vue'
-import cloudSyncSyncDialog from './components/cloudSyncSyncDialog.vue'
+import CloudSyncDialogs from './components/CloudSyncDialogs.vue'
 import cloudSyncSummaryDialog from './components/cloudSyncSummaryDialog.vue'
-import curatedLibrarySyncDialog from './components/curatedLibrarySyncDialog.vue'
 import FileOpInterruptedDialog from './components/fileOpInterruptedDialog.vue'
 import emitter from './utils/mitt'
 import {
@@ -56,6 +54,7 @@ import { formatWindowTitle } from '@renderer/utils/windowTitle'
 import { useMainWindowPlaybackHandoff } from '@renderer/composables/useMainWindowPlaybackHandoff'
 import { useMainWindowBrowseModeState } from '@renderer/composables/useMainWindowBrowseModeState'
 import { useDevSongListTrace } from '@renderer/composables/useDevSongListTrace'
+import { useSetLibrarySyncEvents } from '@renderer/composables/useSetLibrarySyncEvents'
 import { useCloudSyncEvents } from '@renderer/composables/useCloudSyncEvents'
 import { useCuratedLibrarySyncEvents } from '@renderer/composables/useCuratedLibrarySyncEvents'
 import { useUserGuide } from '@renderer/composables/useUserGuide'
@@ -711,6 +710,8 @@ const {
   consumePendingCuratedLibraryJoin
 } = useCuratedLibrarySyncEvents()
 
+useSetLibrarySyncEvents()
+
 const handleMainWindowBlur = async () => {
   runtime.activeMenuUUID = ''
   closeMainWindowBrowseModeMenu()
@@ -1034,19 +1035,8 @@ onBeforeUnmount(() => {
     v-if="activeDialog == 'fingerprints.importDatabase'"
     @cancel="activeDialog = ''"
   />
-  <cloudSyncSettingsDialog
-    v-if="activeDialog == 'cloudSync.settings'"
-    @cancel="activeDialog = ''"
-  />
+  <CloudSyncDialogs v-model="activeDialog" />
   <settingDialog v-if="activeDialog == 'settings'" @cancel="activeDialog = ''" />
-  <cloudSyncSyncDialog
-    v-if="activeDialog == 'cloudSync.syncFingerprints'"
-    @cancel="activeDialog = ''"
-  />
-  <curatedLibrarySyncDialog
-    v-if="activeDialog == 'cloudSync.syncCuratedLibrary'"
-    @cancel="activeDialog = ''"
-  />
   <globalSongSearchDialog
     v-if="activeDialog == 'search.globalSong'"
     @cancel="activeDialog = ''"

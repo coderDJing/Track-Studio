@@ -48,10 +48,11 @@ const combineSignals = (signal?: AbortSignal): AbortSignal => {
 async function postJson(
   pathName: string,
   body: Record<string, unknown>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  prefix = PREFIX
 ): Promise<RecordLike> {
   const baseUrl = await resolveBaseUrl()
-  const res = await fetchWithSystemProxy(`${baseUrl}${PREFIX}${pathName}`, {
+  const res = await fetchWithSystemProxy(`${baseUrl}${prefix}${pathName}`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(body),
@@ -227,6 +228,7 @@ export type CuratedBlobBeginResult = {
 }
 
 export const beginBlobUpload = async (params: {
+  scope?: 'set'
   sha256: string
   size: number
   signal?: AbortSignal
@@ -238,7 +240,8 @@ export const beginBlobUpload = async (params: {
       sha256: params.sha256,
       size: params.size
     },
-    params.signal
+    params.signal,
+    params.scope === 'set' ? '/frkbapi/v1/set-library-sync' : PREFIX
   )
   if (json.success !== true || !isRecord(json.data)) {
     throw Object.assign(new Error(String(json.error || 'CURATED_SYNC_BLOB_BEGIN_FAILED')), {
@@ -268,6 +271,7 @@ export class CuratedBlobOffsetMismatchError extends Error {
 }
 
 export const uploadBlobChunk = async (params: {
+  scope?: 'set'
   sha256: string
   size: number
   offset: number
@@ -279,7 +283,7 @@ export const uploadBlobChunk = async (params: {
   const start = Math.max(0, params.offset)
   const end = start + params.chunk.byteLength - 1
   const res = await fetchWithSystemProxy(
-    `${baseUrl}${PREFIX}/blob/${params.sha256}?userKey=${userKey}&size=${params.size}`,
+    `${baseUrl}${params.scope === 'set' ? '/frkbapi/v1/set-library-sync' : PREFIX}/blob/${params.sha256}?userKey=${userKey}&size=${params.size}`,
     {
       method: 'PUT',
       headers: {
@@ -325,6 +329,7 @@ const proxyFetch: ResumableDownloadFetch = async (url, init) => {
 }
 
 export const downloadBlobFile = async (params: {
+  scope?: 'set'
   sha256: string
   destPath: string
   expectedSize?: number
@@ -334,7 +339,7 @@ export const downloadBlobFile = async (params: {
   const userKey = encodeURIComponent(getUserKey())
   await downloadResumableFile(
     {
-      url: `${baseUrl}${PREFIX}/blob/${params.sha256}?userKey=${userKey}`,
+      url: `${baseUrl}${params.scope === 'set' ? '/frkbapi/v1/set-library-sync' : PREFIX}/blob/${params.sha256}?userKey=${userKey}`,
       destinationPath: params.destPath,
       expectedSize: params.expectedSize,
       sha256: params.sha256,

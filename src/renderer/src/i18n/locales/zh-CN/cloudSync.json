@@ -230,6 +230,61 @@
       "description": "该操作将清除云端与当前 userKey 关联的全部指纹、精选表演者快照及相关元数据（不影响使用统计，也不会删除精选库音频）。此操作不可撤销，请谨慎执行。请输入 DELETE 以继续。",
       "short": "清除云端同步数据",
       "success": "云端同步数据已清除"
-    }
+    },
+    "setLibrary": {
+      "section": "SET 库",
+      "enabled": "同步 SET 库",
+      "scopeHint": "同步整个 SET 库的文件夹、歌单、重复曲目和顺序，以及音频、BPM、网格、Cue、调性、能量、结构和已有波形。开启后立即合并两边，之后自动检查并同步。",
+      "custodyHint": "另一台电脑收到的音频进入 SET 托管区。删除歌单或曲目只移除引用；原电脑的源音频保留。",
+      "cannotChangeUserKey": "请先关闭 SET 库同步，再更换同步密钥。",
+      "conflicts": "SET 库同步冲突",
+      "conflictHint": "两边现状已保留。请选择冲突字段使用哪一边；没有冲突的改动仍会合并。",
+      "keepLocal": "冲突使用本机",
+      "keepCloud": "冲突使用云端",
+      "confirmLocal": "冲突字段将使用本机的值或删除操作，并同步到其他电脑。确认使用本机？",
+      "confirmCloud": "冲突字段将使用云端的值或删除操作，并应用到本机。确认使用云端？",
+      "phases": {
+        "idle": "等待同步",
+        "scanning": "检查 SET 库",
+        "uploading": "上传 SET 数据",
+        "downloading": "下载与应用 SET 数据",
+        "applying": "应用 SET 数据"
+      },
+      "results": {
+        "success": "SET 库同步成功",
+        "unchanged": "SET 库已是最新",
+        "conflicts": "存在同步冲突，请选择处理方式",
+        "failed": "SET 库同步失败，可重试",
+        "cancelled": "SET 库同步已取消"
+      },
+      "notice": "SET 库有两边同时修改的内容，已暂停同步并保留两边现状。请打开「云同步 → 同步 SET 库」选择处理方式。",
+      "fields": {
+        "entity": "新增、编辑或删除",
+        "children": "子项与文件夹删除",
+        "name": "名称",
+        "parentId": "文件夹位置",
+        "type": "类型",
+        "order": "排序",
+        "playlistId": "所属歌单",
+        "createdAtMs": "加入时间",
+        "fileName": "文件名",
+        "audio": "音频内容",
+        "analysis": "分析结果与 Cue",
+        "waveform": "波形"
+      },
+      "errors": {
+        "USER_KEY_REQUIRED": "请先在云同步设置中保存同步密钥。",
+        "MISSING_AUDIO": "SET 中有音频丢失，请先修复缺失文件后重试。",
+        "QUOTA_EXCEEDED": "SET 库云端容量不足。",
+        "HASH_MISMATCH": "文件校验失败，未应用本次 SET 数据。",
+        "LOCAL_CHANGED": "同步期间本机内容发生变化，将在下一次检查时重试。",
+        "BUSY_TRACK": "相关曲目正在播放或分析，稍后自动重试。",
+        "BUSY_LIBRARY": "音乐库正在执行其他操作，稍后自动重试。",
+        "CLOUD_HISTORY_CHANGED": "云端同步历史发生变化，已停止同步并保留本机数据。",
+        "SERVER_UPGRADE": "服务端需要升级后才能同步 SET 库。",
+        "FAILED": "同步未完成，请检查网络后重试。"
+      }
+    },
+    "syncSetLibrary": "同步 SET 库"
   }
 }

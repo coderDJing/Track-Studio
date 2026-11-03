@@ -13,6 +13,7 @@ const isAbortError = (error: unknown): boolean => {
 }
 
 export const uploadBlobWithResume = async (params: {
+  scope?: 'set'
   sha256: string
   filePath: string
   size: number
@@ -21,6 +22,7 @@ export const uploadBlobWithResume = async (params: {
   throwIfCancelled?: () => void
 }): Promise<void> => {
   const begin = await beginBlobUpload({
+    scope: params.scope,
     sha256: params.sha256,
     size: params.size,
     signal: params.signal
@@ -46,6 +48,7 @@ export const uploadBlobWithResume = async (params: {
       while (true) {
         try {
           const result = await uploadBlobChunk({
+            scope: params.scope,
             sha256: params.sha256,
             size: params.size,
             offset,

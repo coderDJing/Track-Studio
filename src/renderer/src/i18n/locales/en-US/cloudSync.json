@@ -230,6 +230,61 @@
       "description": "This will delete all cloud fingerprints, curated artist snapshots, and related metadata linked to the current userKey (usage stats are not reset, and curated library audio is not deleted). IRREVERSIBLE. Type DELETE to continue.",
       "short": "Reset cloud data",
       "success": "Cloud sync data cleared"
-    }
+    },
+    "setLibrary": {
+      "section": "SET library",
+      "enabled": "Sync SET library",
+      "scopeHint": "Sync all SET folders, playlists, duplicate entries and order, with audio, BPM, grids, cues, key, energy, structure and existing waveforms. Enabling merges both libraries and starts automatic checks.",
+      "custodyHint": "Audio received on another computer is managed by the SET library. Removing a playlist or entry removes its reference; source audio on the original computer is preserved.",
+      "cannotChangeUserKey": "Disable SET library sync before changing the sync key.",
+      "conflicts": "SET library sync conflicts",
+      "conflictHint": "Both sides are preserved. Choose which side to use for conflicting fields. Other changes will still merge.",
+      "keepLocal": "Use local for conflicts",
+      "keepCloud": "Use cloud for conflicts",
+      "confirmLocal": "Conflicting values or deletions will use this computer and sync to other computers. Continue?",
+      "confirmCloud": "Conflicting values or deletions will use the cloud and apply to this computer. Continue?",
+      "phases": {
+        "idle": "Waiting",
+        "scanning": "Checking SET library",
+        "uploading": "Uploading SET data",
+        "downloading": "Downloading and applying SET data",
+        "applying": "Applying SET data"
+      },
+      "results": {
+        "success": "SET library synced",
+        "unchanged": "SET library is up to date",
+        "conflicts": "Sync conflicts need your choice",
+        "failed": "SET library sync failed; retry is available",
+        "cancelled": "SET library sync cancelled"
+      },
+      "notice": "Both computers changed the same SET data. Sync is paused and both versions are preserved. Open Cloud sync → Sync SET library to resolve the conflicts.",
+      "fields": {
+        "entity": "Addition, edit or deletion",
+        "children": "Children versus folder deletion",
+        "name": "Name",
+        "parentId": "Folder location",
+        "type": "Type",
+        "order": "Order",
+        "playlistId": "Playlist",
+        "createdAtMs": "Added time",
+        "fileName": "File name",
+        "audio": "Audio content",
+        "analysis": "Analysis and cues",
+        "waveform": "Waveform"
+      },
+      "errors": {
+        "USER_KEY_REQUIRED": "Save a sync key in Cloud sync settings first.",
+        "MISSING_AUDIO": "Some SET audio is missing. Restore the files and retry.",
+        "QUOTA_EXCEEDED": "The cloud SET storage quota is full.",
+        "HASH_MISMATCH": "File verification failed. This SET update was not applied.",
+        "LOCAL_CHANGED": "Local content changed during sync. The next check will retry.",
+        "BUSY_TRACK": "A related track is playing or being analyzed. Sync will retry.",
+        "BUSY_LIBRARY": "The library is busy. Sync will retry.",
+        "CLOUD_HISTORY_CHANGED": "Cloud sync history changed. Sync stopped and local data was preserved.",
+        "SERVER_UPGRADE": "The server needs an update to support SET library sync.",
+        "FAILED": "Sync did not complete. Check your connection and retry."
+      }
+    },
+    "syncSetLibrary": "Sync SET library"
   }
 }

@@ -12,6 +12,7 @@ import singleCheckbox from '@renderer/components/singleCheckbox.vue'
 import BaseSelect from '@renderer/components/BaseSelect.vue'
 import confirm from '@renderer/components/confirmDialog'
 import dangerConfirmWithInput from '@renderer/components/dangerConfirmWithInputDialog'
+import SetLibrarySyncSettings from './settingDialog/SetLibrarySyncSettings.vue'
 import CuratedLibrarySyncSettings from '@renderer/components/settingDialog/CuratedLibrarySyncSettings.vue'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
 import { useRuntimeStore } from '@renderer/stores/runtime'
@@ -295,6 +296,8 @@ onUnmounted(() => utils.delHotkeysScope(uuid))
           <section class="settings-section">
             <div class="section-title">{{ t('cloudSync.sectionLibrary') }}</div>
             <CuratedLibrarySyncSettings ref="curatedSettingsRef" />
+            <div class="section-title">{{ t('cloudSync.setLibrary.section') }}</div>
+            <SetLibrarySyncSettings />
           </section>
 
           <section class="settings-section settings-section--danger">

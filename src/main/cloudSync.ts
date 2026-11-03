@@ -1,3 +1,4 @@
+import { isSetLibrarySyncEnabled } from './setLibrarySync/state'
 import { ipcMain } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import store from './store'
@@ -250,6 +251,9 @@ ipcMain.handle('cloudSync/config/save', (_e, payload: { userKey: string }) =>
     const userKey = (payload?.userKey || '').trim()
     try {
       const currentKey = String(store.settingConfig?.cloudSyncUserKey || '').trim()
+      if (isSetLibrarySyncEnabled() && currentKey !== userKey) {
+        return { success: false, message: 'cloudSync.setLibrary.cannotChangeUserKey' }
+      }
       if (isCuratedLibrarySyncEnabled() && currentKey && currentKey !== userKey) {
         return { success: false, message: 'cloudSync.curatedLibrary.errors.cannotChangeUserKey' }
       }

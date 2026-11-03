@@ -224,7 +224,11 @@ const defaultMenuConfigs = computed<MenuConfig[]>(() => {
       name: 'menu.cloudSync',
       disabled: librarySetupActive,
       subMenu: [
-        [{ name: 'cloudSync.syncFingerprints' }, { name: 'cloudSync.syncCuratedLibrary' }],
+        [
+          { name: 'cloudSync.syncFingerprints' },
+          { name: 'cloudSync.syncCuratedLibrary' },
+          { name: 'cloudSync.syncSetLibrary' }
+        ],
         [{ name: 'cloudSync.settings' }]
       ]
     },

@@ -357,17 +357,24 @@ export async function loadUnifiedDisplayWaveformCacheData(
   }
 }
 
-export async function upsertUnifiedDisplayWaveformCacheEntry(
+export async function prepareUnifiedDisplayWaveformWrite(
+  data: UnifiedDisplayWaveformDetailData
+): Promise<Buffer> {
+  const payload = await encodeUnifiedDisplayWaveformCacheData(data)
+  if (!payload) throw new Error('SET_SYNC_INVALID_WAVEFORM')
+  return payload
+}
+
+export function writePreparedUnifiedDisplayWaveform(
   listRoot: string,
   filePath: string,
   stat: { size: number; mtimeMs: number },
-  data: UnifiedDisplayWaveformDetailData
-): Promise<boolean> {
+  data: UnifiedDisplayWaveformDetailData,
+  payload: Buffer
+): boolean {
   const db = getLibraryDb()
   const keys = resolveCacheKeys(listRoot, filePath)
   if (!db || !keys || !data) return false
-  const payload = await encodeUnifiedDisplayWaveformCacheData(data)
-  if (!payload) return false
   try {
     const upsertMain = db.prepare(
       `INSERT INTO ${TABLE} (
@@ -414,6 +421,16 @@ export async function upsertUnifiedDisplayWaveformCacheEntry(
     log.error('[sqlite] unified display waveform cache upsert failed', error)
     return false
   }
+}
+
+export async function upsertUnifiedDisplayWaveformCacheEntry(
+  listRoot: string,
+  filePath: string,
+  stat: { size: number; mtimeMs: number },
+  data: UnifiedDisplayWaveformDetailData
+): Promise<boolean> {
+  const payload = await encodeUnifiedDisplayWaveformCacheData(data)
+  return !!payload && writePreparedUnifiedDisplayWaveform(listRoot, filePath, stat, data, payload)
 }
 
 export async function updateUnifiedDisplayWaveformCacheStat(
