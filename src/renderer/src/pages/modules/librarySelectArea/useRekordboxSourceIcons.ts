@@ -522,7 +522,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
   }
 
   const clickPioneerDriveIcon = async (item: PioneerDriveIcon) => {
-    if (!item.path) return
+    if (!item.path || isEjectingPioneerDriveIcon(item)) return
     clearExternalDjSelection()
     const sourceCacheKey = resolvePioneerDriveSourceCacheKey(item)
     const cachedTree = getCachedRekordboxSourceTree(sourceCacheKey)
@@ -709,10 +709,15 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
   }
 
   const isEjectingPioneerDriveIcon = (item: PioneerDriveIcon) =>
-    ejectingDriveKeys.value.includes(item.key)
+    ejectingDriveKeys.value.includes(normalizePhysicalPathKey(item.path))
+
+  const isSelectedPioneerDrive = (item: PioneerDriveIcon) =>
+    runtime.pioneerDeviceLibrary.selectedSourceKind === 'usb' &&
+    normalizePhysicalPathKey(runtime.pioneerDeviceLibrary.selectedSourceRootPath) ===
+      normalizePhysicalPathKey(item.path)
 
   const suspendSelectedPioneerDriveBeforeEject = async (item: PioneerDriveIcon) => {
-    if (runtime.pioneerDeviceLibrary.selectedSourceKey !== item.key) return null
+    if (!isSelectedPioneerDrive(item)) return null
 
     const snapshot = snapshotSelection()
     clearSelection()
@@ -743,7 +748,8 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
 
   const ejectPioneerDriveIcon = async (item: PioneerDriveIcon) => {
     if (isEjectingPioneerDriveIcon(item)) return
-    ejectingDriveKeys.value = [...ejectingDriveKeys.value, item.key]
+    const driveKey = normalizePhysicalPathKey(item.path)
+    ejectingDriveKeys.value = [...ejectingDriveKeys.value, driveKey]
     const suspendedSelection = await suspendSelectedPioneerDriveBeforeEject(item)
     try {
       const result = (await window.electron.ipcRenderer.invoke(
@@ -765,12 +771,15 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
         return
       }
 
-      if (suspendedSelection || runtime.pioneerDeviceLibrary.selectedSourceKey === item.key) {
+      if (suspendedSelection || isSelectedPioneerDrive(item)) {
         clearSelection()
         switchBackToFilterLibraryAfterExit()
       }
-      clearRekordboxSourceCache(resolvePioneerDriveSourceCacheKey(item))
-      pioneerDriveIcons.value = pioneerDriveIcons.value.filter((icon) => icon.key !== item.key)
+      pioneerDriveIcons.value = pioneerDriveIcons.value.filter((icon) => {
+        if (normalizePhysicalPathKey(icon.path) !== driveKey) return true
+        clearRekordboxSourceCache(resolvePioneerDriveSourceCacheKey(icon))
+        return false
+      })
       await refreshPioneerDriveIcons({ force: true })
     } catch (error) {
       if (suspendedSelection) {
@@ -789,7 +798,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
         canCopyText: true
       })
     } finally {
-      ejectingDriveKeys.value = ejectingDriveKeys.value.filter((key) => key !== item.key)
+      ejectingDriveKeys.value = ejectingDriveKeys.value.filter((key) => key !== driveKey)
     }
   }
 
