@@ -4,8 +4,12 @@ import {
   upsertMixtapeProjectBpmEnvelope
 } from '../mixtapeProjectTempoDb'
 import { assertLibraryMergeMutationAllowed } from '../services/libraryMerge/runtime'
+import { applyMixtapeArrangement } from '../services/mixtapeArrangement'
 
 export function registerMixtapeProjectTempoHandlers() {
+  ipcMain.handle('mixtape:project:apply-arrangement', (_e, payload: unknown) =>
+    applyMixtapeArrangement(payload)
+  )
   ipcMain.handle(
     'mixtape:project:get-bpm-envelope',
     async (_e, payload?: { playlistId?: string }) => {

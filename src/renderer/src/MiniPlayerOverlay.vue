@@ -189,7 +189,9 @@ onUnmounted(() => {
 }
 
 :global(.mini-player-overlay-root .dialog) {
+  --dialog-available-height: 100vh;
   position: static;
+  padding: 0;
   width: max-content;
   height: max-content;
   display: block;
@@ -201,6 +203,9 @@ onUnmounted(() => {
 }
 
 :global(.mini-player-overlay-root .dialog .inner) {
+  // This window fits the measured dialog exactly, so viewport gutters would
+  // feed back into each resize and progressively shrink the popup.
+  max-width: 100vw !important;
   transform: none;
   opacity: 1;
   box-shadow: none;
@@ -210,6 +215,7 @@ onUnmounted(() => {
 }
 
 :global(.mini-player-overlay-root .content.inner) {
+  width: 300px;
   height: var(--overlay-song-list-height, 70vh) !important;
   max-height: var(--overlay-song-list-height, 70vh) !important;
 }

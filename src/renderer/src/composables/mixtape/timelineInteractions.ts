@@ -340,6 +340,27 @@ export const createTimelineInteractionsModule = (ctx: TimelineInteractionsContex
     event.preventDefault()
     event.stopPropagation()
 
+    // Shift + 纵向滚轮用于横向浏览；触控板/横向滚轮也走同一分支。
+    // 必须在缩放累计之前处理，否则修饰键会被普通滚轮缩放吞掉。
+    if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+      const viewport = resolveTimelineViewportEl()
+      if (!viewport) return
+      const rawDelta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
+      if (!Number.isFinite(rawDelta) || rawDelta === 0) return
+      const unit =
+        event.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? WHEEL_LINE_HEIGHT_PX
+          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? Math.max(1, viewport.clientWidth)
+            : 1
+      const maxLeft = Math.max(0, resolveScrollableWidth(viewport) - viewport.clientWidth)
+      const nextLeft = Math.max(0, Math.min(maxLeft, viewport.scrollLeft + rawDelta * unit))
+      if (nearlyEqual(nextLeft, viewport.scrollLeft)) return
+      viewport.scrollLeft = nextLeft
+      syncTimelineScrollState()
+      return
+    }
+
     const delta = normalizeWheelDeltaY(event)
     if (!delta) return
 

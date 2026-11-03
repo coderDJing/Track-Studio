@@ -260,7 +260,11 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: min(100%, 240px);
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+  max-width: 240px;
+  box-sizing: border-box;
   min-height: 46px;
   padding: 6px 10px;
   overflow: hidden;
@@ -381,8 +385,8 @@ onUnmounted(() => {
   width: min(100%, 460px);
 
   .welcome-create-playlist {
-    align-self: center;
-    width: min(100%, 220px);
+    align-self: stretch;
+    max-width: 220px;
     min-height: 40px;
     padding: 5px 8px;
     border-radius: 9px;

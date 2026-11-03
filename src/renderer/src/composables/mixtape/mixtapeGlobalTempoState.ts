@@ -46,3 +46,9 @@ export const applyMixtapeGlobalTempoSnapshot = (params: {
 }
 
 export const isMixtapeGlobalTempoReady = () => mixtapeGlobalTempoEnvelope.value.length >= 2
+
+export const readMixtapeGlobalTempoSnapshot = (): MixtapeProjectBpmEnvelopeSnapshot => ({
+  bpmEnvelope: mixtapeGlobalTempoEnvelope.value.map((point) => ({ ...point })),
+  bpmEnvelopeDurationSec: mixtapeGlobalTempoDurationSec.value,
+  gridPhaseOffsetSec: mixtapeGlobalTempoPhaseOffsetSec.value
+})

@@ -262,6 +262,23 @@
     "missingTracksRemovedSummary": "{count} track(s) no longer exist in their source playlist, or were not found in both recycle bin and the Mixtape Auto-Recording vault. They have been removed from the Mixtape Auto-Recording playlist and project.",
     "missingTracksRemovedMore": "{count} additional track(s) are not shown here.",
     "deleteBlockedWindowOpen": "This Mixtape Auto-Recording window is currently open, so the Mixtape Auto-Recording playlist cannot be deleted.",
-    "deleteBlockedWindowOpenHint": "Please close the Mixtape Auto-Recording window first, then try deleting again."
+    "deleteBlockedWindowOpenHint": "Please close the Mixtape Auto-Recording window first, then try deleting again.",
+    "cueOverlapTitle": "Hot Cue Alignment",
+    "cueOverlapHint": "In project order, align each outgoing end Hot Cue with the next incoming start Hot Cue. Changes apply only after confirmation.",
+    "cueOverlapBpm": "Target BPM",
+    "cueOverlapTempoNotice": "All tracks will use the target BPM, replacing the master BPM curve. Track envelopes and Loop settings are kept. Undo restores the previous arrangement.",
+    "cueOverlapDuration": "New project duration: {duration}",
+    "cueOverlapTrack": "Track",
+    "cueOverlapPosition": "New start",
+    "cueOverlapApply": "Apply alignment",
+    "cueOverlapApplying": "Aligning…",
+    "cueOverlapInvalid": "Choose different start and end Hot Cues and a target BPM greater than 1 and at most 999. At least two tracks are required.",
+    "cueOverlapError_duration": "Track duration is missing",
+    "cueOverlapError_grid": "A valid beat grid is required",
+    "cueOverlapError_cueOrder": "End Cue must follow Start Cue and both must be within the track",
+    "cueOverlapError_negativeStart": "Alignment would place this track before the timeline start; choose another Cue",
+    "cueOverlapMissingFile": "An audio file is missing. The project was not changed. Check the files and try again.",
+    "cueOverlapChanged": "The project or its state has changed. Close this dialog and try again.",
+    "cueOverlapFailed": "The arrangement could not be saved. Please try again."
   }
 }

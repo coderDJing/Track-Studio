@@ -57,6 +57,7 @@ export const useMixtapeShellUi = ({
   }
 
   const handleUndoKeydown = (event: KeyboardEvent) => {
+    if (runtime.confirmShow) return
     if (event.defaultPrevented) return
     if (event.isComposing || event.repeat) return
     if (isEditableEventTarget(event.target)) return

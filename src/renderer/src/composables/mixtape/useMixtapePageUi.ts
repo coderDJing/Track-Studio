@@ -13,6 +13,7 @@ import { useMixtapeShellUi } from '@renderer/composables/mixtape/useMixtapeShell
 import { useMixtapeStemPlaceholderState } from '@renderer/composables/mixtape/useMixtapeStemPlaceholderState'
 import { useMixtapeTrackLoopEditor } from '@renderer/composables/mixtape/useMixtapeTrackLoopEditor'
 import { useMixtapeTrackDragUndo } from '@renderer/composables/mixtape/useMixtapeTrackDragUndo'
+import { useMixtapeCueOverlap } from '@renderer/composables/mixtape/useMixtapeCueOverlap'
 import type {
   MixtapeEnvelopeParamId,
   MixtapeTrack,
@@ -67,10 +68,20 @@ export const useMixtapePageUi = ({ mixtape, masterTempoLaneExpanded }: UseMixtap
       subMenu: [],
       directAction: 'mixtape.menuOutput',
       disabled: !canOutputFromTitle.value
+    },
+    {
+      name: 'mixtape.cueOverlapTitle',
+      subMenu: [],
+      directAction: 'mixtape.cueOverlapTitle',
+      disabled: !cueOverlap.canOpen.value
     }
   ])
 
   const handleTitleMenuOpen = (key: string) => {
+    if (key === 'mixtape.cueOverlapTitle') {
+      void cueOverlap.open()
+      return
+    }
     if (key === 'mixtape.menuOutput' && !canOutputFromTitle.value) return
     mixtape.handleTitleOpenDialog(key)
   }
@@ -251,6 +262,28 @@ export const useMixtapePageUi = ({ mixtape, masterTempoLaneExpanded }: UseMixtap
     isEditable: () => isEnvelopeParamMode.value
   })
 
+  const cueOverlap = useMixtapeCueOverlap({
+    tracks: mixtape.tracks,
+    playlistId: mixtape.mixtapePlaylistId,
+    isBlocked: () =>
+      mixtape.mixtapeItemsLoading.value ||
+      mixtape.bpmAnalysisActive.value ||
+      mixtape.transportPlaying.value ||
+      mixtape.transportDecoding.value ||
+      mixtape.transportPreloading.value ||
+      mixtape.outputRunning.value ||
+      mixtape.autoGainBusy.value,
+    resolveSourceDuration: mixtape.resolveTrackSourceDurationSeconds,
+    pushUndo: pushExternalUndoStep,
+    refresh: () => {
+      mixtape.clearTimelineLayoutCache()
+      mixtape.updateTimelineWidth(false)
+      mixtape.scheduleTimelineDraw()
+      mixtape.scheduleFullPreRender()
+      mixtape.scheduleWorkerPreRender()
+    }
+  })
+
   const trackDragUndoMouseDown = useMixtapeTrackDragUndo({
     tracks: mixtape.tracks,
     handleTrackDragStart: mixtape.handleTrackDragStart,
@@ -271,7 +304,9 @@ export const useMixtapePageUi = ({ mixtape, masterTempoLaneExpanded }: UseMixtap
     handleTrackLoopTrackMouseDown(item, event)
   }
 
-  const handleUndoMixParam = () => undoLastMixParamChange()
+  const handleUndoMixParam = () => {
+    if (!cueOverlap.busy.value) undoLastMixParamChange()
+  }
   const { handleZoomIn, handleZoomOut, isLightTheme } = useMixtapeShellUi({
     renderZoomLevel: mixtape.renderZoomLevel,
     setZoomValue: mixtape.setZoomValue,

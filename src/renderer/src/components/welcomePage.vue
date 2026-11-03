@@ -4,6 +4,7 @@ import WelcomeCreatePlaylistActions from '@renderer/components/WelcomeCreatePlay
 import { t } from '@renderer/utils/translate'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 
 type ShortcutRow = {
   title: string
@@ -32,7 +33,11 @@ type HorizontalShortcutLayoutItem =
 const runtime = useRuntimeStore()
 const welcomeLogo = welcomeLogoAsset
 const isHorizontalMode = computed(() => runtime.mainWindowBrowseMode !== 'browser')
-const welcomeContainerRef = ref<HTMLElement | null>(null)
+const welcomeContainerRef = ref<InstanceType<typeof OverlayScrollbarsComponent> | null>(null)
+const welcomeScrollbarOptions = {
+  scrollbars: { autoHide: 'leave' as const, autoHideDelay: 50, clickScroll: true },
+  overflow: { x: 'hidden' as const, y: 'scroll' as const }
+}
 const horizontalContainerHeight = ref(272)
 const horizontalContainerWidth = ref(820)
 const deckLabels = {
@@ -258,17 +263,19 @@ const shortcutRows = browserShortcutRows
 let resizeObserver: ResizeObserver | null = null
 
 const syncHorizontalContainerMetrics = () => {
-  horizontalContainerHeight.value = welcomeContainerRef.value?.clientHeight || 272
-  horizontalContainerWidth.value = welcomeContainerRef.value?.clientWidth || 820
+  const element = welcomeContainerRef.value?.getElement()
+  horizontalContainerHeight.value = element?.clientHeight || 272
+  horizontalContainerWidth.value = element?.clientWidth || 820
 }
 
 onMounted(() => {
   syncHorizontalContainerMetrics()
-  if (typeof ResizeObserver === 'undefined' || !welcomeContainerRef.value) return
+  const element = welcomeContainerRef.value?.getElement()
+  if (typeof ResizeObserver === 'undefined' || !element) return
   resizeObserver = new ResizeObserver(() => {
     syncHorizontalContainerMetrics()
   })
-  resizeObserver.observe(welcomeContainerRef.value)
+  resizeObserver.observe(element)
 })
 
 onUnmounted(() => {
@@ -278,11 +285,14 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div
+  <OverlayScrollbarsComponent
     ref="welcomeContainerRef"
     class="welcome-container"
     :class="{ 'welcome-container--horizontal': isHorizontalMode }"
     :style="horizontalLayoutStyle"
+    :options="welcomeScrollbarOptions"
+    element="div"
+    defer
   >
     <div class="welcome-content" :class="{ 'welcome-content--horizontal': isHorizontalMode }">
       <img
@@ -497,7 +507,7 @@ onUnmounted(() => {
         </dl>
       </div>
     </div>
-  </div>
+  </OverlayScrollbarsComponent>
 </template>
 
 <style lang="scss" scoped>
@@ -515,8 +525,15 @@ onUnmounted(() => {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   overscroll-behavior: contain;
+}
+
+.welcome-container :deep([data-overlayscrollbars-contents]) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: safe center;
 }
 
 .welcome-container--horizontal {

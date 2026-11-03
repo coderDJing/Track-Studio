@@ -262,6 +262,23 @@
     "missingTracksRemovedSummary": "有 {count} 首曲目已不在来源歌单中，或在回收站和 Mixtape 自动录制保底目录中都未找到，已从 Mixtape 自动录制歌单与工程中移除。",
     "missingTracksRemovedMore": "其余 {count} 首未在此处展示。",
     "deleteBlockedWindowOpen": "当前 Mixtape 自动录制窗口正在打开，无法删除该 Mixtape 自动录制歌单。",
-    "deleteBlockedWindowOpenHint": "请先关闭该 Mixtape 自动录制窗口，再执行删除。"
+    "deleteBlockedWindowOpenHint": "请先关闭该 Mixtape 自动录制窗口，再执行删除。",
+    "cueOverlapTitle": "Hot Cue 对齐",
+    "cueOverlapHint": "按工程序号，将前一首的结束 Hot Cue 与后一首的开始 Hot Cue 对齐。选择后点击确认才会调整。",
+    "cueOverlapBpm": "目标 BPM",
+    "cueOverlapTempoNotice": "所有歌曲将统一到目标 BPM，替换当前主 BPM 变化曲线；保留歌曲的包络线和 Loop 设置。可一次撤销。",
+    "cueOverlapDuration": "调整后工程时长：{duration}",
+    "cueOverlapTrack": "歌曲",
+    "cueOverlapPosition": "调整后起点",
+    "cueOverlapApply": "确认对齐",
+    "cueOverlapApplying": "正在对齐…",
+    "cueOverlapInvalid": "请选择不同的开始、结束 Hot Cue，并填写有效的目标 BPM（大于 1 且不超过 999）。至少需要两首歌曲。",
+    "cueOverlapError_duration": "缺少歌曲时长",
+    "cueOverlapError_grid": "缺少有效节拍网格",
+    "cueOverlapError_cueOrder": "结束 Cue 必须晚于开始 Cue，且均在歌曲范围内",
+    "cueOverlapError_negativeStart": "对齐后会早于时间线起点，请更换 Cue",
+    "cueOverlapMissingFile": "有音频文件已丢失，未修改工程。请检查后重试。",
+    "cueOverlapChanged": "工程内容或状态已变化，请关闭对话框后重新操作。",
+    "cueOverlapFailed": "保存失败，工程未完成调整，请重试。"
   }
 }

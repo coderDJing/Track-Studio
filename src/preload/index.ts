@@ -257,7 +257,7 @@ const invokePrefixes = [
   'library-relocate:',
   'mini-player:',
   'metadata:',
-  'mixtape:',
+  'mixtape:', // 包含 mixtape:project:apply-arrangement（BPM 与轨道位置原子写入）
   'mixtape-drag-session:',
   'mixtape-stem-waveform-cache:',
   'mixtape-waveform-raw:',
