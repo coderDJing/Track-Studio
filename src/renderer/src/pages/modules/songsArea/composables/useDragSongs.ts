@@ -12,6 +12,8 @@ import emitter from '@renderer/utils/mitt'
 import { copySongCueDefinitionsToTargets } from '@renderer/utils/songCueTransfer'
 import { buildMixtapeDragSessionItem } from '@renderer/utils/mixtapeDragSession'
 import { toIpcCloneablePayload } from '@renderer/utils/ipcCloneablePayload'
+import { appendExternalSongsToSet } from '@renderer/utils/setCustody'
+import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
 import { t } from '@renderer/utils/translate'
 import { type MoveSongsToDirSummary, useSongMoveTransaction } from './useSongMoveTransaction'
 import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
@@ -254,6 +256,21 @@ export function useDragSongs(params: UseDragSongsParams = {}) {
       const isMixtapeTarget = targetNode?.type === 'mixtapeList'
 
       if (isSetTarget) {
+        if (isRekordboxExternalPlaybackSource(sourceSongListUUID, null)) {
+          const songMap = new RendererFilePathMap(
+            runtime.playingData.playingSongListData.map((song) => [song.filePath, song] as const)
+          )
+          const items = selectedSongFilePaths.map((filePath) => {
+            const song = songMap.get(filePath)
+            if (!song) throw new Error(`未找到拖拽歌曲：${filePath}`)
+            return {
+              song,
+              originPathSnapshot: runtime.pioneerDeviceLibrary.selectedSourceName || 'rekordbox'
+            }
+          })
+          await appendExternalSongsToSet({ playlistUuid: targetSongListUUID, items })
+          return []
+        }
         if (!sourceNode || sourceNode.type !== 'songList') {
           return []
         }

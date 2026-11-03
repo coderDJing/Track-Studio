@@ -3,7 +3,7 @@ import fs = require('fs-extra')
 import { v4 as uuidV4 } from 'uuid'
 import store from '../../store'
 import { log } from '../../log'
-import { getCoreFsDirName } from '../../coreLibraries'
+import { getSetCustodyDirAbs } from '../setCustody'
 import { loadLibraryNodes } from '../../libraryTreeDb'
 import { beginLibraryTreeWatcherBulkOperation } from '../../libraryTreeWatcher'
 import * as LibraryCacheDb from '../../libraryCacheDb'
@@ -31,8 +31,6 @@ export type ImportSetPackageParams = {
   onProgress?: (done: number, total: number) => void
 }
 
-const SET_CUSTODY_DIR_NAME = '__set_custody__'
-
 type ImportedFile = {
   absPath: string
   size: number
@@ -41,15 +39,6 @@ type ImportedFile = {
 
 const fileNameKey = (fileName: string) =>
   process.platform === 'win32' ? fileName.toLowerCase() : fileName
-
-function getSetCustodyRoot(): string {
-  return path.join(
-    store.databaseDir || '',
-    'library',
-    getCoreFsDirName('SetLibrary'),
-    SET_CUSTODY_DIR_NAME
-  )
-}
 
 /** 读取并校验包内容，供导入前展示名称与曲目数。 */
 export async function inspectSetPackage(manifestPath: string): Promise<SetPackageManifest> {
@@ -76,7 +65,7 @@ export async function importSetPackage(
   const packageDir = path.dirname(params.manifestPath)
   const manifest = await inspectSetPackage(params.manifestPath)
 
-  const custodyRoot = getSetCustodyRoot()
+  const custodyRoot = getSetCustodyDirAbs()
   // 每次导入独占一个子目录，保证原文件名不变（文件名也是曲目列表里展示的内容）。
   const importDir = path.join(
     custodyRoot,

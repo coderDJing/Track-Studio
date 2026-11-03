@@ -8,8 +8,10 @@ import { notifyFilterLibraryReceivedSongs } from '@renderer/composables/userGuid
 import type { ISongInfo } from '../../../../../types/globals'
 import type { PioneerSongSnapshot } from './usePioneerSongsProjection'
 import { toIpcCloneablePayload } from '@renderer/utils/ipcCloneablePayload'
+import { appendExternalSongsToSet } from '@renderer/utils/setCustody'
 
-export type PioneerTransferTarget = 'CuratedLibrary' | 'FilterLibrary' | 'MixtapeLibrary'
+export type PioneerTransferTarget =
+  'CuratedLibrary' | 'FilterLibrary' | 'MixtapeLibrary' | 'SetLibrary'
 
 type ExistingOperationTracksResult = {
   missingTracks: ISongInfo[]
@@ -89,6 +91,16 @@ export const usePioneerTrackCopyDialog = (params: UsePioneerTrackCopyDialogParam
     }
 
     try {
+      if (targetLibraryName === 'SetLibrary') {
+        await appendExternalSongsToSet({
+          playlistUuid: targetSongListUUID,
+          items: selectedTracks.map((song) => ({
+            song,
+            originPathSnapshot: params.originPathSnapshot.value
+          }))
+        })
+        return
+      }
       if (targetLibraryName === 'MixtapeLibrary') {
         const copyableTracks = selectedTracks.filter((track) => !isNoBpmSong(track))
         const skippedNoBpm = selectedTracks.length - copyableTracks.length

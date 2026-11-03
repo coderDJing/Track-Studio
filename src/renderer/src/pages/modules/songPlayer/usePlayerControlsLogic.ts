@@ -13,6 +13,7 @@ import { WebAudioPlayer } from './webAudioPlayer'
 import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
 import { copySongCueDefinitionsToTargets } from '@renderer/utils/songCueTransfer'
 import { toIpcCloneablePayload } from '@renderer/utils/ipcCloneablePayload'
+import { appendExternalSongsToSet } from '@renderer/utils/setCustody'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
 import { isEditablePioneerUsbSong, deletePioneerUsbSong } from '@renderer/utils/pioneerUsbEditing'
@@ -698,6 +699,19 @@ export function usePlayerControlsLogic({
       selectSongListDialogShow.value = false // 关闭对话框
 
       if (isSetTarget) {
+        if (sourceRequiresVaultCopy) {
+          await appendExternalSongsToSet({
+            playlistUuid: targetListUuid,
+            items: [
+              {
+                song: songToMove,
+                originPathSnapshot: runtime.pioneerDeviceLibrary.selectedSourceName || 'rekordbox'
+              }
+            ]
+          })
+          isFileOperationInProgress.value = false
+          return
+        }
         if (
           targetNode?.type !== 'setList' ||
           (sourceNode &&

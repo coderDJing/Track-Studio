@@ -132,34 +132,54 @@ const expectSnapshotSubmitted = (channel: string) => {
 }
 
 describe('reactive data crossing IPC boundaries', () => {
-  it.each(['set', 'mixtape'] as const)('main player adds a song to %s', async (target) => {
-    const runtime = prepareRuntime()
-    const controls = usePlayerControlsLogic({
-      runtime,
-      audioPlayer: ref(null),
-      bpm: ref<number | string>(''),
-      waveformShow: ref(false),
-      selectSongListDialogShow: ref(false),
-      selectSongListDialogLibraryName: ref(''),
-      selectSongListDialogActionMode: ref('move'),
-      isInternalSongChange: ref(false),
-      requestLoadSong: vi.fn(),
-      ignoreNextEmptyError: ref(false)
-    })
-    if (target === 'set') controls.moveToSetLibrary()
-    else {
-      // A Set source is copied into a Mixtape.
-      runtime.playingData.playingSongListUUID = 'source-set'
-      vi.mocked(libraryUtils.getLibraryTreeByUUID).mockImplementation((uuid) => ({
-        uuid,
-        type: uuid === 'source-set' ? 'setList' : 'mixtapeList',
-        dirName: uuid
-      }))
-      controls.moveToMixtapeLibrary()
+  it.each(['set', 'mixtape', 'usb-set', 'desktop-set'] as const)(
+    'main player adds a song to %s',
+    async (target) => {
+      const runtime = prepareRuntime()
+      const custody = target === 'usb-set' || target === 'desktop-set'
+      if (custody) {
+        runtime.playingData.playingSongListUUID = `${target === 'usb-set' ? 'usb' : 'desktop'}:playlist`
+        runtime.playingData.playingSong!.externalSourceKind =
+          target === 'usb-set' ? 'usb' : 'desktop'
+      }
+      const controls = usePlayerControlsLogic({
+        runtime,
+        audioPlayer: ref(null),
+        bpm: ref<number | string>(''),
+        waveformShow: ref(false),
+        selectSongListDialogShow: ref(false),
+        selectSongListDialogLibraryName: ref(''),
+        selectSongListDialogActionMode: ref('move'),
+        isInternalSongChange: ref(false),
+        requestLoadSong: vi.fn(),
+        ignoreNextEmptyError: ref(false)
+      })
+      if (target !== 'mixtape') controls.moveToSetLibrary()
+      else {
+        // A Set source is copied into a Mixtape.
+        runtime.playingData.playingSongListUUID = 'source-set'
+        vi.mocked(libraryUtils.getLibraryTreeByUUID).mockImplementation((uuid) => ({
+          uuid,
+          type: uuid === 'source-set' ? 'setList' : 'mixtapeList',
+          dirName: uuid
+        }))
+        controls.moveToMixtapeLibrary()
+      }
+      await controls.handleMoveSong(target !== 'mixtape' ? 'target-set' : 'target-list')
+      if (custody) {
+        expect(invoke).toHaveBeenCalledExactlyOnceWith('setList:append-custody-items', {
+          playlistUuid: 'target-set',
+          items: [{ song: runtime.playingData.playingSong, originPathSnapshot: 'rekordbox' }]
+        })
+        // Completion must release the operation flag for the next addition.
+        controls.moveToSetLibrary()
+        await controls.handleMoveSong('target-set')
+        expect(invoke).toHaveBeenCalledTimes(2)
+      } else {
+        expectSnapshotSubmitted(target === 'set' ? 'setList:append-items' : 'mixtape:append')
+      }
     }
-    await controls.handleMoveSong(target === 'set' ? 'target-set' : 'target-list')
-    expectSnapshotSubmitted(target === 'set' ? 'setList:append-items' : 'mixtape:append')
-  })
+  )
 
   it.each(['move', 'copy'] as const)('deck player adds to Mixtape in %s mode', async (mode) => {
     const runtime = prepareRuntime()
@@ -180,35 +200,45 @@ describe('reactive data crossing IPC boundaries', () => {
     expectSnapshotSubmitted('mixtape:append')
   })
 
-  it('copies external reactive song snapshots into a Mixtape', async () => {
-    const runtime = prepareRuntime()
-    const songs = runtime.songsArea.songInfoArr
-    const copy = usePioneerTrackCopyDialog({
-      resolveTrackKey: (song) => song.filePath,
-      resolveSelectedTracksByKeys: () => songs,
-      resolveSelectedTracks: () => songs,
-      resolveExistingOperationTracks: async () => ({ missingTracks: [], existingTracks: songs }),
-      showFileMissingHint: vi.fn(),
-      normalizePath: (path) => path,
-      buildSongSnapshot: (filePath, song) => ({
-        ...song,
-        cover: null,
-        filePath,
-        key: song.key,
-        originalKey: song.key,
-        originalBpm: song.bpm,
-        energyScore: song.energyScore,
-        energyAlgorithmVersion: song.energyAlgorithmVersion,
-        energyAnalysis: song.energyAnalysis,
-        hotCues: song.hotCues || [],
-        memoryCues: song.memoryCues || []
-      }),
-      originPathSnapshot: computed(() => 'External Library')
-    })
-    copy.openCopyTargetDialog('MixtapeLibrary', songs)
-    await copy.handleSelectSongListDialogConfirm('target-list')
-    expectSnapshotSubmitted('mixtape:append')
-  })
+  it.each(['MixtapeLibrary', 'SetLibrary'] as const)(
+    'copies external reactive song snapshots into %s',
+    async (target) => {
+      const runtime = prepareRuntime()
+      const songs = runtime.songsArea.songInfoArr
+      const copy = usePioneerTrackCopyDialog({
+        resolveTrackKey: (song) => song.filePath,
+        resolveSelectedTracksByKeys: () => songs,
+        resolveSelectedTracks: () => songs,
+        resolveExistingOperationTracks: async () => ({ missingTracks: [], existingTracks: songs }),
+        showFileMissingHint: vi.fn(),
+        normalizePath: (path) => path,
+        buildSongSnapshot: (filePath, song) => ({
+          ...song,
+          cover: null,
+          filePath,
+          key: song.key,
+          originalKey: song.key,
+          originalBpm: song.bpm,
+          energyScore: song.energyScore,
+          energyAlgorithmVersion: song.energyAlgorithmVersion,
+          energyAnalysis: song.energyAnalysis,
+          hotCues: song.hotCues || [],
+          memoryCues: song.memoryCues || []
+        }),
+        originPathSnapshot: computed(() => 'External Library')
+      })
+      copy.openCopyTargetDialog(target, songs)
+      await copy.handleSelectSongListDialogConfirm('target-list')
+      if (target === 'SetLibrary') {
+        expect(invoke).toHaveBeenCalledExactlyOnceWith('setList:append-custody-items', {
+          playlistUuid: 'target-list',
+          items: [{ song: songs[0], originPathSnapshot: 'External Library' }]
+        })
+      } else {
+        expectSnapshotSubmitted('mixtape:append')
+      }
+    }
+  )
 
   it('exports a reactive playing song from the mini player with its binary cover intact', async () => {
     const runtime = prepareRuntime()

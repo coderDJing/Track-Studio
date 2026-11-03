@@ -63,6 +63,7 @@ const buildPioneerSongMenuGroups = (
   groups.push([
     { menuName: 'library.copyToFilter' },
     { menuName: 'library.copyToCurated' },
+    { menuName: 'library.addToSet' },
     { menuName: 'library.addToMixtapeByCopy' }
   ])
   groups.push([{ menuName: 'tracks.showInFileExplorer' }])
@@ -178,12 +179,16 @@ export const usePioneerSongContextMenu = (params: UsePioneerSongContextMenuParam
         }
         params.openCopyTargetDialog('FilterLibrary', existingTracks)
         return
+      case 'library.addToSet':
       case 'library.addToMixtapeByCopy':
         if (!existingTracks.length) {
           await showSelectedMissingHint()
           return
         }
-        params.openCopyTargetDialog('MixtapeLibrary', existingTracks)
+        params.openCopyTargetDialog(
+          result.menuName === 'library.addToSet' ? 'SetLibrary' : 'MixtapeLibrary',
+          existingTracks
+        )
         return
       case 'fingerprints.analyzeAndAdd':
         if (!existingTracks.length) {

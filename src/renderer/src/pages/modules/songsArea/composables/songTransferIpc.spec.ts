@@ -68,6 +68,26 @@ afterEach(() => {
 })
 
 describe('song transfer IPC payloads', () => {
+  it('copies USB songs dragged into SET through custody instead of a USB file reference', async () => {
+    const runtime = useRuntimeStore()
+    const song = createSong()
+    song.externalSourceKind = 'usb'
+    runtime.playingData.playingSongListUUID = 'usb:playlist'
+    runtime.playingData.playingSongListData = [song]
+    runtime.dragSourceSongListUUID = 'usb:playlist'
+    runtime.draggingSongFilePaths = [song.filePath]
+    vi.mocked(libraryUtils.getLibraryTreeByUUID).mockImplementation((uuid) =>
+      uuid === 'target-set' ? { uuid, type: 'setList', dirName: 'SET' } : null
+    )
+    const transfer = useDragSongs()
+    await transfer.handleDropToSongList('target-set', 'SetLibrary')
+    expect(invoke).toHaveBeenCalledExactlyOnceWith('setList:append-custody-items', {
+      playlistUuid: 'target-set',
+      items: [{ song, originPathSnapshot: 'rekordbox' }]
+    })
+    expect(runtime.playingData.playingSongListData).toEqual([song])
+  })
+
   it.each([
     ['dialog', 'setList'],
     ['drag', 'setList'],

@@ -5,7 +5,9 @@ import { v4 as uuidV4 } from 'uuid'
 import { log } from '../log'
 import { assertLibraryMergeMutationAllowed } from '../services/libraryMerge/runtime'
 import store from '../store'
-import { getCoreFsDirName } from '../coreLibraries'
+import { getSetCustodyDirAbs } from '../services/setCustody'
+import { appendSetCustodyItems } from '../services/appendSetCustodyItems'
+import type { SetCustodyAppendPayload } from '../../shared/setCustody'
 import { notifyCuratedFilePathChanged } from '../curatedLibrarySync/identityDb'
 import { getCuratedLibraryAbsRoot, isPathInside } from '../curatedLibrarySync/paths'
 import { notifyLibraryFsChanged } from '../libraryTreeWatcher'
@@ -54,7 +56,7 @@ import {
   type SetItemRecord
 } from '../setListDb'
 
-export const SET_CUSTODY_DIR_NAME = '__set_custody__'
+export { SET_CUSTODY_DIR_NAME } from '../services/setCustody'
 
 type SetMappingWithPlaylistName = SetItemRecord & {
   playlistName: string
@@ -366,16 +368,6 @@ function toCachedSetSong(info: ISongInfo, filePath: string, waveformRoot: string
   delete next.fileMissing
   if (!waveformRoot) delete next.waveformPreviewListRoot
   return discardStaleAnalysisFields(next)
-}
-
-function getSetLibraryDirAbs(): string {
-  const dbRoot = store.databaseDir
-  const setDirName = getCoreFsDirName('SetLibrary')
-  return path.join(dbRoot, 'library', setDirName)
-}
-
-function getSetCustodyDirAbs(): string {
-  return path.join(getSetLibraryDirAbs(), SET_CUSTODY_DIR_NAME)
 }
 
 function isSetCustodyFilePath(filePath: string): boolean {
@@ -694,6 +686,26 @@ export async function protectSetReferencedFilesForDeletion(
 }
 
 export function registerSetListHandlers() {
+  // preload 的 invokePrefixes 已放行 setList:，复制和加入在主进程统一完成。
+  ipcMain.handle('setList:append-custody-items', async (_e, payload: SetCustodyAppendPayload) => {
+    assertLibraryMergeMutationAllowed()
+    const id = `set_custody_${uuidV4()}`
+    const total = Array.isArray(payload?.items) ? payload.items.length : 0
+    const progress = (now: number, total: number) => {
+      if (!_e.sender.isDestroyed()) {
+        _e.sender.send('progressSet', { id, titleKey: 'tracks.copyingTracks', now, total })
+      }
+    }
+    try {
+      return await appendSetCustodyItems(payload, progress)
+    } catch (error) {
+      log.error('[setList] append custody items failed', error)
+      throw error
+    } finally {
+      progress(total, total)
+    }
+  })
+
   ipcMain.handle('setList:load-items', async (_e, playlistUuid: string) => {
     try {
       const items = listSetItemsByPlaylist(playlistUuid)

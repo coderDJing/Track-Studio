@@ -8,6 +8,7 @@ import {
   type DragState
 } from '../../utils/dragUtils'
 import libraryUtils from '@renderer/utils/libraryUtils'
+import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
 import { isLibraryTreeManualSort } from '@renderer/utils/libraryTreeSort'
 import type { useRuntimeStore } from '@renderer/stores/runtime'
 import type { IDir } from '../../../../types/globals'
@@ -100,6 +101,10 @@ export function useLibraryDragAndDrop({
     return libraryUtils.getLibraryTreeByUUID(sourceSongListUUID)?.type === 'mixtapeList'
   }
 
+  const canCopyExternalSongsToSet = () =>
+    getDirData()?.type === 'setList' &&
+    isRekordboxExternalPlaybackSource(runtime.dragSourceSongListUUID, null)
+
   const handleSongDragGuard = (e: DragEvent) => {
     const dirData = getDirData()
     if (!dirData) return true
@@ -113,6 +118,7 @@ export function useLibraryDragAndDrop({
     if (
       isSongDrag &&
       (dirData.type === 'songList' || dirData.type === 'setList') &&
+      !canCopyExternalSongsToSet() &&
       isMixtapeSourceSongDrag()
     ) {
       if (e.dataTransfer) {
@@ -147,6 +153,7 @@ export function useLibraryDragAndDrop({
     if (
       isInternalDrag &&
       (dirData.type === 'songList' || dirData.type === 'setList') &&
+      !canCopyExternalSongsToSet() &&
       isMixtapeSourceSongDrag()
     ) {
       if (e.dataTransfer) {
