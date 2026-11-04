@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, payload?: unknown) => unknown>(),
   store: { settingConfig: {} as Partial<ISettingConfig>, songFingerprintList: [] },
   is: { dev: false },
+  setSyncEnabled: false,
   validate: vi.fn(),
   persist: vi.fn(),
   saveLibrary: vi.fn(),
@@ -27,6 +28,9 @@ vi.mock('electron', () => ({
 vi.mock('@electron-toolkit/utils', () => ({ is: mocks.is }))
 vi.mock('../store', () => ({ default: mocks.store }))
 vi.mock('../settingsPersistence', () => ({ persistSettingConfig: mocks.persist }))
+vi.mock('../setLibrarySync/state', () => ({
+  isSetLibrarySyncEnabled: () => mocks.setSyncEnabled
+}))
 vi.mock('../librarySettingsDb', () => ({
   isCuratedLibrarySyncEnabled: () => mocks.store.settingConfig.curatedLibrarySyncEnabled === true,
   saveLibrarySettingsFromConfig: mocks.saveLibrary,
@@ -53,16 +57,10 @@ vi.mock('../cloudSyncScheduler', () => ({
   runCuratedLibrarySyncTick: mocks.syncTick
 }))
 vi.mock('../curatedLibrarySync/liveSync', () => ({ syncCuratedLibraryLiveSync: mocks.liveSync }))
-vi.mock('../curatedLibrarySync/queue', () => {
-  let queued: Promise<unknown> = Promise.resolve()
-  return {
-    enqueueCloudWork: <T>(task: () => Promise<T>): Promise<T> => {
-      const run = queued.then(task, task)
-      queued = run.catch(() => undefined)
-      return run
-    }
-  }
-})
+vi.mock('../curatedLibrarySync/engine', () => ({
+  runCuratedLibrarySync: vi.fn(),
+  completeCuratedLibrarySyncStatus: vi.fn()
+}))
 vi.mock('../window/mainWindow', () => ({
   default: { instance: null },
   syncWindowScreenshotShortcut: vi.fn()
@@ -89,6 +87,7 @@ vi.mock('../services/libraryMerge/runtime', () => ({ assertLibraryMergeMutationA
 import '../cloudSync'
 import { registerSettingsHandlers } from './settingsHandlers'
 import { DEV_DEFAULT_CLOUD_SYNC_USER_KEY } from '../../shared/cloudSyncDevUserKey'
+import { enqueueCloudWork } from '../curatedLibrarySync/queue'
 
 const invoke = async (channel: string, payload?: unknown) => {
   const handler = mocks.handlers.get(channel)
@@ -102,6 +101,7 @@ const newKey = '22222222-2222-4222-8222-222222222222'
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.is.dev = false
+  mocks.setSyncEnabled = false
   mocks.store.settingConfig = {
     cloudSyncUserKey: oldKey,
     curatedLibrarySyncEnabled: true,
@@ -119,6 +119,112 @@ beforeEach(() => {
 })
 
 describe('cloud sync userKey lifecycle', () => {
+  it('SET 上传占用同步队列时，保存未修改的密钥立即成功', async () => {
+    mocks.setSyncEnabled = true
+    let release!: () => void
+    const uploading = enqueueCloudWork(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        })
+    )
+    await Promise.resolve()
+    let result: unknown
+    const saving = invoke('cloudSync/config/save', { userKey: ` ${oldKey} ` }).then((value) => {
+      result = value
+    })
+    try {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(result).toEqual({ success: true, userKey: oldKey })
+      expect(mocks.validate).not.toHaveBeenCalled()
+      expect(mocks.persist).not.toHaveBeenCalled()
+      expect(mocks.restartScheduler).not.toHaveBeenCalled()
+    } finally {
+      release()
+      await uploading
+      await saving
+    }
+  })
+
+  it('SET 上传中更换密钥立即提示关闭同步，不等待传输结束', async () => {
+    mocks.setSyncEnabled = true
+    let release!: () => void
+    const uploading = enqueueCloudWork(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        })
+    )
+    await Promise.resolve()
+    let result: unknown
+    const saving = invoke('cloudSync/config/save', { userKey: newKey }).then((value) => {
+      result = value
+    })
+    try {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(result).toEqual({
+        success: false,
+        message: 'cloudSync.setLibrary.cannotChangeUserKey'
+      })
+      expect(mocks.store.settingConfig.cloudSyncUserKey).toBe(oldKey)
+      expect(mocks.validate).not.toHaveBeenCalled()
+    } finally {
+      release()
+      await uploading
+      await saving
+    }
+  })
+
+  it('密钥等待保存期间开启 SET 同步，执行时仍必须拦截换密钥', async () => {
+    mocks.store.settingConfig.curatedLibrarySyncEnabled = false
+    let release!: () => void
+    const uploading = enqueueCloudWork(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        })
+    )
+    await Promise.resolve()
+    const saving = invoke('cloudSync/config/save', { userKey: newKey })
+    mocks.setSyncEnabled = true
+    release()
+    await uploading
+    expect(await saving).toMatchObject({
+      success: false,
+      message: 'cloudSync.setLibrary.cannotChangeUserKey'
+    })
+    expect(mocks.validate).not.toHaveBeenCalled()
+  })
+
+  it('密钥校验期间开启 SET 同步，不能在请求完成后更换同步身份', async () => {
+    mocks.store.settingConfig.curatedLibrarySyncEnabled = false
+    mocks.validate.mockImplementation(async () => {
+      mocks.setSyncEnabled = true
+      return {
+        status: 200,
+        text: async () =>
+          JSON.stringify({ success: true, data: { isActive: true, userKey: newKey } })
+      }
+    })
+    expect(await invoke('cloudSync/config/save', { userKey: newKey })).toMatchObject({
+      success: false,
+      message: 'cloudSync.setLibrary.cannotChangeUserKey'
+    })
+    expect(mocks.store.settingConfig.cloudSyncUserKey).toBe(oldKey)
+    expect(mocks.persist).not.toHaveBeenCalled()
+  })
+
+  it('空密钥不能被当作已保存而跳过校验', async () => {
+    mocks.store.settingConfig.curatedLibrarySyncEnabled = false
+    mocks.store.settingConfig.cloudSyncUserKey = ''
+    mocks.validate.mockResolvedValue({
+      status: 400,
+      text: async () => JSON.stringify({ success: false, error: 'INVALID_USER_KEY' })
+    })
+    expect(await invoke('cloudSync/config/save', { userKey: '' })).toMatchObject({ success: false })
+    expect(mocks.validate).toHaveBeenCalledTimes(1)
+  })
+
   it.each([false, true])('关闭同步、换密钥、重新打开后保持新密钥 (dev=%s)', async (isDev) => {
     mocks.is.dev = isDev
     const staleRendererSettings = { ...mocks.store.settingConfig }

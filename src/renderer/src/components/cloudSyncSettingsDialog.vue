@@ -143,6 +143,9 @@ const clickSave = async () => {
       success: false,
       message: res?.message || 'cloudSync.connectivityFailed'
     })
+  } catch (error) {
+    console.error('[cloudSyncSettings] save failed', error)
+    await notifyConnectivity({ success: false, message: 'cloudSync.errors.cannotConnect' })
   } finally {
     saving.value = false
   }
@@ -328,7 +331,16 @@ onUnmounted(() => utils.delHotkeysScope(uuid))
         >
           {{ t('cloudSync.testConnectivity') }} (T)
         </div>
-        <div class="button footer-button" @click="clickSave">{{ t('common.save') }} (E)</div>
+        <button
+          type="button"
+          class="button footer-button footer-save"
+          :class="{ disabled: saving }"
+          :disabled="saving"
+          :aria-busy="saving"
+          @click="clickSave"
+        >
+          {{ saving ? t('cloudSync.saving') : t('common.save') }} (E)
+        </button>
         <div class="button footer-button" @click="cancel">{{ t('common.cancel') }} (Esc)</div>
       </div>
     </div>
@@ -512,5 +524,17 @@ label.setting-block {
 .footer-button.disabled {
   opacity: 0.5;
   pointer-events: none;
+}
+
+.footer-save {
+  box-sizing: content-box;
+  border: 0;
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.footer-save:hover:enabled {
+  color: #ffffff;
 }
 </style>

@@ -246,21 +246,40 @@ ipcMain.handle('cloudSync/resetUserData', async (_e, payload: { notes?: string }
   }
 })
 
-ipcMain.handle('cloudSync/config/save', (_e, payload: { userKey: string }) =>
-  enqueueCloudWork(async () => {
-    const userKey = (payload?.userKey || '').trim()
+const immediateConfigSaveResult = (userKey: string) => {
+  const currentKey = String(store.settingConfig?.cloudSyncUserKey || '').trim()
+  // Library switches persist immediately. Closing settings with the saved key must not
+  // wait behind a potentially hours-long audio transfer or restart an existing sync.
+  if (currentKey && currentKey === userKey) {
+    cloudSyncConfig.userKey = currentKey
+    return { success: true, userKey: currentKey }
+  }
+  if (isSetLibrarySyncEnabled() && currentKey !== userKey) {
+    return { success: false, message: 'cloudSync.setLibrary.cannotChangeUserKey' }
+  }
+  if (isCuratedLibrarySyncEnabled() && currentKey && currentKey !== userKey) {
+    return { success: false, message: 'cloudSync.curatedLibrary.errors.cannotChangeUserKey' }
+  }
+  return null
+}
+
+ipcMain.handle('cloudSync/config/save', (_e, payload: { userKey: string }) => {
+  const userKey = (payload?.userKey || '').trim()
+  const immediate = immediateConfigSaveResult(userKey)
+  if (immediate) return immediate
+  return enqueueCloudWork(async () => {
     try {
+      // Recheck after waiting: a library switch may have changed while work was queued.
+      const queuedResult = immediateConfigSaveResult(userKey)
+      if (queuedResult) return queuedResult
       const currentKey = String(store.settingConfig?.cloudSyncUserKey || '').trim()
-      if (isSetLibrarySyncEnabled() && currentKey !== userKey) {
-        return { success: false, message: 'cloudSync.setLibrary.cannotChangeUserKey' }
-      }
-      if (isCuratedLibrarySyncEnabled() && currentKey && currentKey !== userKey) {
-        return { success: false, message: 'cloudSync.curatedLibrary.errors.cannotChangeUserKey' }
-      }
       const baseUrl = await resolveBaseUrl()
       const json = await validateUserKeyRequest(userKey, baseUrl)
       if (json?.success === true && json?.data?.isActive === true) {
-        cloudSyncConfig.userKey = json?.data?.userKey || userKey
+        const validatedKey = json?.data?.userKey || userKey
+        const validatedResult = immediateConfigSaveResult(validatedKey)
+        if (validatedResult) return validatedResult
+        cloudSyncConfig.userKey = validatedKey
         store.settingConfig.cloudSyncUserKey = cloudSyncConfig.userKey
         await persistSettingConfig()
         await saveLibrarySettingsFromConfig()
@@ -284,7 +303,7 @@ ipcMain.handle('cloudSync/config/save', (_e, payload: { userKey: string }) =>
       return { success: false, message: 'cloudSync.errors.cannotConnect' }
     }
   })
-)
+})
 
 ipcMain.handle('cloudSync/testConnectivity', async (_e, payload: { userKey: string }) => {
   try {

@@ -4,6 +4,7 @@
     "syncCuratedLibrary": "Sync curated library",
     "alreadyLatest": "Fingerprint and curated artist cloud data is up to date; no sync is needed.",
     "settings": "Cloud Sync Settings",
+    "saving": "Saving…",
     "notConfigured": "Not configured",
     "notConfiguredHint": "Not configured. Opening settings...",
     "syncIncludesCuratedArtists": "This sync also merges curated artist records together with fingerprints.",
