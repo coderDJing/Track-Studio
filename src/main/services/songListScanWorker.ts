@@ -2,6 +2,7 @@ import { Worker } from 'node:worker_threads'
 import type { scanSongList } from './scanSongs'
 import { resolveMainWorkerPath } from '../workerPath'
 import { trackForegroundSongCacheRead } from './foregroundSongCacheRead'
+import { log } from '../log'
 
 type ScanSongListResult = Awaited<ReturnType<typeof scanSongList>>
 
@@ -17,7 +18,12 @@ type WorkerRequest = {
 }
 
 type WorkerResponse = {
-  type?: 'scan-result' | 'cache-write-complete' | 'waveform-availability-complete'
+  type?:
+    | 'scan-result'
+    | 'cache-write-complete'
+    | 'waveform-availability-complete'
+    | 'metadata-read-error'
+  filePath?: string
   requestId?: number
   result?: ScanSongListResult
   error?: string
@@ -118,6 +124,10 @@ const createWorkerState = (): ScanWorkerState => {
   }
   workerStates.add(state)
   state.worker.on('message', (payload: WorkerResponse) => {
+    if (payload?.type === 'metadata-read-error') {
+      log.error('[playlist-scan] metadata read failed', payload.filePath, payload.error)
+      return
+    }
     if (payload?.type === 'cache-write-complete') {
       if (state.cacheWriteRequestId !== payload.requestId) return
       state.cacheWriteRequestId = null

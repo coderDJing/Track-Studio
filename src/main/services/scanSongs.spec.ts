@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ISongInfo } from '../../types/globals'
 import { createSongBeatGridMapV2FromFixedGrid } from '../../shared/songBeatGridMapV2'
 import { prepareFullMetadataCacheInfo, preserveCachedGridAnalysisFields } from './scanSongs'
+import { needsMetadataRetry } from './songMetadataRetry'
 
 const createGrid = () => {
   const grid = createSongBeatGridMapV2FromFixedGrid({
@@ -106,5 +107,21 @@ describe('prepareFullMetadataCacheInfo', () => {
     expect(result.key).toBe('8A')
     expect(result.beatGridMap).toEqual(cached.beatGridMap)
     expect(result.energyScore).toBe(74)
+  })
+
+  it('keeps a failed metadata read eligible for retry and preserves analysis', () => {
+    const failed = { ...createSong(), duration: '', analysisOnly: true }
+    const result = prepareFullMetadataCacheInfo(failed, { ...createSong(), energyScore: 74 }, true)
+    expect(result.analysisOnly).toBe(true)
+    expect(result.energyScore).toBe(74)
+    expect(needsMetadataRetry(result)).toBe(true)
+  })
+
+  it('detects the legacy MP3 placeholder without retrying normal or unsupported records', () => {
+    const placeholder = { ...createSong(), title: 'dhea.mp3', duration: '', bitrate: undefined }
+    expect(needsMetadataRetry(placeholder)).toBe(true)
+    expect(needsMetadataRetry(createSong())).toBe(false)
+    expect(needsMetadataRetry({ ...placeholder, filePath: 'D:/music/dhea.ac3' })).toBe(false)
+    expect(needsMetadataRetry({ ...placeholder, artist: 'Artist' })).toBe(false)
   })
 })

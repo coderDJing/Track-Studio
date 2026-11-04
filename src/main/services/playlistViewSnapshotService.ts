@@ -21,6 +21,7 @@ import { normalizePath, resolveCacheListRootAbs } from '../libraryCacheDb/pathRe
 import { createSongListItemComparator } from '../../shared/songListItemCompare'
 import { planSongListMerge } from '../../shared/playlistViewMerge'
 import { computePlaylistIdentityDigest } from './playlistIdentitySignature'
+import { needsMetadataRetry } from './songMetadataRetry'
 import { listPlaylistAudioFilesWithStat, PLAYLIST_STAT_CONCURRENCY } from './playlistScanPrepare'
 import {
   onDeferredWaveformAvailability,
@@ -206,7 +207,10 @@ export function openPlaylistViewFast(input: {
     schedulePlaylistViewVerification({
       songListUUID: uuid,
       listRootAbs,
-      reason: snapshot.verifiedAtMs > 0 ? 'verify-mismatch' : 'content-stale',
+      reason:
+        snapshot.verifiedAtMs > 0 && !snapshot.items.some(needsMetadataRetry)
+          ? 'verify-mismatch'
+          : 'content-stale',
       delayMs: VERIFY_AFTER_OPEN_DELAY_MS
     })
   }
@@ -282,10 +286,15 @@ export function schedulePlaylistViewVerification(input: {
   const listRootAbs = String(input?.listRootAbs || '').trim()
   if (!uuid || !listRootAbs) return
 
+  const pending = pendingRequests.get(uuid)
   pendingRequests.set(uuid, {
     songListUUID: uuid,
     listRootAbs,
-    reason: input?.reason || 'verify-mismatch'
+    reason:
+      input?.reason === 'content-stale' ||
+      (pending?.listRootAbs === listRootAbs && pending.reason === 'content-stale')
+        ? 'content-stale'
+        : 'verify-mismatch'
   })
   const existing = pendingTimers.get(uuid)
   if (existing) clearTimeout(existing)
@@ -352,7 +361,7 @@ async function verifyOnce(request: VerificationRequest): Promise<void> {
   if (!(await directoryStillExists(listRootAbs))) return
 
   // verified_at_ms > 0：只做便宜的身份核对。对得上就纯粹更新时间戳，UI 一无所知。
-  if (meta.verifiedAtMs > 0 && meta.identityDigest) {
+  if (request.reason !== 'content-stale' && meta.verifiedAtMs > 0 && meta.identityDigest) {
     const digest = await computeCurrentIdentityDigest(listRootAbs)
     if (!isCurrentVerification()) {
       scheduleRerun()

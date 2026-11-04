@@ -1,4 +1,5 @@
 import path = require('path')
+import { isMainThread, parentPort } from 'node:worker_threads'
 import { isSqliteReadDiagnosticsEnabled } from './sqliteReadDiagnostics'
 import { runWithConcurrency } from '../nodeTaskUtils'
 import { ISongInfo } from '../../types/globals'
@@ -35,6 +36,8 @@ import {
 } from './songStructureCachePolicy'
 import { preserveCachedAddedAtMs } from '../../shared/songAddedAt'
 import { computePlaylistIdentityDigest } from './playlistIdentitySignature'
+import { needsMetadataRetry } from './songMetadataRetry'
+import { log } from '../log'
 
 type DeferredSongCacheWrite = () => Promise<void>
 
@@ -294,7 +297,7 @@ export const prepareFullMetadataCacheInfo = (
   cachedInfo?: ISongInfo | null,
   cachedStatMatches = false
 ): ISongInfo => {
-  const nextInfo: ISongInfo = { ...info, analysisOnly: false }
+  const nextInfo: ISongInfo = { ...info, analysisOnly: info.analysisOnly === true }
   if (!cachedInfo) return nextInfo
   preserveCachedKeyAndBpm(nextInfo, cachedInfo)
   if (cachedStatMatches) {
@@ -458,7 +461,6 @@ export async function scanSongList(
     mtimeMismatch: 0,
     analysisOnly: 0
   }
-  const isAnalysisOnly = (info?: ISongInfo | null): boolean => Boolean(info?.analysisOnly)
   const perfCacheMatchStart = Date.now()
   for (const it of filesStatList) {
     const c = cacheMap.get(it.key)
@@ -477,7 +479,7 @@ export async function scanSongList(
       filesToParse.push(it.file)
       continue
     }
-    if (isAnalysisOnly(c.info)) {
+    if (needsMetadataRetry(c.info)) {
       cacheMisses.analysisOnly += 1
       analysisOnlyByPath.set(it.key, c.info)
       filesToParse.push(it.file)
@@ -795,6 +797,12 @@ export async function scanSongList(
         container: metadata.format?.container
       } as ISongInfo
     } catch (error) {
+      const message = error instanceof Error ? error.stack || error.message : String(error)
+      if (!isMainThread && parentPort) {
+        parentPort.postMessage({ type: 'metadata-read-error', filePath: url, error: message })
+      } else {
+        log.error('[playlist-scan] metadata read failed', url, message)
+      }
       const meta = computeFileMeta(url, undefined)
       return {
         filePath: url,
@@ -808,7 +816,8 @@ export async function scanSongList(
         genre: undefined,
         label: undefined,
         bitrate: undefined,
-        container: meta.fileFormat
+        container: meta.fileFormat,
+        analysisOnly: true
       } as ISongInfo
     }
   })
