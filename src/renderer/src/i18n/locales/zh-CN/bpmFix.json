@@ -60,6 +60,8 @@
     "extremeStretch": "部分片段变速幅度过大，已停止处理。",
     "sourceChanged": "处理期间原歌曲发生变化，请关闭后重新分析。",
     "runtimeHint": "分析组件尚未就绪，请安装分析组件后重试。",
+    "componentUpdatePrompt": "修复 BPM 漂移需要下载或更新 {title} 分析组件（约 {size}）。现有组件支持的功能仍可继续使用。",
+    "componentUpdateUnavailable": "当前可下载的分析组件尚不支持 BPM 漂移修复，请稍后重试。",
     "librosaUnavailable": "节拍检查组件不完整，请更新分析组件后重试。",
     "rendererUnavailable": "音频处理组件不可用，请修复或重新安装应用。",
     "libraryBusy": "资料库正在合并，请完成后再修复 BPM 漂移。",

@@ -52,10 +52,7 @@ const explicitChannel = String(getArgValue('--channel', '')).trim().toLowerCase(
 const repoUrl = String(packageJson?.repository?.url || '')
 const repoMatch = repoUrl.match(/github\.com[:/](.+?)\/(.+?)(?:\.git)?$/i)
 const githubOwner = getArgValue('--github-owner', repoMatch?.[1] || 'coderDjing')
-const githubRepo = getArgValue(
-  '--github-repo',
-  repoMatch?.[2] || 'Track-Studio'
-)
+const githubRepo = getArgValue('--github-repo', repoMatch?.[2] || 'Track-Studio')
 
 const toBaseVersion = (value) =>
   String(value || '')
@@ -486,6 +483,18 @@ for (const profileName of profileNames) {
     console.warn(`[demucs-runtime-package] Skip missing runtime: ${runtimeDir}`)
     continue
   }
+  const pythonRelativePath = resolveRuntimePythonRelativePath(runtimeDir)
+  if (platformKey.startsWith('win32-') || platformKey.startsWith('darwin-')) {
+    const probe = spawnSync(
+      path.join(runtimeDir, ...pythonRelativePath.split('/')),
+      ['-c', 'from librosa.beat import beat_track'],
+      { env: buildRuntimeEnv(runtimeDir), encoding: 'utf8', timeout: 60000, windowsHide: true }
+    )
+    if (probe.status !== 0)
+      throw new Error(
+        `BPM repair dependency unavailable (${profileName}): ${probe.stderr || probe.error || probe.status}`
+      )
+  }
   const archiveName = `${packagePrefix}-${platformKey}-${profileName}-${resolvedAssetVersion}.zip`
   const archivePath = path.join(outputRoot, archiveName)
   createArchive({
@@ -495,7 +504,6 @@ for (const profileName of profileNames) {
   })
   const archiveOutput = await splitArchiveIfNeeded(archivePath)
   const runtimeMeta = readRuntimeMeta(runtimeDir)
-  const pythonRelativePath = resolveRuntimePythonRelativePath(runtimeDir)
   const contentHash = createRuntimeContentHash({
     platform: platformKey,
     profile: profileName,
@@ -523,6 +531,7 @@ for (const profileName of profileNames) {
       archiveSize: item.archiveSize
     })),
     pythonRelativePath,
+    bpmFixReady: platformKey.startsWith('win32-') || platformKey.startsWith('darwin-'),
     generatedAt: new Date().toISOString(),
     torchVersion: String(runtimeMeta?.torchVersion || runtimeMeta?.probe?.torch_version || ''),
     beatThisVersion: String(

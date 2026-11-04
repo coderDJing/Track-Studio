@@ -690,20 +690,26 @@ export const installRuntimeFromManifestEntry = async (
     )
   }
 
+  // Validate before removing the working installation.
+  await deps.validateInstalledRuntime(entry, extractedRuntimeDir)
   await fs.promises.mkdir(platformRoot, { recursive: true })
   onState?.({
     status: 'extracting',
     percent: 98,
     message: `正在启用 ${deps.resolveRuntimeProfileTitle(entry.profile)} 加速组件`
   })
-  await fs.promises.rm(runtimeDir, { recursive: true, force: true }).catch(() => {})
-  await fs.promises.rename(extractedRuntimeDir, runtimeDir)
+  const backupDir = `${runtimeDir}.previous-${Date.now()}`
+  const hadPrevious = await deps.fileExists(runtimeDir)
+  if (hadPrevious) await fs.promises.rename(runtimeDir, backupDir)
   try {
+    await fs.promises.rename(extractedRuntimeDir, runtimeDir)
     await deps.validateInstalledRuntime(entry, runtimeDir)
   } catch (error) {
     await fs.promises.rm(runtimeDir, { recursive: true, force: true }).catch(() => {})
+    if (hadPrevious) await fs.promises.rename(backupDir, runtimeDir)
     throw error
   }
+  if (hadPrevious) await fs.promises.rm(backupDir, { recursive: true, force: true })
   const runtimeMeta = await deps.readRuntimeMetaFile(runtimeDir)
   await fs.promises.writeFile(
     versionPath,

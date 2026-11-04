@@ -12,7 +12,7 @@ type TranslateFn = (key: string, params?: Record<string, unknown>) => string
 type ConfirmDialogFn = typeof import('@renderer/components/confirmDialog').default
 
 type AnalysisRuntimePromptSource = 'startup' | 'help' | 'horizontal' | 'stem' | 'bpm-fix'
-type AnalysisRuntimePromptResult = 'ready' | 'started' | 'blocked'
+type AnalysisRuntimePromptResult = 'ready' | 'started' | 'blocked' | 'handled'
 
 type AnalysisRuntimeDownloadStatus =
   'idle' | 'available' | 'downloading' | 'extracting' | 'ready' | 'failed'
@@ -232,9 +232,12 @@ export const useAnalysisRuntimeDownload = (options: {
   const promptAnalysisRuntimeDownload = async (
     source: AnalysisRuntimePromptSource
   ): Promise<AnalysisRuntimePromptResult> => {
-    if (options.runtime.analysisRuntime.available) return 'ready'
+    if (source !== 'bpm-fix' && options.runtime.analysisRuntime.available) return 'ready'
     if (analysisRuntimePromptBusy) {
-      const currentResult = resolvePromptResultFromCurrentState()
+      const currentResult =
+        source === 'bpm-fix' && options.runtime.analysisRuntime.state.status === 'ready'
+          ? 'blocked'
+          : resolvePromptResultFromCurrentState()
       if (currentResult === 'started' && source !== 'startup') {
         options.runtime.setAnalysisRuntimeDownloadOverlayMinimized(false)
         await showAnalysisRuntimeDownloadInProgressHint()
@@ -243,8 +246,19 @@ export const useAnalysisRuntimeDownload = (options: {
     }
     analysisRuntimePromptBusy = true
     try {
-      const { preferred, state } = await refreshAnalysisRuntimeStatus()
-      if (options.runtime.analysisRuntime.available) return 'ready'
+      const bpmStatus =
+        source === 'bpm-fix'
+          ? normalizeAnalysisRuntimeStatusResponse(
+              await window.electron.ipcRenderer.invoke('analysis-runtime:get-status', true)
+            )
+          : null
+      const { preferred, state } = bpmStatus
+        ? {
+            preferred: normalizeAnalysisRuntimePreferredInfo(bpmStatus.preferred),
+            state: normalizeAnalysisRuntimeDownloadState(bpmStatus.state)
+          }
+        : await refreshAnalysisRuntimeStatus()
+      if (preferred.alreadyAvailable) return 'ready'
       if (isAnalysisRuntimeDownloadActiveStatus(state.status)) {
         if (source !== 'startup') {
           options.runtime.setAnalysisRuntimeDownloadOverlayMinimized(false)
@@ -288,6 +302,16 @@ export const useAnalysisRuntimeDownload = (options: {
         return 'blocked'
       }
 
+      if (preferred.reason === 'bpm fix asset unavailable') {
+        await options.confirmDialog({
+          title: options.t('analysisRuntime.unsupportedTitle'),
+          content: [options.t('bpmFix.componentUpdateUnavailable')],
+          confirmShow: false,
+          innerHeight: 0,
+          textAlign: 'left'
+        })
+        return 'handled'
+      }
       if (!preferred.downloadable || !preferred.profile) return 'blocked'
       if (source === 'startup' && hasShownAnalysisRuntimeStartupPromptForCurrentVersion()) {
         return 'blocked'
@@ -299,10 +323,13 @@ export const useAnalysisRuntimeDownload = (options: {
       const confirmResult = await options.confirmDialog({
         title: options.t('analysisRuntime.promptTitle'),
         content: [
-          options.t('analysisRuntime.promptBody', {
-            title: preferred.title,
-            size: formatAnalysisRuntimeBytes(preferred.archiveSize)
-          }),
+          options.t(
+            source === 'bpm-fix' ? 'bpmFix.componentUpdatePrompt' : 'analysisRuntime.promptBody',
+            {
+              title: preferred.title,
+              size: formatAnalysisRuntimeBytes(preferred.archiveSize)
+            }
+          ),
           options.t('analysisRuntime.promptHint')
         ],
         confirmShow: true,
@@ -312,16 +339,17 @@ export const useAnalysisRuntimeDownload = (options: {
         innerWidth: 560,
         innerHeight: 0
       })
-      if (confirmResult !== 'confirm') return 'blocked'
+      if (confirmResult !== 'confirm') return source === 'bpm-fix' ? 'handled' : 'blocked'
 
       const response = await window.electron.ipcRenderer.invoke(
-        'analysis-runtime:download-preferred'
+        'analysis-runtime:download-preferred',
+        source === 'bpm-fix'
       )
       const next = applyAnalysisRuntimeStatus({
         preferred,
         state: response?.state
       })
-      if (options.runtime.analysisRuntime.available) return 'ready'
+      if (response?.started && next.state.status === 'ready') return 'ready'
       if (next.state.status === 'downloading' || next.state.status === 'extracting')
         return 'started'
       return 'blocked'
@@ -351,14 +379,18 @@ export const useAnalysisRuntimeDownload = (options: {
     source: Exclude<AnalysisRuntimePromptSource, 'startup'>
     blockedHintKey: string
   }) => {
-    if (options.runtime.analysisRuntime.available) {
+    if (params.source !== 'bpm-fix' && options.runtime.analysisRuntime.available) {
       return true
     }
 
     const result = await promptAnalysisRuntimeDownload(params.source)
-    if (result === 'ready' || options.runtime.analysisRuntime.available) {
+    if (
+      result === 'ready' ||
+      (params.source !== 'bpm-fix' && options.runtime.analysisRuntime.available)
+    ) {
       return true
     }
+    if (result === 'handled') return false
     if (
       result === 'started' ||
       isAnalysisRuntimeDownloadActiveStatus(options.runtime.analysisRuntime.state.status)

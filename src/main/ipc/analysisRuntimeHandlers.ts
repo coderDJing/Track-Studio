@@ -12,15 +12,15 @@ import mainWindow from '../window/mainWindow'
 const ANALYSIS_RUNTIME_CLEAR_PROGRESS_ID = 'analysis-runtime.clear-local'
 
 export function registerAnalysisRuntimeHandlers() {
-  ipcMain.handle('analysis-runtime:get-status', async () => {
+  ipcMain.handle('analysis-runtime:get-status', async (_event, requireBpmFix: unknown) => {
     return {
-      preferred: await getPreferredAnalysisRuntimeDownloadInfo(),
+      preferred: await getPreferredAnalysisRuntimeDownloadInfo(requireBpmFix === true),
       state: getAnalysisRuntimeDownloadState()
     }
   })
 
-  ipcMain.handle('analysis-runtime:download-preferred', async () => {
-    const started = await downloadPreferredAnalysisRuntime()
+  ipcMain.handle('analysis-runtime:download-preferred', async (_event, requireBpmFix: unknown) => {
+    const started = await downloadPreferredAnalysisRuntime(requireBpmFix === true)
     return {
       started,
       state: getAnalysisRuntimeDownloadState()

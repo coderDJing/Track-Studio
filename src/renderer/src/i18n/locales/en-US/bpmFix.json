@@ -60,6 +60,8 @@
     "extremeStretch": "Some segments require excessive stretching. Processing was stopped.",
     "sourceChanged": "The original changed during processing. Close and analyze again.",
     "runtimeHint": "The analysis components are not ready. Install them and try again.",
+    "componentUpdatePrompt": "BPM drift repair requires downloading or updating the {title} analysis component (about {size}). Other features supported by your current component remain available.",
+    "componentUpdateUnavailable": "The available analysis component does not yet support BPM drift repair. Please try again later.",
     "librosaUnavailable": "The beat-checking components are incomplete. Update the analysis components and try again.",
     "rendererUnavailable": "Audio processing is unavailable. Repair or reinstall the app.",
     "libraryBusy": "Wait until the library merge finishes.",

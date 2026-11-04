@@ -14,14 +14,15 @@ export type AnalysisRuntimeDownloadState = MixtapeStemRuntimeDownloadState
 
 export const analysisRuntimeDownloadEvents = stemRuntimeDownloadEvents
 
-export const getPreferredAnalysisRuntimeDownloadInfo =
-  async (): Promise<AnalysisRuntimeDownloadInfo> => await getPreferredStemRuntimeDownloadInfo()
+export const getPreferredAnalysisRuntimeDownloadInfo = async (
+  requireBpmFix = false
+): Promise<AnalysisRuntimeDownloadInfo> => await getPreferredStemRuntimeDownloadInfo(requireBpmFix)
 
 export const getAnalysisRuntimeDownloadState = (): AnalysisRuntimeDownloadState =>
   getStemRuntimeDownloadState()
 
-export const downloadPreferredAnalysisRuntime = async (): Promise<boolean> => {
-  const downloaded = await downloadPreferredStemRuntime()
+export const downloadPreferredAnalysisRuntime = async (requireBpmFix = false): Promise<boolean> => {
+  const downloaded = await downloadPreferredStemRuntime(requireBpmFix)
   if (downloaded) {
     resetBeatThisRuntimeResolution()
   }

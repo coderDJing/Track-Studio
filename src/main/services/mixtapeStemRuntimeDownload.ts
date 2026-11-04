@@ -30,6 +30,7 @@ import { probeWindowsGpuAdapters } from './mixtapeStemSeparationProbe'
 import { getCachedStemDeviceProbeSnapshot, probeDemucsDevices } from './mixtapeStemSeparationProbe'
 import { invalidateStemDeviceProbeCache } from './mixtapeStemSeparationProbe'
 import { installRuntimeFromManifestEntry } from './mixtapeStemRuntimeDownloadInstall'
+import { hasBpmFixRuntimeSupport } from './bpmFixRuntimeSupport'
 
 const DEFAULT_DEMUCS_RUNTIME_RELEASE_TAG = 'demucs-runtime-assets'
 const DEFAULT_DEMUCS_RUNTIME_RC_RELEASE_TAG = 'demucs-runtime-assets-rc'
@@ -57,6 +58,7 @@ export type RuntimeAssetEntry = {
   generatedAt: string
   torchVersion?: string
   beatThisVersion?: string
+  bpmFixReady?: boolean
   contentHash?: string
 }
 
@@ -498,6 +500,7 @@ const validateInstalledRuntime = async (entry: RuntimeAssetEntry, runtimeDir: st
     '  payload["torchaudio"] = True',
     '  import demucs',
     '  payload["demucs"] = True',
+    '  from librosa.beat import beat_track',
     'except Exception as exc:',
     '  payload["error"] = str(exc)',
     'print(json.dumps(payload))'
@@ -722,12 +725,17 @@ const doesInstalledRuntimeMatchEntry = async (
   return true
 }
 
-const isRuntimeAlreadyAvailable = async (entry: RuntimeAssetEntry) => {
+const isRuntimeAlreadyAvailable = async (entry: RuntimeAssetEntry, requireBpmFix = false) => {
   const candidate = resolveBundledDemucsRuntimeCandidates().find(
     (item) => item.key === entry.runtimeKey
   )
   if (candidate?.pythonPath && fs.existsSync(candidate.pythonPath)) {
     if (!(await hasBundledBeatThisSupport(candidate.runtimeDir))) return false
+    if (
+      requireBpmFix &&
+      !(await hasBpmFixRuntimeSupport(candidate.pythonPath, candidate.runtimeDir))
+    )
+      return false
     if (candidate.runtimeDir.startsWith(resolveInstalledDemucsPlatformRootPath())) {
       const installed = await readInstalledRuntimeVersionInfo(candidate.runtimeDir)
       if (await doesInstalledRuntimeMatchEntry(candidate.runtimeDir, installed, entry)) return true
@@ -811,6 +819,7 @@ const ensureRuntimeProfileAvailable = async (
   profile: RuntimeProfileName,
   options?: {
     emitState?: boolean
+    requireBpmFix?: boolean
   }
 ): Promise<boolean> => {
   const platform = resolveDemucsPlatformDir()
@@ -824,7 +833,7 @@ const ensureRuntimeProfileAvailable = async (
     const entry =
       manifest.assets.find((item) => item.platform === platform && item.profile === profile) || null
     if (!entry) return false
-    if (await isRuntimeAlreadyAvailable(entry)) {
+    if (await isRuntimeAlreadyAvailable(entry, options?.requireBpmFix)) {
       if (options?.emitState) {
         updateRuntimeDownloadState({
           status: 'ready',
@@ -883,93 +892,104 @@ const ensureRuntimeProfileAvailable = async (
   return await task
 }
 
-export const getPreferredStemRuntimeDownloadInfo =
-  async (): Promise<MixtapeStemRuntimeDownloadInfo> => {
-    const preferredProfiles = await resolvePreferredRuntimeProfiles()
-    if (preferredProfiles.length === 0) {
-      return {
-        supported: false,
-        downloadable: false,
-        alreadyAvailable: false,
-        profile: '',
-        runtimeKey: '',
-        version: '',
-        archiveSize: 0,
-        title: '',
-        reason: 'platform unsupported',
-        manifestUrl: resolveRuntimeManifestUrl(),
-        releaseTag: '',
-        error: '',
-        state: getStemRuntimeDownloadState()
-      }
+export const getPreferredStemRuntimeDownloadInfo = async (
+  requireBpmFix = false
+): Promise<MixtapeStemRuntimeDownloadInfo> => {
+  const preferredProfiles = await resolvePreferredRuntimeProfiles()
+  if (preferredProfiles.length === 0) {
+    return {
+      supported: false,
+      downloadable: false,
+      alreadyAvailable: false,
+      profile: '',
+      runtimeKey: '',
+      version: '',
+      archiveSize: 0,
+      title: '',
+      reason: 'platform unsupported',
+      manifestUrl: resolveRuntimeManifestUrl(),
+      releaseTag: '',
+      error: '',
+      state: getStemRuntimeDownloadState()
     }
-    const manifest = await readRuntimeManifest()
-    if (!manifest) {
-      const localRuntime = await resolveAnyLocalRuntimeAvailability()
-      const fallbackProfile = localRuntime.profile || preferredProfiles[0] || ''
-      return {
-        supported: true,
-        downloadable: !localRuntime.alreadyAvailable,
-        alreadyAvailable: localRuntime.alreadyAvailable,
-        profile: fallbackProfile,
-        runtimeKey: localRuntime.runtimeKey,
-        version: '',
-        archiveSize: 0,
-        title: localRuntime.title || resolveRuntimeProfileTitle(fallbackProfile),
-        reason: localRuntime.alreadyAvailable ? 'already available' : 'manifest unavailable',
-        manifestUrl: resolveRuntimeManifestUrl(),
-        releaseTag: '',
-        error: runtimeManifestLastError,
-        state: getStemRuntimeDownloadState()
-      }
+  }
+  const manifest = await readRuntimeManifest()
+  if (!manifest) {
+    const localRuntime = await resolveAnyLocalRuntimeAvailability()
+    if (requireBpmFix && localRuntime.alreadyAvailable) {
+      const candidate = resolveBundledDemucsRuntimeCandidates().find(
+        (item) => item.key === localRuntime.runtimeKey
+      )
+      localRuntime.alreadyAvailable =
+        !!candidate && (await hasBpmFixRuntimeSupport(candidate.pythonPath, candidate.runtimeDir))
     }
-    const platform = resolveDemucsPlatformDir()
-    const entry =
-      preferredProfiles
-        .map(
-          (profile) =>
-            manifest.assets.find(
-              (item) => item.platform === platform && item.profile === profile
-            ) || null
-        )
-        .find(Boolean) || null
-    if (!entry) {
-      return {
-        supported: true,
-        downloadable: false,
-        alreadyAvailable: false,
-        profile: preferredProfiles[0] || '',
-        runtimeKey: '',
-        version: '',
-        archiveSize: 0,
-        title: resolveRuntimeProfileTitle(preferredProfiles[0] || ''),
-        reason: 'runtime asset missing',
-        manifestUrl: resolveRuntimeManifestUrl(),
-        releaseTag: manifest.releaseTag || '',
-        error: '',
-        state: getStemRuntimeDownloadState()
-      }
-    }
-    const alreadyAvailable = await isRuntimeAlreadyAvailable(entry)
+    const fallbackProfile = localRuntime.profile || preferredProfiles[0] || ''
     return {
       supported: true,
-      downloadable: !alreadyAvailable,
-      alreadyAvailable,
-      profile: entry.profile,
-      runtimeKey: entry.runtimeKey,
-      version: entry.version,
-      archiveSize: entry.archiveSize,
-      title: resolveRuntimeProfileTitle(entry.profile),
-      reason: alreadyAvailable ? 'already available' : '',
+      downloadable: !localRuntime.alreadyAvailable,
+      alreadyAvailable: localRuntime.alreadyAvailable,
+      profile: fallbackProfile,
+      runtimeKey: localRuntime.runtimeKey,
+      version: '',
+      archiveSize: 0,
+      title: localRuntime.title || resolveRuntimeProfileTitle(fallbackProfile),
+      reason: localRuntime.alreadyAvailable ? 'already available' : 'manifest unavailable',
+      manifestUrl: resolveRuntimeManifestUrl(),
+      releaseTag: '',
+      error: runtimeManifestLastError,
+      state: getStemRuntimeDownloadState()
+    }
+  }
+  const platform = resolveDemucsPlatformDir()
+  const entry =
+    preferredProfiles
+      .map(
+        (profile) =>
+          manifest.assets.find((item) => item.platform === platform && item.profile === profile) ||
+          null
+      )
+      .find(Boolean) || null
+  if (!entry) {
+    return {
+      supported: true,
+      downloadable: false,
+      alreadyAvailable: false,
+      profile: preferredProfiles[0] || '',
+      runtimeKey: '',
+      version: '',
+      archiveSize: 0,
+      title: resolveRuntimeProfileTitle(preferredProfiles[0] || ''),
+      reason: 'runtime asset missing',
       manifestUrl: resolveRuntimeManifestUrl(),
       releaseTag: manifest.releaseTag || '',
       error: '',
       state: getStemRuntimeDownloadState()
     }
   }
+  const alreadyAvailable = await isRuntimeAlreadyAvailable(entry, requireBpmFix)
+  return {
+    supported: true,
+    downloadable: !alreadyAvailable && (!requireBpmFix || entry.bpmFixReady === true),
+    alreadyAvailable,
+    profile: entry.profile,
+    runtimeKey: entry.runtimeKey,
+    version: entry.version,
+    archiveSize: entry.archiveSize,
+    title: resolveRuntimeProfileTitle(entry.profile),
+    reason: alreadyAvailable
+      ? 'already available'
+      : requireBpmFix && !entry.bpmFixReady
+        ? 'bpm fix asset unavailable'
+        : '',
+    manifestUrl: resolveRuntimeManifestUrl(),
+    releaseTag: manifest.releaseTag || '',
+    error: '',
+    state: getStemRuntimeDownloadState()
+  }
+}
 
-export const downloadPreferredStemRuntime = async (): Promise<boolean> => {
-  const info = await getPreferredStemRuntimeDownloadInfo()
+export const downloadPreferredStemRuntime = async (requireBpmFix = false): Promise<boolean> => {
+  const info = await getPreferredStemRuntimeDownloadInfo(requireBpmFix)
   if (info.reason === 'manifest unavailable') {
     updateRuntimeDownloadState({
       status: 'failed',
@@ -986,7 +1006,8 @@ export const downloadPreferredStemRuntime = async (): Promise<boolean> => {
     })
     return false
   }
-  if (!info.supported || !info.profile) return false
+  if (!info.supported || !info.profile || (!info.alreadyAvailable && !info.downloadable))
+    return false
   if (info.alreadyAvailable) {
     updateRuntimeDownloadState({
       status: 'ready',
@@ -1027,6 +1048,7 @@ export const downloadPreferredStemRuntime = async (): Promise<boolean> => {
     error: ''
   })
   return await ensureRuntimeProfileAvailable(info.profile, {
-    emitState: true
+    emitState: true,
+    requireBpmFix
   })
 }
