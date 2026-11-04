@@ -27,6 +27,10 @@ on:
         description: Optional app version metadata written into runtime manifest
         required: false
         default: ''
+      reuse_artifacts:
+        description: 'Optional JSON map of win, arm64 and x64 to source workflow run IDs'
+        required: false
+        default: '{}'
       build_win:
         description: Build Windows runtime assets
         required: true
@@ -44,6 +48,7 @@ on:
         default: false
 
 permissions:
+  actions: read
   contents: write
 
 jobs:
@@ -274,7 +279,8 @@ jobs:
         (
           needs.build_runtime_assets_win.result == 'success' ||
           needs.build_runtime_assets_mac_arm64.result == 'success' ||
-          needs.build_runtime_assets_mac_x64.result == 'success'
+          needs.build_runtime_assets_mac_x64.result == 'success' ||
+          inputs.reuse_artifacts != '{}'
         )
       }}
     runs-on: ubuntu-latest
@@ -302,25 +308,31 @@ jobs:
             --tag "$TAG_NAME" --dir artifacts/existing-release
 
       - name: Download runtime assets (Windows)
-        if: ${{ inputs.build_win }}
+        if: ${{ inputs.build_win || fromJSON(inputs.reuse_artifacts).win }}
         uses: actions/download-artifact@v8
         with:
           name: demucs-runtime-assets-win32-x64
           path: artifacts/demucs-runtime-assets-win32-x64
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ fromJSON(inputs.reuse_artifacts).win || github.run_id }}
 
       - name: Download runtime assets (macOS arm64)
-        if: ${{ inputs.build_mac_arm64 }}
+        if: ${{ inputs.build_mac_arm64 || fromJSON(inputs.reuse_artifacts).arm64 }}
         uses: actions/download-artifact@v8
         with:
           name: demucs-runtime-assets-darwin-arm64
           path: artifacts/demucs-runtime-assets-darwin-arm64
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ fromJSON(inputs.reuse_artifacts).arm64 || github.run_id }}
 
       - name: Download runtime assets (macOS x64)
-        if: ${{ inputs.build_mac_x64 }}
+        if: ${{ inputs.build_mac_x64 || fromJSON(inputs.reuse_artifacts).x64 }}
         uses: actions/download-artifact@v8
         with:
           name: demucs-runtime-assets-darwin-x64
           path: artifacts/demucs-runtime-assets-darwin-x64
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ fromJSON(inputs.reuse_artifacts).x64 || github.run_id }}
 
       - name: Merge runtime manifests
         shell: bash
@@ -343,7 +355,7 @@ jobs:
 
           base_manifest="artifacts/existing-release/demucs-runtime-manifest.json"
           if [ ! -f "$base_manifest" ]; then
-            if [ "${{ inputs.build_win }}" != "true" ] || [ "${{ inputs.build_mac_arm64 }}" != "true" ] || [ "${{ inputs.build_mac_x64 }}" != "true" ]; then
+            if [ ! -d artifacts/demucs-runtime-assets-win32-x64 ] || [ ! -d artifacts/demucs-runtime-assets-darwin-arm64 ] || [ ! -d artifacts/demucs-runtime-assets-darwin-x64 ]; then
               echo "Existing release manifest not found. Initial publish must build all platforms."
               exit 1
             fi
