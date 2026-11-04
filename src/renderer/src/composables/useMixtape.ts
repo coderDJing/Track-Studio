@@ -398,12 +398,9 @@ export const useMixtape = (options: UseMixtapeOptions = {}) => {
   } = createMixtapeAutoGainController({
     tracks,
     selectedTrackId,
-    transportPlaying,
-    transportDecoding,
     bpmAnalysisActive,
     resolveTrackTitle,
     t,
-    onStopTransport: handleTransportStop,
     onEnvelopeApplied: () => {
       clearTimelineLayoutCache()
       updateTimelineWidth(false)

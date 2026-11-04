@@ -56,6 +56,19 @@ const createNode = (
 }
 
 describe('timeline transport source phase', () => {
+  it('uses the corrected source grid BPM instead of stale metadata for playback', () => {
+    const setRate = vi.fn()
+    const node = createNode('corrected-grid', 8, 0, setRate)
+    node.entry.originalBpm = 126
+    node.entry.tempoSnapshot.gridSourceBpm = 128
+    applyTimelineTransportSync({
+      nodes: [node],
+      timelineSec: 8,
+      masterTrackId: node.trackId,
+      audioCtx: { state: 'running', currentTime: 8 } as BaseAudioContext
+    })
+    expect(setRate).toHaveBeenCalledWith(1, 8, 0.04)
+  })
   it('does not use mismatched processing-chain source clocks as musical phase feedback', () => {
     const masterSetRate = vi.fn()
     const followerSetRate = vi.fn()

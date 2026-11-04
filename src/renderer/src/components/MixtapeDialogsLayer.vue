@@ -157,7 +157,9 @@ const autoGainColumnMenuVisibleModel = computed({
   </div>
   <div v-if="autoGainBusy && !autoGainDialogVisible" class="mixtape-auto-gain-mask">
     <div class="bpm-loading-card">
-      <div class="bpm-loading-title">{{ t('mixtape.autoGainRunning') }}</div>
+      <div class="bpm-loading-title" role="status" aria-live="polite">
+        <span class="auto-gain-spinner" aria-hidden="true"></span>{{ t('mixtape.autoGainRunning') }}
+      </div>
       <div class="bpm-loading-sub">{{ autoGainProgressText }}</div>
     </div>
   </div>
@@ -262,7 +264,10 @@ const autoGainColumnMenuVisibleModel = computed({
       </div>
       <div v-if="autoGainBusy" class="mixtape-auto-gain-dialog__busy-mask">
         <div class="bpm-loading-card">
-          <div class="bpm-loading-title">{{ t('mixtape.autoGainRunning') }}</div>
+          <div class="bpm-loading-title" role="status" aria-live="polite">
+            <span class="auto-gain-spinner" aria-hidden="true"></span
+            >{{ t('mixtape.autoGainRunning') }}
+          </div>
           <div class="bpm-loading-sub">{{ autoGainProgressText }}</div>
         </div>
       </div>

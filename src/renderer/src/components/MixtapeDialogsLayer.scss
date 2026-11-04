@@ -50,3 +50,25 @@
   cursor: progress;
   background: var(--mixtape-mask-overlay-strong);
 }
+
+.auto-gain-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  vertical-align: -2px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: auto-gain-spin 0.8s linear infinite;
+}
+@keyframes auto-gain-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auto-gain-spinner {
+    animation: none;
+  }
+}

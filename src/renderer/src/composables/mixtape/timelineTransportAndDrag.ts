@@ -612,9 +612,23 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
   }
 
   const startTransportFrom = async (rawStartSec: number) => {
-    const plan = buildTransportPlaybackEntries()
     stopTransport()
     const version = ++transportVersion
+    transportDecoding.value = true
+    try {
+      await prepareAndStartTransport(rawStartSec, version)
+    } catch (error) {
+      if (transportVersion !== version) return
+      stopTransport()
+      transportError.value = t('mixtape.transportPlaybackInitializeFailed')
+      console.error('[mixtape-transport] playback preparation failed', error)
+    } finally {
+      if (transportVersion === version) transportDecoding.value = false
+    }
+  }
+
+  const prepareAndStartTransport = async (rawStartSec: number, version: number) => {
+    const plan = buildTransportPlaybackEntries()
     const entries = plan.entries
 
     if (entries.length) {
@@ -638,14 +652,8 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
         }
       }
       if (pendingAudioRefs.length > 0) {
-        const hasIpcEntries = pendingAudioRefs.some((e) => e.decodeMode === 'ipc')
-        if (hasIpcEntries) transportDecoding.value = true
         const failCount = await decodeAllTransportEntries(entries)
-        if (transportVersion !== version) {
-          transportDecoding.value = false
-          return
-        }
-        transportDecoding.value = false
+        if (transportVersion !== version) return
         plan.decodeFailedCount = failCount
       } else {
         if (useStemMode) {

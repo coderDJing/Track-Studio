@@ -119,7 +119,11 @@ export const buildMixtapeCueOverlapPlan = (params: {
             row.error = 'cueOrder'
             return { sec: 0, missing: false }
           }
-          const baseSec = baseMap.mapSourceToLocal(sourceSec)
+          // 先在未展开 Loop 的拍线上吸附，再选择首/末次出现的位置。
+          const baseSec = baseMap.snapLocalSec(
+            baseMap.mapSourceToLocal(sourceSec),
+            Number.POSITIVE_INFINITY
+          )
           const occurrences = sections.flatMap((section, index) => {
             const finalEnd =
               index === sections.length - 1 && Math.abs(baseSec - baseMap.durationSec) <= 0.0001

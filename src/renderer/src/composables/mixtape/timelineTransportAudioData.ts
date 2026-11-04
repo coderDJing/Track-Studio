@@ -332,7 +332,9 @@ export const createTimelineTransportAudioDataModule = (ctx: TimelineTransportAud
       const tempoSnapshot = serializeTrackRuntimeTempoSnapshot(runtimeTempoSnapshot)
       const beatSec = resolveBeatSecByBpm(bpm)
       const tempoRatio =
-        sourceDuration > 0 ? sourceDuration / Math.max(0.01, runtimeTempoSnapshot.durationSec) : 1
+        sourceDuration > 0
+          ? sourceDuration / Math.max(0.01, runtimeTempoSnapshot.baseDurationSec)
+          : 1
       const trackDuration = tempoSnapshot.durationSec
       const firstBeatSec = runtimeTempoSnapshot.timeMap.mapSourceToLocal(
         runtimeTempoSnapshot.firstBeatSourceSec

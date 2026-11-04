@@ -162,7 +162,9 @@ const resolveEntryBasePlaybackRateAtTimelineSec = (
 ) => {
   const targetBpm = resolveEntryBpmAtTimelineSec(entry, timelineSec, latencySec)
   const dynamicSegment = resolveEntryDynamicSegmentAtTimelineSec(entry, timelineSec, latencySec)
-  const originalBpm = Number(dynamicSegment?.sourceBpm ?? entry.originalBpm)
+  const originalBpm = Number(
+    dynamicSegment?.sourceBpm ?? entry.tempoSnapshot.gridSourceBpm ?? entry.originalBpm
+  )
   if (!Number.isFinite(targetBpm) || targetBpm <= 0) {
     return clampNumber(Number(entry.tempoRatio) || 1, 0.25, 4)
   }

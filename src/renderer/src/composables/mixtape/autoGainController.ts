@@ -16,12 +16,9 @@ type PersistEntry = {
 type CreateMixtapeAutoGainControllerParams = {
   tracks: Ref<MixtapeTrack[]>
   selectedTrackId: Ref<string>
-  transportPlaying: Ref<boolean>
-  transportDecoding: Ref<boolean>
   bpmAnalysisActive: Ref<boolean>
   resolveTrackTitle: (track: MixtapeTrack) => string
   t: (key: string, payload?: Record<string, unknown>) => string
-  onStopTransport: () => void
   onEnvelopeApplied: () => void
   persistGainEnvelope: (entries: PersistEntry[]) => Promise<void>
   showErrorDialog: (message: string) => Promise<void>
@@ -35,6 +32,7 @@ export const createMixtapeAutoGainController = (params: CreateMixtapeAutoGainCon
   const autoGainProgressDone = ref(0)
   const autoGainProgressTotal = ref(0)
   const autoGainProgressLabel = ref('')
+  const autoGainSaving = ref(false)
   let autoGainAnalysisSnapshot: AutoGainAnalysisSnapshot | null = null
   let autoGainToken = 0
 
@@ -47,6 +45,7 @@ export const createMixtapeAutoGainController = (params: CreateMixtapeAutoGainCon
 
   const autoGainProgressText = computed(() => {
     if (!autoGainBusy.value) return ''
+    if (autoGainSaving.value) return params.t('mixtape.autoGainSaving')
     if (!autoGainProgressTotal.value) return params.t('mixtape.autoGainPreparing')
     return params.t('mixtape.autoGainProgress', {
       done: autoGainProgressDone.value,
@@ -60,6 +59,7 @@ export const createMixtapeAutoGainController = (params: CreateMixtapeAutoGainCon
   )
 
   const resetAutoGainProgress = () => {
+    autoGainSaving.value = false
     autoGainProgressDone.value = 0
     autoGainProgressTotal.value = 0
     autoGainProgressLabel.value = ''
@@ -135,9 +135,7 @@ export const createMixtapeAutoGainController = (params: CreateMixtapeAutoGainCon
         }
       })
       params.tracks.value = nextTracks
-      if (params.transportPlaying.value || params.transportDecoding.value) {
-        params.onStopTransport()
-      }
+      // 播放器逐帧读取最新增益包络，无需停止播放或重建音频节点。
       params.onEnvelopeApplied()
       const persistEntries = nextTracks
         .map((track) => {
@@ -151,7 +149,9 @@ export const createMixtapeAutoGainController = (params: CreateMixtapeAutoGainCon
           }
         })
         .filter((item): item is PersistEntry => !!item && item.itemId.length > 0)
+      autoGainSaving.value = true
       await params.persistGainEnvelope(persistEntries)
+      if (token !== autoGainToken) return
       autoGainDialogVisible.value = false
     } catch (error) {
       console.error('[mixtape] auto gain failed', error)

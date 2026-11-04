@@ -8,6 +8,7 @@ import {
 } from './mixtapeGlobalTempoState'
 import type { MixtapeTrack } from './types'
 import { buildMixtapeTrackCueMarkers } from './mixtapeTrackCueMarkers'
+import { buildTrackRuntimeTempoSnapshot } from './trackRuntimeTempoSnapshot'
 
 const track = (id: string, bpm = 120, overrides: Partial<MixtapeTrack> = {}): MixtapeTrack => ({
   id,
@@ -55,13 +56,36 @@ describe('manual Hot Cue overlap planning', () => {
     expect(result.snapshot.bpmEnvelope.map((point) => point.bpm)).toEqual([120, 120])
   })
 
+  it('snaps off-grid Cues to the nearest beat before positioning tracks', () => {
+    const result = plan([
+      track('1', 120, {
+        hotCues: [
+          { slot: 0, sec: 10.12 },
+          { slot: 1, sec: 90.18 }
+        ]
+      }),
+      track('2', 120, {
+        hotCues: [
+          { slot: 0, sec: 10.21 },
+          { slot: 1, sec: 90.13 }
+        ]
+      })
+    ])
+    expect(result.valid).toBe(true)
+    expect(result.rows.map((row) => [row.inSec, row.outSec])).toEqual([
+      [10, 90],
+      [10, 90]
+    ])
+    expect(result.rows[1].startSec).toBe(80)
+  })
+
   it('uses project order and preserves the first track start', () => {
     const result = plan([track('3'), track('1', 120, { startSec: 12 }), track('2')])
     expect(result.rows.map((row) => row.id)).toEqual(['1', '2', '3'])
     expect(result.rows.map((row) => row.startSec)).toEqual([12, 92, 172])
   })
 
-  it('keeps the actual rendered Hot Cue positions aligned after applying the plan', () => {
+  it('aligns the nearest rendered beat lines after applying the plan', () => {
     const tracks = [
       track('1', 126, { timeBasisOffsetMs: 50 }),
       track('2', 130, {
@@ -90,8 +114,13 @@ describe('manual Hot Cue overlap planning', () => {
     const incoming = markers[1].find((marker) => marker.hotCue?.slot === 0)
     expect(outgoing).toBeDefined()
     expect(incoming).toBeDefined()
-    expect(positioned[0].startSec + (outgoing?.localSec || 0)).toBeCloseTo(
-      positioned[1].startSec + (incoming?.localSec || 0),
+    const snap = (index: number, sec: number) =>
+      buildTrackRuntimeTempoSnapshot({
+        track: positioned[index],
+        sourceDurationSec: 120
+      }).timeMap.snapLocalSec(sec, Number.POSITIVE_INFINITY)
+    expect(positioned[0].startSec + snap(0, outgoing?.localSec || 0)).toBeCloseTo(
+      positioned[1].startSec + snap(1, incoming?.localSec || 0),
       3
     )
   })

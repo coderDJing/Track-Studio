@@ -100,7 +100,7 @@ describe('manual cue overlap dialog', () => {
       expect(html).toContain('确认对齐')
       expect(html).toContain('取消')
       expect(html).toContain('替换当前主 BPM 变化曲线')
-      expect(html).toContain('1 首算至结尾')
+      expect(html).toContain('1 首缺少结束 Cue，使用歌曲结尾')
       expect(html).not.toMatch(/\stitle=/)
     }
   )
@@ -133,7 +133,7 @@ describe('manual cue overlap dialog', () => {
     expect(globalCss.errors).toEqual([])
     css.unshift(globalCss.code)
     css.push(
-      'body{margin:0}.preview-theme{position:relative;height:640px;background:var(--bg);color:var(--text)}h3{position:absolute;left:16px;top:0;z-index:100;font-size:13px}.preview-theme .dialog{position:absolute;width:100%;height:100%}'
+      'body{margin:0}.preview-theme{position:relative;height:640px;background:var(--bg);color:var(--text)}.preview-theme > h3{position:absolute;left:16px;top:0;z-index:100;font-size:13px}.preview-theme .dialog{position:absolute;width:100%;height:100%}'
     )
     await mkdir(outputDir, { recursive: true })
     await writeFile(
