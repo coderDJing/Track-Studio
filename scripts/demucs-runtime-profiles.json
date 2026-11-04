@@ -92,7 +92,14 @@
     "profiles": {
       "cpu": {
         "targetDir": "runtime-cpu",
-        "pipInstall": ["beat-this==1.1.0", "librosa==0.11.0"]
+        "pipInstall": [
+          "--only-binary=numba,llvmlite",
+          "numpy<2",
+          "beat-this==1.1.0",
+          "librosa==0.11.0",
+          "numba==0.61.2",
+          "llvmlite==0.44.0"
+        ]
       }
     }
   },
