@@ -54,6 +54,15 @@ export const ensureRekordboxDesktopWriteAvailable = async (
   const status = await probeWriteAvailability()
   if (status?.writable) return true
 
+  if (status?.status === 'busy' && (status.rekordboxPid ?? 0) > 0) {
+    const result = await confirm({
+      title: t('rekordboxDesktop.liveWriteTitle'),
+      content: [t('rekordboxDesktop.liveWriteWarning'), t('rekordboxDesktop.liveWriteRefresh')],
+      confirmText: t('rekordboxDesktop.liveWriteContinue')
+    })
+    return result === 'confirm'
+  }
+
   await confirm({
     title: t('rekordboxDesktop.writeCheckBlockedTitle'),
     content: buildBlockedContent(status, context),

@@ -5,9 +5,24 @@ from unittest.mock import patch
 
 import bridge
 import bridge_runtime
+import pyrekordbox.masterdb.database as masterdb
 
 
 class ProbeTests(unittest.TestCase):
+    def test_live_write_opt_in_is_scoped_to_one_request(self):
+        observed = []
+        def handler(_payload):
+            observed.append(masterdb.get_rekordbox_pid())
+            return {}
+
+        with patch.object(masterdb, 'get_rekordbox_pid', return_value=123), \
+             patch.dict(bridge.COMMANDS, {'create-empty-playlist': handler}), \
+             patch.object(bridge, '_write_response'):
+            bridge._execute_request({'command': 'create-empty-playlist', 'payload': {}})
+            bridge._execute_request({'command': 'create-empty-playlist', 'payload': {'allowRunning': True}})
+            bridge._execute_request({'command': 'create-empty-playlist', 'payload': {}})
+        self.assertEqual(observed, [123, 0, 123])
+
     def test_stale_rekordbox7_config_does_not_hide_valid_rekordbox6(self):
         config7 = {"db_path": "D:/stale/master.db", "version": "7"}
         config6 = {"db_path": "E:/live/master.db", "version": "6"}

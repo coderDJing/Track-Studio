@@ -1,6 +1,7 @@
 import json
 import sys
 from typing import Any, Dict, Optional
+from unittest.mock import patch
 
 from bridge_runtime import (
     HelperCommandError,
@@ -153,7 +154,13 @@ def _execute_request(request: Dict[str, Any]) -> None:
         raise ValueError(f"unsupported command: {command}")
     if not isinstance(payload, dict):
         raise ValueError("payload must be a JSON object")
-    result = COMMANDS[command](payload)
+    # The desktop app explicitly opts into live writes after warning the user.
+    # Keep direct bridge clients, including dataset scripts, on the upstream guard.
+    if command not in ("probe", "probe-write", "load-tree", "load-playlist-tracks") and payload.get("allowRunning") is True:
+        with patch("pyrekordbox.masterdb.database.get_rekordbox_pid", return_value=0):
+            result = COMMANDS[command](payload)
+    else:
+        result = COMMANDS[command](payload)
     _write_response(_ok(result))
 
 

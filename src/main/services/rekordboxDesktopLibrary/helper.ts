@@ -525,5 +525,12 @@ export async function runRekordboxDesktopHelper<TResult, TPayload extends Record
   if (process.platform !== 'win32' && process.platform !== 'darwin') {
     throw createHelperError('当前平台暂不支持 Rekordbox 库。', 'UNSUPPORTED_PLATFORM')
   }
-  return await helperSession.run(command, payload, options)
+  const readCommands: RekordboxDesktopHelperCommand[] = [
+    'probe',
+    'probe-write',
+    'load-tree',
+    'load-playlist-tracks'
+  ]
+  const request = readCommands.includes(command) ? payload : { ...payload, allowRunning: true }
+  return await helperSession.run(command, request, options)
 }
