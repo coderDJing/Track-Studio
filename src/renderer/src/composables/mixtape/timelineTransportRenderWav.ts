@@ -344,7 +344,7 @@ export const createTimelineTransportRenderWavModule = (ctx: TimelineTransportRen
             )
             source.connect(stemGain)
             stemGain.connect(stemBus)
-            source.start(
+            await source.start(
               Math.max(0, entry.startSec - timelineOriginSec),
               resolveStartOffset(entry, source)
             )
@@ -411,7 +411,7 @@ export const createTimelineTransportRenderWavModule = (ctx: TimelineTransportRen
         eqHigh.connect(volume)
         volume.connect(gain)
         gain.connect(offlineCtx.destination)
-        source.start(
+        await source.start(
           Math.max(0, entry.startSec - timelineOriginSec),
           resolveStartOffset(entry, source)
         )

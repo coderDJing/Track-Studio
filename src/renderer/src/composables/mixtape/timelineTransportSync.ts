@@ -1,10 +1,12 @@
 import {
   clampNumber,
-  resolveTempoRatioByBpm,
   resolveSyncPlaybackRateWithDiagnostics
 } from '@renderer/composables/mixtape/beatSyncModel'
 import { createMixtapeMasterGrid } from '@renderer/composables/mixtape/mixtapeMasterGrid'
-import { createTrackTimeMapFromSnapshotPayload } from '@renderer/composables/mixtape/trackTimeMapFactory'
+import {
+  resolveTransportEntryTimeMap as resolveEntryTimeMap,
+  resolveTransportEntryPlaybackRate
+} from './timelineTransportPlaybackRate'
 import {
   resolveTransportDynamicTempoSegmentAtLocalSec,
   type TransportDynamicTempoSegment
@@ -91,21 +93,6 @@ type TransientLagDiagnostics = {
 const TRANSIENT_PROBE_WINDOW_SAMPLES = 2048
 const TRANSIENT_PROBE_MAX_LAG_SAMPLES = 192
 const TRANSIENT_MIN_CORRELATION = 0.08
-const transportTimeMapCache = new Map<
-  string,
-  ReturnType<typeof createTrackTimeMapFromSnapshotPayload>
->()
-
-const resolveEntryTimeMap = (entry: TransportSyncEntry) => {
-  const signature = String(entry.tempoSnapshot?.signature || '')
-  const cacheKey = signature || `${entry.trackId}:${entry.startSec}:${entry.duration}`
-  const cached = transportTimeMapCache.get(cacheKey)
-  if (cached) return cached
-  const next = createTrackTimeMapFromSnapshotPayload(entry.tempoSnapshot)
-  transportTimeMapCache.set(cacheKey, next)
-  return next
-}
-
 const resolveNodeLatencySec = (node: TransportSyncNode) => {
   const latencySec = Number(node.source.resolveLatencySec?.() || 0)
   if (!Number.isFinite(latencySec) || latencySec <= 0) return 0
@@ -160,18 +147,10 @@ const resolveEntryBasePlaybackRateAtTimelineSec = (
   timelineSec: number,
   latencySec = 0
 ) => {
-  const targetBpm = resolveEntryBpmAtTimelineSec(entry, timelineSec, latencySec)
-  const dynamicSegment = resolveEntryDynamicSegmentAtTimelineSec(entry, timelineSec, latencySec)
-  const originalBpm = Number(
-    dynamicSegment?.sourceBpm ?? entry.tempoSnapshot.gridSourceBpm ?? entry.originalBpm
+  return resolveTransportEntryPlaybackRate(
+    entry,
+    resolveEntryLocalSecAtTimelineSec(entry, timelineSec, latencySec)
   )
-  if (!Number.isFinite(targetBpm) || targetBpm <= 0) {
-    return clampNumber(Number(entry.tempoRatio) || 1, 0.25, 4)
-  }
-  if (!Number.isFinite(originalBpm) || originalBpm <= 0) {
-    return clampNumber(Number(entry.tempoRatio) || 1, 0.25, 4)
-  }
-  return resolveTempoRatioByBpm(targetBpm, originalBpm)
 }
 
 const resolveEntrySyncAnchorSecAtTimelineSec = (
@@ -339,10 +318,9 @@ export const applyTimelineTransportSync = (
   const activeNodes = nodes.filter((node) => {
     const entry = node.entry
     if (!Number.isFinite(entry.beatSec) || entry.beatSec <= 0) return false
-    const latencySec = resolveNodeLatencySec(node)
     const start = Number(entry.startSec) || 0
-    const end = start + (Number(entry.duration) || 0) + latencySec
-    return timelineSec >= start && timelineSec <= end
+    const end = start + (Number(entry.duration) || 0)
+    return timelineSec >= start && timelineSec < end
   })
   if (!activeNodes.length) {
     return {

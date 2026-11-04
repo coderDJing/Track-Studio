@@ -12,6 +12,7 @@ import { t } from '@renderer/utils/translate'
 import { resolveSongHotCueLabel } from '@shared/hotCues'
 import {
   formatCueOverlapTime,
+  formatCueOverlapPointTime,
   isCueBoundarySlot,
   type CueBoundary,
   type MixtapeCueOverlapSettings,
@@ -229,9 +230,9 @@ onUnmounted(() => {
                       t(`mixtape.cueOverlapError_${row.error}`)
                     }}</span>
                   </td>
-                  <td>{{ row.error ? '—' : formatCueOverlapTime(row.startSec) }}</td>
+                  <td>{{ row.error ? '—' : formatCueOverlapPointTime(row.startSec) }}</td>
                   <td>
-                    {{ row.error ? '—' : formatCueOverlapTime(row.inSec) }}
+                    {{ row.error ? '—' : formatCueOverlapPointTime(row.inSec) }}
                     <span
                       v-if="!row.error && (row.missingStart || startCue === 'start')"
                       class="cue-overlap-dialog__boundary"
@@ -239,7 +240,7 @@ onUnmounted(() => {
                     >
                   </td>
                   <td>
-                    {{ row.error ? '—' : formatCueOverlapTime(row.outSec) }}
+                    {{ row.error ? '—' : formatCueOverlapPointTime(row.outSec) }}
                     <span
                       v-if="!row.error && (row.missingEnd || endCue === 'end')"
                       class="cue-overlap-dialog__boundary"

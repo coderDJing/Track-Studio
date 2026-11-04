@@ -104,12 +104,23 @@ export const buildMixtapeCueOverlapPlan = (params: {
           track.loopSegments ?? track.loopSegment
         )
         const cues = normalizeSongHotCues(track.hotCues)
+        const snapPoint = (map: typeof timeMap, sec: number) => {
+          const line = map.resolveNearestGridLine(sec, Number.POSITIVE_INFINITY)
+          if (!line) return sec
+          // 音频边界可能位于两拍之间，最近一拍也可能刚好落在文件范围外。
+          // 保留该虚拟拍点（没有裁切/移动音频），通过工程起点对齐真实拍线。
+          const beatSec = 60 / bpm
+          return Number((line.sec + Math.round((sec - line.sec) / beatSec) * beatSec).toFixed(4))
+        }
         const resolveCue = (boundary: CueBoundary, end: boolean) => {
           const cue = isCueBoundarySlot(boundary)
             ? cues.find((item) => item.slot === boundary)
             : undefined
           if (!cue)
-            return { sec: end ? timeMap.durationSec : 0, missing: typeof boundary === 'number' }
+            return {
+              sec: snapPoint(timeMap, end ? timeMap.durationSec : 0),
+              missing: typeof boundary === 'number'
+            }
           const timelineSec = resolveSongCueTimelineSec(cue.sec, cue, track.timeBasisOffsetMs) ?? 0
           const sourceSec = Math.max(
             0,
@@ -120,10 +131,7 @@ export const buildMixtapeCueOverlapPlan = (params: {
             return { sec: 0, missing: false }
           }
           // 先在未展开 Loop 的拍线上吸附，再选择首/末次出现的位置。
-          const baseSec = baseMap.snapLocalSec(
-            baseMap.mapSourceToLocal(sourceSec),
-            Number.POSITIVE_INFINITY
-          )
+          const baseSec = snapPoint(baseMap, baseMap.mapSourceToLocal(sourceSec))
           const occurrences = sections.flatMap((section, index) => {
             const finalEnd =
               index === sections.length - 1 && Math.abs(baseSec - baseMap.durationSec) <= 0.0001
@@ -133,7 +141,9 @@ export const buildMixtapeCueOverlapPlan = (params: {
               : []
           })
           return {
-            sec: (end ? occurrences.at(-1) : occurrences[0]) ?? timeMap.mapSourceToLocal(sourceSec),
+            sec:
+              (end ? occurrences.at(-1) : occurrences[0]) ??
+              (baseSec < 0 ? baseSec : timeMap.durationSec + baseSec - baseMap.durationSec),
             missing: false
           }
         }
@@ -179,4 +189,10 @@ export const buildMixtapeCueOverlapPlan = (params: {
 export const formatCueOverlapTime = (seconds: number) => {
   const total = Math.max(0, Math.round(seconds))
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+}
+
+export const formatCueOverlapPointTime = (seconds: number) => {
+  const totalMs = Math.round(Math.abs(seconds) * 1000)
+  const totalSec = Math.floor(totalMs / 1000)
+  return `${seconds < 0 && totalMs > 0 ? '−' : ''}${Math.floor(totalSec / 60)}:${String(totalSec % 60).padStart(2, '0')}.${String(totalMs % 1000).padStart(3, '0')}`
 }

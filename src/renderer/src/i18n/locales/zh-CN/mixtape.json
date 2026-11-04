@@ -280,15 +280,15 @@
     "cueOverlapMissingFile": "有音频文件已丢失，未修改工程。请检查后重试。",
     "cueOverlapChanged": "工程内容或状态已变化，请关闭对话框后重新操作。",
     "cueOverlapFailed": "保存失败，工程未完成调整，请重试。",
-    "cueOverlapBoundaryNotice": "找不到所选的开始 Hot Cue 时，使用歌曲开头；找不到结束 Hot Cue 时，使用歌曲结尾。也可直接选择开头或结尾。音频边界不一定在拍线上，使用边界时可能保留拍线偏差。",
+    "cueOverlapBoundaryNotice": "找不到开始 Hot Cue 时，以歌曲开头附近最近的拍线对齐；找不到结束 Hot Cue 时，以歌曲结尾附近最近的拍线对齐。直接选择开头或结尾也按此规则处理，避免音频边界不在拍线上造成错拍。",
     "cueOverlapPreview": "对齐预览",
-    "cueOverlapPreviewHint": "时间线起点为歌曲在工程中的位置；开始点、结束点为目标 BPM 下的歌曲内时间（含 Loop）。",
+    "cueOverlapPreviewHint": "时间线起点为歌曲在工程中的位置；开始点、结束点为目标 BPM 下的对齐拍点（含 Loop）。开头附近的拍点可能略早于 0 秒，对齐只调整歌曲在工程中的位置。",
     "cueOverlapStartPoint": "开始点",
     "cueOverlapEndPoint": "结束点",
-    "cueOverlapUsesStart": "使用歌曲开头",
-    "cueOverlapUsesEnd": "使用歌曲结尾",
-    "cueOverlapStartFallback": "{count} 首缺少开始 Cue，使用歌曲开头",
-    "cueOverlapEndFallback": "{count} 首缺少结束 Cue，使用歌曲结尾",
+    "cueOverlapUsesStart": "开头附近拍线",
+    "cueOverlapUsesEnd": "结尾附近拍线",
+    "cueOverlapStartFallback": "{count} 首缺少开始 Cue，使用开头附近拍线",
+    "cueOverlapEndFallback": "{count} 首缺少结束 Cue，使用结尾附近拍线",
     "autoGainSaving": "正在保存增益设置…"
   }
 }

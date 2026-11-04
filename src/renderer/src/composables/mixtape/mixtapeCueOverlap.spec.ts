@@ -44,6 +44,50 @@ const plan = (tracks: MixtapeTrack[], bpm = 120) =>
 afterEach(() => resetMixtapeGlobalTempoState())
 
 describe('manual Hot Cue overlap planning', () => {
+  it('aligns the actual aiSet second/third grids when the incoming start Cue is missing', () => {
+    const makeTrack = (id: string, bpm: number, anchorMs: number, endCueSec: number) =>
+      track(id, bpm, {
+        timeBasisOffsetMs: 23.021,
+        beatGridMap:
+          createSongBeatGridMapV2FromFixedGrid({
+            bpm,
+            firstBeatMs: anchorMs,
+            downbeatBeatOffset: 0,
+            source: 'analysis'
+          }) ?? undefined,
+        hotCues: [{ slot: 1, sec: endCueSec }]
+      })
+    const tracks = [makeTrack('2', 124, 25.771, 154.864), makeTrack('3', 125, 7.521, 138.248)]
+    const result = buildMixtapeCueOverlapPlan({
+      tracks,
+      settings: { startCue: 0, endCue: 1, bpm: 126 },
+      resolveSourceDuration: () => 200
+    })
+    expect(result.valid).toBe(true)
+    expect(result.rows[1].inSec).toBeLessThan(0)
+    applyMixtapeGlobalTempoSnapshot({
+      playlistId: 'mix',
+      source: 'user',
+      snapshot: result.snapshot
+    })
+    const maps = tracks.map((item, index) =>
+      buildTrackRuntimeTempoSnapshot({
+        track: { ...item, bpm: 126, startSec: result.rows[index].startSec },
+        sourceDurationSec: 200,
+        zoom: 99
+      })
+    )
+    // Compare rendered beat positions throughout the overlap, not only Cue timestamps.
+    for (const beat of [1, 8, 32]) {
+      const expected = result.rows[0].startSec + result.rows[0].outSec + (beat * 60) / 126
+      for (let index = 0; index < maps.length; index++) {
+        const positions = maps[index].visibleGridLines.map(
+          (line) => result.rows[index].startSec + line.sec
+        )
+        expect(Math.min(...positions.map((sec) => Math.abs(sec - expected)))).toBeLessThan(0.0002)
+      }
+    }
+  })
   it('aligns outgoing and incoming cues at the same global time after unifying BPM', () => {
     const result = plan([track('1'), track('2', 60), track('3', 180)])
     expect(result.valid).toBe(true)

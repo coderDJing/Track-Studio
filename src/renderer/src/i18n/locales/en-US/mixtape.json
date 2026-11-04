@@ -280,15 +280,15 @@
     "cueOverlapMissingFile": "An audio file is missing. The project was not changed. Check the files and try again.",
     "cueOverlapChanged": "The project or its state has changed. Close this dialog and try again.",
     "cueOverlapFailed": "The arrangement could not be saved. Please try again.",
-    "cueOverlapBoundaryNotice": "Missing start Hot Cue: use the track start. Missing end Hot Cue: use the track end. You can also select these boundaries directly. Audio boundaries may fall between beats, leaving a beat offset.",
+    "cueOverlapBoundaryNotice": "If the start Hot Cue is missing, align using the beat nearest the track start. If the end Hot Cue is missing, use the beat nearest the track end. Explicit start/end selections follow the same rule to avoid off-beat audio boundaries.",
     "cueOverlapPreview": "Alignment preview",
-    "cueOverlapPreviewHint": "Timeline start is the track’s position in the project. Start and end points are times within the track at the target BPM, including Loops.",
+    "cueOverlapPreviewHint": "Timeline start is the track’s position in the project. Start/end points are alignment beats at the target BPM, including Loops. The beat nearest the start may be just before zero. Alignment adjusts track positions in the project.",
     "cueOverlapStartPoint": "Start point",
     "cueOverlapEndPoint": "End point",
-    "cueOverlapUsesStart": "Uses track start",
-    "cueOverlapUsesEnd": "Uses track end",
-    "cueOverlapStartFallback": "{count} tracks missing start Cue: using track start",
-    "cueOverlapEndFallback": "{count} tracks missing end Cue: using track end",
+    "cueOverlapUsesStart": "Beat nearest start",
+    "cueOverlapUsesEnd": "Beat nearest end",
+    "cueOverlapStartFallback": "{count} tracks missing start Cue: using beat nearest start",
+    "cueOverlapEndFallback": "{count} tracks missing end Cue: using beat nearest end",
     "autoGainSaving": "Saving gain settings…"
   }
 }

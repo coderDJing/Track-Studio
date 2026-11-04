@@ -11,7 +11,6 @@ const R3_MW_OPTIONS =
   RubberBandOption.RubberBandOptionProcessRealTime |
   RubberBandOption.RubberBandOptionChannelsTogether |
   RubberBandOption.RubberBandOptionEngineFiner
-const R3_OUTPUT_BUFFER_FRAMES = 4096
 const clampTempo = (value: number) => Math.max(0.25, Math.min(4, Number(value) || 1))
 
 let r3WasmBinaryPromise: Promise<Uint8Array> | null = null
@@ -69,15 +68,47 @@ export const createTransportR3Source = async (
 
   let endedHandler: (() => void) | null = null
   let latestPositionSec: number | null = null
+  let preparedOffsetSec: number | null = null
   node.onended = () => endedHandler?.()
   node.onposition = (seconds) => {
     latestPositionSec = Math.max(0, Number(seconds) || 0)
   }
 
+  const waitForWorkletMessage = (expected: 'prepared' | 'scheduled', send: () => void) => {
+    return new Promise<void>((resolve, reject) => {
+      const cleanup = () => {
+        clearTimeout(timeout)
+        node.port.removeEventListener('message', onMessage)
+      }
+      const onMessage = (event: MessageEvent<{ type?: string; error?: string }>) => {
+        if (event.data?.type === expected) {
+          cleanup()
+          resolve()
+        } else if (event.data?.type === 'error') {
+          cleanup()
+          reject(new Error(event.data.error || 'R3 preparation failed'))
+        }
+      }
+      const timeout = setTimeout(() => {
+        cleanup()
+        reject(new Error(`R3 ${expected} timed out`))
+      }, 10000)
+      node.port.addEventListener('message', onMessage)
+      try {
+        send()
+      } catch (error) {
+        cleanup()
+        reject(error)
+      }
+    })
+  }
+
   return {
     buffer: planBuffer,
     startOffsetKind: sequence && sequence.segments.length > 1 ? 'plan' : 'source',
-    resolveLatencySec: () => R3_OUTPUT_BUFFER_FRAMES / Math.max(1, audioCtx.sampleRate),
+    // Worklet removes the stretcher's start delay before emitting audio. The ring
+    // buffer is look-ahead capacity, not an extra delay on the scheduled output.
+    resolveLatencySec: () => 0,
     resolvePlaybackPositionSec: () => latestPositionSec,
     playbackRate,
     get onended() {
@@ -102,8 +133,11 @@ export const createTransportR3Source = async (
       const safeOffset = Math.max(0, Number(offset) || 0)
       latestPositionSec = safeOffset
       node.setTempo(playbackRate.value)
-      node.seek(safeOffset)
-      node.port.postMessage({ type: 'play', startTimeSec })
+      if (preparedOffsetSec !== safeOffset) node.seek(safeOffset)
+      preparedOffsetSec = null
+      return waitForWorkletMessage('scheduled', () =>
+        node.port.postMessage({ type: 'play', startTimeSec })
+      )
     },
     stop(when?: number) {
       const stopTimeSec =
@@ -111,6 +145,13 @@ export const createTransportR3Source = async (
           ? Number(when)
           : audioCtx.currentTime
       node.port.postMessage({ type: 'stop', stopTimeSec })
+    },
+    async prepareStart(offset: number) {
+      const safeOffset = Math.max(0, Number(offset) || 0)
+      await waitForWorkletMessage('prepared', () =>
+        node.port.postMessage({ type: 'prepare', seconds: safeOffset, speed: tempoValue })
+      )
+      preparedOffsetSec = safeOffset
     }
   }
 }

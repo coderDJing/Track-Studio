@@ -1,3 +1,4 @@
+import { resolveTransportEntryPlaybackRate } from './timelineTransportPlaybackRate'
 import { RendererFilePathMap, RendererFilePathSet } from '@renderer/utils/filePathComparison'
 import type { Ref } from 'vue'
 import { canPlayHtmlAudio, toPreviewUrl } from '@renderer/pages/modules/songPlayer/webAudioPlayer'
@@ -24,7 +25,6 @@ import {
 } from '@renderer/composables/mixtape/timelineTransportPlaybackSequence'
 import {
   buildTransportDynamicTempoSegments,
-  resolveTransportDynamicTempoSegmentAtLocalSec,
   type TransportDynamicTempoSegment
 } from '@renderer/composables/mixtape/timelineTransportDynamicTempoSegments'
 import { normalizeVolumeMuteSegments } from '@renderer/composables/mixtape/volumeMuteSegments'
@@ -420,18 +420,11 @@ export const createTimelineTransportAudioDataModule = (ctx: TimelineTransportAud
         playbackSequence,
         mapSourceToBaseLocal: (sourceSec: number) => baseTimeMap.mapSourceToLocal(sourceSec)
       })
-      const resolveSegmentTempoRatio = (localSec: number) => {
-        const segment = resolveTransportDynamicTempoSegmentAtLocalSec(
-          dynamicTempoSegments,
+      const resolveSegmentTempoRatio = (localSec: number) =>
+        resolveTransportEntryPlaybackRate(
+          { tempoSnapshot, dynamicTempoSegments, tempoRatio, originalBpm },
           localSec
         )
-        if (!segment) return tempoRatio
-        const targetBpm = runtimeTempoSnapshot.timeMap.sampleBpmAtLocal(localSec)
-        if (!Number.isFinite(targetBpm) || targetBpm <= 0) return tempoRatio
-        const sourceBpm = Number(segment.sourceBpm)
-        if (!Number.isFinite(sourceBpm) || sourceBpm <= 0) return tempoRatio
-        return targetBpm / sourceBpm
-      }
       const sectionList = splitLoopSections
         ? buildMixtapeTrackLoopSections(tempoSnapshot.baseDurationSec, loopValue)
         : [

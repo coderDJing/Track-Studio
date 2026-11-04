@@ -1,3 +1,4 @@
+import { resolveTransportClockSec } from './timelineTransportClock'
 import { ref, type Ref } from 'vue'
 import type { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { t } from '@renderer/utils/translate'
@@ -32,8 +33,7 @@ import {
 import { hasInternalPlaybackSequence } from '@renderer/composables/mixtape/timelineTransportPlaybackSequence'
 import {
   resolveEntryPlaybackOffsetSourceSec,
-  resolveEntryPlaybackOffsetPlanSec,
-  resolveTransportAudibleTimelineSec
+  resolveEntryPlaybackOffsetPlanSec
 } from '@renderer/composables/mixtape/timelineTransportPositionMapping'
 import type {
   MixtapeEnvelopeParamId,
@@ -127,7 +127,6 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
 
   let transportRaf = 0
   let transportBaseSec = 0
-  let transportStartedAt = 0
   let transportAudioStartAt = 0
   let transportDurationSec = 0
   let transportAudioCtx: AudioContext | null = null
@@ -405,7 +404,6 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
     }
     transportPlaying.value = false
     transportDecoding.value = false
-    transportStartedAt = 0
     transportAudioStartAt = 0
     clearTransportGraphNodes()
   }
@@ -454,10 +452,17 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
   }
 
   const finishTransportPlayback = () => {
-    const total = resolveTransportDuration()
+    const current =
+      transportPlaying.value && transportAudioCtx
+        ? resolveTransportClockSec(
+            transportAudioCtx.currentTime,
+            transportAudioStartAt,
+            transportBaseSec
+          )
+        : playheadSec.value
     stopTransport()
-    // 暂停时保持播放中线可见
-    playheadSec.value = total
+    // 暂停保留实际输出位置，继续播放从这里恢复。
+    playheadSec.value = Math.min(resolveTransportDuration(), current)
   }
 
   const resolveTransportMinStartSec = () => {
@@ -471,7 +476,7 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
   }
 
   const handleTransportStop = () => {
-    stopTransport()
+    finishTransportPlayback()
     // 暂停时保持播放中线可见，只在真正停止时隐藏
   }
 
@@ -739,6 +744,7 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
         await ensureTransportSequencerWorkletModule(transportCtx)
         transportSequencerWorkletReady = true
       } catch (error) {
+        if (transportVersion !== version) return
         console.error('[mixtape-transport] sequencer worklet unavailable', error)
         transportError.value = t('mixtape.transportSequencerUnavailable')
         playheadVisible.value = false
@@ -794,6 +800,7 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
       }
     } catch (error) {
       for (const prepared of preparedNodes) prepared.node.dispose()
+      if (transportVersion !== version) return
       console.error('[mixtape-transport] R3 playback initialisation failed', error)
       transportError.value = t('mixtape.transportPlaybackInitializeFailed')
       playheadVisible.value = false
@@ -804,15 +811,19 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
     const scheduleLeadSec = 0.03
     const scheduleStartAt = transportCtx.currentTime + scheduleLeadSec
     transportBaseSec = startSec
-    transportStartedAt = performance.now() + scheduleLeadSec * 1000
     transportAudioStartAt = scheduleStartAt
     transportPlaying.value = true
     try {
-      for (const prepared of preparedNodes) {
-        prepared.node.start(scheduleStartAt + prepared.delaySec)
+      await Promise.all(
+        preparedNodes.map((prepared) => prepared.node.start(scheduleStartAt + prepared.delaySec))
+      )
+      if (transportVersion !== version) {
+        for (const prepared of preparedNodes) prepared.node.dispose()
+        return
       }
     } catch (error) {
       for (const prepared of preparedNodes) prepared.node.dispose()
+      if (transportVersion !== version) return
       console.error('[mixtape-transport] R3 playback scheduling failed', error)
       transportError.value = t('mixtape.transportPlaybackStartFailed')
       transportPlaying.value = false
@@ -821,33 +832,19 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
     }
 
     const tick = () => {
-      if (!transportPlaying.value) return
-      const elapsed =
-        transportAudioCtx && transportAudioCtx.state !== 'closed' && transportAudioStartAt > 0
-          ? Math.max(0, transportAudioCtx.currentTime - transportAudioStartAt)
-          : Math.max(0, (performance.now() - transportStartedAt) / 1000)
-      const current = transportBaseSec + elapsed
-      const runtimeCurrent = resolveTransportAudibleTimelineSec(
-        current,
-        transportGraphNodes,
-        transportMasterTrackId
-      )
-      applyTransportMixParamsAtTimelineSec(runtimeCurrent)
+      if (!transportPlaying.value || transportVersion !== version) return
+      const current = resolveTransportClockSec(transportCtx.currentTime, scheduleStartAt, startSec)
+      applyTransportMixParamsAtTimelineSec(current)
       const syncResult = applyTimelineTransportSync({
         nodes: transportGraphNodes,
-        timelineSec: runtimeCurrent,
+        timelineSec: current,
         masterTrackId: transportMasterTrackId,
         audioCtx: transportAudioCtx
       })
       transportMasterTrackId = syncResult.masterTrackId
       mirrorTransportStemPlaybackRates(transportGraphNodes, transportAudioCtx)
-      const audibleCurrent = resolveTransportAudibleTimelineSec(
-        runtimeCurrent,
-        transportGraphNodes,
-        transportMasterTrackId
-      )
-      playheadSec.value = audibleCurrent
-      syncTimelineScrollByPlayhead(audibleCurrent)
+      playheadSec.value = current
+      syncTimelineScrollByPlayhead(current)
       if (current >= transportDurationSec) {
         stopTransport()
         // 播放结束时保持播放中线可见

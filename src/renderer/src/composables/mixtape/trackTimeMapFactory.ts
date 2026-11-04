@@ -37,16 +37,11 @@ import type { SerializedTrackTempoSnapshot } from '@renderer/composables/mixtape
 const TRACK_TIME_MAP_SNAPSHOT_CACHE_LIMIT = 180
 const trackTimeMapSnapshotCache = new Map<string, TrackTimeMap>()
 
+// Callers derive a base map by removing loops from a serialized snapshot. Its
+// signature stays the same, so all mapping inputs must participate in the key.
+// Keep sub-millisecond phase values intact for highly zoomed waveform rendering.
 const buildSerializedTrackTimeMapCacheKey = (snapshot: SerializedTrackTempoSnapshot) =>
-  [
-    String(snapshot.signature || ''),
-    Math.round((Number(snapshot.baseDurationSec) || 0) * 1000),
-    Math.round((Number(snapshot.sourceDurationSec) || 0) * 1000),
-    Math.round((Number(snapshot.firstBeatSourceSec) || 0) * 1000),
-    Math.round((Number(snapshot.beatSourceSec) || 0) * 1000),
-    Math.round((Number(snapshot.downbeatBeatOffset) || 0) * 1000),
-    Math.round((Number(snapshot.masterGridPhaseOffsetSec) || 0) * 1000)
-  ].join('|')
+  JSON.stringify(snapshot)
 
 const readTrackTimeMapSnapshotCache = (key: string) => {
   const cached = trackTimeMapSnapshotCache.get(key)

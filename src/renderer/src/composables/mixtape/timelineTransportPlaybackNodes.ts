@@ -4,8 +4,7 @@ import {
   type TransportPlayableSource
 } from './timelineTransportPlayableSource'
 import { createTransportR3Source } from './timelineTransportR3Source'
-import { createTrackTimeMapFromSnapshotPayload } from './trackTimeMapFactory'
-import { resolveTransportDynamicTempoSegmentAtLocalSec } from './timelineTransportDynamicTempoSegments'
+import { resolveTransportEntryPlaybackRate } from './timelineTransportPlaybackRate'
 import type {
   TransportEntry,
   TransportStemAudioRef,
@@ -34,7 +33,7 @@ export type TrackGraphNode = {
 export type TransportPlaybackSourceMode = 'buffer' | 'r3' | 'sequenced-buffer' | 'sequenced-r3'
 
 export type PreparedTransportTrackGraphNode = {
-  start: (whenSec: number) => void
+  start: (whenSec: number) => Promise<void>
   dispose: () => void
 }
 
@@ -80,19 +79,7 @@ const resolveSourceStartOffset = (params: {
 const resolveInitialTempoRatio = (entry: TransportEntry, offsetTimelineSec: number) => {
   const localStartSec = Math.max(0, Number(entry.localStartSec) || 0)
   const localSec = localStartSec + Math.max(0, Number(offsetTimelineSec) || 0)
-  const dynamicSegment = resolveTransportDynamicTempoSegmentAtLocalSec(
-    entry.dynamicTempoSegments,
-    localSec
-  )
-  if (!dynamicSegment) return entry.tempoRatio
-  const targetBpm = createTrackTimeMapFromSnapshotPayload(entry.tempoSnapshot).sampleBpmAtLocal(
-    localSec
-  )
-  const sourceBpm = Number(dynamicSegment.sourceBpm)
-  if (!Number.isFinite(targetBpm) || targetBpm <= 0 || !Number.isFinite(sourceBpm)) {
-    return entry.tempoRatio
-  }
-  return Math.max(0.25, Math.min(4, targetBpm / Math.max(0.000001, sourceBpm)))
+  return resolveTransportEntryPlaybackRate(entry, localSec)
 }
 
 const createPlaybackSource = async (
@@ -166,6 +153,20 @@ export const prepareTransportTrackGraphNode = async (
           mode
         )
         source.playbackRate.value = initialTempoRatio
+        try {
+          await source.prepareStart?.(
+            resolveSourceStartOffset({
+              source,
+              entry,
+              bufferDuration: Number(source.buffer?.duration || 0),
+              offsetPlanSec,
+              offsetSourceSec
+            })
+          )
+        } catch (error) {
+          disconnectSource(source)
+          throw error
+        }
         const stemGain = ctx.createGain()
         stemGain.gain.value = resolveEntryEnvelopeValue(entry, stemAudio.stemId, offsetTimelineSec)
         source.connect(stemGain)
@@ -215,11 +216,12 @@ export const prepareTransportTrackGraphNode = async (
 
     return {
       dispose,
-      start(whenSec: number) {
+      async start(whenSec: number) {
         if (disposed) return
         const safeWhen = Math.max(ctx.currentTime, whenSec)
         const stopAt = safeWhen + Math.max(0.02, Number(entry.duration) - offsetTimelineSec) + 0.02
         transportGraphNodes.push(graphNode)
+        const scheduled: Array<void | Promise<void>> = []
         for (const stemNode of stemNodes) {
           const safeOffset = resolveSourceStartOffset({
             source: stemNode.source,
@@ -229,9 +231,10 @@ export const prepareTransportTrackGraphNode = async (
             offsetSourceSec
           })
           stemNode.source.playbackRate.setTargetAtTime(initialTempoRatio, safeWhen, 0.0001)
-          stemNode.source.start(safeWhen, safeOffset)
+          scheduled.push(stemNode.source.start(safeWhen, safeOffset))
           stemNode.source.stop(stopAt)
         }
+        await Promise.all(scheduled)
       }
     }
   }
@@ -241,6 +244,20 @@ export const prepareTransportTrackGraphNode = async (
   const ctx = ensureTransportAudioContext(audioBuffer.sampleRate)
   const source = await createPlaybackSource(ctx, audioBuffer, entry, mode)
   source.playbackRate.value = initialTempoRatio
+  try {
+    await source.prepareStart?.(
+      resolveSourceStartOffset({
+        source,
+        entry,
+        bufferDuration: audioBuffer.duration,
+        offsetPlanSec,
+        offsetSourceSec
+      })
+    )
+  } catch (error) {
+    disconnectSource(source)
+    throw error
+  }
 
   const eqLow = ctx.createBiquadFilter()
   eqLow.type = 'lowshelf'
@@ -295,7 +312,7 @@ export const prepareTransportTrackGraphNode = async (
 
   return {
     dispose,
-    start(whenSec: number) {
+    async start(whenSec: number) {
       if (disposed) return
       const safeWhen = Math.max(ctx.currentTime, whenSec)
       const safeOffset = resolveSourceStartOffset({
@@ -306,9 +323,10 @@ export const prepareTransportTrackGraphNode = async (
         offsetSourceSec
       })
       source.playbackRate.setTargetAtTime(initialTempoRatio, safeWhen, 0.0001)
-      source.start(safeWhen, safeOffset)
+      const scheduled = source.start(safeWhen, safeOffset)
       source.stop(safeWhen + Math.max(0.02, Number(entry.duration) - offsetTimelineSec) + 0.02)
       transportGraphNodes.push(graphNode)
+      await scheduled
     }
   }
 }

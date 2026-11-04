@@ -100,7 +100,7 @@ describe('manual cue overlap dialog', () => {
       expect(html).toContain('确认对齐')
       expect(html).toContain('取消')
       expect(html).toContain('替换当前主 BPM 变化曲线')
-      expect(html).toContain('1 首缺少结束 Cue，使用歌曲结尾')
+      expect(html).toContain('1 首缺少结束 Cue，使用结尾附近拍线')
       expect(html).not.toMatch(/\stitle=/)
     }
   )

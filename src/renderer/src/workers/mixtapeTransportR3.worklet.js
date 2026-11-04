@@ -395,7 +395,7 @@
           this.setBuffer(msg)
           break
         case 'play':
-          if (this.finished) this.resetTransport(0)
+          if (this.finished && this.ringCount === 0) this.resetTransport(0)
           this.endedPosted = false
           this.startTimeSec = Number.isFinite(msg.startTimeSec)
             ? Math.max(currentTime, msg.startTimeSec)
@@ -403,7 +403,16 @@
           this.stopTimeSec = null
           this.preroll()
           this.playing = true
+          this.port.postMessage({ type: 'scheduled' })
           break
+        case 'prepare': {
+          this.speed = msg.speed > 0 ? msg.speed : 1
+          const frame = Math.max(0, Math.round((msg.seconds || 0) * this.sourceSampleRate))
+          this.resetTransport(Math.min(frame, this.sourceLen))
+          this.preroll()
+          this.port.postMessage({ type: 'prepared' })
+          break
+        }
         case 'pause':
           this.playing = false
           this.startTimeSec = null

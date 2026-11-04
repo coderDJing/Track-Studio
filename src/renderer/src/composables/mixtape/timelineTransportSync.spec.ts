@@ -56,6 +56,19 @@ const createNode = (
 }
 
 describe('timeline transport source phase', () => {
+  it('hands Master to the next active track at the exact end, even when the previous source has latency', () => {
+    const ended = createNode('ended', 120, 0.1, vi.fn())
+    const next = createNode('next', 60, 0, vi.fn())
+    next.entry.startSec = 60
+    const result = applyTimelineTransportSync({
+      nodes: [ended, next],
+      timelineSec: 120,
+      masterTrackId: 'ended',
+      audioCtx: { state: 'running', currentTime: 120 } as BaseAudioContext
+    })
+    expect(result.masterTrackId).toBe('next')
+    expect(result.activeTrackCount).toBe(1)
+  })
   it('uses the corrected source grid BPM instead of stale metadata for playback', () => {
     const setRate = vi.fn()
     const node = createNode('corrected-grid', 8, 0, setRate)

@@ -14,7 +14,8 @@ export type TransportPlayableSource = {
   onended: (() => void) | null
   connect: (destination: AudioNode) => void
   disconnect: () => void
-  start: (when?: number, offset?: number) => void
+  start: (when?: number, offset?: number) => void | Promise<void>
+  prepareStart?: (offset: number) => Promise<void>
   stop: (when?: number) => void
 }
 
