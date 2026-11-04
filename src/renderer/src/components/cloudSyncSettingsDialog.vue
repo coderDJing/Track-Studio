@@ -296,6 +296,8 @@ onUnmounted(() => utils.delHotkeysScope(uuid))
           <section class="settings-section">
             <div class="section-title">{{ t('cloudSync.sectionLibrary') }}</div>
             <CuratedLibrarySyncSettings ref="curatedSettingsRef" />
+          </section>
+          <section class="settings-section">
             <div class="section-title">{{ t('cloudSync.setLibrary.section') }}</div>
             <SetLibrarySyncSettings />
           </section>

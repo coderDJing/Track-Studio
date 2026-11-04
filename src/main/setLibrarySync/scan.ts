@@ -11,7 +11,6 @@ import { exportTrackWaveforms } from '../services/setPackage/waveformTransfer'
 import { stripMachineLocalSongFields } from '../services/setPackage/manifest'
 import {
   loadSetSongCacheCandidates,
-  readSetSongCacheCandidates,
   setSongCacheLookupKey
 } from '../services/setListCachedSongScan'
 import {
@@ -22,6 +21,7 @@ import {
   type SetSyncSnapshot
 } from '../../shared/setLibrarySync'
 import { parseSetSnapshot } from './validation'
+import { readSetContentGeneration } from './generation'
 
 export type SetLocalItem = {
   id: string
@@ -100,32 +100,7 @@ export function readSetTree() {
 export function setLocalGuard(): string {
   const db = getLibraryDb()
   if (!db) throw new Error('SET_SYNC_LIBRARY_NOT_READY')
-  const items = db.prepare<{ file_path: string }>('SELECT * FROM set_items ORDER BY id').all()
-  const paths = items.map((i) =>
-    path.isAbsolute(i.file_path)
-      ? i.file_path
-      : path.join(store.databaseDir, 'library', i.file_path)
-  )
-  return createHash('sha256')
-    .update(
-      stableSetJson({
-        nodes: readSetTree().nodes,
-        items,
-        // Analysis edits live in song_cache, independently of set_items.
-        cache: [...readSetSongCacheCandidates(paths, true)],
-        detail: db
-          .prepare(
-            'SELECT list_root, file_path, updated_at_ms FROM unified_display_waveform_cache ORDER BY list_root, file_path'
-          )
-          .all(),
-        surfaces: db
-          .prepare(
-            'SELECT list_root, file_path, updated_at_ms FROM waveform_surface_cache ORDER BY list_root, file_path'
-          )
-          .all()
-      })
-    )
-    .digest('hex')
+  return readSetContentGeneration(db)
 }
 
 export async function scanSetLibrary(signal: AbortSignal): Promise<SetLocalScan> {

@@ -94,16 +94,17 @@ const cancel = () => window.electron.ipcRenderer.invoke('setLibrarySync/cancel')
 
 <template>
   <div class="set-sync">
-    <label class="setting-block" for="set-library-cloud-sync">{{
-      t('cloudSync.setLibrary.enabled')
-    }}</label>
-    <div class="setting-control">
+    <div class="enable-row">
       <singleCheckbox
         id="set-library-cloud-sync"
         v-model="enabled"
         :disabled="busy"
         @change="changeEnabled"
-      />
+      >
+        {{ t('cloudSync.setLibrary.enabled') }}
+      </singleCheckbox>
+    </div>
+    <div class="sync-details">
       <p>{{ t('cloudSync.setLibrary.scopeHint') }}</p>
       <p>{{ t('cloudSync.setLibrary.custodyHint') }}</p>
       <p v-if="status?.running" role="status">
@@ -149,13 +150,19 @@ const cancel = () => window.electron.ipcRenderer.invoke('setLibrarySync/cancel')
 
 <style scoped>
 .set-sync {
-  display: grid;
-  grid-template-columns: minmax(90px, 1fr) minmax(0, 3fr);
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  text-align: left;
   color: var(--text);
 }
-.setting-block {
+.enable-row {
+  margin-top: 18px;
   font-size: 13px;
+}
+.sync-details {
+  min-width: 0;
+  margin-top: 4px;
 }
 p {
   margin: 6px 0;
@@ -171,6 +178,8 @@ p {
   margin-top: 10px;
 }
 button {
+  font: inherit;
+  font-size: 12px;
   padding: 6px 12px;
   color: var(--text);
   background: var(--bg-elev);
@@ -200,10 +209,5 @@ button:hover:enabled {
   border-bottom: 1px solid var(--border);
   font-size: 12px;
   overflow-wrap: anywhere;
-}
-@media (max-width: 520px) {
-  .set-sync {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 </style>
