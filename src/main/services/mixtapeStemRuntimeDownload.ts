@@ -27,10 +27,15 @@ import {
   runProbeProcess
 } from './mixtapeStemSeparationShared'
 import { probeWindowsGpuAdapters } from './mixtapeStemSeparationProbe'
-import { getCachedStemDeviceProbeSnapshot, probeDemucsDevices } from './mixtapeStemSeparationProbe'
+import { probeDemucsDevices } from './mixtapeStemSeparationProbe'
 import { invalidateStemDeviceProbeCache } from './mixtapeStemSeparationProbe'
 import { installRuntimeFromManifestEntry } from './mixtapeStemRuntimeDownloadInstall'
-import { hasBpmFixRuntimeSupport } from './bpmFixRuntimeSupport'
+import type { AnalysisRuntimeFeature } from '../../shared/analysisRuntimeFeatures'
+import {
+  clearAnalysisRuntimeCapabilityCache,
+  getAnalysisRuntimeFeatureProbeCode,
+  hasAnalysisRuntimeFeatureSupport
+} from './analysisRuntimeCapabilities'
 
 const DEFAULT_DEMUCS_RUNTIME_RELEASE_TAG = 'demucs-runtime-assets'
 const DEFAULT_DEMUCS_RUNTIME_RC_RELEASE_TAG = 'demucs-runtime-assets-rc'
@@ -69,16 +74,6 @@ type RuntimeAssetManifest = {
   assets: RuntimeAssetEntry[]
 }
 
-type InstalledRuntimeVersionInfo = {
-  profile?: string
-  runtimeKey?: string
-  version?: string
-  archiveUrl?: string
-  archiveSha256?: string
-  contentHash?: string
-  installedAt?: string
-}
-
 export type MixtapeStemRuntimeDownloadState = {
   status: 'idle' | 'available' | 'downloading' | 'extracting' | 'ready' | 'failed'
   profile: RuntimeProfileName | ''
@@ -111,10 +106,14 @@ export type MixtapeStemRuntimeDownloadInfo = {
 }
 
 let runtimeManifestPromise: Promise<RuntimeAssetManifest | null> | null = null
-const runtimeEnsurePromiseByProfile = new Map<string, Promise<boolean>>()
+const runtimeEnsurePromiseByProfile = new Map<
+  string,
+  { feature: AnalysisRuntimeFeature; promise: Promise<boolean> }
+>()
 let runtimeDownloadProxyDispatcher: ProxyAgent | undefined
 let runtimeDownloadProxyInitialized = false
 let runtimeManifestLastError = ''
+let failedRuntimeFeature: AnalysisRuntimeFeature | undefined
 let runtimeDownloadState: MixtapeStemRuntimeDownloadState = {
   status: 'idle',
   profile: '',
@@ -308,6 +307,8 @@ const resetStemRuntimeDownloadState = () => {
   runtimeEnsurePromiseByProfile.clear()
   runtimeManifestPromise = null
   runtimeManifestLastError = ''
+  failedRuntimeFeature = undefined
+  clearAnalysisRuntimeCapabilityCache()
   runtimeDownloadState = {
     status: 'idle',
     profile: '',
@@ -473,7 +474,11 @@ const summarizeRuntimeInstallValidationFailure = (rawError: string) => {
   return errorText
 }
 
-const validateInstalledRuntime = async (entry: RuntimeAssetEntry, runtimeDir: string) => {
+const validateInstalledRuntime = async (
+  entry: RuntimeAssetEntry,
+  runtimeDir: string,
+  feature: AnalysisRuntimeFeature
+) => {
   const pythonPath = path.join(runtimeDir, entry.pythonRelativePath)
   if (!(await fileExists(pythonPath))) {
     throw createStemError(
@@ -485,22 +490,10 @@ const validateInstalledRuntime = async (entry: RuntimeAssetEntry, runtimeDir: st
   const env = buildStemProcessEnv(runtimeDir, ffmpegPath)
   const probeScript = [
     'import json',
-    'payload = {',
-    '  "torch": False,',
-    '  "torchaudio": False,',
-    '  "demucs": False,',
-    '  "cuda": False,',
-    '  "error": ""',
-    '}',
+    'payload = {"ready": False, "error": ""}',
     'try:',
-    '  import torch',
-    '  payload["torch"] = True',
-    '  payload["cuda"] = bool(getattr(torch, "cuda", None) and torch.cuda.is_available())',
-    '  import torchaudio',
-    '  payload["torchaudio"] = True',
-    '  import demucs',
-    '  payload["demucs"] = True',
-    '  from librosa.beat import beat_track',
+    `  ${getAnalysisRuntimeFeatureProbeCode(feature)}`,
+    '  payload["ready"] = True',
     'except Exception as exc:',
     '  payload["error"] = str(exc)',
     'print(json.dumps(payload))'
@@ -536,7 +529,7 @@ const validateInstalledRuntime = async (entry: RuntimeAssetEntry, runtimeDir: st
       `运行时安装校验失败: ${validationError || `exit=${result.status ?? -1}`}`
     )
   }
-  let payload: { torch?: boolean; torchaudio?: boolean; demucs?: boolean; error?: string } = {}
+  let payload: { ready?: boolean; error?: string } = {}
   try {
     payload = JSON.parse(lastLine)
   } catch (error) {
@@ -545,30 +538,14 @@ const validateInstalledRuntime = async (entry: RuntimeAssetEntry, runtimeDir: st
       `运行时安装校验结果不可解析: ${error instanceof Error ? error.message : String(error || '')}`
     )
   }
-  if (
-    !payload.torch ||
-    !payload.torchaudio ||
-    !payload.demucs ||
-    normalizeText(payload.error, 500)
-  ) {
+  if (!payload.ready || normalizeText(payload.error, 500)) {
     throw createStemError(
       'STEM_RUNTIME_DOWNLOAD_INVALID',
       `运行时安装校验失败: ${normalizeText(payload.error, 500) || JSON.stringify(payload)}`
     )
   }
-}
-
-const readInstalledRuntimeVersionInfo = async (
-  runtimeDir: string
-): Promise<InstalledRuntimeVersionInfo | null> => {
-  const versionPath = resolveRuntimeInstalledVersionPath(runtimeDir)
-  if (!(await fileExists(versionPath))) return null
-  try {
-    const installedRaw = await fs.promises.readFile(versionPath, 'utf8')
-    const installed = JSON.parse(installedRaw) as InstalledRuntimeVersionInfo
-    return installed && typeof installed === 'object' ? installed : null
-  } catch {
-    return null
+  if (feature !== 'stem' && !(await hasBundledBeatThisSupport(runtimeDir))) {
+    throw createStemError('STEM_RUNTIME_DOWNLOAD_INVALID', '运行时缺少节拍分析组件或模型')
   }
 }
 
@@ -619,7 +596,6 @@ const hasBundledBeatThisSupport = async (runtimeDir: string) => {
   const sitePackagesDir = resolveRuntimeSitePackagesDir(runtimeDir)
   const beatThisPackagePath = sitePackagesDir ? path.join(sitePackagesDir, 'beat_this') : ''
   if (!beatThisPackagePath || !(await fileExists(beatThisPackagePath))) return false
-  if (runtimeMeta?.beatThisInstalled === false) return false
   const checkpointCandidates = resolveRuntimeBeatThisCheckpointCandidates(runtimeDir, runtimeMeta)
   for (const checkpointPath of checkpointCandidates) {
     if (await fileExists(checkpointPath)) return true
@@ -627,137 +603,22 @@ const hasBundledBeatThisSupport = async (runtimeDir: string) => {
   return false
 }
 
-const resolveInstalledRuntimeContentHash = async (
-  runtimeDir: string,
-  installed: InstalledRuntimeVersionInfo | null,
-  entry: RuntimeAssetEntry
-) => {
-  const installedContentHash = normalizeText(installed?.contentHash, 120).toLowerCase()
-  if (installedContentHash) return installedContentHash
-  if (!normalizeText(entry.contentHash, 120)) return ''
-  const runtimeMeta = await readRuntimeMetaFile(runtimeDir)
-  if (!runtimeMeta) return ''
-  try {
-    return createRuntimeContentHash({
-      platform: entry.platform,
-      profile: entry.profile,
-      runtimeKey: entry.runtimeKey,
-      pythonRelativePath: entry.pythonRelativePath,
-      runtimeMeta
-    })
-  } catch {
-    return ''
-  }
-}
-
-const isInstalledRuntimeLegacyCompatible = async (
-  runtimeDir: string,
-  installed: InstalledRuntimeVersionInfo | null,
-  entry: RuntimeAssetEntry
-) => {
-  const runtimeMeta = await readRuntimeMetaFile(runtimeDir)
-  if (!runtimeMeta) return false
-  const probe =
-    runtimeMeta.probe && typeof runtimeMeta.probe === 'object'
-      ? (runtimeMeta.probe as Record<string, unknown>)
-      : {}
-  const runtimeKeyFromInstalled = normalizeText(installed?.runtimeKey, 120)
-  const profileFromInstalled = normalizeText(installed?.profile, 120)
-  const torchVersionFromMeta = normalizeText(runtimeMeta.torchVersion || probe.torch_version, 120)
-  const expectedTorchVersion = normalizeText(entry.torchVersion, 120)
-  if (runtimeKeyFromInstalled && runtimeKeyFromInstalled !== entry.runtimeKey) return false
-  if (profileFromInstalled && profileFromInstalled !== entry.profile) return false
-  if (
-    expectedTorchVersion &&
-    torchVersionFromMeta &&
-    torchVersionFromMeta !== expectedTorchVersion
-  ) {
-    return false
-  }
-  if (entry.profile === 'directml') {
-    const directmlInstalled = !!(runtimeMeta.directmlInstalled ?? probe.directml_installed)
-    if (!directmlInstalled) return false
-  }
-  if (entry.profile === 'xpu') {
-    const xpuBackendInstalled = !!(runtimeMeta.xpuBackendInstalled ?? probe.xpu_backend_installed)
-    if (!xpuBackendInstalled) return false
-  }
-  return true
-}
-
-const doesInstalledRuntimeMatchEntry = async (
-  runtimeDir: string,
-  installed: InstalledRuntimeVersionInfo | null,
-  entry: RuntimeAssetEntry
-) => {
-  if (!installed) return false
-  const installedRuntimeKey = normalizeText(installed.runtimeKey, 120)
-  const installedProfile = normalizeText(installed.profile, 120)
-  const installedVersion = normalizeText(installed.version, 120)
-  const installedArchiveSha256 = normalizeText(installed.archiveSha256, 120).toLowerCase()
-  const expectedContentHash = normalizeText(entry.contentHash, 120).toLowerCase()
-  if (installedRuntimeKey && installedRuntimeKey !== entry.runtimeKey) return false
-  if (installedProfile && installedProfile !== entry.profile) return false
-  if (expectedContentHash) {
-    const installedContentHash = await resolveInstalledRuntimeContentHash(
-      runtimeDir,
-      installed,
-      entry
-    )
-    return !!installedContentHash && installedContentHash === expectedContentHash
-  }
-  const legacyExactMatched =
-    installedVersion === entry.version &&
-    installedArchiveSha256 ===
-      String(entry.archiveSha256 || '')
-        .trim()
-        .toLowerCase()
-  if (legacyExactMatched) return true
-  if (await isInstalledRuntimeLegacyCompatible(runtimeDir, installed, entry)) return true
-  if (installedVersion !== entry.version) return false
-  if (
-    installedArchiveSha256 !==
-    String(entry.archiveSha256 || '')
-      .trim()
-      .toLowerCase()
-  )
-    return false
-  return true
-}
-
-const isRuntimeAlreadyAvailable = async (entry: RuntimeAssetEntry, requireBpmFix = false) => {
-  const candidate = resolveBundledDemucsRuntimeCandidates().find(
-    (item) => item.key === entry.runtimeKey
-  )
-  if (candidate?.pythonPath && fs.existsSync(candidate.pythonPath)) {
-    if (!(await hasBundledBeatThisSupport(candidate.runtimeDir))) return false
-    if (
-      requireBpmFix &&
-      !(await hasBpmFixRuntimeSupport(candidate.pythonPath, candidate.runtimeDir))
-    )
-      return false
-    if (candidate.runtimeDir.startsWith(resolveInstalledDemucsPlatformRootPath())) {
-      const installed = await readInstalledRuntimeVersionInfo(candidate.runtimeDir)
-      if (await doesInstalledRuntimeMatchEntry(candidate.runtimeDir, installed, entry)) return true
-    } else {
-      return true
-    }
-  }
-  return false
-}
-
-const resolveAnyLocalRuntimeAvailability = async (): Promise<{
+const resolveAnyLocalRuntimeAvailability = async (
+  feature: AnalysisRuntimeFeature
+): Promise<{
   alreadyAvailable: boolean
   profile: RuntimeProfileName | ''
   runtimeKey: string
   title: string
+  runtimeDir: string
+  pythonPath: string
 }> => {
   const runtimeCandidatesRaw = resolveBundledDemucsRuntimeCandidates().filter(
     (candidate) => !!normalizeText(candidate.key, 120) && fs.existsSync(candidate.pythonPath)
   )
   const runtimeCandidates: typeof runtimeCandidatesRaw = []
   for (const candidate of runtimeCandidatesRaw) {
-    if (await hasBundledBeatThisSupport(candidate.runtimeDir)) {
+    if (feature === 'stem' || (await hasBundledBeatThisSupport(candidate.runtimeDir))) {
       runtimeCandidates.push(candidate)
     }
   }
@@ -766,23 +627,9 @@ const resolveAnyLocalRuntimeAvailability = async (): Promise<{
       alreadyAvailable: false,
       profile: '',
       runtimeKey: '',
-      title: ''
-    }
-  }
-
-  const cachedProbe = getCachedStemDeviceProbeSnapshot()
-  if (
-    cachedProbe?.runtimeUsable &&
-    normalizeText(cachedProbe.runtimeKey, 120) &&
-    fs.existsSync(cachedProbe.pythonPath) &&
-    (await hasBundledBeatThisSupport(cachedProbe.runtimeDir))
-  ) {
-    const profile = resolveRuntimeProfileByRuntimeKey(cachedProbe.runtimeKey)
-    return {
-      alreadyAvailable: true,
-      profile,
-      runtimeKey: cachedProbe.runtimeKey,
-      title: resolveRuntimeProfileTitle(profile)
+      title: '',
+      runtimeDir: '',
+      pythonPath: ''
     }
   }
 
@@ -792,40 +639,64 @@ const resolveAnyLocalRuntimeAvailability = async (): Promise<{
       runtimeSnapshot.runtimeUsable &&
       normalizeText(runtimeSnapshot.runtimeKey, 120) &&
       fs.existsSync(runtimeSnapshot.pythonPath) &&
-      (await hasBundledBeatThisSupport(runtimeSnapshot.runtimeDir))
+      (feature === 'stem' || (await hasBundledBeatThisSupport(runtimeSnapshot.runtimeDir)))
     ) {
       const profile = resolveRuntimeProfileByRuntimeKey(runtimeSnapshot.runtimeKey)
       return {
         alreadyAvailable: true,
         profile,
         runtimeKey: runtimeSnapshot.runtimeKey,
-        title: resolveRuntimeProfileTitle(profile)
+        title: resolveRuntimeProfileTitle(profile),
+        runtimeDir: runtimeSnapshot.runtimeDir,
+        pythonPath: runtimeSnapshot.pythonPath
       }
     }
   } catch {}
 
-  const fallbackCandidate = runtimeCandidates[0]
-  const fallbackRuntimeKey = normalizeText(fallbackCandidate?.key, 120)
-  const fallbackProfile = resolveRuntimeProfileByRuntimeKey(fallbackRuntimeKey)
   return {
-    alreadyAvailable: true,
-    profile: fallbackProfile,
-    runtimeKey: fallbackRuntimeKey,
-    title: resolveRuntimeProfileTitle(fallbackProfile)
+    alreadyAvailable: false,
+    profile: '',
+    runtimeKey: '',
+    title: '',
+    runtimeDir: '',
+    pythonPath: ''
   }
+}
+
+const isRuntimeAlreadyAvailable = async (
+  entry: RuntimeAssetEntry,
+  feature: AnalysisRuntimeFeature
+) => {
+  const local = await resolveAnyLocalRuntimeAvailability(feature)
+  if (!local.alreadyAvailable || local.runtimeKey !== entry.runtimeKey) return false
+  return await hasAnalysisRuntimeFeatureSupport(feature, local.pythonPath, local.runtimeDir)
 }
 
 const ensureRuntimeProfileAvailable = async (
   profile: RuntimeProfileName,
   options?: {
     emitState?: boolean
-    requireBpmFix?: boolean
+    feature?: AnalysisRuntimeFeature
   }
 ): Promise<boolean> => {
   const platform = resolveDemucsPlatformDir()
   const promiseKey = `${platform}:${profile}`
   const existing = runtimeEnsurePromiseByProfile.get(promiseKey)
-  if (existing) return await existing
+  if (existing) {
+    if (existing.feature === (options?.feature || 'analysis')) return await existing.promise
+    await existing.promise
+    const local = await resolveAnyLocalRuntimeAvailability(options?.feature || 'analysis')
+    if (
+      local.alreadyAvailable &&
+      (await hasAnalysisRuntimeFeatureSupport(
+        options?.feature || 'analysis',
+        local.pythonPath,
+        local.runtimeDir
+      ))
+    )
+      return true
+    return await ensureRuntimeProfileAvailable(profile, options)
+  }
 
   const task = (async () => {
     const manifest = await readRuntimeManifest()
@@ -833,7 +704,7 @@ const ensureRuntimeProfileAvailable = async (
     const entry =
       manifest.assets.find((item) => item.platform === platform && item.profile === profile) || null
     if (!entry) return false
-    if (await isRuntimeAlreadyAvailable(entry, options?.requireBpmFix)) {
+    if (await isRuntimeAlreadyAvailable(entry, options?.feature || 'analysis')) {
       if (options?.emitState) {
         updateRuntimeDownloadState({
           status: 'ready',
@@ -862,15 +733,20 @@ const ensureRuntimeProfileAvailable = async (
           resolveRuntimeProfileTitle,
           resolveInstalledRuntimeDir,
           fileExists,
-          validateInstalledRuntime,
+          validateInstalledRuntime: (selectedEntry, runtimeDir) =>
+            validateInstalledRuntime(selectedEntry, runtimeDir, options?.feature || 'analysis'),
           readRuntimeMetaFile,
           cleanupRuntimeDownloadArtifacts,
           createRuntimeContentHash
         },
         options?.emitState ? updateRuntimeDownloadState : undefined
       )
+      invalidateStemDeviceProbeCache()
+      clearAnalysisRuntimeCapabilityCache()
+      failedRuntimeFeature = undefined
       return true
     } catch (error) {
+      failedRuntimeFeature = options?.feature || 'analysis'
       if (options?.emitState) {
         updateRuntimeDownloadState({
           status: 'failed',
@@ -888,12 +764,15 @@ const ensureRuntimeProfileAvailable = async (
   })().finally(() => {
     runtimeEnsurePromiseByProfile.delete(promiseKey)
   })
-  runtimeEnsurePromiseByProfile.set(promiseKey, task)
+  runtimeEnsurePromiseByProfile.set(promiseKey, {
+    feature: options?.feature || 'analysis',
+    promise: task
+  })
   return await task
 }
 
 export const getPreferredStemRuntimeDownloadInfo = async (
-  requireBpmFix = false
+  feature: AnalysisRuntimeFeature = 'analysis'
 ): Promise<MixtapeStemRuntimeDownloadInfo> => {
   const preferredProfiles = await resolvePreferredRuntimeProfiles()
   if (preferredProfiles.length === 0) {
@@ -913,16 +792,33 @@ export const getPreferredStemRuntimeDownloadInfo = async (
       state: getStemRuntimeDownloadState()
     }
   }
+  const localRuntime = await resolveAnyLocalRuntimeAvailability(feature)
+  if (localRuntime.alreadyAvailable) {
+    localRuntime.alreadyAvailable = await hasAnalysisRuntimeFeatureSupport(
+      feature,
+      localRuntime.pythonPath,
+      localRuntime.runtimeDir
+    )
+  }
+  if (localRuntime.alreadyAvailable) {
+    return {
+      supported: true,
+      downloadable: false,
+      alreadyAvailable: true,
+      profile: localRuntime.profile,
+      runtimeKey: localRuntime.runtimeKey,
+      version: '',
+      archiveSize: 0,
+      title: localRuntime.title,
+      reason: 'already available',
+      manifestUrl: resolveRuntimeManifestUrl(),
+      releaseTag: '',
+      error: '',
+      state: getStemRuntimeDownloadState()
+    }
+  }
   const manifest = await readRuntimeManifest()
   if (!manifest) {
-    const localRuntime = await resolveAnyLocalRuntimeAvailability()
-    if (requireBpmFix && localRuntime.alreadyAvailable) {
-      const candidate = resolveBundledDemucsRuntimeCandidates().find(
-        (item) => item.key === localRuntime.runtimeKey
-      )
-      localRuntime.alreadyAvailable =
-        !!candidate && (await hasBpmFixRuntimeSupport(candidate.pythonPath, candidate.runtimeDir))
-    }
     const fallbackProfile = localRuntime.profile || preferredProfiles[0] || ''
     return {
       supported: true,
@@ -966,10 +862,10 @@ export const getPreferredStemRuntimeDownloadInfo = async (
       state: getStemRuntimeDownloadState()
     }
   }
-  const alreadyAvailable = await isRuntimeAlreadyAvailable(entry, requireBpmFix)
+  const alreadyAvailable = await isRuntimeAlreadyAvailable(entry, feature)
   return {
     supported: true,
-    downloadable: !alreadyAvailable && (!requireBpmFix || entry.bpmFixReady === true),
+    downloadable: !alreadyAvailable && (feature !== 'bpm-fix' || entry.bpmFixReady === true),
     alreadyAvailable,
     profile: entry.profile,
     runtimeKey: entry.runtimeKey,
@@ -978,7 +874,7 @@ export const getPreferredStemRuntimeDownloadInfo = async (
     title: resolveRuntimeProfileTitle(entry.profile),
     reason: alreadyAvailable
       ? 'already available'
-      : requireBpmFix && !entry.bpmFixReady
+      : feature === 'bpm-fix' && !entry.bpmFixReady
         ? 'bpm fix asset unavailable'
         : '',
     manifestUrl: resolveRuntimeManifestUrl(),
@@ -988,8 +884,10 @@ export const getPreferredStemRuntimeDownloadInfo = async (
   }
 }
 
-export const downloadPreferredStemRuntime = async (requireBpmFix = false): Promise<boolean> => {
-  const info = await getPreferredStemRuntimeDownloadInfo(requireBpmFix)
+export const downloadPreferredStemRuntime = async (
+  feature: AnalysisRuntimeFeature = 'analysis'
+): Promise<boolean> => {
+  const info = await getPreferredStemRuntimeDownloadInfo(feature)
   if (info.reason === 'manifest unavailable') {
     updateRuntimeDownloadState({
       status: 'failed',
@@ -1027,6 +925,7 @@ export const downloadPreferredStemRuntime = async (requireBpmFix = false): Promi
   const failedState = getStemRuntimeDownloadState()
   if (
     failedState.status === 'failed' &&
+    failedRuntimeFeature === feature &&
     failedState.profile === info.profile &&
     failedState.runtimeKey === info.runtimeKey &&
     failedState.version === info.version &&
@@ -1049,6 +948,6 @@ export const downloadPreferredStemRuntime = async (requireBpmFix = false): Promi
   })
   return await ensureRuntimeProfileAvailable(info.profile, {
     emitState: true,
-    requireBpmFix
+    feature
   })
 }

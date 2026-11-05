@@ -227,7 +227,7 @@ export async function enqueueLibraryStemJob(params: {
 
   const snapshot = await getLibraryStemStatusSnapshot(params?.filePath || '', model)
   if (!snapshot.filePath || !fs.existsSync(snapshot.filePath)) return snapshot
-  if (!(await isAnalysisRuntimeAvailable())) {
+  if (!(await isAnalysisRuntimeAvailable('stem'))) {
     return createLibraryStemSnapshot({
       ...snapshot,
       status: 'failed',

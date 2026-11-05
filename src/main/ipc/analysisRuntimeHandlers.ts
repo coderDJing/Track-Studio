@@ -1,3 +1,4 @@
+import { normalizeAnalysisRuntimeFeature } from '../../shared/analysisRuntimeFeatures'
 import { ipcMain } from 'electron'
 import store from '../store'
 import {
@@ -12,15 +13,17 @@ import mainWindow from '../window/mainWindow'
 const ANALYSIS_RUNTIME_CLEAR_PROGRESS_ID = 'analysis-runtime.clear-local'
 
 export function registerAnalysisRuntimeHandlers() {
-  ipcMain.handle('analysis-runtime:get-status', async (_event, requireBpmFix: unknown) => {
+  ipcMain.handle('analysis-runtime:get-status', async (_event, feature: unknown) => {
     return {
-      preferred: await getPreferredAnalysisRuntimeDownloadInfo(requireBpmFix === true),
+      preferred: await getPreferredAnalysisRuntimeDownloadInfo(
+        normalizeAnalysisRuntimeFeature(feature)
+      ),
       state: getAnalysisRuntimeDownloadState()
     }
   })
 
-  ipcMain.handle('analysis-runtime:download-preferred', async (_event, requireBpmFix: unknown) => {
-    const started = await downloadPreferredAnalysisRuntime(requireBpmFix === true)
+  ipcMain.handle('analysis-runtime:download-preferred', async (_event, feature: unknown) => {
+    const started = await downloadPreferredAnalysisRuntime(normalizeAnalysisRuntimeFeature(feature))
     return {
       started,
       state: getAnalysisRuntimeDownloadState()

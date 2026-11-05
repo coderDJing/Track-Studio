@@ -1,13 +1,14 @@
 {
   "analysisRuntime": {
     "promptTitle": "检测到可用的分析运行时组件",
-    "promptBody": "当前电脑支持使用 {title} 加速 BPM/网格分析、双轨横推与 Stem 分离。现在可下载安装该组件（约 {size}）；未完成安装前，上述功能不可用。",
+    "featureUpdateBody": "该功能需要下载或更新 {title} 分析组件（约 {size}）。已支持的功能仍可继续使用。",
+    "promptBody": "当前电脑可下载 {title} 分析组件（约 {size}），用于支持相应的分析功能。",
     "promptHint": "如当前网络无法访问 GitHub，可尝试开启 VPN，或确认系统代理 / PAC 已对 Track Studio 生效。",
     "downloadNow": "立即下载",
     "downloadLater": "暂不下载",
     "downloadTitle": "正在下载 {title}",
     "downloadTitleGeneric": "正在准备分析运行时组件",
-    "downloadBlockingHint": "安装完成前，BPM/网格分析、双轨横推与 Stem 分离暂不可用。",
+    "downloadBlockingHint": "正在准备当前功能所需的组件，已就绪的其他功能仍可继续使用。",
     "downloadInProgressTitle": "{title} 正在下载中",
     "downloadInProgressTitleGeneric": "分析运行时正在准备中",
     "downloadInProgressHint": "当前正在下载或解压分析运行时组件，请稍候；完成前该功能暂不可用。",
@@ -16,13 +17,13 @@
     "extractingText": "下载完成，正在解压并校验运行时组件……",
     "minimizeOverlay": "最小化到进度条",
     "restoreOverlay": "查看下载",
-    "readyHint": "{title} 组件已准备完成，后续 BPM/网格分析、双轨横推与 Stem 分离会自动使用该运行时。",
+    "readyHint": "{title} 组件已准备完成。",
     "unsupportedTitle": "分析运行时不可用",
-    "unsupportedHint": "当前电脑暂不支持可下载的分析运行时，BPM/网格分析、双轨横推与 Stem 分离暂不可用。",
+    "unsupportedHint": "当前电脑暂不支持该功能所需的分析组件。",
     "manifestUnavailableHint": "无法获取分析运行时下载清单，通常是网络连接、GitHub 访问或代理配置异常导致。",
-    "downloadFailedHint": "分析运行时下载失败，当前无法使用 BPM/网格分析、双轨横推与 Stem 分离。",
+    "downloadFailedHint": "分析组件下载失败，当前请求的功能暂不可用。",
     "downloadErrorHint": "错误详情：{error}",
-    "horizontalBlockedHint": "未安装分析运行时，暂不可进入双轨横推模式。请先下载可用的运行时组件。",
-    "stemBlockedHint": "未安装分析运行时，暂不可进入 Stem 工作台。请先下载可用的运行时组件。"
+    "horizontalBlockedHint": "当前分析组件尚不支持双轨横推，请先下载可用的组件。",
+    "stemBlockedHint": "当前分析组件尚不支持 Stem 工作台，请先下载可用的组件。"
   }
 }

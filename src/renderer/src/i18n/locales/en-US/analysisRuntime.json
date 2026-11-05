@@ -1,13 +1,14 @@
 {
   "analysisRuntime": {
     "promptTitle": "An analysis runtime component is available",
-    "promptBody": "This computer supports using {title} to accelerate BPM/grid analysis, dual-track horizontal browse, and stem separation. You can download this component ({size}) now. Until it is installed, those features stay unavailable.",
+    "featureUpdateBody": "This feature requires downloading or updating the {title} analysis component (about {size}). Features already supported remain available.",
+    "promptBody": "This computer can download the {title} analysis component (about {size}) for supported analysis features.",
     "promptHint": "If GitHub is unreachable from the current network, try enabling a VPN or make sure the system proxy / PAC is applied to Track Studio.",
     "downloadNow": "Download now",
     "downloadLater": "Later",
     "downloadTitle": "Downloading {title}",
     "downloadTitleGeneric": "Preparing the analysis runtime",
-    "downloadBlockingHint": "BPM/grid analysis, dual-track horizontal browse, and stem separation stay unavailable until setup finishes.",
+    "downloadBlockingHint": "Preparing the component for this feature. Other features that are ready remain available.",
     "downloadInProgressTitle": "{title} is downloading",
     "downloadInProgressTitleGeneric": "The analysis runtime is being prepared",
     "downloadInProgressHint": "The analysis runtime is currently downloading or extracting. This feature stays unavailable until it finishes.",
@@ -16,13 +17,13 @@
     "extractingText": "Download complete. Extracting and validating the runtime...",
     "minimizeOverlay": "Minimize to progress bar",
     "restoreOverlay": "View download",
-    "readyHint": "{title} is ready. Future BPM/grid analysis, dual-track horizontal browse, and stem separation will use this runtime automatically.",
+    "readyHint": "The {title} component is ready.",
     "unsupportedTitle": "Analysis runtime unavailable",
-    "unsupportedHint": "This computer does not currently support a downloadable analysis runtime. BPM/grid analysis, dual-track horizontal browse, and stem separation are unavailable.",
+    "unsupportedHint": "This computer does not currently support the analysis component required by this feature.",
     "manifestUnavailableHint": "Unable to fetch the analysis runtime manifest. This is usually caused by network, GitHub access, or proxy configuration issues.",
-    "downloadFailedHint": "Failed to download the analysis runtime. BPM/grid analysis, dual-track horizontal browse, and stem separation are unavailable right now.",
+    "downloadFailedHint": "The analysis component download failed. The requested feature is currently unavailable.",
     "downloadErrorHint": "Details: {error}",
-    "horizontalBlockedHint": "Dual-track horizontal browse is unavailable until the analysis runtime is installed.",
-    "stemBlockedHint": "Stem workspace is unavailable until the analysis runtime is installed."
+    "horizontalBlockedHint": "The current analysis component does not support dual-track horizontal browse. Download a compatible component first.",
+    "stemBlockedHint": "The current analysis component does not support the Stem workspace. Download a compatible component first."
   }
 }

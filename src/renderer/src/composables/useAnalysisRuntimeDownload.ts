@@ -1,3 +1,4 @@
+import type { AnalysisRuntimeFeature } from '@shared/analysisRuntimeFeatures'
 import { computed } from 'vue'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import {
@@ -178,8 +179,7 @@ export const useAnalysisRuntimeDownload = (options: {
     const state = normalizeAnalysisRuntimeDownloadState(params.state)
     options.runtime.analysisRuntime.preferred = preferred
     options.runtime.analysisRuntime.state = state
-    options.runtime.analysisRuntime.available =
-      preferred.alreadyAvailable || state.status === 'ready'
+    options.runtime.analysisRuntime.available = preferred.alreadyAvailable
     const nextActive = isAnalysisRuntimeDownloadActiveStatus(state.status)
     const prevActive = isAnalysisRuntimeDownloadActiveStatus(prevStatus)
     if ((nextActive && !prevActive) || !nextActive) {
@@ -203,6 +203,14 @@ export const useAnalysisRuntimeDownload = (options: {
       preferred: response?.preferred,
       state: response?.state
     })
+  }
+
+  const refreshAnalysisRuntimeStatusAfterInstall = async () => {
+    try {
+      await refreshAnalysisRuntimeStatus()
+    } catch (error) {
+      console.error('[analysis-runtime] 安装后检查组件状态失败', error)
+    }
   }
 
   const analysisRuntimeDownloadVisible = computed(() => {
@@ -232,12 +240,16 @@ export const useAnalysisRuntimeDownload = (options: {
   const promptAnalysisRuntimeDownload = async (
     source: AnalysisRuntimePromptSource
   ): Promise<AnalysisRuntimePromptResult> => {
-    if (source !== 'bpm-fix' && options.runtime.analysisRuntime.available) return 'ready'
+    const feature: AnalysisRuntimeFeature =
+      source === 'horizontal' || source === 'stem' || source === 'bpm-fix' ? source : 'analysis'
+    const isFeatureRequest = feature !== 'analysis'
+    if (!isFeatureRequest && options.runtime.analysisRuntime.available) return 'ready'
     if (analysisRuntimePromptBusy) {
-      const currentResult =
-        source === 'bpm-fix' && options.runtime.analysisRuntime.state.status === 'ready'
-          ? 'blocked'
-          : resolvePromptResultFromCurrentState()
+      const currentResult = isFeatureRequest
+        ? isAnalysisRuntimeDownloadActiveStatus(options.runtime.analysisRuntime.state.status)
+          ? 'started'
+          : 'blocked'
+        : resolvePromptResultFromCurrentState()
       if (currentResult === 'started' && source !== 'startup') {
         options.runtime.setAnalysisRuntimeDownloadOverlayMinimized(false)
         await showAnalysisRuntimeDownloadInProgressHint()
@@ -246,16 +258,15 @@ export const useAnalysisRuntimeDownload = (options: {
     }
     analysisRuntimePromptBusy = true
     try {
-      const bpmStatus =
-        source === 'bpm-fix'
-          ? normalizeAnalysisRuntimeStatusResponse(
-              await window.electron.ipcRenderer.invoke('analysis-runtime:get-status', true)
-            )
-          : null
-      const { preferred, state } = bpmStatus
+      const featureStatus = isFeatureRequest
+        ? normalizeAnalysisRuntimeStatusResponse(
+            await window.electron.ipcRenderer.invoke('analysis-runtime:get-status', feature)
+          )
+        : null
+      const { preferred, state } = featureStatus
         ? {
-            preferred: normalizeAnalysisRuntimePreferredInfo(bpmStatus.preferred),
-            state: normalizeAnalysisRuntimeDownloadState(bpmStatus.state)
+            preferred: normalizeAnalysisRuntimePreferredInfo(featureStatus.preferred),
+            state: normalizeAnalysisRuntimeDownloadState(featureStatus.state)
           }
         : await refreshAnalysisRuntimeStatus()
       if (preferred.alreadyAvailable) return 'ready'
@@ -324,7 +335,11 @@ export const useAnalysisRuntimeDownload = (options: {
         title: options.t('analysisRuntime.promptTitle'),
         content: [
           options.t(
-            source === 'bpm-fix' ? 'bpmFix.componentUpdatePrompt' : 'analysisRuntime.promptBody',
+            source === 'bpm-fix'
+              ? 'bpmFix.componentUpdatePrompt'
+              : isFeatureRequest && options.runtime.analysisRuntime.available
+                ? 'analysisRuntime.featureUpdateBody'
+                : 'analysisRuntime.promptBody',
             {
               title: preferred.title,
               size: formatAnalysisRuntimeBytes(preferred.archiveSize)
@@ -343,13 +358,16 @@ export const useAnalysisRuntimeDownload = (options: {
 
       const response = await window.electron.ipcRenderer.invoke(
         'analysis-runtime:download-preferred',
-        source === 'bpm-fix'
+        feature
       )
       const next = applyAnalysisRuntimeStatus({
-        preferred,
+        preferred: isFeatureRequest ? options.runtime.analysisRuntime.preferred : preferred,
         state: response?.state
       })
-      if (response?.started && next.state.status === 'ready') return 'ready'
+      if (response?.started && next.state.status === 'ready') {
+        await refreshAnalysisRuntimeStatusAfterInstall()
+        return 'ready'
+      }
       if (next.state.status === 'downloading' || next.state.status === 'extracting')
         return 'started'
       return 'blocked'
@@ -376,20 +394,11 @@ export const useAnalysisRuntimeDownload = (options: {
   }
 
   const ensureAnalysisRuntimeForFeature = async (params: {
-    source: Exclude<AnalysisRuntimePromptSource, 'startup'>
+    source: Exclude<AnalysisRuntimeFeature, 'analysis'>
     blockedHintKey: string
   }) => {
-    if (params.source !== 'bpm-fix' && options.runtime.analysisRuntime.available) {
-      return true
-    }
-
     const result = await promptAnalysisRuntimeDownload(params.source)
-    if (
-      result === 'ready' ||
-      (params.source !== 'bpm-fix' && options.runtime.analysisRuntime.available)
-    ) {
-      return true
-    }
+    if (result === 'ready') return true
     if (result === 'handled') return false
     if (
       result === 'started' ||
@@ -430,6 +439,7 @@ export const useAnalysisRuntimeDownload = (options: {
       state: payload
     })
     if (next.state.status === 'ready' && prevStatus !== 'ready' && next.state.title) {
+      await refreshAnalysisRuntimeStatusAfterInstall()
       await options.confirmDialog({
         title: options.t('common.success'),
         content: [options.t('analysisRuntime.readyHint', { title: next.state.title })],

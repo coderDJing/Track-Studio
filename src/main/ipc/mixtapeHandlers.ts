@@ -125,7 +125,7 @@ export function registerMixtapeHandlers() {
     const nextPayload = payload || {}
     const playlistId = typeof nextPayload.playlistId === 'string' ? nextPayload.playlistId : ''
     if (playlistId && getMixtapeProjectMixMode(playlistId) === 'stem') {
-      const runtimeAvailable = await isAnalysisRuntimeAvailable().catch(() => false)
+      const runtimeAvailable = await isAnalysisRuntimeAvailable('stem').catch(() => false)
       if (!runtimeAvailable) {
         try {
           mainWindow.instance?.webContents.send(
@@ -905,15 +905,7 @@ export function registerMixtapeHandlers() {
       const entries = Array.isArray(payload?.entries) ? payload.entries : []
       return upsertMixtapeItemMixEnvelopeById(
         paramRaw as
-          | 'gain'
-          | 'high'
-          | 'mid'
-          | 'low'
-          | 'vocal'
-          | 'inst'
-          | 'bass'
-          | 'drums'
-          | 'volume',
+          'gain' | 'high' | 'mid' | 'low' | 'vocal' | 'inst' | 'bass' | 'drums' | 'volume',
         entries.map((item) => ({
           itemId: typeof item?.itemId === 'string' ? item.itemId : '',
           gainEnvelope: Array.isArray(item?.gainEnvelope)

@@ -417,7 +417,7 @@ export const runStemSeparation = async (params: {
   let pythonPath =
     normalizeFilePath(deviceSnapshot.pythonPath) || resolveBundledDemucsPythonPath(runtimeDir)
   if (!fs.existsSync(pythonPath)) {
-    const downloaded = await downloadPreferredStemRuntime()
+    const downloaded = await downloadPreferredStemRuntime('stem')
     throwIfStemCancelled(params.signal)
     if (downloaded) {
       invalidateStemDeviceProbeCache()
