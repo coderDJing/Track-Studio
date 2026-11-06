@@ -444,7 +444,19 @@ export const applyTimelineTransportSync = (
       rawPhaseErrorSec = rawSyncDiagnostics.phaseErrorSec
       let postSyncDiagnostics = rawSyncDiagnostics
       if (!node.phaseAnchorLocked) {
-        runtimeSyncAnchorSec -= rawSyncDiagnostics.phaseErrorSec
+        if (masterPhaseGrid && rawSyncDiagnostics.masterBeatSec > 0) {
+          // The master-grid error is master beat minus target beat; align the
+          // virtual anchor in beat space so a tempo ramp does not introduce drift.
+          const targetBeat =
+            masterPhaseGrid.mapSecToBeats(audibleRuntimeSyncAnchorSec) +
+            rawSyncDiagnostics.phaseErrorSec / rawSyncDiagnostics.masterBeatSec
+          const firstBeat = masterPhaseGrid.mapSecToBeats(0)
+          const validTargetBeat =
+            targetBeat < firstBeat ? targetBeat + Math.ceil(firstBeat - targetBeat) : targetBeat
+          runtimeSyncAnchorSec = masterPhaseGrid.mapBeatsToSec(validTargetBeat) - latencySec
+        } else {
+          runtimeSyncAnchorSec -= rawSyncDiagnostics.phaseErrorSec
+        }
         node.runtimeSyncAnchorSec = runtimeSyncAnchorSec
         audibleRuntimeSyncAnchorSec = runtimeSyncAnchorSec + latencySec
         node.phaseAnchorLocked = true

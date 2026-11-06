@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { createMixtapeMasterGrid } from './mixtapeMasterGrid'
 import type { TransportPlayableSource } from './timelineTransportPlayableSource'
 import { applyTimelineTransportSync, type TransportSyncNode } from './timelineTransportSync'
 import type { SerializedTrackTempoSnapshot } from './types'
@@ -56,6 +57,108 @@ const createNode = (
 }
 
 describe('timeline transport source phase', () => {
+  it.each([0.02, -0.02])(
+    'locks an existing phase offset of %s seconds without inducing speed drift',
+    (offset) => {
+      const master = createNode('master', 8, 0, vi.fn())
+      const follower = createNode('follower', 8, 0, vi.fn())
+      master.entry.syncAnchorSec = 10
+      follower.entry.syncAnchorSec = 10 + offset
+      for (const timelineSec of [8, 20, 48]) {
+        const result = applyTimelineTransportSync({
+          nodes: [master, follower],
+          timelineSec,
+          masterTrackId: 'master',
+          audioCtx: { state: 'running', currentTime: timelineSec } as BaseAudioContext,
+          collectDiagnostics: true
+        })
+        expect(result.diagnostics[1].postPhaseErrorSec).toBeCloseTo(0, 8)
+        expect(result.diagnostics[1].phasePull).toBeCloseTo(0, 8)
+        expect(result.diagnostics[1].appliedRate).toBeCloseTo(1, 8)
+      }
+    }
+  )
+
+  it('keeps the aiSet 18/19 overlap at the same tempo on the edited BPM curve', () => {
+    const points = [
+      { sec: 0, bpm: 126 },
+      { sec: 3441.9396, bpm: 127.1828 },
+      { sec: 3551.2069, bpm: 129.9693 },
+      { sec: 4272.2224, bpm: 132.375 }
+    ]
+    const grid = createMixtapeMasterGrid({ points, fallbackBpm: 126 })
+    const master = createNode('18', 0, 0, vi.fn())
+    const follower = createNode('19', 0, 0, vi.fn())
+    for (const [node, startSec, sourceBpm] of [
+      [master, 3387.2021, 132],
+      [follower, 3588.7492, 130]
+    ] as const) {
+      node.entry.startSec = startSec
+      node.entry.duration = 300
+      node.entry.tempoSnapshot = {
+        ...createTempoSnapshot(),
+        signature: node.trackId,
+        gridSourceBpm: sourceBpm,
+        beatSourceSec: 60 / sourceBpm,
+        mappingMode: 'masterGrid',
+        trackStartSec: startSec,
+        masterGridPoints: points,
+        masterGridFallbackBpm: 130
+      }
+    }
+    master.entry.syncAnchorSec = master.entry.startSec
+    follower.entry.syncAnchorSec = grid.mapBeatsToSec(
+      grid.mapSecToBeats(follower.entry.startSec) + (0.2185 * 130) / 60
+    )
+
+    for (const timelineSec of [3600, 3620, 3640]) {
+      const result = applyTimelineTransportSync({
+        nodes: [master, follower],
+        timelineSec,
+        masterTrackId: '18',
+        audioCtx: { state: 'running', currentTime: timelineSec } as BaseAudioContext,
+        collectDiagnostics: true
+      })
+      const followerDiagnostic = result.diagnostics[1]
+      expect(Math.abs(followerDiagnostic.postPhaseErrorSec)).toBeLessThan(0.0001)
+      expect(Math.abs(followerDiagnostic.phasePull)).toBeLessThan(0.00004)
+      expect(followerDiagnostic.appliedRate).toBeCloseTo(followerDiagnostic.baseRate, 4)
+    }
+  })
+
+  it.each([-0.04, 0.04])(
+    'locks either direction of phase offset on a changing master grid (%s seconds)',
+    (offset) => {
+      const points = [
+        { sec: 0, bpm: 120 },
+        { sec: 120, bpm: 140 }
+      ]
+      const grid = createMixtapeMasterGrid({ points, fallbackBpm: 120 })
+      const master = createNode('master', 0, 0, vi.fn())
+      const follower = createNode('follower', 0, 0, vi.fn())
+      for (const node of [master, follower]) {
+        node.entry.tempoSnapshot = {
+          ...createTempoSnapshot(),
+          mappingMode: 'masterGrid',
+          trackStartSec: 0,
+          masterGridPoints: points,
+          masterGridFallbackBpm: 120
+        }
+      }
+      master.entry.syncAnchorSec = 5
+      follower.entry.syncAnchorSec = grid.mapBeatsToSec(grid.mapSecToBeats(5) + 32) + offset
+      const result = applyTimelineTransportSync({
+        nodes: [master, follower],
+        timelineSec: 60,
+        masterTrackId: 'master',
+        audioCtx: { state: 'running', currentTime: 60 } as BaseAudioContext,
+        collectDiagnostics: true
+      })
+      expect(Math.abs(result.diagnostics[1].postPhaseErrorSec)).toBeLessThan(0.0001)
+      expect(Math.abs(result.diagnostics[1].phasePull)).toBeLessThan(0.00004)
+    }
+  )
+
   it('hands Master to the next active track at the exact end, even when the previous source has latency', () => {
     const ended = createNode('ended', 120, 0.1, vi.fn())
     const next = createNode('next', 60, 0, vi.fn())
