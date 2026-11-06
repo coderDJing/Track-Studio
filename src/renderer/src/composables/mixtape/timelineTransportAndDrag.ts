@@ -1,4 +1,5 @@
 import { resolveTransportClockSec } from './timelineTransportClock'
+import { scrollTimelineViewportToPlayhead } from './timelineFollowPlayhead'
 import { ref, type Ref } from 'vue'
 import type { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { t } from '@renderer/utils/translate'
@@ -63,7 +64,6 @@ const MIX_ENVELOPE_PARAMS_4STEMS: MixtapeEnvelopeParamId[] = [
 ]
 const STEM_IDS_4STEMS: TransportStemId[] = ['vocal', 'inst', 'bass', 'drums']
 const MIXTAPE_SEGMENT_MUTE_GAIN = 0.0001
-const FOLLOW_PLAYHEAD_LOCK_RATIO = 1 / 3
 
 type ValueRef<T> = Ref<T>
 type TimelineScrollHost = InstanceType<typeof OverlayScrollbarsComponent>
@@ -89,6 +89,7 @@ type TimelineTransportAndDragContext = {
   computeTimelineDuration: () => number
   scheduleFullPreRender: () => void
   scheduleWorkerPreRender: () => void
+  syncTimelineScrollState: () => void
 }
 
 export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDragContext) => {
@@ -111,7 +112,8 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
     resolveTrackFirstBeatSeconds,
     computeTimelineDuration,
     scheduleFullPreRender,
-    scheduleWorkerPreRender
+    scheduleWorkerPreRender,
+    syncTimelineScrollState
   } = ctx
 
   const transportPlaying = ref(false)
@@ -431,24 +433,19 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
       Number(viewport.clientWidth || timelineViewportWidth.value || 0)
     )
     const layoutTotalWidth = Math.max(0, Number(timelineLayout.value.totalWidth || 0))
-    const scrollableWidth = Math.max(
-      viewportWidth,
-      layoutTotalWidth,
-      Number(viewport.scrollWidth || 0)
-    )
-    if (scrollableWidth <= viewportWidth) return
-    const maxScrollLeft = Math.max(0, scrollableWidth - viewportWidth)
     const pxPerSec = Math.max(0.0001, resolveRenderPxPerSec(normalizedRenderZoom.value))
     const playheadX = clampNumber(
       resolveTimelineDisplayX(timelineSec, pxPerSec, layoutTotalWidth),
       0,
       layoutTotalWidth
     )
-    const targetLocalX = viewportWidth * FOLLOW_PLAYHEAD_LOCK_RATIO
-    const nextLeft = clampNumber(playheadX - targetLocalX, 0, maxScrollLeft)
-    const currentScrollLeft = clampNumber(Number(viewport.scrollLeft || 0), 0, maxScrollLeft)
-    if (Math.abs(nextLeft - currentScrollLeft) < 0.5) return
-    viewport.scrollLeft = Math.round(nextLeft)
+    scrollTimelineViewportToPlayhead({
+      viewport,
+      viewportWidth,
+      layoutTotalWidth,
+      playheadX,
+      syncScrollState: syncTimelineScrollState
+    })
   }
 
   const finishTransportPlayback = () => {

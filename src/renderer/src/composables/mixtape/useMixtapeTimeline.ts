@@ -608,6 +608,7 @@ export const useMixtapeTimeline = (options: UseMixtapeTimelineOptions) => {
     postWaveformWorkerMessage({ type: 'cancelPreRender' })
   }
 
+  let syncTimelineScrollStateForFollow: (() => void) | undefined
   const {
     isTrackDragging,
     transportPlaying,
@@ -659,7 +660,8 @@ export const useMixtapeTimeline = (options: UseMixtapeTimelineOptions) => {
     resolveTrackFirstBeatSeconds,
     computeTimelineDuration,
     scheduleFullPreRender,
-    scheduleWorkerPreRender
+    scheduleWorkerPreRender,
+    syncTimelineScrollState: () => syncTimelineScrollStateForFollow?.()
   })
 
   const scheduleTimelineDrawBridgeRef: { value: null | (() => void) } = { value: null }
@@ -873,6 +875,7 @@ export const useMixtapeTimeline = (options: UseMixtapeTimelineOptions) => {
     applyRenderZoomImmediate,
     setZoomValue,
     updateTimelineWidth,
+    syncTimelineScrollState,
     startTimelineScrollSampler,
     handleTimelineWheel,
     handleTimelinePanStart,
@@ -913,6 +916,7 @@ export const useMixtapeTimeline = (options: UseMixtapeTimelineOptions) => {
     scheduleWaveformLoad,
     scheduleFullPreRender
   })
+  syncTimelineScrollStateForFollow = syncTimelineScrollState
 
   createTimelineWatchAndMountModule({
     tracks,
