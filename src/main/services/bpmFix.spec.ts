@@ -20,7 +20,6 @@ vi.mock('../ffmpeg', () => ({
 }))
 vi.mock('./childProcessRegistry', () => ({ terminateChildProcess: vi.fn() }))
 vi.mock('../log', () => ({ log: { error: vi.fn(), info: vi.fn() } }))
-vi.mock('./rcDiagnostics', () => ({ isPackagedRcBuild: vi.fn(() => false) }))
 vi.mock('./libraryMerge/mutationGate', () => ({
   tryBeginLibraryMaintenanceMutation: vi.fn(() => vi.fn())
 }))
@@ -36,7 +35,8 @@ vi.mock('./bpmFixProcess', () => ({
     env: {},
     device: 'cpu'
   })),
-  runBpmFixPipeline: vi.fn()
+  runBpmFixPipeline: vi.fn(),
+  closeBpmFixPipeline: vi.fn(async () => {})
 }))
 vi.mock('./bpmFixPlaylist', () => ({
   resolveBpmFixPlaylist: vi.fn(async () => ({ root: path.resolve('music'), uuid: 'list' })),
@@ -53,12 +53,12 @@ import {
   isBpmFixBusy,
   prepareBpmFix,
   startBpmFixAnalysis,
-  startBpmFixRepair
+  startBpmFixRepair,
+  cancelBpmFix
 } from './bpmFix'
 import { resolveBpmFixRuntime, runBpmFixPipeline } from './bpmFixProcess'
 import { publishBpmFixOutput } from './bpmFixFiles'
 import { log } from '../log'
-import { isPackagedRcBuild } from './rcDiagnostics'
 
 const owner = Object.assign(new EventEmitter(), {
   id: 42,
@@ -75,7 +75,7 @@ const prepare = () => prepareBpmFix(owner as unknown as WebContents, input)
 describe('BPM drift repair session', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(isPackagedRcBuild).mockReturnValue(false)
+    vi.mocked(runBpmFixPipeline).mockReset()
     vi.stubEnv('FRKB_R3_STRETCH_LIBRARY', path.resolve('vendor/stretch.dll'))
   })
   afterEach(async () => {
@@ -109,14 +109,54 @@ describe('BPM drift repair session', () => {
   })
 
   it.each([false, true])(
-    'records diagnostics only in RC and never publishes failed output (RC=%s)',
-    async (rc) => {
-      vi.mocked(isPackagedRcBuild).mockReturnValue(rc)
+    'automatic repair proceeds without a second click and respects cancellation (%s)',
+    async (cancel) => {
+      vi.mocked(runBpmFixPipeline)
+        .mockImplementationOnce(async () => {
+          if (cancel) cancelBpmFix(owner.id)
+          return {
+            public: {
+              sourceBpm: 128,
+              referenceBpm: 64,
+              confidence: 0.4,
+              agreement: 0,
+              regularity: 1,
+              driftMs: 150,
+              coverage: 1,
+              filledBeats: 0,
+              ignoredDetections: 0,
+              durationSec: 120,
+              tempoAmbiguous: true
+            },
+            analysis: { beats: [0, 0.5, 1] }
+          }
+        })
+        .mockRejectedValueOnce(new Error('BPM_FIX_VERIFICATION_FAILED'))
+      const snapshot = await prepare()
+      expect(() =>
+        startBpmFixAnalysis(owner.id, snapshot.id, { saveMode: 'invalid', format: 'wav' })
+      ).toThrow('BPM_FIX_INVALID_OPTIONS')
+      startBpmFixAnalysis(owner.id, snapshot.id, { saveMode: 'copy', format: 'wav' })
+      await vi.waitFor(() => expect(isBpmFixBusy()).toBe(false))
+      expect(runBpmFixPipeline).toHaveBeenCalledTimes(cancel ? 1 : 2)
+      if (cancel) expect(snapshot.status).toBe('cancelled')
+      else {
+        expect(vi.mocked(runBpmFixPipeline).mock.calls[1][2]).toContain('--automatic')
+        expect(snapshot.status).toBe('completed')
+        expect(snapshot.tracks[0].error).toBe('BPM_FIX_VERIFICATION_FAILED')
+      }
+      expect(publishBpmFixOutput).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([0.4, 0.9])(
+    'logs rejected verification and never publishes failed output (confidence=%s)',
+    async (confidence) => {
       vi.mocked(runBpmFixPipeline).mockResolvedValueOnce({
         public: {
           sourceBpm: 128,
           referenceBpm: 128,
-          confidence: 0.9,
+          confidence,
           agreement: 0.9,
           regularity: 0.9,
           driftMs: 150,
@@ -147,7 +187,7 @@ describe('BPM drift repair session', () => {
             enabled: true,
             tempoFactor: 1,
             targetBpm: 128,
-            allowLowConfidence: false
+            allowLowConfidence: confidence < 0.5
           }
         ]
       })
@@ -156,11 +196,11 @@ describe('BPM drift repair session', () => {
       expect(publishBpmFixOutput).not.toHaveBeenCalled()
       expect(snapshot.tracks[0].outputPath).toBeUndefined()
       const repairArgs = vi.mocked(runBpmFixPipeline).mock.calls[1][2]
-      expect(repairArgs.includes('--rc-diagnostics')).toBe(rc)
-      expect(log.info).toHaveBeenCalledTimes(rc ? 1 : 0)
-      if (rc) {
-        expect(log.info).toHaveBeenCalledWith(
-          '[bpm-fix][rc] verification',
+      expect(repairArgs.includes('--diagnostics')).toBe(true)
+      expect(log.info).not.toHaveBeenCalled()
+      {
+        expect(log.error).toHaveBeenCalledWith(
+          '[bpm-fix] verification rejected',
           expect.objectContaining({
             sessionId: snapshot.id,
             filePath: input.filePaths[0],
@@ -173,4 +213,52 @@ describe('BPM drift repair session', () => {
       }
     }
   )
+
+  it('publishes a verified automatic result without stopping for low confidence or tempo ambiguity', async () => {
+    vi.mocked(runBpmFixPipeline)
+      .mockResolvedValueOnce({
+        public: {
+          sourceBpm: 128,
+          referenceBpm: 64,
+          confidence: 0.4,
+          agreement: 0,
+          regularity: 1,
+          driftMs: 150,
+          coverage: 1,
+          filledBeats: 0,
+          ignoredDetections: 0,
+          durationSec: 120,
+          tempoAmbiguous: true
+        },
+        analysis: { beats: [0, 0.5, 1] }
+      })
+      .mockResolvedValueOnce({
+        sourceBpm: 128,
+        targetBpm: 128,
+        gridOffsetSec: 0,
+        confidence: 0.4,
+        durationInSec: 120,
+        durationOutSec: 120,
+        noticeableSegments: 0,
+        peakGain: 1,
+        verification: {
+          passed: true,
+          detectedBpm: 128,
+          bpmError: 0,
+          gridRmsMs: 6,
+          offGridBeats: 0
+        },
+        timeMap: { from: [0, 100], to: [0, 100], sampleRate: 44100, downbeatBeatOffset: 0 }
+      })
+    vi.mocked(publishBpmFixOutput).mockResolvedValueOnce({
+      outputPath: path.resolve('music/fixed.wav')
+    })
+    const snapshot = await prepare()
+    startBpmFixAnalysis(owner.id, snapshot.id, { saveMode: 'copy', format: 'wav' })
+    await vi.waitFor(() => expect(isBpmFixBusy()).toBe(false))
+    expect(snapshot.status).toBe('completed')
+    expect(snapshot.tracks[0].status).toBe('completed')
+    expect(snapshot.tracks[0].summary?.verification.passed).toBe(true)
+    expect(publishBpmFixOutput).toHaveBeenCalledWith(expect.objectContaining({ overwrite: false }))
+  })
 })

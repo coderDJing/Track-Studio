@@ -12,6 +12,7 @@ import pkg from '../../../../package.json'
 export const bpmFixSnapshot = shallowRef<BpmFixSnapshot | null>(null)
 export const bpmFixDialogOpen = ref(false)
 export const bpmFixFocusedId = ref('')
+export const bpmFixAdvanced = ref(false)
 export const bpmFixDraft = reactive<{
   saveMode: BpmFixOptions['saveMode']
   format: BpmFixOptions['format']
@@ -26,8 +27,10 @@ const applySnapshot = (snapshot: BpmFixSnapshot | null) => {
     bpmFixDraft.format = 'wav'
     bpmFixDraft.tracks = {}
     bpmFixFocusedId.value = ''
+    bpmFixAdvanced.value = false
   }
   bpmFixSnapshot.value = snapshot
+  if (snapshot?.status === 'ready') bpmFixAdvanced.value = true
   for (const track of snapshot?.tracks || []) {
     if (!track.analysis || bpmFixDraft.tracks[track.id]) continue
     bpmFixDraft.tracks[track.id] = {
@@ -75,12 +78,38 @@ export const initializeBpmFix = () => {
 }
 export const bpmFixErrorText = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error)
+  if (message.includes('BPM_FIX_VERIFICATION_FAILED: ')) {
+    try {
+      const details: unknown = JSON.parse(message.split('BPM_FIX_VERIFICATION_FAILED: ')[1])
+      if (
+        details &&
+        typeof details === 'object' &&
+        'reasons' in details &&
+        Array.isArray(details.reasons)
+      ) {
+        const labels: Record<string, string> = {
+          bpm_error: 'verificationTempo',
+          grid_rms: 'verificationDrift',
+          remaining_anomalies: 'verificationDetections',
+          insufficient_audio_matches: 'verificationAudio'
+        }
+        const reasons = details.reasons.filter(
+          (key): key is string => typeof key === 'string' && !!labels[key]
+        )
+        if (reasons.length)
+          return `${t('bpmFix.verificationFailed')} ${reasons.map((key) => t(`bpmFix.${labels[key]}`)).join(' ')}`
+      }
+    } catch {
+      /* Keep the general error for older or malformed results. */
+    }
+  }
   const known = [
+    ['BPM_FIX_OUTPUT_CLEANUP_REQUIRED', 'outputCleanupRequired'],
     ['BPM_FIX_RECOVERY_REQUIRED', 'recoveryRequired'],
     ['BPM_FIX_LIBROSA_UNAVAILABLE', 'librosaUnavailable'],
     ['BPM_FIX_LOW_CONFIDENCE', 'lowConfidence'],
-    ['BPM_FIX_NOT_ENOUGH_BEATS', 'lowConfidence'],
-    ['BPM_FIX_UNRELIABLE_BEATS', 'lowConfidence'],
+    ['BPM_FIX_NOT_ENOUGH_BEATS', 'notEnoughBeats'],
+    ['BPM_FIX_UNRELIABLE_BEATS', 'unreliableBeats'],
     ['BPM_FIX_VERIFICATION_FAILED', 'verificationFailed'],
     ['BPM_FIX_SOURCE_CHANGED', 'sourceChanged'],
     ['BPM_FIX_EXTREME_STRETCH', 'extremeStretch'],
@@ -147,7 +176,7 @@ export const repairBpmFix = async () => {
     await window.electron.ipcRenderer.invoke('audio:bpm-fix:repair', snapshot.id, options)
   )
 }
-export const analyzeBpmFix = async () => {
+export const analyzeBpmFix = async (automatic = false) => {
   const snapshot = bpmFixSnapshot.value
   if (!snapshot || snapshot.status !== 'pending') return
   runtimeGate ??= useAnalysisRuntimeDownload({
@@ -158,7 +187,9 @@ export const analyzeBpmFix = async () => {
   })
   if (!(await runtimeGate.ensureAnalysisRuntimeForBpmFix())) return
   if (bpmFixSnapshot.value?.id !== snapshot.id) return
-  applySnapshot(await window.electron.ipcRenderer.invoke('audio:bpm-fix:analyze', snapshot.id))
+  const args: unknown[] = [snapshot.id]
+  if (automatic) args.push({ saveMode: bpmFixDraft.saveMode, format: bpmFixDraft.format })
+  applySnapshot(await window.electron.ipcRenderer.invoke('audio:bpm-fix:analyze', ...args))
 }
 export const startBpmFix = async (input: BpmFixStart) => {
   initializeBpmFix()

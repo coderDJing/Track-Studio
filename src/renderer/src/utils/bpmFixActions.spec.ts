@@ -50,6 +50,18 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('opening BPM drift repair', () => {
+  it('distinguishes failed verification causes without exposing raw backend errors', async () => {
+    const { bpmFixErrorText } = await import('./bpmFixActions')
+    expect(
+      bpmFixErrorText('BPM_FIX_VERIFICATION_FAILED: {"reasons":["grid_rms","remaining_anomalies"]}')
+    ).toBe('bpmFix.verificationFailed bpmFix.verificationDrift bpmFix.verificationDetections')
+    expect(bpmFixErrorText('BPM_FIX_VERIFICATION_FAILED: bad JSON')).toBe(
+      'bpmFix.verificationFailed'
+    )
+    expect(bpmFixErrorText('BPM_FIX_OUTPUT_CLEANUP_REQUIRED: private/path')).toBe(
+      'bpmFix.outputCleanupRequired'
+    )
+  })
   it('opens the selected songs without starting analysis or checking runtime dependencies', async () => {
     const actions = await import('./bpmFixActions')
     await actions.startBpmFix(input)
@@ -80,5 +92,18 @@ describe('opening BPM drift repair', () => {
     finishRuntimeCheck(true)
     await analyzing
     expect(invoke.mock.calls.some(([channel]) => channel === 'audio:bpm-fix:analyze')).toBe(false)
+  })
+
+  it('captures save settings for one-click automatic repair', async () => {
+    const actions = await import('./bpmFixActions')
+    await actions.startBpmFix(input)
+    expect(actions.bpmFixAdvanced.value).toBe(false)
+    actions.bpmFixDraft.saveMode = 'overwrite'
+    actions.bpmFixDraft.format = 'original'
+    await actions.analyzeBpmFix(true)
+    expect(invoke).toHaveBeenCalledWith('audio:bpm-fix:analyze', 'session', {
+      saveMode: 'overwrite',
+      format: 'original'
+    })
   })
 })

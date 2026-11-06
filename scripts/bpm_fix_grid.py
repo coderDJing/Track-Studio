@@ -36,9 +36,19 @@ def walk_beats(raw, duration):
     raw = raw[np.isfinite(raw) & (raw >= 0) & (raw < duration)]
     if len(raw) < 8:
         raise ValueError("BPM_FIX_NOT_ENOUGH_BEATS")
-    initial = float(np.median(np.diff(raw[:min(33, len(raw))])))
-    if not 0.15 <= initial <= 2.0:
+    # An irregular intro must not lock the whole song to the wrong period.
+    # Compare early and full-track seeds by retained real evidence, penalising
+    # both invented beats and discarded detections (including half-time seeds).
+    seeds = (float(np.median(np.diff(raw[:min(33, len(raw))]))),
+             float(np.median(np.diff(raw))))
+    candidates = [_walk_from_period(raw, duration, initial) for initial in dict.fromkeys(seeds)
+                  if 0.15 <= initial <= 2.0]
+    if not candidates:
         raise ValueError("BPM_FIX_UNRELIABLE_BEATS")
+    return max(candidates, key=lambda item: 2 * np.count_nonzero(item[1]) / (len(raw) + len(item[0])))
+
+
+def _walk_from_period(raw, duration, initial):
     beats, detected = [float(raw[0])], [True]
     cursor = 1
     while cursor < len(raw):
@@ -97,15 +107,21 @@ def grid_indices(beats):
     return indices
 
 
-def _attack_strength(mono, sr, times):
+def _attack_envelope(mono, sr):
     # Compare positive short-term energy rises, not the raw amplitude of a bass
     # waveform. Only consulted to distinguish a timing event from tracker jitter.
     frame = max(1, int(sr * 0.003))
     count = len(mono) // frame
     if count < 3:
-        return np.zeros(len(times))
+        return np.zeros(count), frame
     levels = np.mean(np.abs(mono[:count * frame].reshape(count, frame)), axis=1)
     rise = np.maximum(0.0, levels - np.roll(levels, 2))
+    return rise, frame
+
+
+def _attack_strength(envelope, sr, times):
+    rise, frame = envelope
+    count = len(rise)
     result = []
     for t in times:
         center = int(t * sr / frame)
@@ -116,6 +132,7 @@ def _attack_strength(mono, sr, times):
 
 def smooth_beats(beats, detected, indices, mono=None, sr=44100):
     smooth = beats.copy()
+    envelope = None
     for i in range(len(beats)):
         lo, hi = max(0, i - 8), min(len(beats), i + 9)
         mask = detected[lo:hi].copy()
@@ -130,7 +147,9 @@ def smooth_beats(beats, detected, indices, mono=None, sr=44100):
         if abs(beats[i] - predicted) > 0.025:
             if mono is None:
                 continue
-            measured_attack, line_attack = _attack_strength(mono, sr, [beats[i], predicted])
+            if envelope is None:
+                envelope = _attack_envelope(mono, sr)
+            measured_attack, line_attack = _attack_strength(envelope, sr, [beats[i], predicted])
             if measured_attack > 1.5 * max(line_attack, 1e-9):
                 continue
         smooth[i] = predicted

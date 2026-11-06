@@ -1,15 +1,17 @@
 import { app } from 'electron'
 import path from 'node:path'
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { Worker } from 'node:worker_threads'
 import type { BpmFixRuntime } from '../../shared/bpmFix'
-import { registerChildProcess, terminateChildProcess } from './childProcessRegistry'
-import { lowerAnalysisProcessPriority } from '../workers/analysisRuntimeTuning'
+import { BpmFixPipeline } from './bpmFixPipeline'
 import { resolveMainWorkerPath } from '../workerPath'
 
-export type BpmFixProcessJob = { cancelled: boolean; child?: ChildProcess; worker?: Worker }
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === 'object' && !Array.isArray(value)
+export type BpmFixProcessJob = {
+  cancelled: boolean
+  child?: ChildProcess
+  worker?: Worker
+  pipeline?: BpmFixPipeline
+}
 
 export const resolveBpmFixRuntime = async (job: BpmFixProcessJob): Promise<BpmFixRuntime> => {
   const worker = new Worker(resolveMainWorkerPath(__dirname, 'bpmFixRuntimeWorker.js'), {
@@ -47,85 +49,21 @@ export const runBpmFixPipeline = async (
   diagnostic?: (details: Record<string, unknown>) => void
 ) => {
   if (job.cancelled) throw new Error('BPM_FIX_CANCELLED')
-  const child = spawn(runtime.command, [...runtime.args, ...args, '--device', runtime.device], {
-    env: runtime.env,
-    windowsHide: true,
-    stdio: ['pipe', 'pipe', 'pipe']
-  })
-  child.stdin?.on('error', () => undefined)
-  child.stdin?.end(analysis ? JSON.stringify(analysis) + '\n' : '')
-  job.child = child
-  const unregister = registerChildProcess(child, 'bpm-fix')
-  lowerAnalysisProcessPriority(child)
-  try {
-    return await new Promise<unknown>((resolve, reject) => {
-      let buffer = ''
-      let stderr = ''
-      let result: unknown
-      let failure = ''
-      const stages = new Set([
-        'loading',
-        'decoding',
-        'analyzing',
-        'crosschecking',
-        'planning',
-        'rendering',
-        'encoding',
-        'verifying',
-        'saving'
-      ])
-      child.stderr?.on('data', (data: Buffer) => {
-        stderr = (stderr + data.toString('utf8')).slice(-6000)
-      })
-      child.stdout?.setEncoding('utf8')
-      child.stdout?.on('data', (data: string) => {
-        buffer += data
-        if (buffer.length > 2_000_000) {
-          failure = 'BPM_FIX_INVALID_RESULT'
-          terminateChildProcess(child, 'bpm-fix')
-          return
-        }
-        let end: number
-        while ((end = buffer.indexOf('\n')) !== -1) {
-          const line = buffer.slice(0, end)
-          buffer = buffer.slice(end + 1)
-          try {
-            const message: unknown = JSON.parse(line)
-            if (!isRecord(message)) continue
-            if (
-              message.type === 'progress' &&
-              typeof message.stage === 'string' &&
-              stages.has(message.stage)
-            ) {
-              progress(message.stage, Number(message.percent) || 0)
-            } else if (
-              diagnostic &&
-              message.type === 'diagnostic' &&
-              message.event === 'verification' &&
-              isRecord(message.details)
-            ) {
-              diagnostic(message.details)
-            } else if (message.type === 'error' && typeof message.error === 'string') {
-              failure = message.error
-            } else if (message.type === 'result') {
-              result = message.result
-            }
-          } catch (error) {
-            if (error instanceof Error && error.message === 'BPM_FIX_INVALID_RESULT')
-              failure = error.message
-          }
-        }
-      })
-      child.once('error', reject)
-      child.once('close', (code) => {
-        if (job.cancelled) reject(new Error('BPM_FIX_CANCELLED'))
-        else if (code !== 0 || !result || failure)
-          reject(new Error(failure || stderr || 'BPM_FIX_FAILED'))
-        else resolve(result)
-      })
-    })
-  } finally {
-    unregister()
-    job.child = undefined
+  if (!job.pipeline) {
+    job.pipeline = new BpmFixPipeline(runtime, args[0])
+    job.child = job.pipeline.child
   }
+  return job.pipeline.run(
+    [...args.slice(1), '--device', runtime.device],
+    analysis,
+    progress,
+    diagnostic
+  )
+}
+
+export const closeBpmFixPipeline = async (job: BpmFixProcessJob) => {
+  const pipeline = job.pipeline
+  job.pipeline = undefined
+  job.child = undefined
+  await pipeline?.close()
 }

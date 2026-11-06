@@ -16,9 +16,9 @@ export const registerBpmFixHandlers = () => {
     if (isLibraryMergeMutationLocked()) throw new Error('LIBRARY_MERGE_IN_PROGRESS')
     return prepareBpmFix(event.sender, payload)
   })
-  ipcMain.handle('audio:bpm-fix:analyze', (event, id: unknown) => {
+  ipcMain.handle('audio:bpm-fix:analyze', (event, id: unknown, automatic?: unknown) => {
     if (isLibraryMergeMutationLocked()) throw new Error('LIBRARY_MERGE_IN_PROGRESS')
-    return startBpmFixAnalysis(event.sender.id, id)
+    return startBpmFixAnalysis(event.sender.id, id, automatic)
   })
   ipcMain.handle('audio:bpm-fix:repair', (event, id: unknown, options: unknown) => {
     if (isLibraryMergeMutationLocked()) throw new Error('LIBRARY_MERGE_IN_PROGRESS')

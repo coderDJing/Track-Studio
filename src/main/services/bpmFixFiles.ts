@@ -71,7 +71,14 @@ export const publishBpmFixOutput = async (options: {
     published = true
     commit?.(destination)
   } catch (error) {
-    if (published) await fs.unlink(destination)
+    let cleanupError: unknown
+    if (published) {
+      try {
+        await fs.unlink(destination)
+      } catch (failure) {
+        if ((failure as NodeJS.ErrnoException).code !== 'ENOENT') cleanupError = failure
+      }
+    }
     if (backedUp) {
       try {
         // Another application may have recreated the old filename meanwhile.
@@ -81,9 +88,23 @@ export const publishBpmFixOutput = async (options: {
         await fs.utimes(source.realPath, stat.atime, stat.mtime)
         await fs.unlink(backup)
       } catch (recoveryError) {
-        log.error('[bpm-fix] original retained in recovery backup', { backup, recoveryError })
+        log.error('[bpm-fix] original retained in recovery backup', {
+          backup,
+          destination,
+          error,
+          cleanupError,
+          recoveryError
+        })
         throw new Error(`BPM_FIX_RECOVERY_REQUIRED: ${backup}`, { cause: recoveryError })
       }
+    }
+    if (cleanupError) {
+      log.error('[bpm-fix] uncommitted output retained; original restored or unchanged', {
+        destination,
+        error,
+        cleanupError
+      })
+      throw new Error(`BPM_FIX_OUTPUT_CLEANUP_REQUIRED: ${destination}`, { cause: cleanupError })
     }
     throw error
   } finally {

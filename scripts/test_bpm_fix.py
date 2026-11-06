@@ -12,11 +12,42 @@ from unittest.mock import patch
 import numpy as np
 from bpm_fix_grid import (analyze_grid, grid_indices, plan_correction, verify_grid,
                           verification_diagnostics, walk_beats)
-from bpm_fix_crosscheck import beat_f1
+from bpm_fix_crosscheck import beat_f1, compare_beats, merge_cross_check
 from bpm_fix_detection import detect_verification_beats, select_verification_beats
 
 
 class GridTests(unittest.TestCase):
+    def test_crosscheck_cannot_overwrite_sparse_primary_evidence(self):
+        beats = 0.4 + np.arange(20) * 0.5
+        analysis = analyze_grid(beats, beats[::4], 180)
+        result = merge_cross_check(analysis, {"confidence": 1.0, "agreement": 1.0})
+        self.assertAlmostEqual(result["confidence"], 1 / 18)
+        self.assertEqual(result["crossCheckConfidence"], 1.0)
+
+    def test_same_tempo_with_consistent_phase_shift_is_not_low_confidence(self):
+        beats = 0.4 + np.arange(180) * 0.5
+        for shift in (0.1, -0.1, 0.249, -0.249):
+            with self.subTest(shift=shift):
+                result = compare_beats(beats, beats + shift, 120)
+                self.assertEqual(result["agreement"], 0)
+                self.assertGreater(result["phaseAlignedAgreement"], 0.98)
+
+    def test_phase_comparison_does_not_align_unrelated_or_incoherent_beats(self):
+        beats = 0.4 + np.arange(180) * 0.5
+        for reference, bpm in ((0.4 + np.arange(180) * 60 / 100, 100),
+                               (beats + np.tile([0.1, -0.1], 90), 120)):
+            result = compare_beats(beats, reference, bpm)
+            self.assertEqual(result["phaseAlignedAgreement"], result["agreement"])
+
+    def test_attack_envelope_is_computed_once_for_multiple_outliers(self):
+        import bpm_fix_grid as grid
+        beats = 0.4 + np.arange(180) * 0.5
+        beats[[30, 60, 90]] += 0.08
+        mono = np.zeros(91000, dtype=np.float32)
+        with patch.object(grid, "_attack_envelope", wraps=grid._attack_envelope) as envelope:
+            grid.smooth_beats(beats, np.ones(180, dtype=bool), np.arange(180), mono, 1000)
+        self.assertEqual(envelope.call_count, 1)
+
     def test_accelerated_verification_preserves_cpu_spectrogram_inference(self):
         import torch
         scores = torch.zeros(75)

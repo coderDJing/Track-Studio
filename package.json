@@ -1,6 +1,6 @@
 {
   "name": "frkb",
-  "version": "1.2.7-rc.202611061621",
+  "version": "1.2.7-rc.202611061939",
   "packageManager": "pnpm@9.15.9",
   "description": "Track Studio — Rapid Audio Organization Tool",
   "license": "PolyForm-Noncommercial-1.0.0",
@@ -70,6 +70,8 @@
         "to": "demucs/bootstrap",
         "filter": [
           "bpm_fix.py",
+          "bpm_fix_media.py",
+          "bpm_fix_verification.py",
           "bpm_fix_detection.py",
           "bpm_fix_transients.py",
           "bpm_fix_grid.py",

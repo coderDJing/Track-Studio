@@ -23,6 +23,8 @@ export type BpmFixAnalysis = {
   referenceBpm: number
   confidence: number
   agreement: number
+  phaseAlignedAgreement?: number
+  referencePhaseShiftMs?: number
   regularity: number
   driftMs: number
   coverage: number
@@ -45,6 +47,8 @@ export type BpmFixOptions = {
   format: 'original' | 'wav'
   tracks: BpmFixTrackOptions[]
 }
+
+export type BpmFixAutomaticOptions = Pick<BpmFixOptions, 'saveMode' | 'format'>
 
 export type BpmFixTrack = {
   id: string

@@ -30,8 +30,7 @@ def render_r3(samples, sr, plan, library_path, progress=None):
         process = bind("process", [state_type, channels_ptr, uint, ct.c_int])
         available = bind("available", [state_type], ct.c_int)
         retrieve = bind("retrieve", [state_type, channels_ptr, uint], uint)
-        planar = np.ascontiguousarray(samples.T, dtype=np.float32)
-        channels, frames = planar.shape
+        frames, channels = samples.shape
         if max(frames, plan["outputFrames"]) >= 2 ** 32:
             raise ValueError("BPM_FIX_AUDIO_TOO_LONG")
         # Offline, R3 multi-resolution, stereo channels together. Pitch is 1.0.
@@ -60,11 +59,12 @@ def render_r3(samples, sr, plan, library_path, progress=None):
                 return (float_ptr * channels)(*(row.ctypes.data_as(float_ptr) for row in array))
 
             for start in range(0, frames, block):
-                part = np.ascontiguousarray(planar[:, start:start + block])
+                part = np.ascontiguousarray(samples[start:start + block].T, dtype=np.float32)
                 study(state, pointers(part), part.shape[1], int(start + block >= frames))
                 if progress:
                     progress(0.2 * min(1.0, (start + block) / frames))
-            chunks = []
+            rendered = np.empty((plan["outputFrames"], channels), dtype=np.float32)
+            retrieve_buffer = np.empty((channels, block * 4), dtype=np.float32)
             retrieved = 0
 
             def drain():
@@ -73,24 +73,22 @@ def render_r3(samples, sr, plan, library_path, progress=None):
                     count = available(state)
                     if count <= 0:
                         return count
-                    result = np.empty((channels, min(count, block * 4)), dtype=np.float32)
-                    n = retrieve(state, pointers(result), result.shape[1])
+                    n = retrieve(state, pointers(retrieve_buffer), min(count, block * 4))
                     if not n:
                         raise RuntimeError("BPM_FIX_RENDERER_STALLED")
-                    chunks.append(result[:, :n].copy())
-                    retrieved += n
-                    if retrieved > plan["outputFrames"] + sr * 2:
+                    if retrieved + n > plan["outputFrames"]:
                         raise RuntimeError("BPM_FIX_RENDERER_LENGTH_MISMATCH")
+                    rendered[retrieved:retrieved + n] = retrieve_buffer[:, :n].T
+                    retrieved += n
 
             for start in range(0, frames, block):
-                part = np.ascontiguousarray(planar[:, start:start + block])
+                part = np.ascontiguousarray(samples[start:start + block].T, dtype=np.float32)
                 process(state, pointers(part), part.shape[1], int(start + block >= frames))
                 drain()
                 if progress:
                     progress(0.2 + 0.8 * min(1.0, (start + block) / frames))
             if drain() != -1 or retrieved != plan["outputFrames"]:
                 raise RuntimeError(f"BPM_FIX_RENDERER_LENGTH_MISMATCH: {retrieved} != {plan['outputFrames']}")
-            rendered = np.ascontiguousarray(np.concatenate(chunks, axis=1).T)
             if not np.all(np.isfinite(rendered)):
                 raise RuntimeError("BPM_FIX_INVALID_AUDIO")
             return rendered

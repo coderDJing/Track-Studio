@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs/promises'
 import { writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { publishBpmFixOutput, readBpmFixSourceIdentity } from './bpmFixFiles'
+vi.mock('../log', () => ({ log: { error: vi.fn() } }))
 
 describe('BPM correction publication', () => {
   let folder: string
@@ -15,6 +16,7 @@ describe('BPM correction publication', () => {
     ])
   })
   afterEach(async () => {
+    vi.restoreAllMocks()
     await fs.rm(folder, { recursive: true, force: true })
   })
   const publish = async (source = readBpmFixSourceIdentity(path.join(folder, 'source.mp3'))) =>
@@ -89,6 +91,28 @@ describe('BPM correction publication', () => {
     expect(await fs.readFile(source, 'utf8')).toBe('original')
     expect((await fs.readdir(folder)).sort()).toEqual(['source.mp3', 'staged.wav'])
   })
+
+  it.each([true, false])(
+    'recovers independently of destination unlink failure (same path=%s)',
+    async (samePath) => {
+      const source = path.join(folder, 'source.mp3')
+      const destination = samePath ? source : path.join(folder, 'source.wav')
+      const unlink = fs.unlink.bind(fs)
+      vi.spyOn(fs, 'unlink').mockImplementation(async (file) => {
+        if (file === destination) throw Object.assign(new Error('locked'), { code: 'EPERM' })
+        return unlink(file)
+      })
+      await expect(
+        replace(destination, () => {
+          throw new Error('database failed')
+        })
+      ).rejects.toThrow(samePath ? 'BPM_FIX_RECOVERY_REQUIRED' : 'BPM_FIX_OUTPUT_CLEANUP_REQUIRED')
+      if (samePath) {
+        const backup = (await fs.readdir(folder)).find((name) => name.endsWith('.bak'))!
+        expect(await fs.readFile(path.join(folder, backup), 'utf8')).toBe('original')
+      } else expect(await fs.readFile(source, 'utf8')).toBe('original')
+    }
+  )
 
   it('preserves both songs when the format-changing destination collides', async () => {
     const destination = path.join(folder, 'source.wav')

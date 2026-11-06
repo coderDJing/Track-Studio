@@ -8,7 +8,8 @@ import type {
   BpmFixSnapshot,
   BpmFixStart,
   BpmFixRuntime,
-  BpmFixTrackOptions
+  BpmFixTrackOptions,
+  BpmFixAutomaticOptions
 } from '../../shared/bpmFix'
 import { ensureExecutableOnMac, resolveBundledFfmpegPath } from '../ffmpeg'
 import { terminateChildProcess } from './childProcessRegistry'
@@ -20,9 +21,13 @@ import {
 } from './bpmFixFiles'
 import { log } from '../log'
 import { tryBeginLibraryMaintenanceMutation } from './libraryMerge/mutationGate'
-import { resolveBpmFixRuntime, runBpmFixPipeline, type BpmFixProcessJob } from './bpmFixProcess'
+import {
+  resolveBpmFixRuntime,
+  runBpmFixPipeline,
+  closeBpmFixPipeline,
+  type BpmFixProcessJob
+} from './bpmFixProcess'
 import { readBpmFixSummary } from './bpmFixResult'
-import { isPackagedRcBuild } from './rcDiagnostics'
 import {
   resolveBpmFixPlaylist,
   assertBpmFixPlaylistTrack,
@@ -120,7 +125,8 @@ const runTrack = async (
   output: string,
   mode: 'analyze' | 'repair',
   options?: BpmFixTrackOptions,
-  analysis?: unknown
+  analysis?: unknown,
+  automatic = false
 ) => {
   assertRunning(job)
   if (!job.runtime || !job.args) throw new Error('BPM_FIX_RUNTIME_UNAVAILABLE')
@@ -130,27 +136,28 @@ const runTrack = async (
     if (options.targetBpm !== null) args.push('--target-bpm', String(options.targetBpm))
     if (options.allowLowConfidence) args.push('--allow-low-confidence')
   }
-  // 每首输出一次 RC 复检摘要；失败原因修复且真实样本回归通过后移除这条采集链路。
-  const rcDiagnostics = isPackagedRcBuild()
-  if (rcDiagnostics) args.push('--rc-diagnostics')
+  if (mode === 'repair') args.push('--diagnostics')
+  if (automatic) args.push('--automatic')
   return runBpmFixPipeline(
     job,
     job.runtime,
     args,
     (stage, value) => progress(job, stage, value),
     analysis,
-    rcDiagnostics
-      ? (details) =>
-          log.info('[bpm-fix][rc] verification', {
-            sessionId: job.snapshot.id,
-            filePath,
-            mode,
-            ...details
-          })
-      : undefined
+    (details) => {
+      // Only rejected output is logged. Keep bounded evidence for the actual
+      // failure so an ordinary release is diagnosable without success traces.
+      if (details.passed === false)
+        log.error('[bpm-fix] verification rejected', {
+          sessionId: job.snapshot.id,
+          filePath,
+          mode,
+          ...details
+        })
+    }
   )
 }
-const analyzeBatch = async (job: Job) => {
+const analyzeBatch = async (job: Job, automatic?: BpmFixAutomaticOptions) => {
   let folder = ''
   let finalStatus: BpmFixSnapshot['status'] = 'ready'
   try {
@@ -215,6 +222,28 @@ const analyzeBatch = async (job: Job) => {
       await fs
         .rm(folder, { recursive: true, force: true })
         .catch((error) => log.error('[bpm-fix] cleanup failed', error))
+    if (automatic && !job.cancelled && finalStatus === 'ready') {
+      job.snapshot.status = 'repairing'
+      job.snapshot.stage = 'planning'
+      job.snapshot.percent = 0
+      job.snapshot.currentPercent = 0
+      await repairBatch(
+        job,
+        {
+          ...automatic,
+          tracks: job.snapshot.tracks.map((track) => ({
+            id: track.id,
+            enabled: track.status === 'ready',
+            tempoFactor: 1,
+            targetBpm: null,
+            allowLowConfidence: false
+          }))
+        },
+        true
+      )
+      return
+    }
+    await closeBpmFixPipeline(job)
     if (job.cancelled)
       for (const track of job.snapshot.tracks)
         if (['pending', 'analyzing'].includes(track.status)) track.status = 'cancelled'
@@ -282,13 +311,20 @@ export const prepareBpmFix = async (owner: WebContents, value: unknown) => {
   owner.once('destroyed', job.destroyed)
   return job.snapshot
 }
-export const startBpmFixAnalysis = (ownerId: number, id: unknown) => {
+export const startBpmFixAnalysis = (ownerId: number, id: unknown, automatic?: unknown) => {
   const job = requireJob(ownerId, id)
   if (job.working || job.snapshot.status !== 'pending') throw new Error('BPM_FIX_BUSY')
+  if (
+    automatic !== undefined &&
+    (!isRecord(automatic) ||
+      !['copy', 'overwrite'].includes(String(automatic.saveMode)) ||
+      !['original', 'wav'].includes(String(automatic.format)))
+  )
+    throw new Error('BPM_FIX_INVALID_OPTIONS')
   job.snapshot.status = 'analyzing'
   job.snapshot.stage = 'loading'
   job.snapshot.current = 1
-  job.working = analyzeBatch(job)
+  job.working = analyzeBatch(job, automatic as BpmFixAutomaticOptions | undefined)
   notify(job)
   return job.snapshot
 }
@@ -332,7 +368,7 @@ const readOptions = (value: unknown, job: Job): BpmFixOptions => {
     tracks
   }
 }
-const repairBatch = async (job: Job, options: BpmFixOptions) => {
+const repairBatch = async (job: Job, options: BpmFixOptions, automatic = false) => {
   let folder = ''
   let finalStatus: BpmFixSnapshot['status'] = 'completed'
   try {
@@ -366,7 +402,8 @@ const repairBatch = async (job: Job, options: BpmFixOptions) => {
           stagedAudio,
           'repair',
           settings,
-          job.analyses.get(track.id)
+          job.analyses.get(track.id),
+          automatic
         )
         const summary = readBpmFixSummary(result)
         if (!isRecord(result) || !isRecord(result.timeMap))
@@ -441,6 +478,7 @@ const repairBatch = async (job: Job, options: BpmFixOptions) => {
       log.error('[bpm-fix] repair batch failed', error)
     }
   } finally {
+    await closeBpmFixPipeline(job)
     if (folder)
       await fs
         .rm(folder, { recursive: true, force: true })

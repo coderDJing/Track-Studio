@@ -14,6 +14,7 @@ import {
   bpmFixDraft as draft,
   bpmFixErrorText,
   bpmFixFocusedId as focusedId,
+  bpmFixAdvanced as advanced,
   analyzeBpmFix,
   repairBpmFix
 } from '@renderer/utils/bpmFixActions'
@@ -96,14 +97,16 @@ const selectReliable = (checked: boolean) => {
     const settings = draft.tracks[track.id]
     if (settings && track.status === 'ready')
       settings.enabled =
-        checked && ((track.analysis?.confidence || 0) >= 0.5 || settings.allowLowConfidence)
+        checked &&
+        (((track.analysis?.confidence || 0) >= 0.5 && !track.analysis?.tempoAmbiguous) ||
+          settings.allowLowConfidence)
   }
 }
 const start = async () => {
   submitting.value = true
   error.value = ''
   try {
-    if (snapshot.value?.status === 'pending') await analyzeBpmFix()
+    if (snapshot.value?.status === 'pending') await analyzeBpmFix(!advanced.value)
     else await repairBpmFix()
   } catch (err) {
     error.value = bpmFixErrorText(err)
@@ -163,6 +166,16 @@ onUnmounted(() => {
               <div :style="{ width: `${snapshot.percent}%` }" />
             </div>
           </div>
+          <p v-if="!advanced && snapshot.status === 'pending'" class="hint">
+            {{ t('bpmFix.automaticHint') }}
+          </p>
+          <singleCheckbox
+            v-if="snapshot.status === 'pending'"
+            v-model="advanced"
+            :disabled="submitting"
+          >
+            {{ t('bpmFix.advanced') }}
+          </singleCheckbox>
           <div v-if="editable" class="batch-tools">
             <button class="button" @click="selectReliable(true)">
               {{ t('bpmFix.selectAll') }}
@@ -201,15 +214,15 @@ onUnmounted(() => {
             :options="tableScrollbarOptions"
             element="div"
           >
-            <table>
+            <table :class="{ 'advanced-table': advanced }">
               <thead>
                 <tr>
-                  <th>{{ t('bpmFix.process') }}</th>
-                  <th>{{ t('bpmFix.song') }}</th>
+                  <th v-if="advanced" class="selection-column">{{ t('bpmFix.process') }}</th>
+                  <th class="song-column">{{ t('bpmFix.song') }}</th>
                   <th>{{ t('bpmFix.detected') }}</th>
-                  <th>{{ t('bpmFix.confidence') }}</th>
-                  <th>{{ t('bpmFix.interpretation') }}</th>
-                  <th>{{ t('bpmFix.target') }}</th>
+                  <th v-if="advanced">{{ t('bpmFix.confidence') }}</th>
+                  <th v-if="advanced" class="tempo-column">{{ t('bpmFix.interpretation') }}</th>
+                  <th class="target-column">{{ t('bpmFix.target') }}</th>
                   <th>{{ t('bpmFix.status') }}</th>
                 </tr>
               </thead>
@@ -220,7 +233,7 @@ onUnmounted(() => {
                   :class="{ focused: focused?.id === track.id }"
                   @click="focusedId = track.id"
                 >
-                  <td>
+                  <td v-if="advanced">
                     <singleCheckbox
                       v-if="draft.tracks[track.id]"
                       v-model="draft.tracks[track.id].enabled"
@@ -241,6 +254,7 @@ onUnmounted(() => {
                   </td>
                   <td>{{ number(track.analysis?.sourceBpm) }}</td>
                   <td
+                    v-if="advanced"
                     :class="{
                       warning:
                         track.analysis &&
@@ -249,7 +263,7 @@ onUnmounted(() => {
                   >
                     {{ percent(track.analysis?.confidence) }}
                   </td>
-                  <td>
+                  <td v-if="advanced">
                     <BaseSelect
                       v-if="draft.tracks[track.id]"
                       v-model="draft.tracks[track.id].tempoFactor"
@@ -261,7 +275,7 @@ onUnmounted(() => {
                   </td>
                   <td>
                     <input
-                      v-if="draft.tracks[track.id]"
+                      v-if="advanced && draft.tracks[track.id]"
                       :value="draft.tracks[track.id].targetBpm ?? ''"
                       type="number"
                       min="30"
@@ -272,6 +286,9 @@ onUnmounted(() => {
                       :aria-label="t('bpmFix.target')"
                       @input="setTarget(track.id, $event)"
                     />
+                    <span v-else>{{
+                      track.summary?.targetBpm ?? (track.analysis ? target(track) : '—')
+                    }}</span>
                   </td>
                   <td>
                     <button
@@ -281,7 +298,11 @@ onUnmounted(() => {
                     >
                       {{ t('bpmFix.trackCompleted') }}</button
                     ><span v-else>{{
-                      t(`bpmFix.track${track.status[0].toUpperCase()}${track.status.slice(1)}`)
+                      t(
+                        track.status === 'ready' && !advanced
+                          ? 'bpmFix.trackQueued'
+                          : `bpmFix.track${track.status[0].toUpperCase()}${track.status.slice(1)}`
+                      )
                     }}</span>
                   </td>
                 </tr>
@@ -289,17 +310,34 @@ onUnmounted(() => {
             </table>
           </OverlayScrollbarsComponent>
           <section
-            v-if="focused && (focused.analysis || focused.summary || focused.error)"
+            v-if="focused && ((advanced && focused.analysis) || focused.summary || focused.error)"
             class="details"
           >
             <strong>{{ fileName(focused.filePath) }}</strong>
             <p v-if="focused.error" class="error">{{ bpmFixErrorText(focused.error) }}</p>
-            <template v-if="focused.analysis">
+            <template v-if="advanced && focused.analysis">
               <div class="metrics">
                 <span
                   >{{ t('bpmFix.drift') }} <b>{{ number(focused.analysis.driftMs, 1) }} ms</b></span
                 >
               </div>
+              <p class="hint">
+                {{
+                  t('bpmFix.analysisEvidence', {
+                    coverage: percent(focused.analysis.coverage),
+                    agreement: percent(
+                      focused.analysis.phaseAlignedAgreement ?? focused.analysis.agreement
+                    ),
+                    reference: number(focused.analysis.referenceBpm)
+                  })
+                }}
+              </p>
+              <p v-if="Math.abs(focused.analysis.referencePhaseShiftMs || 0) > 70" class="hint">
+                {{ t('bpmFix.phaseDifferenceHint') }}
+              </p>
+              <p v-if="focused.analysis.confidence < 0.5" class="warning">
+                {{ t('bpmFix.lowConfidenceHint') }}
+              </p>
               <p v-if="focused.analysis.tempoAmbiguous" class="warning">
                 {{ t('bpmFix.ambiguityHint') }}
               </p>
@@ -380,7 +418,9 @@ onUnmounted(() => {
           :disabled="(snapshot.status === 'ready' && !selected) || submitting"
           @click="start"
         >
-          {{ t(snapshot.status === 'pending' ? 'bpmFix.startAnalysis' : 'bpmFix.start') }}
+          {{
+            t(snapshot.status === 'pending' && advanced ? 'bpmFix.startAnalysis' : 'bpmFix.start')
+          }}
         </button>
         <button v-if="busy" class="button" :disabled="cancelling" @click="cancel">
           {{ t(cancelling ? 'bpmFix.cancelling' : 'bpmFix.cancel') }}
@@ -398,18 +438,14 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 .bpm-fix-dialog {
-  --bpm-fix-warning: #dba143;
-  --bpm-fix-error: #ef8585;
+  --bpm-fix-warning: var(--warning-text);
+  --bpm-fix-error: var(--danger-text);
   width: min(1060px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
   display: flex;
   flex-direction: column;
   color: var(--text);
   background: var(--bg-elev);
-}
-:global(.theme-light) .bpm-fix-dialog {
-  --bpm-fix-warning: #916004;
-  --bpm-fix-error: #b32b2b;
 }
 .bpm-body-scroll {
   flex: 1 1 auto;
@@ -492,17 +528,23 @@ td {
   padding: 9px 7px;
   border-bottom: 1px solid var(--border);
 }
-th:first-child {
+th.selection-column {
   width: 42px;
 }
-th:nth-child(2) {
+th.song-column {
   width: 28%;
 }
-th:nth-child(5) {
+th.tempo-column {
   width: 76px;
 }
-th:nth-child(6) {
+th.target-column {
   width: 88px;
+}
+table:not(.advanced-table) {
+  min-width: 480px;
+  .song-column {
+    width: 44%;
+  }
 }
 tbody tr {
   cursor: pointer;

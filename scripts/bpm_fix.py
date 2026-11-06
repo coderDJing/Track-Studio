@@ -6,9 +6,7 @@ Outputs newline-delimited JSON progress for the Electron main process.
 
 import argparse
 import json
-import os
 from pathlib import Path
-import subprocess
 import sys
 import tempfile
 import time
@@ -16,19 +14,15 @@ import time
 # Embedded managed Python may omit the script directory from sys.path.
 # Resolve sibling helpers explicitly in both development and packaged builds.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from bpm_fix_media import run_media, encode_audio
+
+_request_id = None
 
 
 def emit(payload):
+    if _request_id is not None:
+        payload = {**payload, "requestId": _request_id}
     print(json.dumps(payload, ensure_ascii=False), flush=True)
-
-
-def run_media(args):
-    result = subprocess.run(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    if result.returncode:
-        raise RuntimeError(result.stderr.decode("utf-8", "replace")[-3000:])
-    return result.stdout
 
 
 def decode_audio(source, workdir, ffmpeg, ffprobe, name):
@@ -51,7 +45,7 @@ def decode_audio(source, workdir, ffmpeg, ffprobe, name):
     return audio, sr
 
 
-def fix(args):
+def fix(args, models=None):
     # Import the existing bridge to reuse its managed DLL/site paths and its
     # DirectML/MPS compatibility handling, not its constant-grid approximation.
     import beat_this_bridge as bridge
@@ -60,6 +54,7 @@ def fix(args):
     from bpm_fix_rubberband import render_r3
     from bpm_fix_detection import detect_verification_beats
     from bpm_fix_transients import refine_time_map
+    from bpm_fix_verification import audio_features, verify_audio
 
     source, output = (Path(p).resolve() for p in (args.input, args.output))
     if not source.is_file() or source == output:
@@ -71,8 +66,13 @@ def fix(args):
         raise FileNotFoundError("BPM_FIX_CHECKPOINT_UNAVAILABLE")
     started = time.monotonic()
     emit({"type": "progress", "stage": "loading", "percent": 2})
-    predictor = bridge.Audio2Beats(checkpoint_path=checkpoint, device=args.device, dbn=False)
-    cpu_spect = bridge.LogMelSpect(device="cpu") if bridge._uses_accelerated_device(args.device) else None
+    models = {} if models is None else models
+    model_key = (checkpoint, args.device)
+    if model_key not in models:
+        predictor = bridge.Audio2Beats(checkpoint_path=checkpoint, device=args.device, dbn=False)
+        cpu_spect = bridge.LogMelSpect(device="cpu") if bridge._uses_accelerated_device(args.device) else None
+        models[model_key] = (predictor, cpu_spect)
+    predictor, cpu_spect = models[model_key]
 
     def detect(audio, sr):
         mono = np.mean(audio, axis=1, dtype=np.float32)
@@ -84,19 +84,20 @@ def fix(args):
         audio, sr = decode_audio(source, workdir, args.ffmpeg, args.ffprobe, "input")
         emit({"type": "progress", "stage": "analyzing", "percent": 10})
         if args.mode == "analyze" or not args.analysis:
-            from bpm_fix_crosscheck import cross_check
+            from bpm_fix_crosscheck import cross_check, merge_cross_check
             raw, downbeats = detect(audio, sr)
             mono = np.mean(audio, axis=1, dtype=np.float32)
             analysis = analyze_grid(raw, downbeats, len(audio) / sr, mono, sr)
             emit({"type": "progress", "stage": "crosschecking", "percent": 65})
             checked = cross_check(raw, mono, sr)
-            analysis.update(checked)
+            analysis = merge_cross_check(analysis, checked)
             indices = analysis["indices"]
             regression = np.polyfit(indices, analysis["beats"], 1)
             residual = analysis["beats"] - np.polyval(regression, indices)
             ratio = checked["referenceBpm"] / analysis["bpm"]
             public = {
                 "sourceBpm": float(analysis["bpm"]), **checked,
+                "confidence": analysis["confidence"],
                 "driftMs": float(np.ptp(residual) * 1000),
                 "coverage": analysis["coverage"], "filledBeats": analysis["filled"],
                 "ignoredDetections": analysis["ignored"],
@@ -112,7 +113,7 @@ def fix(args):
             analysis = args.analysis
             for key in ("beats", "detected", "indices", "smoothed", "downbeats"):
                 analysis[key] = np.asarray(analysis[key])
-        if analysis["confidence"] < 0.5 and not args.allow_low_confidence:
+        if analysis["confidence"] < 0.5 and not args.allow_low_confidence and not args.automatic:
             raise ValueError("BPM_FIX_LOW_CONFIDENCE")
         plan = plan_correction(analysis, len(audio), sr, args.target_bpm, args.tempo_factor)
         emit({"type": "progress", "stage": "planning", "percent": 35,
@@ -131,26 +132,11 @@ def fix(args):
         gain = min(1.0, 0.999 / max(peak, 1e-9))
         rendered *= gain
         pcm = workdir / "rendered.f32"
-        rendered.astype("<f4").tofile(pcm)
+        rendered.astype("<f4", copy=False).tofile(pcm)
+        del rendered
         candidate = workdir / ("fixed" + output.suffix.lower())
-        encoders = {
-            ".wav": ["-c:a", "pcm_s24le", "-rf64", "auto"],
-            ".mp3": ["-c:a", "libmp3lame", "-b:a", "320k", "-id3v2_version", "3"],
-            ".flac": ["-c:a", "flac", "-sample_fmt", "s32"],
-            ".aif": ["-c:a", "pcm_s24be"], ".aiff": ["-c:a", "pcm_s24be"],
-            ".m4a": ["-c:a", "aac", "-b:a", "256k"],
-            ".aac": ["-c:a", "aac", "-b:a", "256k"],
-            ".ogg": ["-c:a", "libvorbis", "-q:a", "8"],
-            ".opus": ["-c:a", "libopus", "-b:a", "192k"],
-        }
-        if output.suffix.lower() not in encoders:
-            raise ValueError("BPM_FIX_UNSUPPORTED_FORMAT")
         emit({"type": "progress", "stage": "encoding", "percent": 76})
-        run_media([args.ffmpeg, "-nostdin", "-v", "error", "-y", "-f", "f32le",
-                   "-ar", str(sr), "-ac", str(audio.shape[1]), "-i", str(pcm),
-                   "-i", str(source), "-map", "0:a:0", "-map_metadata", "1",
-                   "-metadata", "BPM=" + str(plan["targetBpm"]),
-                   *encoders[output.suffix.lower()], str(candidate)])
+        encode_audio(pcm, source, candidate, sr, audio.shape[1], plan["targetBpm"], args.ffmpeg, args.ffprobe)
         emit({"type": "progress", "stage": "verifying", "percent": 80})
         actual, output_sr = decode_audio(candidate, workdir, args.ffmpeg, args.ffprobe, "verify")
         checked_beats, raw_checked_count = detect_verification_beats(
@@ -160,12 +146,26 @@ def fix(args):
         if args.tempo_factor == 0.5:
             checked_beats = checked_beats[::2]
         verification = None
+        beat_verification = None
         try:
-            verification = verify_grid(checked_beats, plan["targetBpm"], plan["gridOffsetSec"])
+            try:
+                beat_verification = verify_grid(checked_beats, plan["targetBpm"], plan["gridOffsetSec"])
+            except ValueError:
+                # Too few model detections is diagnostic. The independent
+                # source-to-output audio match still measures the actual render.
+                pass
+            verification = verify_audio(audio_features(audio, sr), audio_features(actual, output_sr),
+                                        analysis, plan, sr, args.tempo_factor)
         finally:
-            if args.rc_diagnostics:
+            if args.diagnostics:
                 details = verification_diagnostics(
-                    checked_beats, plan["targetBpm"], plan["gridOffsetSec"], verification)
+                    checked_beats, plan["targetBpm"], plan["gridOffsetSec"], beat_verification)
+                details.update({"beatRedetection": beat_verification,
+                                "passed": bool(verification and verification["passed"]),
+                                "metrics": verification,
+                                "reasons": verification["reasons"] if verification else ["verification_error"]})
+                details["redetectionThresholds"] = details.pop("thresholds")
+                details["verificationMethod"] = "source-output-audio-match"
                 planned_beats = np.interp(analysis["beats"] * sr, plan["from"], plan["to"]) / sr
                 planned_grid = (plan["gridOffsetSec"] +
                                 (analysis["indices"] - analysis["indices"][0]) *
@@ -207,7 +207,8 @@ def fix(args):
             "downbeatBeatOffset": int(round(-analysis["indices"][first_downbeat] * args.tempo_factor)) % 4,
         }
         if not verification["passed"]:
-            raise ValueError("BPM_FIX_VERIFICATION_FAILED")
+            raise ValueError("BPM_FIX_VERIFICATION_FAILED: " + json.dumps({
+                "reasons": verification["reasons"], "metrics": verification}))
         emit({"type": "progress", "stage": "saving", "percent": 96})
         # Electron gives us private staging paths. The main process rechecks
         # source identity and publishes to a new destination without overwrite.
@@ -217,7 +218,7 @@ def fix(args):
         emit({"type": "result", "result": result})
 
 
-def main():
+def argument_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("input", "output", "ffmpeg", "ffprobe", "rubberband"):
         parser.add_argument("--" + name, required=True)
@@ -226,9 +227,34 @@ def main():
     parser.add_argument("--target-bpm", type=float)
     parser.add_argument("--tempo-factor", type=float, default=1.0)
     parser.add_argument("--allow-low-confidence", action="store_true")
+    parser.add_argument("--automatic", action="store_true")
     parser.add_argument("--analysis-stdin", action="store_true")
-    parser.add_argument("--rc-diagnostics", action="store_true")
-    args = parser.parse_args()
+    parser.add_argument("--diagnostics", "--rc-diagnostics", dest="diagnostics", action="store_true")
+    return parser
+
+
+def serve(stream, models=None, process_track=fix):
+    global _request_id
+    models = {} if models is None else models
+    parser = argument_parser()
+    for line in stream:
+        try:
+            request = json.loads(line)
+            _request_id = request["requestId"]
+            args = parser.parse_args(request["args"])
+            args.analysis = request.get("analysis")
+            process_track(args, models)
+        except (Exception, SystemExit) as error:
+            emit({"type": "error", "error": str(error)})
+        finally:
+            _request_id = None
+
+
+def main():
+    if sys.argv[1:] == ["--worker"]:
+        serve(sys.stdin)
+        return 0
+    args = argument_parser().parse_args()
     try:
         args.analysis = json.loads(sys.stdin.readline()) if args.analysis_stdin else None
         fix(args)
