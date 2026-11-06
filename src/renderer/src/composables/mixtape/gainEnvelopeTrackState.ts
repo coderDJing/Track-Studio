@@ -240,11 +240,7 @@ export const createGainEnvelopeTrackStateModule = (params: {
     const rawDurationSec = params.resolveTrackDurationSeconds(track)
     const durationSec =
       Number.isFinite(rawDurationSec) && rawDurationSec > 0 ? Math.max(0, rawDurationSec) : 0
-    const segments = resolveGridAlignedVolumeMuteSegments(
-      track,
-      durationSec,
-      track.volumeMuteSegments
-    )
+    const segments = normalizeVolumeMuteSegments(track.volumeMuteSegments, durationSec)
     return {
       track,
       durationSec,
