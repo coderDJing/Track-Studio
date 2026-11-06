@@ -231,7 +231,7 @@ const {
   resolveActiveEnvelopePolygon,
   resolveActiveGhostPointDot,
   resolveActiveEnvelopePointDots,
-  resolveActiveSegmentMasks,
+  resolveVolumeSegmentMasks,
   handleEnvelopeSegmentMouseDown,
   handleEnvelopePointMouseDown,
   handleEnvelopeStageMouseDown,
@@ -671,17 +671,15 @@ onBeforeUnmount(() => {
                                     ></div>
                                   </div>
                                 </template>
-                                <template v-else>
-                                  <div
-                                    v-for="segment in resolveActiveSegmentMasks(item)"
-                                    :key="`mute-${item.track.id}-${segment.key}`"
-                                    class="lane-track__mute-segment"
-                                    :style="{
-                                      left: `${segment.left}%`,
-                                      width: `${segment.width}%`
-                                    }"
-                                  ></div>
-                                </template>
+                                <div
+                                  v-for="segment in resolveVolumeSegmentMasks(item)"
+                                  :key="`volume-mute-${item.track.id}-${segment.key}`"
+                                  class="lane-track__mute-segment"
+                                  :style="{
+                                    left: `${segment.left}%`,
+                                    width: `${segment.width}%`
+                                  }"
+                                ></div>
                               </div>
                               <MixtapeTrackLoopOverlay
                                 :item="item"
@@ -915,9 +913,8 @@ onBeforeUnmount(() => {
                           :lines="resolveTrackEnvelopePreviewLines(item)"
                           :loop-blocks="resolveOverviewTrackLoopBlocks(item)"
                           :stem-rows="resolveTrackStemPreviewRows(item)"
-                          :mute-segments="resolveActiveSegmentMasks(item)"
+                          :mute-segments="resolveVolumeSegmentMasks(item)"
                           :show-stem-rows="isStemMixMode"
-                          :show-mute-segments="!isStemMixMode || isVolumeParamMode"
                         />
                       </div>
                     </div>

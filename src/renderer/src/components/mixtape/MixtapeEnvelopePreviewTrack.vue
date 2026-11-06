@@ -16,7 +16,6 @@ defineProps<{
     style: CSSProperties
   }>
   muteSegments: MixSegmentMask[]
-  showMuteSegments: boolean
   showStemRows: boolean
   stemRows: TrackStemPreviewRow[]
   trackStyle: CSSProperties
@@ -60,7 +59,7 @@ defineProps<{
         </div>
       </div>
     </div>
-    <div v-if="showMuteSegments" class="timeline-envelope-preview__mute-segments">
+    <div class="timeline-envelope-preview__mute-segments">
       <div
         v-for="segment in muteSegments"
         :key="`envelope-preview-mute-${item.track.id}-${segment.key}`"

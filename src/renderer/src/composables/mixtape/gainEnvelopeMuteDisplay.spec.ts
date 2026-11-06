@@ -1,9 +1,45 @@
 import { describe, expect, it } from 'vitest'
+import { ref } from 'vue'
 import { createGainEnvelopeTrackStateModule } from './gainEnvelopeTrackState'
+import { createMixtapeGainEnvelopeEditor } from './useGainEnvelopeEditor'
 import { resolveVolumeMuteSegmentMasks, toggleVolumeMuteIntervals } from './gainEnvelopeEditorGrid'
-import type { MixtapeTrack } from './types'
+import type { MixtapeEnvelopeParamId, MixtapeTrack } from './types'
 
 describe('volume mute ranges', () => {
+  it('keeps volume masks visible when the selected parameter changes', () => {
+    const track: MixtapeTrack = {
+      id: 'track',
+      mixOrder: 1,
+      title: '',
+      artist: '',
+      duration: '01:40',
+      filePath: '',
+      originPath: '',
+      volumeMuteSegments: [{ startSec: 10, endSec: 20 }]
+    }
+    let activeParam: MixtapeEnvelopeParamId | null = null
+    let segmentSelection = false
+    const editor = createMixtapeGainEnvelopeEditor({
+      tracks: ref([track]),
+      renderZoomLevel: ref(3),
+      resolveTrackDurationSeconds: () => 100,
+      resolveTrackSourceDurationSeconds: () => 100,
+      resolveTrackFirstBeatSeconds: () => 0,
+      resolveActiveParam: () => activeParam,
+      isSegmentSelectionMode: () => segmentSelection,
+      isEditable: () => true
+    })
+    const item = { track, laneIndex: 0, startSec: 0, startX: 0, width: 100 }
+    for (const param of [null, 'gain', 'high', 'vocal', 'volume'] as const) {
+      activeParam = param
+      for (segmentSelection of [false, true]) {
+        expect(editor.resolveVolumeSegmentMasks(item)).toEqual([
+          { key: '10.0000:20.0000', left: 10, width: 10 }
+        ])
+      }
+    }
+  })
+
   it('displays the saved range even when no grid lines are visible', () => {
     const track: MixtapeTrack = {
       id: 'eight',

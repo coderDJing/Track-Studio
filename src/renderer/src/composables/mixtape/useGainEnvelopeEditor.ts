@@ -197,13 +197,8 @@ export const createMixtapeGainEnvelopeEditor = (params: CreateMixtapeGainEnvelop
     })
   }
 
-  const resolveActiveSegmentMasks = (item: TimelineTrackLayout): MixSegmentMask[] => {
-    const param = resolveCurrentParam()
-    if (!param || !isSegmentModeParam(param)) return []
-    const { durationSec, segments } =
-      param === 'volume'
-        ? resolveTrackVolumeMuteState(item.track.id)
-        : resolveTrackStemSegmentState(item.track.id, param)
+  const resolveVolumeSegmentMasks = (item: TimelineTrackLayout): MixSegmentMask[] => {
+    const { durationSec, segments } = resolveTrackVolumeMuteState(item.track.id)
     return resolveVolumeMuteSegmentMasksByUtils(durationSec, segments)
   }
 
@@ -1022,7 +1017,7 @@ export const createMixtapeGainEnvelopeEditor = (params: CreateMixtapeGainEnvelop
     resolveActiveEnvelopePolygon,
     resolveActiveGhostPointDot,
     resolveActiveEnvelopePointDots,
-    resolveActiveSegmentMasks,
+    resolveVolumeSegmentMasks,
     handleEnvelopeSegmentMouseDown,
     handleEnvelopePointMouseDown,
     handleEnvelopeStageMouseDown,
