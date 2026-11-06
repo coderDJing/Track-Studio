@@ -22,8 +22,8 @@ const props = defineProps<{
 const hoveredGridKey = ref('')
 
 const resolveGridTone = (level: 'downbeat' | 'beat') => {
-  if (level === 'downbeat') return 'rgba(255, 223, 120, 0.26)'
-  return 'rgba(255, 223, 120, 0.18)'
+  if (level === 'downbeat') return 'var(--mixtape-loop-grid-beat)'
+  return 'color-mix(in srgb, var(--mixtape-loop-grid-beat) 70%, transparent)'
 }
 
 const resolveGridLineStyle = (
@@ -41,14 +41,15 @@ const resolveGridLineStyle = (
       background: line.disabled
         ? 'transparent'
         : hovered || line.active
-          ? 'rgba(255, 223, 120, 0.035)'
+          ? 'var(--mixtape-loop-grid-hover-bg)'
           : 'transparent',
       color: resolveGridTone(line.level),
       pointerEvents: 'auto',
       cursor: 'default',
       zIndex: 10,
       opacity: line.disabled ? 0.28 : 0.92,
-      boxShadow: hovered || line.active ? 'inset 0 0 0 1px rgba(255, 223, 120, 0.08)' : undefined
+      boxShadow:
+        hovered || line.active ? 'inset 0 0 0 1px var(--mixtape-loop-grid-hover-border)' : undefined
     }
   ]
 }
@@ -67,7 +68,7 @@ const resolveGridRailStyle = (
     borderRadius: '999px',
     background: 'currentColor',
     opacity: hovered || line.active ? 0.96 : 0.62,
-    boxShadow: hovered || line.active ? '0 0 12px rgba(255, 223, 120, 0.18)' : 'none',
+    boxShadow: hovered || line.active ? '0 0 12px var(--mixtape-loop-grid-hover-glow)' : 'none',
     pointerEvents: 'none'
   }
 }
@@ -85,9 +86,9 @@ const resolveGridHoverLabelStyle = (
       : 'translate(-50%, calc(-100% - 2px))',
     padding: '4px 8px',
     borderRadius: '999px',
-    border: '1px solid rgba(255, 223, 120, 0.16)',
-    background: 'rgba(15, 16, 18, 0.74)',
-    color: 'rgba(255, 245, 214, 0.94)',
+    border: '1px solid var(--mixtape-loop-label-border)',
+    background: 'var(--mixtape-loop-label-bg)',
+    color: 'var(--mixtape-loop-label-text)',
     backdropFilter: 'blur(8px)',
     fontSize: '9px',
     fontWeight: '600',
@@ -284,7 +285,12 @@ const resolveStatusMetaStyle = (tone: 'info' | 'error' | undefined): CSSProperti
       </span>
     </bubbleBoxTrigger>
     <div
-      v-if="loopEditMode && overlay.gridLines.length === 0 && overlay.blocks.length === 0"
+      v-if="
+        loopEditMode &&
+        overlay.gridEmptyHint &&
+        overlay.gridLines.length === 0 &&
+        !overlay.blocks.length
+      "
       class="mixtape-track-loop__grid-empty-hint"
     >
       {{ overlay.gridEmptyHint }}

@@ -1,6 +1,12 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSProperties, type Ref } from 'vue'
 import { buildTrackRuntimeTempoSnapshot } from '@renderer/composables/mixtape/trackRuntimeTempoSnapshot'
 import {
+  BASE_PX_PER_SEC,
+  GRID_DOWNBEAT_LINE_ZOOM,
+  MIXTAPE_WIDTH_SCALE,
+  ZOOM_MIN
+} from '@renderer/composables/mixtape/constants'
+import {
   buildMixtapeTrackLoopSections,
   buildMixtapeTrackLoopSignature,
   mapLoopedTrackLocalToBaseLocal,
@@ -116,6 +122,7 @@ type SelectedLoopState = {
 const LOOP_MIN_REPEAT_COUNT = 1
 const LOOP_MAX_REPEAT_COUNT = 32
 const LOOP_EPSILON = 0.0001
+const LOOP_GRID_MIN_SPACING_PX = 14
 
 const clampNumber = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 const roundSec = (value: number) => Number(Math.max(0, Number(value) || 0).toFixed(4))
@@ -233,13 +240,22 @@ export const useMixtapeTrackLoopEditor = (options: UseMixtapeTrackLoopEditorOpti
       0,
       Number(options.resolveTrackSourceDurationSeconds(track)) || 0
     )
+    const zoom = Number(options.renderZoomLevel.value) || 0
     const runtime = buildTrackRuntimeTempoSnapshot({
       track,
       sourceDurationSec,
-      zoom: Number(options.renderZoomLevel.value) || 0
+      zoom
     })
-    const visibleGridLines = Array.isArray(runtime.visibleGridLines) ? runtime.visibleGridLines : []
+    const hasSourceGrid = !!runtime.timeMapInput.sourceBeatGridMap
+    const useOverviewGrid = zoom < GRID_DOWNBEAT_LINE_ZOOM && hasSourceGrid
+    const visibleGridLines = !hasSourceGrid
+      ? []
+      : useOverviewGrid
+        ? runtime.timeMap.buildVisibleGridLines(GRID_DOWNBEAT_LINE_ZOOM)
+        : runtime.visibleGridLines
     const finestLevel = resolveFinestVisibleLevel(visibleGridLines.map((line) => line.level))
+    let previousDisplayPx = Number.NEGATIVE_INFINITY
+    const pxPerSec = BASE_PX_PER_SEC * MIXTAPE_WIDTH_SCALE * Math.max(ZOOM_MIN, zoom)
     const gridLines = visibleGridLines
       .filter((line) => line.level === finestLevel)
       .map((line) => ({
@@ -253,7 +269,14 @@ export const useMixtapeTrackLoopEditor = (options: UseMixtapeTrackLoopEditorOpti
           line.sec >= 0 &&
           line.sec <= Number(runtime.durationSec) + LOOP_EPSILON &&
           (index === 0 || Math.abs(line.sec - lines[index - 1]!.sec) > LOOP_EPSILON)
-      ) satisfies SerializedVisibleGridLine[]
+      )
+      .filter((line) => {
+        if (!useOverviewGrid) return true
+        const displayPx = line.sec * pxPerSec
+        if (displayPx - previousDisplayPx < LOOP_GRID_MIN_SPACING_PX) return false
+        previousDisplayPx = displayPx
+        return true
+      }) satisfies SerializedVisibleGridLine[]
     return {
       baseDurationSec: Number(runtime.baseDurationSec),
       gridLines
@@ -482,7 +505,7 @@ export const useMixtapeTrackLoopEditor = (options: UseMixtapeTrackLoopEditorOpti
             blocks: [],
             boundaryMarkers: [],
             gridLines: [],
-            gridEmptyHint: options.t('mixtape.loopGridUnavailableHint'),
+            gridEmptyHint: allowGridSelection ? options.t('mixtape.loopGridUnavailableHint') : '',
             repeatControl: null,
             statusChip,
             selectedLoopKey,
@@ -591,7 +614,7 @@ export const useMixtapeTrackLoopEditor = (options: UseMixtapeTrackLoopEditorOpti
           return markers
         }),
       gridLines: overlayGridLines,
-      gridEmptyHint: options.t('mixtape.loopGridUnavailableHint'),
+      gridEmptyHint: allowGridSelection ? options.t('mixtape.loopGridUnavailableHint') : '',
       repeatControl:
         options.isLoopParamMode.value && selectedLoopRange
           ? {
