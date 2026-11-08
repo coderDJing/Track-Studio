@@ -97,7 +97,9 @@ export const useMixtapeBeatAlignGridAdjust = (params: UseMixtapeBeatAlignGridAdj
   const handleGridShift = (delta: number, options: GridShiftOptions = {}) => {
     if (!canAdjustClipGrid()) return
     if (params.dynamicGridEdit?.hasV2GridMap.value === true) {
-      params.dynamicGridEdit.shiftActiveGrid(delta)
+      if (params.dynamicGridEdit.shiftActiveGrid(delta) && options.preservePlaybackPhase === true) {
+        params.applyPlaybackPhaseCompensation?.(delta)
+      }
       return
     }
     const bpmValue = Number(params.bpm.value)

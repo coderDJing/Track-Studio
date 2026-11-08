@@ -11,6 +11,8 @@ type Session = {
   entries: IRekordboxBeatGridEntry[]
   pending: number
   sent: number
+  pendingPhase: number
+  sentPhase: number
   timer?: ReturnType<typeof setTimeout>
   saving?: Promise<void>
 }
@@ -23,6 +25,7 @@ export const usePioneerUsbGridEditing = (params: {
   previewDownbeatBeatOffset: Ref<number>
   previewBeatGridMap: Ref<SongBeatGridMapV2 | null>
   draw: () => void
+  applyPlaybackPhaseCompensation?: (deltaMs: number) => void
 }) => {
   const sessions = new Map<string, Session>()
   let mounted = true
@@ -65,13 +68,22 @@ export const usePioneerUsbGridEditing = (params: {
     }
     session.pending = 0
     session.sent = offsetMs
+    session.sentPhase = session.pendingPhase
+    session.pendingPhase = 0
     session.saving = (async () => {
       try {
         const result = await editPioneerUsbSong(session.song, { kind: 'shift-grid', offsetMs })
         if (result?.rekordboxGridEntries) session.entries = result.rekordboxGridEntries
-        else session.pending = 0
+        else {
+          if (mounted && currentSession() === session) {
+            params.applyPlaybackPhaseCompensation?.(-session.sentPhase - session.pendingPhase)
+          }
+          session.pending = 0
+          session.pendingPhase = 0
+        }
       } finally {
         session.sent = 0
+        session.sentPhase = 0
         session.saving = undefined
         showPreview(session)
       }
@@ -79,7 +91,7 @@ export const usePioneerUsbGridEditing = (params: {
     await session.saving
     if (Math.round(session.pending)) await flush(session)
   }
-  const shift = (deltaMs: number) => {
+  const shift = (deltaMs: number, options?: HorizontalBrowseGridShiftOptions) => {
     const song = params.song()
     if (!isEditablePioneerUsbSong(song) || !song || !Number.isFinite(deltaMs)) return false
     let session = sessions.get(key(song))
@@ -89,13 +101,19 @@ export const usePioneerUsbGridEditing = (params: {
         song: { ...song, pioneerUsbSource: { ...song.pioneerUsbSource! } },
         entries: song.rekordboxGridEntries.map((entry) => ({ ...entry })),
         pending: 0,
-        sent: 0
+        sent: 0,
+        pendingPhase: 0,
+        sentPhase: 0
       }
       sessions.set(key(song), session)
     }
     if (!session.saving && !session.pending && song.rekordboxGridEntries?.length)
       session.entries = song.rekordboxGridEntries.map((entry) => ({ ...entry }))
     session.pending += deltaMs
+    if (options?.preservePlaybackPhase === true) {
+      session.pendingPhase += deltaMs
+      params.applyPlaybackPhaseCompensation?.(deltaMs)
+    }
     showPreview(session)
     if (session.timer) clearTimeout(session.timer)
     session.timer = setTimeout(() => {
@@ -137,7 +155,7 @@ export const usePioneerUsbGridEditing = (params: {
         if (!isEditablePioneerUsbSong(params.song())) local.schedulePersistGridDefinition()
       },
       handleGridShift: (delta: number, options?: HorizontalBrowseGridShiftOptions) => {
-        if (isEditablePioneerUsbSong(params.song())) shift(delta)
+        if (isEditablePioneerUsbSong(params.song())) shift(delta, options)
         else local.handleGridShift(delta, options)
       }
     }),

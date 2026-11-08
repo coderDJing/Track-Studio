@@ -25,15 +25,17 @@ const fixture = () => {
     rekordboxGridEntries: entries
   } as ISongInfo)
   const firstBeatMs = ref(100)
+  const compensate = vi.fn()
   const state = usePioneerUsbGridEditing({
     song: () => song.value,
     previewFirstBeatMs: firstBeatMs,
     previewBpm: ref(120),
     previewDownbeatBeatOffset: ref(0),
     previewBeatGridMap: ref<SongBeatGridMapV2 | null>(null),
-    draw: vi.fn()
+    draw: vi.fn(),
+    applyPlaybackPhaseCompensation: compensate
   })
-  return { song, firstBeatMs, ...state }
+  return { song, firstBeatMs, compensate, ...state }
 }
 beforeEach(() => {
   vi.useFakeTimers()
@@ -44,6 +46,32 @@ afterEach(() => {
   vi.useRealTimers()
 })
 describe('native USB grid buttons save silently without losing queued movement', () => {
+  it('keeps the paused linked grid fixed and reverses compensation on write failure', async () => {
+    const state = fixture()
+    const local = {
+      persistGridDefinition: vi.fn(),
+      schedulePersistGridDefinition: vi.fn(),
+      handleGridShift: vi.fn()
+    }
+    const toolbar = state.bindToolbar(local)
+    edit.mockResolvedValue(null)
+    toolbar.handleGridShift(5, { preservePlaybackPhase: true })
+    toolbar.handleGridShift(5, { preservePlaybackPhase: true })
+    expect(state.firstBeatMs.value).toBe(110)
+    expect(state.compensate.mock.calls).toEqual([[5], [5]])
+    expect(local.handleGridShift).not.toHaveBeenCalled()
+    await state.flush()
+    expect(state.firstBeatMs.value).toBe(100)
+    expect(state.compensate.mock.calls).toEqual([[5], [5], [-10]])
+  })
+
+  it('keeps ordinary USB grid shifts without phase compensation', async () => {
+    const state = fixture()
+    edit.mockResolvedValue({ rekordboxGridEntries: entries })
+    state.shift(5)
+    expect(state.compensate).not.toHaveBeenCalled()
+    await state.flush()
+  })
   it('previews immediately and merges repeated presses into one save', async () => {
     const state = fixture()
     edit.mockResolvedValue({

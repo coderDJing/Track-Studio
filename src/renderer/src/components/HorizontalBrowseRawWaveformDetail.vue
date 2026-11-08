@@ -215,6 +215,7 @@ const {
 } = presentationState
 
 const usbGridEditing = usePioneerUsbGridEditing({
+  applyPlaybackPhaseCompensation: (deltaMs) => applyLocalGridShiftPhaseCompensation(deltaMs),
   song: () => props.song,
   previewBpm,
   previewFirstBeatMs,
