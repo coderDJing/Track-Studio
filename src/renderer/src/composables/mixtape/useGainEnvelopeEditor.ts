@@ -75,6 +75,7 @@ export const createMixtapeGainEnvelopeEditor = (params: CreateMixtapeGainEnvelop
     isStemSegmentParam
   })
   const {
+    resolveDynamicVisibleGridLines,
     resolveVolumeMuteGrid,
     resolveGridAlignedVolumeMuteSegments,
     resolveVolumeMuteSegmentBySec,
@@ -470,20 +471,42 @@ export const createMixtapeGainEnvelopeEditor = (params: CreateMixtapeGainEnvelop
       const pointIndex = state.pointIndices[0]
       if (pointIndex < 0 || pointIndex >= points.length) return
 
-      let nextSec = pointer.sec
+      let nextSec = points[pointIndex].sec
       if (pointIndex === 0) {
         nextSec = 0
       } else if (pointIndex === points.length - 1) {
         nextSec = durationSec
-      } else {
-        const currentSec = points[pointIndex]?.sec ?? pointer.sec
-        nextSec = currentSec
+      } else if (state.startPointer && state.basePoints) {
+        const deltaSec = pointer.sec - state.startPointer.sec
+        const stageWidth = state.stageEl.getBoundingClientRect().width
+        // 点击热区或纯纵向微调不应改变时间；横向拖动超过 4px 后再启用吸附。
+        if ((Math.abs(deltaSec) / durationSec) * stageWidth >= 4) {
+          state.horizontalDragStarted = true
+        }
+        if (state.horizontalDragStarted) {
+          const baseSec = state.basePoints[pointIndex].sec
+          // 保留已有的同时间跳变点，移动时不跨点、不新建重合点，避免归一化吞点。
+          const gap = GAIN_ENVELOPE_SAME_SEC_EPSILON * 2
+          const minSec = Math.min(baseSec, points[pointIndex - 1].sec + gap)
+          const maxSec = Math.max(baseSec, points[pointIndex + 1].sec - gap)
+          const targetSec = baseSec + deltaSec
+          let nearestDistance = Number.POSITIVE_INFINITY
+          for (const line of resolveDynamicVisibleGridLines(track, durationSec)) {
+            const sec = Number(line.sec.toFixed(4))
+            if (sec < minSec || sec > maxSec) continue
+            const distance = Math.abs(sec - targetSec)
+            if (distance < nearestDistance) {
+              nextSec = sec
+              nearestDistance = distance
+            }
+          }
+        }
       }
 
       let nextGain = pointer.gain
-      if (isFineTune && state.startPointer && state.basePoints) {
+      if (state.startPointer && state.basePoints) {
         const deltaGain = pointer.gain - state.startPointer.gain
-        nextGain = state.basePoints[pointIndex].gain + deltaGain * 0.1
+        nextGain = state.basePoints[pointIndex].gain + deltaGain * (isFineTune ? 0.1 : 1)
       }
 
       let finalGain = clampMixEnvelopeGain(state.param, nextGain)
@@ -550,6 +573,7 @@ export const createMixtapeGainEnvelopeEditor = (params: CreateMixtapeGainEnvelop
       trackId,
       pointIndices,
       stageEl,
+      horizontalDragStarted: false,
       startPointer,
       basePoints
     }

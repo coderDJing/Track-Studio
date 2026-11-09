@@ -20,6 +20,7 @@ export type EnvelopeDragState = {
   trackId: string
   pointIndices: number[]
   stageEl: HTMLElement
+  horizontalDragStarted: boolean
   startPointer?: { sec: number; gain: number }
   basePoints?: MixtapeGainPoint[]
 }
