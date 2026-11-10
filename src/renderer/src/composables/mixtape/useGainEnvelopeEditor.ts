@@ -1051,6 +1051,7 @@ export const createMixtapeGainEnvelopeEditor = (params: CreateMixtapeGainEnvelop
     handleEnvelopePointContextMenu,
     canUndoMixParam,
     pushExternalUndoStep,
+    flushPendingMixEnvelopePersist,
     undoLastMixParamChange,
     cleanupGainEnvelopeEditor
   }

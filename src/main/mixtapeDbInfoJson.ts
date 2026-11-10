@@ -6,15 +6,7 @@ const TABLE = 'mixtape_items'
 const MIXTAPE_LANE_COUNT = 2
 
 export type MixtapeMixEnvelopeParam =
-  | 'gain'
-  | 'high'
-  | 'mid'
-  | 'low'
-  | 'vocal'
-  | 'inst'
-  | 'bass'
-  | 'drums'
-  | 'volume'
+  'gain' | 'high' | 'mid' | 'low' | 'vocal' | 'inst' | 'bass' | 'drums' | 'volume'
 
 const MIXTAPE_ENVELOPE_FIELD_BY_PARAM: Record<MixtapeMixEnvelopeParam, string> = {
   gain: 'gainEnvelope',
@@ -54,11 +46,15 @@ const parseItemInfoJson = (raw: unknown): MixtapeItemInfoJson => {
 
 export function upsertMixtapeItemMixEnvelopeById(
   param: MixtapeMixEnvelopeParam,
-  entries: Array<{ itemId: string; gainEnvelope: Array<{ sec: number; gain: number }> }>
+  entries: Array<{ itemId: string; gainEnvelope: Array<{ sec: number; gain: number }> }>,
+  options?: { requireAll?: boolean }
 ): { updated: number } {
   if (!Array.isArray(entries) || entries.length === 0) return { updated: 0 }
   const db = getLibraryDb()
-  if (!db) return { updated: 0 }
+  if (!db) {
+    if (options?.requireAll) throw new Error('MIXTAPE_GAIN_DATABASE_UNAVAILABLE')
+    return { updated: 0 }
+  }
   const envelopeField = MIXTAPE_ENVELOPE_FIELD_BY_PARAM[param]
   const maxGain = MIXTAPE_ENVELOPE_MAX_GAIN_BY_PARAM[param]
 
@@ -114,12 +110,16 @@ export function upsertMixtapeItemMixEnvelopeById(
     envelopeById.set(itemId, normalizedEnvelope)
   }
   const itemIds = Array.from(envelopeById.keys())
+  if (options?.requireAll && itemIds.length !== entries.length) {
+    throw new Error('MIXTAPE_GAIN_INVALID_ENTRIES')
+  }
   if (!itemIds.length) return { updated: 0 }
 
   try {
     let updated = 0
     const updateStmt = db.prepare(`UPDATE ${TABLE} SET info_json = ? WHERE id = ?`)
     const tx = db.transaction(() => {
+      let matched = 0
       const CHUNK_SIZE = 300
       for (let offset = 0; offset < itemIds.length; offset += CHUNK_SIZE) {
         const chunk = itemIds.slice(offset, offset + CHUNK_SIZE)
@@ -128,6 +128,7 @@ export function upsertMixtapeItemMixEnvelopeById(
         const rows = db
           .prepare(`SELECT id, info_json FROM ${TABLE} WHERE id IN (${placeholders})`)
           .all(...chunk) as Array<{ id: string; info_json?: string | null }>
+        matched += rows.length
         for (const row of rows) {
           const itemId = typeof row?.id === 'string' ? row.id.trim() : ''
           if (!itemId) continue
@@ -144,19 +145,24 @@ export function upsertMixtapeItemMixEnvelopeById(
           updated += 1
         }
       }
+      if (options?.requireAll && matched !== itemIds.length) {
+        throw new Error('MIXTAPE_GAIN_ITEMS_CHANGED')
+      }
     })
     tx()
     return { updated }
   } catch (error) {
     log.error('[sqlite] mixtape mix envelope upsert failed', { param, error })
+    if (options?.requireAll) throw error
     return { updated: 0 }
   }
 }
 
 export function upsertMixtapeItemGainEnvelopeById(
-  entries: Array<{ itemId: string; gainEnvelope: Array<{ sec: number; gain: number }> }>
+  entries: Array<{ itemId: string; gainEnvelope: Array<{ sec: number; gain: number }> }>,
+  options?: { requireAll?: boolean }
 ): { updated: number } {
-  return upsertMixtapeItemMixEnvelopeById('gain', entries)
+  return upsertMixtapeItemMixEnvelopeById('gain', entries, options)
 }
 
 export function upsertMixtapeItemVolumeMuteSegmentsById(

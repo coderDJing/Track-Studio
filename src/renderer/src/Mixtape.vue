@@ -10,6 +10,7 @@ import MixtapeEnvelopePreviewTrack from '@renderer/components/mixtape/MixtapeEnv
 import MixtapeGlobalBpmEditor from '@renderer/components/mixtape/MixtapeGlobalBpmEditor.vue'
 import MixtapeTrackLoopOverlay from '@renderer/components/mixtape/MixtapeTrackLoopOverlay.vue'
 import MixtapeTrackCueOverlay from '@renderer/components/mixtape/MixtapeTrackCueOverlay.vue'
+import MixtapeProjectGainButtons from '@renderer/components/mixtape/MixtapeProjectGainButtons.vue'
 import MixtapeTrackEnvelopeCurve from '@renderer/components/mixtape/MixtapeTrackEnvelopeCurve.vue'
 import { useMixtape } from '@renderer/composables/useMixtape'
 import { useMixtapePageUi } from '@renderer/composables/mixtape/useMixtapePageUi'
@@ -19,6 +20,7 @@ import UserGuideCard from '@renderer/components/userGuide/UserGuideCard.vue'
 const masterTempoLaneExpanded = ref(false)
 const transportToastVisible = ref(false)
 const transportToastMessage = ref('')
+const transportToastPriority = ref<'polite' | 'assertive'>('assertive')
 let transportToastTimer: ReturnType<typeof setTimeout> | null = null
 
 const clearTransportToastTimer = () => {
@@ -27,10 +29,11 @@ const clearTransportToastTimer = () => {
   transportToastTimer = null
 }
 
-const showTransportToast = (message: string) => {
+const showTransportToast = (message: string, priority: 'polite' | 'assertive' = 'assertive') => {
   const text = String(message || '').trim()
   if (!text) return
   transportToastMessage.value = text
+  transportToastPriority.value = priority
   transportToastVisible.value = true
   clearTransportToastTimer()
   transportToastTimer = setTimeout(() => {
@@ -240,6 +243,11 @@ const {
   handleEnvelopePointDoubleClick,
   handleEnvelopePointContextMenu,
   canUndoMixParam,
+  projectGainBusy,
+  canDecreaseProjectGain,
+  canIncreaseProjectGain,
+  projectGainUnavailableReason,
+  adjustProjectGain,
   handleUndoMixParam,
   pushExternalUndoStep,
   handleLaneTrackMouseDown,
@@ -251,7 +259,8 @@ const {
   handleGlobalBpmTrackTargetsSync
 } = useMixtapePageUi({
   mixtape,
-  masterTempoLaneExpanded
+  masterTempoLaneExpanded,
+  showToast: (message) => showTransportToast(message, 'polite')
 })
 
 watch(transportError, (message) => {
@@ -390,7 +399,7 @@ onBeforeUnmount(() => {
               tag="button"
               class="button mixtape-param-bar__action-btn mixtape-param-bar__action-btn--icon"
               type="button"
-              :disabled="!canUndoMixParam"
+              :disabled="!canUndoMixParam || projectGainBusy"
               :title="t('mixtape.undoActionHint')"
               :aria-label="t('mixtape.undoActionHint')"
               @click="handleUndoMixParam"
@@ -424,15 +433,26 @@ onBeforeUnmount(() => {
                 <path d="M5.9 10.6 8 12.7l2.1-2.1"></path>
               </svg>
             </bubbleBoxTrigger>
-            <button
+            <bubbleBoxTrigger
               v-if="selectedMixParam === 'gain'"
+              wrapper-tag="span"
+              tag="button"
               class="button mixtape-param-bar__action-btn"
               type="button"
-              :disabled="!canStartAutoGain"
+              :disabled="!canStartAutoGain || projectGainBusy"
+              :title="t('mixtape.autoGainActionHint')"
               @click="handleOpenAutoGainDialog"
             >
               {{ t('mixtape.autoGainAction') }}
-            </button>
+            </bubbleBoxTrigger>
+            <MixtapeProjectGainButtons
+              v-if="selectedMixParam === 'gain'"
+              :can-decrease="canDecreaseProjectGain"
+              :can-increase="canIncreaseProjectGain"
+              :busy="projectGainBusy"
+              :unavailable-reason="projectGainUnavailableReason"
+              @adjust="adjustProjectGain"
+            />
             <button
               v-if="isSegmentSelectionSupported"
               class="button mixtape-param-bar__action-btn"
@@ -1051,8 +1071,8 @@ onBeforeUnmount(() => {
       <div
         v-if="transportToastVisible"
         class="mixtape-transport-toast"
-        role="alert"
-        aria-live="assertive"
+        :role="transportToastPriority === 'assertive' ? 'alert' : 'status'"
+        :aria-live="transportToastPriority"
       >
         <div class="mixtape-transport-toast__message">{{ transportToastMessage }}</div>
       </div>

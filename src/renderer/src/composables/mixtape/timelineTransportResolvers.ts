@@ -142,14 +142,17 @@ export const createTimelineTransportResolversModule = (ctx: TimelineTransportRes
     return total
   }
 
-  const overviewPlayheadStyle = computed(() => ({
-    left: `${clampNumber(
-      resolveTransportDuration() <= 0 ? 0 : (playheadSec.value / resolveTransportDuration()) * 100,
-      0,
-      100
-    )}%`,
-    opacity: playheadVisible.value ? (transportPlaying.value ? '1' : '0.45') : '0'
-  }))
+  const overviewPlayheadStyle = computed(() => {
+    const totalWidth = Math.max(0, timelineLayout.value.totalWidth)
+    const pxPerSec = Math.max(0, resolveRenderPxPerSec(normalizedRenderZoom.value))
+    // 概览矩形包含画布两端留白，播放线必须使用同一像素坐标和画布宽度。
+    // 音频计划的时长只负责播放调度，不能作为概览的位置分母。
+    const x = totalWidth > 0 ? resolveTimelineDisplayX(playheadSec.value, pxPerSec, totalWidth) : 0
+    return {
+      left: `${totalWidth > 0 ? (x / totalWidth) * 100 : 0}%`,
+      opacity: playheadVisible.value ? (transportPlaying.value ? '1' : '0.45') : '0'
+    }
+  })
 
   const playheadViewportX = computed(() => {
     const totalWidth = Math.max(0, timelineLayout.value.totalWidth)

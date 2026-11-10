@@ -14,6 +14,8 @@ import { useMixtapeStemPlaceholderState } from '@renderer/composables/mixtape/us
 import { useMixtapeTrackLoopEditor } from '@renderer/composables/mixtape/useMixtapeTrackLoopEditor'
 import { useMixtapeTrackDragUndo } from '@renderer/composables/mixtape/useMixtapeTrackDragUndo'
 import { useMixtapeCueOverlap } from '@renderer/composables/mixtape/useMixtapeCueOverlap'
+import { useMixtapeProjectGain } from '@renderer/composables/mixtape/useMixtapeProjectGain'
+import confirmDialog from '@renderer/components/confirmDialog'
 import type {
   MixtapeEnvelopeParamId,
   MixtapeTrack,
@@ -29,9 +31,15 @@ import { formatWindowTitle } from '@renderer/utils/windowTitle'
 type UseMixtapePageUiOptions = {
   mixtape: ReturnType<typeof useMixtape>
   masterTempoLaneExpanded: Ref<boolean>
+  showToast: (message: string) => void
 }
 
-export const useMixtapePageUi = ({ mixtape, masterTempoLaneExpanded }: UseMixtapePageUiOptions) => {
+export const useMixtapePageUi = ({
+  mixtape,
+  masterTempoLaneExpanded,
+  showToast
+}: UseMixtapePageUiOptions) => {
+  const projectGainBusy = ref(false)
   const mixtapeWindowVolume = ref(readWindowVolume(MIXTAPE_WINDOW_VOLUME_STORAGE_KEY))
   mixtape.setTransportMasterVolume(mixtapeWindowVolume.value)
   const mixtapeWindowTitle = computed(() => formatWindowTitle(mixtape.titleLabel.value))
@@ -67,7 +75,7 @@ export const useMixtapePageUi = ({ mixtape, masterTempoLaneExpanded }: UseMixtap
       name: 'mixtape.menuOutput',
       subMenu: [],
       directAction: 'mixtape.menuOutput',
-      disabled: !canOutputFromTitle.value
+      disabled: !canOutputFromTitle.value || projectGainBusy.value
     },
     {
       name: 'mixtape.cueOverlapTitle',
@@ -78,6 +86,7 @@ export const useMixtapePageUi = ({ mixtape, masterTempoLaneExpanded }: UseMixtap
   ])
 
   const handleTitleMenuOpen = (key: string) => {
+    if (projectGainBusy.value) return
     if (key === 'mixtape.cueOverlapTitle') {
       void cueOverlap.open()
       return
@@ -248,6 +257,7 @@ export const useMixtapePageUi = ({ mixtape, masterTempoLaneExpanded }: UseMixtap
     handleEnvelopePointContextMenu,
     canUndoMixParam,
     pushExternalUndoStep,
+    flushPendingMixEnvelopePersist,
     undoLastMixParamChange,
     cleanupGainEnvelopeEditor
   } = createMixtapeGainEnvelopeEditor({
@@ -259,13 +269,14 @@ export const useMixtapePageUi = ({ mixtape, masterTempoLaneExpanded }: UseMixtap
     resolveActiveParam: () =>
       isEnvelopeParamMode.value ? (selectedMixParam.value as MixtapeEnvelopeParamId) : null,
     isSegmentSelectionMode: () => isSegmentSelectionActive.value,
-    isEditable: () => isEnvelopeParamMode.value
+    isEditable: () => isEnvelopeParamMode.value && !projectGainBusy.value
   })
 
   const cueOverlap = useMixtapeCueOverlap({
     tracks: mixtape.tracks,
     playlistId: mixtape.mixtapePlaylistId,
     isBlocked: () =>
+      projectGainBusy.value ||
       mixtape.mixtapeItemsLoading.value ||
       mixtape.bpmAnalysisActive.value ||
       mixtape.transportPlaying.value ||
@@ -284,6 +295,40 @@ export const useMixtapePageUi = ({ mixtape, masterTempoLaneExpanded }: UseMixtap
     }
   })
 
+  const projectGain = useMixtapeProjectGain({
+    busy: projectGainBusy,
+    tracks: mixtape.tracks,
+    playlistId: mixtape.mixtapePlaylistId,
+    resolveDuration: mixtape.resolveTrackDurationSeconds,
+    isBlocked: () =>
+      !mixtape.mixtapePlaylistId.value ||
+      mixtape.mixtapeItemsLoading.value ||
+      mixtape.bpmAnalysisActive.value ||
+      mixtape.outputRunning.value ||
+      mixtape.autoGainBusy.value ||
+      mixtape.mixtapeDropBusy.value ||
+      mixtape.beatAlignDialogVisible.value ||
+      cueOverlap.busy.value,
+    flushPending: flushPendingMixEnvelopePersist,
+    pushUndo: pushExternalUndoStep,
+    refresh: mixtape.scheduleTimelineDraw,
+    onAdjusted: (deltaDb, count) => {
+      showToast(
+        mixtape.t(deltaDb < 0 ? 'mixtape.projectGainDecreased' : 'mixtape.projectGainIncreased', {
+          count
+        })
+      )
+    },
+    onUndone: (count) => showToast(mixtape.t('mixtape.projectGainUndone', { count })),
+    showError: async () => {
+      await confirmDialog({
+        title: mixtape.t('common.error'),
+        content: [mixtape.t('mixtape.projectGainFailed')],
+        confirmShow: false
+      })
+    }
+  })
+
   const trackDragUndoMouseDown = useMixtapeTrackDragUndo({
     tracks: mixtape.tracks,
     handleTrackDragStart: mixtape.handleTrackDragStart,
@@ -291,6 +336,7 @@ export const useMixtapePageUi = ({ mixtape, masterTempoLaneExpanded }: UseMixtap
   })
 
   const handleLaneTrackMouseDown = (item: TimelineTrackLayout, event: MouseEvent) => {
+    if (projectGainBusy.value) return
     if (isLoopParamMode.value) {
       handleTrackLoopTrackMouseDown(item, event)
       return
@@ -300,12 +346,13 @@ export const useMixtapePageUi = ({ mixtape, masterTempoLaneExpanded }: UseMixtap
   }
 
   const handleLaneTrackMouseDownCapture = (item: TimelineTrackLayout, event: MouseEvent) => {
+    if (projectGainBusy.value) return
     if (!isLoopParamMode.value) return
     handleTrackLoopTrackMouseDown(item, event)
   }
 
   const handleUndoMixParam = () => {
-    if (!cueOverlap.busy.value) undoLastMixParamChange()
+    if (!cueOverlap.busy.value && !projectGainBusy.value) undoLastMixParamChange()
   }
   const { handleZoomIn, handleZoomOut, isLightTheme } = useMixtapeShellUi({
     renderZoomLevel: mixtape.renderZoomLevel,
@@ -437,6 +484,11 @@ export const useMixtapePageUi = ({ mixtape, masterTempoLaneExpanded }: UseMixtap
   )
 
   return {
+    projectGainBusy,
+    canDecreaseProjectGain: projectGain.canDecrease,
+    canIncreaseProjectGain: projectGain.canIncrease,
+    projectGainUnavailableReason: projectGain.unavailableReason,
+    adjustProjectGain: projectGain.adjust,
     mixtapeWindowVolume,
     mixtapeWindowTitle,
     handleMixtapeWindowVolumeChange,

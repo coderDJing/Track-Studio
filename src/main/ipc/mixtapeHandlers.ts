@@ -852,6 +852,7 @@ export function registerMixtapeHandlers() {
     async (
       _e,
       payload?: {
+        requireAll?: boolean
         entries?: Array<{ itemId?: string; gainEnvelope?: Array<{ sec?: number; gain?: number }> }>
       }
     ) => {
@@ -873,7 +874,8 @@ export function registerMixtapeHandlers() {
                     point.gain > 0
                 )
             : []
-        }))
+        })),
+        { requireAll: payload?.requireAll === true }
       )
     }
   )
