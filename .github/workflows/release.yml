@@ -1028,3 +1028,43 @@ jobs:
             gh api -X DELETE "repos/${GH_REPO}/git/refs/tags/${orphan_tag}" \
               || echo "WARN: failed to delete orphan tag ${orphan_tag} (需 contents: write 权限)"
           done
+
+      - name: Remove superseded stable releases
+        # 正式版发布成功后只保留当前这一版；运行时资源（demucs-*）不参与淘汰。
+        if: ${{ !contains(github.ref_name, '-rc.') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # 用纯三段版本号正则限定“应用正式版”。不能只按 isPrerelease=false 判断，
+          # 因为 demucs-model-assets 这类运行时资源 Release 同样是非预发布。
+          mapfile -t stale_tags < <(
+            gh release list --limit 1000 --json tagName,isPrerelease \
+              --jq '.[] | select(.isPrerelease | not) | .tagName' |
+              grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' |
+              grep -v "^${TAG_NAME}$" || true
+          )
+          for stale_tag in "${stale_tags[@]}"; do
+            echo "Removing superseded stable release and tag: ${stale_tag}"
+            gh release delete "${stale_tag}" --yes --cleanup-tag
+          done
+
+          # 同 RC：补清理没有 Release 的孤儿正式版 tag
+          mapfile -t orphan_tags < <(
+            gh api --paginate "repos/${GH_REPO}/git/matching-refs/tags" \
+              --jq '.[].ref' |
+              sed 's#^refs/tags/##' |
+              grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' |
+              grep -v "^${TAG_NAME}$" || true
+          )
+          for orphan_tag in "${orphan_tags[@]}"; do
+            if gh release view "${orphan_tag}" >/dev/null 2>&1; then
+              # 仍有 Release 的正式版 tag 由上一步处理，这里不重复删除
+              continue
+            fi
+            echo "Removing orphan stable tag without release: ${orphan_tag}"
+            gh api -X DELETE "repos/${GH_REPO}/git/refs/tags/${orphan_tag}" \
+              || echo "WARN: failed to delete orphan tag ${orphan_tag} (需 contents: write 权限)"
+          done
