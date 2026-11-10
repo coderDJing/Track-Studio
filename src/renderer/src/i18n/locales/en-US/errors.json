@@ -1,7 +1,7 @@
 {
   "errors": {
-    "diskFullTitle": "Disk space low",
-    "diskFullHint": "",
-    "diskFullInterruptedHint": "Insufficient space. Completed {0}, pending {1}. Free space then retry or skip the rest."
+    "diskFullTitle": "Not enough disk space",
+    "diskFullHint": "Free up disk space and try again.",
+    "diskFullInterruptedHint": "Insufficient space. Completed {0}, pending {1}. Free up space, then retry or skip the rest."
   }
 }

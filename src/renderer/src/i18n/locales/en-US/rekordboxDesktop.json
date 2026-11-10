@@ -80,9 +80,9 @@
     "noTracksToImport": "There are no tracks to write into Rekordbox.",
     "loadTreeFailed": "Failed to load the Rekordbox library.",
     "loadingPlaylistTree": "Loading the Rekordbox library playlist tree...",
-    "emptyPlaylistTree": "There are no visible playlists in this Rekordbox library yet.",
+    "emptyPlaylistTree": "No playlists in this Rekordbox library yet.",
     "loadingPlaylistTracks": "Loading Rekordbox library playlist tracks...",
     "selectPlaylistPrompt": "Select a Rekordbox playlist from the left first.",
-    "emptyPlaylist": "There are no visible tracks in this Rekordbox playlist yet."
+    "emptyPlaylist": "No tracks in this Rekordbox playlist yet."
   }
 }

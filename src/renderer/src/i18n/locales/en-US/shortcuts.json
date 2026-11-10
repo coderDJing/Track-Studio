@@ -1,9 +1,9 @@
 {
   "shortcuts": {
-    "globalCallShortcut": "Toggle Track Studio focus/minimize",
-    "enterNewShortcut": "Type a new shortcut.",
-    "shortcutSetFailed": "Failed to set shortcut. May conflict.",
-    "tryOtherCombinations": "Try another combo.",
+    "globalCallShortcut": "Show or minimize the Track Studio window",
+    "enterNewShortcut": "Press the new shortcut on your keyboard.",
+    "shortcutSetFailed": "Couldn't set the shortcut. It may already be in use.",
+    "tryOtherCombinations": "Try a different key combination.",
     "playerGlobalShortcuts": "Global playback shortcuts",
     "playerGlobalShortcutsHint": "These combos still work even if the app is minimized.",
     "globalPlayPauseShortcut": "Global play / pause",

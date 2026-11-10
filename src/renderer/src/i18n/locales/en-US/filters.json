@@ -29,7 +29,7 @@
     "rangeAnd": "and",
     "includeKeyword": "Include keyword",
     "excludeKeyword": "Exclude keyword",
-    "keywordPlaceholder": "Please enter keyword",
+    "keywordPlaceholder": "Enter a keyword",
     "excludeKeywordPlaceholder": "Enter keywords to exclude (comma/semicolon/pipe separated)",
     "clearThisColumn": "Clear column",
     "durationPlaceholder": "MM:SS",

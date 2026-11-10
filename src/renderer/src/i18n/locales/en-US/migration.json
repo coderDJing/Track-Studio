@@ -259,7 +259,7 @@
       "issues": {
         "MERGE_PENDING": "Finish or recover the current library merge first.",
         "LIBRARY_BUSY": "Wait for the current task to finish before moving the music library.",
-        "RELOCATE_ACTIVE": "An music library move is already running or unfinished.",
+        "RELOCATE_ACTIVE": "A library move is already running or hasn't finished.",
         "SOURCE_NOT_READY": "The current music library is not open or is missing.",
         "PARENT_MISSING": "The selected parent folder is missing or inaccessible.",
         "PARENT_NOT_DIRECTORY": "Select a folder as the new parent location.",
@@ -270,7 +270,7 @@
         "SAME_PATH": "The new location is the same as the current music library.",
         "INSUFFICIENT_SPACE": "Not enough free space on the destination disk.",
         "SPACE_UNAVAILABLE": "Could not check free space on the destination disk.",
-        "CANCELED": "music library move canceled.",
+        "CANCELED": "Library move canceled.",
         "COPY_FAILED": "Failed to copy the music library.",
         "VERIFY_FAILED": "Copy verification failed. The old folder was not deleted.",
         "DELETE_SOURCE_FAILED": "The app now uses the new location, but the old folder could not be deleted. Please delete it manually.",
@@ -304,7 +304,7 @@
     "legacyTitle": "Music library upgrade",
     "legacyInProgress": "Previous upgrade didn't finish. It will run again.",
     "legacyRequired": "A legacy music library was detected. Upgrade required to continue.",
-    "legacyActions": "The upgrade will reorganize music library data. The upgraded music library won't work with older Track Studio versions. Please don't open it with older versions. Large music libraries may take longer. Please don't force quit.",
+    "legacyActions": "The upgrade rewrites how music library data is stored. Upgraded libraries can no longer be opened by older Track Studio versions, so don't open this library with them. Large libraries may take a while — don't force quit.",
     "legacyConfirm": "Start upgrade",
     "legacyExit": "Exit"
   }

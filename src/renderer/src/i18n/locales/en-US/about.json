@@ -1,8 +1,8 @@
 {
   "about": {
-    "author": "Author: Coder 'Programmer/DJ'",
+    "author": "Author: Coder (Programmer/DJ)",
     "contact": "Feedback or DJ booking: {email}",
-    "prereleaseHint": "This is a pre-release build. May be unstable. Please use with caution or download the stable version.",
+    "prereleaseHint": "This is a pre-release build and may be unstable. Use it with care, or download the stable version.",
     "thirdPartyNoticesHint": "Third-party notices: Help > Third-Party Notices"
   }
 }
