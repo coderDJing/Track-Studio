@@ -178,27 +178,33 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path vendor/ffmpeg/win32-x64 | Out-Null
-          $headers = @{
-            'User-Agent' = 'TrackStudio-Release'
-            'Authorization' = "Bearer $env:GH_TOKEN"
-            'X-GitHub-Api-Version' = '2022-11-28'
+
+          # BtbN 的 latest 滚动标签下资产名固定，优先按固定 URL 直连下载。
+          # 走 api.github.com 会在匿名/额度耗尽时直接 403 限流，导致整条发布中断。
+          $downloadUrl = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip'
+          $downloaded = $false
+          try {
+            Write-Host "Downloading $downloadUrl"
+            Invoke-WebRequest -Uri $downloadUrl -OutFile ffmpeg.zip -MaximumRetryCount 5 -RetryIntervalSec 5
+            $downloaded = $true
+          } catch {
+            Write-Host "WARN: 固定 URL 下载失败，回退到 gh api 解析：$($_.Exception.Message)"
           }
-          $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest' -Headers $headers
-          $asset =
-            $release.assets |
-            Where-Object { $_.name -match '^ffmpeg-N-.*-win64-gpl\.zip$' } |
-            Select-Object -First 1
-          if (-not $asset) {
-            $asset =
-              $release.assets |
-              Where-Object { $_.name -match '^ffmpeg-.*-win64-gpl\.zip$' } |
+          if (-not $downloaded) {
+            # 兜底：gh 走 GITHUB_TOKEN 认证，不会像裸 Invoke-RestMethod 那样被当作匿名请求限流
+            $assetName =
+              gh api repos/BtbN/FFmpeg-Builds/releases/latest --jq '.assets[].name' |
+              Where-Object { $_ -match '^ffmpeg-.*-win64-gpl\.zip$' } |
               Select-Object -First 1
+            if (-not $assetName) {
+              throw 'win64 gpl ffmpeg asset not found in latest BtbN release.'
+            }
+            $downloadUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/$assetName"
+            Write-Host "Downloading $downloadUrl"
+            Invoke-WebRequest -Uri $downloadUrl -OutFile ffmpeg.zip -MaximumRetryCount 5 -RetryIntervalSec 5
           }
-          if (-not $asset) {
-            throw 'win64 gpl ffmpeg asset not found in latest BtbN release.'
-          }
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile ffmpeg.zip
           Expand-Archive -Path ffmpeg.zip -DestinationPath ffmpeg_unzip -Force
           $ff = (Get-ChildItem -Recurse -Filter ffmpeg.exe ffmpeg_unzip | Select-Object -First 1).FullName
           $ffprobe = (Get-ChildItem -Recurse -Filter ffprobe.exe ffmpeg_unzip | Select-Object -First 1).FullName
@@ -218,26 +224,30 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $headers = @{
-            'User-Agent' = 'TrackStudio-Release'
-            'Authorization' = "Bearer $env:GH_TOKEN"
-            'X-GitHub-Api-Version' = '2022-11-28'
+          $ErrorActionPreference = 'Stop'
+
+          # 同 Prepare FFmpeg (Windows)：固定 URL 直连，避免 api.github.com 限流
+          $downloadUrl = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip'
+          $downloaded = $false
+          try {
+            Write-Host "Downloading $downloadUrl"
+            Invoke-WebRequest -Uri $downloadUrl -OutFile ffmpeg-shared.zip -MaximumRetryCount 5 -RetryIntervalSec 5
+            $downloaded = $true
+          } catch {
+            Write-Host "WARN: 固定 URL 下载失败，回退到 gh api 解析：$($_.Exception.Message)"
           }
-          $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest' -Headers $headers
-          $asset =
-            $release.assets |
-            Where-Object { $_.name -match '^ffmpeg-N-.*-win64-gpl-shared.*\.zip$' } |
-            Select-Object -First 1
-          if (-not $asset) {
-            $asset =
-              $release.assets |
-              Where-Object { $_.name -match '^ffmpeg-.*-win64-gpl-shared.*\.zip$' } |
+          if (-not $downloaded) {
+            $assetName =
+              gh api repos/BtbN/FFmpeg-Builds/releases/latest --jq '.assets[].name' |
+              Where-Object { $_ -match '^ffmpeg-.*-win64-gpl-shared\.zip$' } |
               Select-Object -First 1
+            if (-not $assetName) {
+              throw 'win64 gpl shared ffmpeg asset not found in latest BtbN release.'
+            }
+            $downloadUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/$assetName"
+            Write-Host "Downloading $downloadUrl"
+            Invoke-WebRequest -Uri $downloadUrl -OutFile ffmpeg-shared.zip -MaximumRetryCount 5 -RetryIntervalSec 5
           }
-          if (-not $asset) {
-            throw 'win64 gpl shared ffmpeg asset not found in latest BtbN release.'
-          }
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile ffmpeg-shared.zip
           Expand-Archive -Path ffmpeg-shared.zip -DestinationPath ffmpeg_shared_unzip -Force
           $binDir = Get-ChildItem -Recurse -Directory ffmpeg_shared_unzip | Where-Object { $_.Name -eq 'bin' } | Select-Object -First 1
           if (-not $binDir) {
