@@ -80,7 +80,7 @@
     "outputFormat": "格式",
     "outputFilename": "文件名",
     "outputPreview": "输出预览",
-    "outputDialogTitle": "输出",
+    "outputDialogTitle": "输出混音",
     "outputAction": "输出",
     "outputRunning": "正在输出 Mixtape 自动录制…",
     "outputPathRequired": "请先选择输出目录。",

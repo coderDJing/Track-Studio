@@ -80,7 +80,7 @@
     "outputFormat": "Format",
     "outputFilename": "Filename",
     "outputPreview": "Output preview",
-    "outputDialogTitle": "Output",
+    "outputDialogTitle": "Output mix",
     "outputAction": "Output",
     "outputRunning": "Exporting Mixtape Auto-Recording...",
     "outputPathRequired": "Please choose an output folder first.",

@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import hotkeys from 'hotkeys-js'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { v4 as uuidV4 } from 'uuid'
 import { t, tLabel } from '@renderer/utils/translate'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
 import BaseSelect from '@renderer/components/BaseSelect.vue'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
+import utils from '@renderer/utils/utils'
+
+const scope = uuidV4()
 
 const props = defineProps({
   outputPath: {
@@ -37,9 +42,7 @@ const { dialogVisible, closeWithAnimation } = useDialogTransition()
 const draftPath = ref(props.outputPath)
 const draftFormat = ref<'wav' | 'mp3'>(props.outputFormat)
 const draftFilename = ref(props.outputFilename)
-const dialogInnerStyle = computed(
-  () => 'width: 500px; height: 280px; display: flex; flex-direction: column'
-)
+const dialogInnerStyle = computed(() => 'width: 480px; display: flex; flex-direction: column')
 
 const outputPathDisplay = computed(() => {
   return draftPath.value || t('mixtape.outputPathPlaceholder')
@@ -72,6 +75,22 @@ const cancel = () => {
     emit('cancel')
   })
 }
+
+onMounted(() => {
+  hotkeys('E,Enter', scope, () => {
+    confirm()
+    return false
+  })
+  hotkeys('Esc', scope, () => {
+    cancel()
+    return false
+  })
+  utils.setHotkeysScpoe(scope)
+})
+
+onUnmounted(() => {
+  utils.delHotkeysScope(scope)
+})
 </script>
 
 <template>
@@ -80,14 +99,14 @@ const cancel = () => {
       <div class="dialog-title dialog-header">
         <span>{{ t('mixtape.outputDialogTitle') }}</span>
       </div>
-      <div class="dialog-body">
+      <div class="dialog-content">
         <div class="form-row">
           <div class="form-label">{{ tLabel('mixtape.outputPath') }}</div>
-          <div class="form-field">
+          <div class="form-control">
             <bubbleBoxTrigger
               tag="div"
-              class="chooseDirDiv"
-              :class="{ 'chooseDirDiv--empty': !draftPath }"
+              class="choose-dir"
+              :class="{ 'choose-dir--empty': !draftPath }"
               :title="outputPathDisplay"
               @click="handlePickOutputPath"
             >
@@ -97,125 +116,102 @@ const cancel = () => {
         </div>
         <div class="form-row">
           <div class="form-label">{{ tLabel('mixtape.outputFormat') }}</div>
-          <div class="form-field">
-            <BaseSelect v-model="draftFormat" :options="formatOptions" :width="140" />
+          <div class="form-control">
+            <BaseSelect
+              v-model="draftFormat"
+              :options="formatOptions"
+              width="100%"
+              :show-bubble="false"
+            />
           </div>
         </div>
         <div class="form-row">
           <div class="form-label">{{ tLabel('mixtape.outputFilename') }}</div>
-          <div class="form-field">
-            <input v-model="draftFilename" class="dialog-input" type="text" />
+          <div class="form-control">
+            <input v-model="draftFilename" class="text-input" type="text" />
           </div>
         </div>
       </div>
       <div class="dialog-footer">
-        <div class="button" @click="confirm">{{ t('mixtape.outputAction') }}</div>
-        <div class="button" @click="cancel">{{ t('common.cancel') }}</div>
+        <div class="button" @click="confirm">{{ t('mixtape.outputAction') }} (E)</div>
+        <div class="button" @click="cancel">{{ t('common.cancel') }} (Esc)</div>
       </div>
     </div>
   </div>
 </template>
 
 <style lang="scss" scoped>
-.dialog-body {
-  padding: 16px 20px 0;
-  flex: 1 1 auto;
+.dialog-content {
+  padding: 16px 18px 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1 1 auto;
 }
 
 .form-row {
   display: flex;
+  gap: 12px;
   align-items: center;
-  gap: 10px;
-}
-
-.form-row--start {
-  align-items: flex-start;
 }
 
 .form-label {
-  width: 90px;
-  text-align: left;
-  font-size: 13px;
-  color: var(--textColor);
-  flex: 0 0 90px;
+  width: 100px;
+  flex: 0 0 100px;
+  text-align: right;
+  font-size: 14px;
+  color: var(--text);
 }
 
-.form-field {
+.form-control {
   flex: 1 1 auto;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
-.form-hint {
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--textColor3);
-}
-
-.form-hint--sub {
-  margin-top: -4px;
-}
-
-.dialog-input {
-  width: 100%;
-  height: 36px;
+/* BaseSelect 自带横向 padding 且未设 border-box，必须显式收敛，否则 width:100% 会溢出 */
+.form-control :deep(.base-select) {
   box-sizing: border-box;
-  background: var(--inputBG);
-  border: 1px solid var(--borderColor);
-  border-radius: 8px;
-  color: var(--textColor);
-  padding: 0 12px;
+  width: 100%;
+  height: 30px;
+}
+
+/* 与 BaseSelect 的 28px 内容高 + 1px 边框保持一致，三个控件外高统一为 30px */
+.choose-dir,
+.text-input {
+  width: 100%;
+  height: 30px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background-color: var(--bg-elev);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.choose-dir {
+  padding: 0 10px;
+  line-height: 28px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--hover);
+    border-color: var(--accent);
+  }
+}
+
+.choose-dir--empty {
+  color: var(--text-secondary);
+}
+
+.text-input {
+  padding: 0 10px;
   outline: none;
-}
 
-.dialog-input:focus {
-  border-color: var(--mainColor);
-}
-
-.chooseDirDiv {
-  width: 100%;
-  min-height: 36px;
-  box-sizing: border-box;
-  border-radius: 8px;
-  border: 1px solid var(--borderColor);
-  background: var(--inputBG);
-  color: var(--textColor);
-  padding: 8px 12px;
-  line-height: 20px;
-  cursor: pointer;
-  word-break: break-all;
-}
-
-.chooseDirDiv--empty {
-  color: var(--textColor3);
-}
-
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 20px 20px;
-}
-
-.button {
-  min-width: 88px;
-  height: 34px;
-  line-height: 34px;
-  text-align: center;
-  border-radius: 8px;
-  cursor: pointer;
-  user-select: none;
-  background: var(--buttonBG);
-  color: var(--textColor);
-  transition: opacity 0.2s ease;
-}
-
-.button:hover {
-  opacity: 0.9;
+  &:focus {
+    border-color: var(--accent);
+  }
 }
 </style>
