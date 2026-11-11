@@ -1000,11 +1000,17 @@ jobs:
           TAG_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          # Only older versions are superseded. A newer tag may still be building.
+          is_older_rc() {
+            [[ "$1" != "$TAG_NAME" ]] &&
+              [[ "$(printf '%s\n' "$1" "$TAG_NAME" | sort -V | head -n 1)" == "$1" ]]
+          }
           mapfile -t stale_tags < <(
             gh release list --limit 1000 --json tagName,isPrerelease \
               --jq ".[] | select(.isPrerelease and .tagName != \"${TAG_NAME}\" and (.tagName | test(\"^[0-9]+\\\\.[0-9]+\\\\.[0-9]+-rc\\\\.\"))) | .tagName"
           )
           for stale_tag in "${stale_tags[@]}"; do
+            is_older_rc "$stale_tag" || continue
             echo "Removing superseded RC release and tag: ${stale_tag}"
             gh release delete "${stale_tag}" --yes --cleanup-tag
           done
@@ -1020,6 +1026,7 @@ jobs:
               grep -v "^${TAG_NAME}$" || true
           )
           for orphan_tag in "${orphan_tags[@]}"; do
+            is_older_rc "$orphan_tag" || continue
             if gh release view "${orphan_tag}" >/dev/null 2>&1; then
               # 仍有 Release 的 RC tag 由上一步处理，这里不重复删除
               continue
