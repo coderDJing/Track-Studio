@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, shallowRef } from 'vue'
 import { useLatestRelease } from './useLatestRelease'
 
 const props = defineProps<{
@@ -8,7 +8,8 @@ const props = defineProps<{
   otherPrefix: string
 }>()
 
-const release = ref<ReturnType<typeof useLatestRelease> | null>(null)
+// Keep the composable's nested refs intact; a deep ref unwraps them before the .value reads below.
+const release = shallowRef<ReturnType<typeof useLatestRelease> | null>(null)
 
 onMounted(() => {
   release.value = useLatestRelease()
