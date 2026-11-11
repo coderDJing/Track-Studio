@@ -2,6 +2,7 @@
 import { computed, ref, toRef } from 'vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import MixtapeOutputDialog from '@renderer/components/mixtapeOutputDialog.vue'
+import MixtapeOutputProgressDialog from '@renderer/components/mixtape/MixtapeOutputProgressDialog.vue'
 import MixtapeBeatAlignDialog from '@renderer/components/MixtapeBeatAlignDialog.vue'
 import ColumnHeaderContextMenu from '@renderer/pages/modules/songsArea/ColumnHeaderContextMenu.vue'
 import SongListHeader from '@renderer/pages/modules/songsArea/SongListHeader.vue'
@@ -163,20 +164,13 @@ const autoGainColumnMenuVisibleModel = computed({
       <div class="bpm-loading-sub">{{ autoGainProgressText }}</div>
     </div>
   </div>
-  <div v-if="outputRunning" class="mixtape-output-mask">
-    <div class="bpm-loading-card">
-      <div class="bpm-loading-title">{{ t('mixtape.outputRunning') }}</div>
-      <div class="bpm-loading-sub">{{ outputProgressText }}</div>
-      <div class="preload-bar">
-        <div class="preload-bar__fill" :style="{ width: `${outputProgressPercent}%` }"></div>
-      </div>
-      <div class="bpm-loading-actions">
-        <button type="button" class="bpm-loading-action-btn" @click="handleOutputCancelRunning">
-          {{ t('common.cancel') }}
-        </button>
-      </div>
-    </div>
-  </div>
+  <MixtapeOutputProgressDialog
+    v-if="outputRunning"
+    :title="t('mixtape.outputDialogTitle')"
+    :stage-text="outputProgressText"
+    :percent="outputProgressPercent"
+    @cancel="handleOutputCancelRunning"
+  />
   <div v-if="autoGainDialogVisible" class="mixtape-auto-gain-dialog">
     <div class="mixtape-auto-gain-dialog__card">
       <div class="mixtape-auto-gain-dialog__title">{{ t('mixtape.autoGainDialogTitle') }}</div>

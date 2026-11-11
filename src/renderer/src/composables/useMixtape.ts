@@ -258,16 +258,29 @@ export const useMixtape = (options: UseMixtapeOptions = {}) => {
     return tracks.value.find((track) => track.id === trackId) || null
   })
   const trackMenuMasterTempoChecked = computed(() => trackContextTrack.value?.masterTempo !== false)
+  const formatOutputProgressSeconds = (value: number) => {
+    const total = Math.max(0, Math.round(value))
+    const hours = Math.floor(total / 3600)
+    const minutes = Math.floor((total % 3600) / 60)
+    const seconds = total % 60
+    const pad = (item: number) => String(item).padStart(2, '0')
+    return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`
+  }
   const outputProgressText = computed(() => {
     const stageKey = outputProgressKey.value || 'mixtape.outputProgressPreparing'
     const stageLabel = t(stageKey)
-    const percent = Math.max(0, Math.min(100, Number(outputProgressPercent.value) || 0))
     const done = Math.max(0, Number(outputProgressDone.value) || 0)
     const total = Math.max(0, Number(outputProgressTotal.value) || 0)
-    if (total > 0 && done <= total) {
-      return `${stageLabel} ${done}/${total} (${percent}%)`
+    if (stageKey === 'mixtape.outputProgressRendering' && total > 0) {
+      return `${stageLabel} · ${t('mixtape.outputProgressRenderingDetail', {
+        done: formatOutputProgressSeconds(done),
+        total: formatOutputProgressSeconds(total)
+      })}`
     }
-    return `${stageLabel} (${percent}%)`
+    if (stageKey === 'mixtape.outputProgressDecoding' && total > 0) {
+      return `${stageLabel} · ${t('mixtape.outputProgressDecodingDetail', { done, total })}`
+    }
+    return stageLabel
   })
   const formatTrackKey = (value?: string) => {
     const raw = typeof value === 'string' ? value.trim() : ''

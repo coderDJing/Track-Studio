@@ -34,6 +34,7 @@ type MixtapeOutputUiContext = {
   outputProgressTotal: ValueRef<number>
   renderMixtapeOutputWav: (params: {
     onProgress: (payload: MixtapeOutputProgressPayload) => void
+    shouldAbort?: () => boolean
   }) => Promise<MixtapeRenderedWavResult>
   normalizeMixtapeFilePath: (value: unknown) => string
   normalizeStemProfile: (value: unknown, fallback?: MixtapeStemProfile) => MixtapeStemProfile
@@ -212,11 +213,20 @@ export const createMixtapeOutputUi = (ctx: MixtapeOutputUiContext) => {
 
     try {
       const rendered = await renderMixtapeOutputWav({
-        onProgress: applyOutputProgressPayload
+        onProgress: applyOutputProgressPayload,
+        // 取消要能在离线渲染途中生效，否则用户点了取消也只能干等整段混音渲染完
+        shouldAbort: () => outputCancelRequested
       })
       if (outputCancelRequested) {
         throw new Error('mixtape.outputCancelled')
       }
+      // 渲染/编码完成后还要把整段 WAV 交给主进程写盘，这一步不能没有反馈
+      applyOutputProgressPayload({
+        stageKey: 'mixtape.outputProgressFinalizing',
+        done: 98,
+        total: 100,
+        percent: 98
+      })
       const result = await window.electron.ipcRenderer.invoke('mixtape:output', {
         ...outputRequest,
         wavBytes: rendered.wavBytes,
