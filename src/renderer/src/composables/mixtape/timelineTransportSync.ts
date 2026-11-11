@@ -93,6 +93,41 @@ type TransientLagDiagnostics = {
 const TRANSIENT_PROBE_WINDOW_SAMPLES = 2048
 const TRANSIENT_PROBE_MAX_LAG_SAMPLES = 192
 const TRANSIENT_MIN_CORRELATION = 0.08
+
+type MasterGridParams = Parameters<typeof createMixtapeMasterGrid>[0]
+type MasterGridMemo = {
+  pointsRef: unknown
+  phaseOffsetSec: number | undefined
+  fallbackBpm: number
+  grid: ReturnType<typeof createMixtapeMasterGrid>
+}
+
+// 调度循环按 1/120 秒推进，每一步都会给当前 master 轨重建一次 master grid，而
+// createMixtapeMasterGrid 每次都要重排 BPM 点、重建整段积分缓存、再拼一遍 signature
+// 字符串。实测单次约 24µs，71 分钟的导出等于白跑十几秒，实时播放时也在持续付费。
+// grid 只依赖 (points, phaseOffsetSec, fallbackBpm) 三者，且返回对象是只读快照，
+// 因此三者都没变时直接复用同一份结果——计算结果逐位不变，只是不再重算。
+let masterGridMemo: MasterGridMemo | null = null
+
+const resolveMasterGrid = (params: MasterGridParams) => {
+  const memo = masterGridMemo
+  if (
+    memo &&
+    memo.pointsRef === params.points &&
+    memo.phaseOffsetSec === params.phaseOffsetSec &&
+    memo.fallbackBpm === params.fallbackBpm
+  ) {
+    return memo.grid
+  }
+  const grid = createMixtapeMasterGrid(params)
+  masterGridMemo = {
+    pointsRef: params.points,
+    phaseOffsetSec: params.phaseOffsetSec,
+    fallbackBpm: params.fallbackBpm,
+    grid
+  }
+  return grid
+}
 const resolveNodeLatencySec = (node: TransportSyncNode) => {
   const latencySec = Number(node.source.resolveLatencySec?.() || 0)
   if (!Number.isFinite(latencySec) || latencySec <= 0) return 0
@@ -362,7 +397,7 @@ export const applyTimelineTransportSync = (
     masterEntry.tempoSnapshot.mappingMode === 'masterGrid' &&
     Array.isArray(masterGridPoints) &&
     masterGridPoints.length >= 2
-      ? createMixtapeMasterGrid({
+      ? resolveMasterGrid({
           points: masterGridPoints,
           phaseOffsetSec: masterEntry.tempoSnapshot.masterGridPhaseOffsetSec,
           fallbackBpm: masterBpm

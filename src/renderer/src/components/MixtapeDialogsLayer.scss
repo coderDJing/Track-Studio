@@ -4,8 +4,7 @@
 .mixtape-decode-mask,
 .mixtape-bpm-mask,
 .mixtape-bpm-failed,
-.mixtape-auto-gain-mask,
-.mixtape-output-mask {
+.mixtape-auto-gain-mask {
   position: absolute;
   inset: 0;
   display: flex;
@@ -42,13 +41,6 @@
   pointer-events: auto;
   cursor: progress;
   background: var(--mixtape-mask-overlay);
-}
-
-.mixtape-output-mask {
-  z-index: 27;
-  pointer-events: auto;
-  cursor: progress;
-  background: var(--mixtape-mask-overlay-strong);
 }
 
 .auto-gain-spinner {

@@ -514,9 +514,9 @@ export const runMixtapeOutput = async (params: {
       Number.isFinite(declaredDuration) && declaredDuration > 0 ? declaredDuration : 0
     params.onProgress?.({
       stageKey: 'mixtape.outputProgressFinalizing',
-      done: 96,
+      done: 98,
       total: 100,
-      percent: 96
+      percent: 98
     })
     ensureNotCancelled(params.control)
     if (outputFormat === 'wav') {

@@ -7,15 +7,19 @@ import type {
 import type { TransportPlaybackSequence } from './timelineTransportPlaybackSequence'
 import { createTransportPlanBuffer } from './timelineTransportR3Plan'
 
-const R3_MW_OPTIONS =
+export const R3_MW_OPTIONS =
   RubberBandOption.RubberBandOptionProcessRealTime |
   RubberBandOption.RubberBandOptionChannelsTogether |
   RubberBandOption.RubberBandOptionEngineFiner
-const clampTempo = (value: number) => Math.max(0.25, Math.min(4, Number(value) || 1))
+export const R3_PROCESSOR_URL = new URL(
+  '../../workers/mixtapeTransportR3.worklet.js',
+  import.meta.url
+).href
+export const clampTempo = (value: number) => Math.max(0.25, Math.min(4, Number(value) || 1))
 
 let r3WasmBinaryPromise: Promise<Uint8Array> | null = null
 
-const loadR3WasmBinary = async () => {
+export const loadR3WasmBinary = async () => {
   if (!r3WasmBinaryPromise) {
     r3WasmBinaryPromise = fetch(r3WasmDataUrl).then(async (response) => {
       if (!response.ok) {
@@ -35,7 +39,7 @@ export const createTransportR3Source = async (
   const planBuffer = createTransportPlanBuffer(audioCtx, buffer, sequence)
   const channels = Math.max(1, Math.min(2, planBuffer.numberOfChannels || 1))
   const wasmBinary = await loadR3WasmBinary()
-  const processorUrl = new URL('../../workers/mixtapeTransportR3.worklet.js', import.meta.url).href
+  const processorUrl = R3_PROCESSOR_URL
   const node = await RubberBandNode.create(audioCtx, {
     processorUrl,
     wasmBinary: wasmBinary.slice(),

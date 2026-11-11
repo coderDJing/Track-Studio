@@ -183,6 +183,13 @@ export default defineConfig({
     },
     plugins: [inlineWasmPlugin(), vue()],
     build: {
+      // AudioWorklet.addModule() 在打包页的 CSP（script-src 'self' 'unsafe-eval'）下
+      // 无法加载 data: / blob: URL，而 <4KB 的 worklet 默认会被内联成 base64 data URL。
+      // 所以 worklet 一律发成同源独立文件，其余资源沿用默认策略。
+      assetsInlineLimit: (filePath: string) => {
+        if (/\.worklet\.js$/i.test(filePath.replace(/\\/g, '/'))) return false
+        return undefined
+      },
       rolldownOptions: {
         input: {
           index: resolve(__dirname, 'src/renderer/', 'index.html'),
