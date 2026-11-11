@@ -11,7 +11,8 @@ import MixtapeGlobalBpmEditor from '@renderer/components/mixtape/MixtapeGlobalBp
 import MixtapeTrackLoopOverlay from '@renderer/components/mixtape/MixtapeTrackLoopOverlay.vue'
 import MixtapeTrackCueOverlay from '@renderer/components/mixtape/MixtapeTrackCueOverlay.vue'
 import MixtapeProjectGainButtons from '@renderer/components/mixtape/MixtapeProjectGainButtons.vue'
-import MixtapeTrackEnvelopeCurve from '@renderer/components/mixtape/MixtapeTrackEnvelopeCurve.vue'
+import MixtapeEnvelopeOverlay from '@renderer/components/mixtape/MixtapeEnvelopeOverlay.vue'
+import MixtapeEnvelopeToolbar from '@renderer/components/mixtape/MixtapeEnvelopeToolbar.vue'
 import { useMixtape } from '@renderer/composables/useMixtape'
 import { useMixtapePageUi } from '@renderer/composables/mixtape/useMixtapePageUi'
 import { useMixtapeWindowUserGuide } from '@renderer/composables/mixtape/useMixtapeWindowUserGuide'
@@ -179,6 +180,8 @@ const {
   handleTitleMenuOpen,
   stemPlaceholderStateByTrackId,
   envelopeHintKey,
+  envelopeEditor,
+  envelopeLaneExpanded,
   isEnvelopeParamMode,
   isLoopParamMode,
   isSegmentSelectionActive,
@@ -230,18 +233,7 @@ const {
   handleAutoGainSelectLoudestReferenceClick,
   handleAutoGainSelectQuietestReferenceClick,
   resolveStemMuteOverlayRows,
-  resolveActiveEnvelopePolyline,
-  resolveActiveEnvelopePolygon,
-  resolveActiveGhostPointDot,
-  resolveActiveEnvelopePointDots,
   resolveVolumeSegmentMasks,
-  handleEnvelopeSegmentMouseDown,
-  handleEnvelopePointMouseDown,
-  handleEnvelopeStageMouseDown,
-  handleEnvelopeStageMouseMove,
-  handleEnvelopeStageMouseLeave,
-  handleEnvelopePointDoubleClick,
-  handleEnvelopePointContextMenu,
   canUndoMixParam,
   projectGainBusy,
   canDecreaseProjectGain,
@@ -356,7 +348,10 @@ onBeforeUnmount(() => {
               </span>
             </button>
           </div>
-          <div v-if="isEnvelopeParamMode" class="mixtape-param-bar__hint">
+          <div
+            v-if="isEnvelopeParamMode && (!showEnvelopeCurve || isSegmentSelectionActive)"
+            class="mixtape-param-bar__hint"
+          >
             {{ t(envelopeHintKey) }}
           </div>
           <div class="mixtape-param-bar__actions">
@@ -399,6 +394,7 @@ onBeforeUnmount(() => {
               tag="button"
               class="button mixtape-param-bar__action-btn mixtape-param-bar__action-btn--icon"
               type="button"
+              v-if="!showEnvelopeCurve || isSegmentSelectionActive"
               :disabled="!canUndoMixParam || projectGainBusy"
               :title="t('mixtape.undoActionHint')"
               :aria-label="t('mixtape.undoActionHint')"
@@ -471,6 +467,13 @@ onBeforeUnmount(() => {
             />
           </div>
         </div>
+        <MixtapeEnvelopeToolbar
+          v-if="showEnvelopeCurve && !isSegmentSelectionActive"
+          :editor="envelopeEditor"
+          :disabled="projectGainBusy"
+          :expanded="envelopeLaneExpanded"
+          @toggle-expanded="envelopeLaneExpanded = !envelopeLaneExpanded"
+        />
         <div class="mixtape-main">
           <section
             ref="timelineRootRef"
@@ -665,12 +668,6 @@ onBeforeUnmount(() => {
                               @mousedown.stop="handleLaneTrackMouseDown(item, $event)"
                               @contextmenu.stop.prevent="handleTrackContextMenu(item, $event)"
                             >
-                              <MixtapeTrackEnvelopeCurve
-                                :visible="showEnvelopeCurve"
-                                :polygon="resolveActiveEnvelopePolygon(item)"
-                                :polyline="resolveActiveEnvelopePolyline(item)"
-                                @segment-mousedown="handleEnvelopeSegmentMouseDown(item, $event)"
-                              />
                               <div class="lane-track__mute-segments">
                                 <template v-if="isStemParamMode">
                                   <div
@@ -715,75 +712,13 @@ onBeforeUnmount(() => {
                                 :source-duration-sec="resolveTrackSourceDurationSeconds(item.track)"
                                 :render-zoom="renderZoomLevel"
                               />
-                              <div
+                              <MixtapeEnvelopeOverlay
                                 v-if="showTrackEnvelopeEditor"
-                                class="lane-track__envelope-points"
-                                :class="{
-                                  'is-segment-mute-mode': isSegmentSelectionActive
-                                }"
-                                @mousedown.stop.prevent="handleEnvelopeStageMouseDown(item, $event)"
-                                @mousemove="handleEnvelopeStageMouseMove(item, $event)"
-                                @mouseleave="handleEnvelopeStageMouseLeave"
-                              >
-                                <template
-                                  v-if="
-                                    showEnvelopeCurve &&
-                                    !(isVolumeParamMode && isSegmentSelectionActive)
-                                  "
-                                >
-                                  <div
-                                    v-if="resolveActiveGhostPointDot(item)"
-                                    class="lane-track__envelope-ghost-point"
-                                    :style="{
-                                      left: `${resolveActiveGhostPointDot(item)!.x}%`,
-                                      top: `${resolveActiveGhostPointDot(item)!.y}%`
-                                    }"
-                                  ></div>
-                                  <div
-                                    v-for="point in resolveActiveEnvelopePointDots(item)"
-                                    :key="`point-wrap-${item.track.id}-${point.index}`"
-                                    class="lane-track__envelope-point-wrap"
-                                    :style="{
-                                      left: `${point.x}%`,
-                                      top: `${point.y}%`
-                                    }"
-                                  >
-                                    <button
-                                      class="lane-track__envelope-point"
-                                      :class="[
-                                        {
-                                          'is-boundary': point.isBoundary,
-                                          'is-active': point.isActive
-                                        },
-                                        resolveEnvelopePointBoundaryClass(point)
-                                      ]"
-                                      type="button"
-                                      @mousedown.stop.prevent="
-                                        handleEnvelopePointMouseDown(item, point.index, $event)
-                                      "
-                                      @dblclick.stop.prevent="
-                                        handleEnvelopePointDoubleClick(item, point.index)
-                                      "
-                                      @contextmenu.stop.prevent="
-                                        handleEnvelopePointContextMenu(item, point.index)
-                                      "
-                                    ></button>
-                                    <div
-                                      v-if="point.isActive"
-                                      class="lane-track__envelope-point-label"
-                                      :class="{
-                                        'is-above': point.y > 15,
-                                        'is-below': point.y <= 15,
-                                        'is-align-left': point.x < 5,
-                                        'is-align-right': point.x > 95
-                                      }"
-                                    >
-                                      {{ point.gainDb > 0 ? '+' : ''
-                                      }}{{ point.gainDb.toFixed(1) }} dB
-                                    </div>
-                                  </div>
-                                </template>
-                              </div>
+                                :editor="envelopeEditor"
+                                :item="item"
+                                :curve="showEnvelopeCurve"
+                                :segment-mode="isSegmentSelectionActive"
+                              />
                               <div
                                 v-if="stemPlaceholderStateByTrackId[item.track.id]"
                                 class="lane-track__stem-placeholder"

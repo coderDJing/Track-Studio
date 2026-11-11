@@ -242,25 +242,7 @@ export const useMixtapePageUi = ({
     })
   }
 
-  const {
-    resolveActiveEnvelopePolyline,
-    resolveActiveEnvelopePolygon,
-    resolveActiveGhostPointDot,
-    resolveActiveEnvelopePointDots,
-    resolveVolumeSegmentMasks,
-    handleEnvelopeSegmentMouseDown,
-    handleEnvelopePointMouseDown,
-    handleEnvelopeStageMouseDown,
-    handleEnvelopeStageMouseMove,
-    handleEnvelopeStageMouseLeave,
-    handleEnvelopePointDoubleClick,
-    handleEnvelopePointContextMenu,
-    canUndoMixParam,
-    pushExternalUndoStep,
-    flushPendingMixEnvelopePersist,
-    undoLastMixParamChange,
-    cleanupGainEnvelopeEditor
-  } = createMixtapeGainEnvelopeEditor({
+  const envelopeEditor = createMixtapeGainEnvelopeEditor({
     tracks: mixtape.tracks,
     renderZoomLevel: mixtape.renderZoomLevel,
     resolveTrackDurationSeconds: mixtape.resolveTrackDurationSeconds,
@@ -269,8 +251,24 @@ export const useMixtapePageUi = ({
     resolveActiveParam: () =>
       isEnvelopeParamMode.value ? (selectedMixParam.value as MixtapeEnvelopeParamId) : null,
     isSegmentSelectionMode: () => isSegmentSelectionActive.value,
-    isEditable: () => isEnvelopeParamMode.value && !projectGainBusy.value
+    isEditable: () => isEnvelopeParamMode.value && !projectGainBusy.value,
+    onGestureActiveChange: (active) => {
+      const root = mixtape.timelineRootRef.value
+      if (root) root.dataset.envelopeEditing = active ? 'true' : 'false'
+    }
   })
+  const {
+    resolveVolumeSegmentMasks,
+    canUndoMixParam,
+    canRedoMixParam,
+    pushExternalUndoStep,
+    flushPendingMixEnvelopePersist,
+    undoLastMixParamChange,
+    redoLastMixParamChange,
+    cleanupGainEnvelopeEditor,
+    handleEnvelopeKeydown
+  } = envelopeEditor
+  const envelopeLaneExpanded = mixtape.envelopeLaneExpanded
 
   const cueOverlap = useMixtapeCueOverlap({
     tracks: mixtape.tracks,
@@ -354,12 +352,18 @@ export const useMixtapePageUi = ({
   const handleUndoMixParam = () => {
     if (!cueOverlap.busy.value && !projectGainBusy.value) undoLastMixParamChange()
   }
+  const handleRedoMixParam = () => {
+    if (!cueOverlap.busy.value && !projectGainBusy.value) redoLastMixParamChange()
+  }
   const { handleZoomIn, handleZoomOut, isLightTheme } = useMixtapeShellUi({
     renderZoomLevel: mixtape.renderZoomLevel,
     setZoomValue: mixtape.setZoomValue,
     applyRenderZoomImmediate: mixtape.applyRenderZoomImmediate,
     canUndoMixParam,
     handleUndoMixParam,
+    canRedoMixParam,
+    handleRedoMixParam,
+    handleEnvelopeKeydown,
     beatAlignDialogVisible: mixtape.beatAlignDialogVisible,
     outputDialogVisible: mixtape.outputDialogVisible,
     autoGainDialogVisible: mixtape.autoGainDialogVisible,
@@ -484,6 +488,8 @@ export const useMixtapePageUi = ({
   )
 
   return {
+    envelopeEditor,
+    envelopeLaneExpanded,
     projectGainBusy,
     canDecreaseProjectGain: projectGain.canDecrease,
     canIncreaseProjectGain: projectGain.canIncrease,
@@ -548,18 +554,7 @@ export const useMixtapePageUi = ({
     handleAutoGainSelectLoudestReferenceClick,
     handleAutoGainSelectQuietestReferenceClick,
     resolveStemMuteOverlayRows,
-    resolveActiveEnvelopePolyline,
-    resolveActiveEnvelopePolygon,
-    resolveActiveGhostPointDot,
-    resolveActiveEnvelopePointDots,
     resolveVolumeSegmentMasks,
-    handleEnvelopeSegmentMouseDown,
-    handleEnvelopePointMouseDown,
-    handleEnvelopeStageMouseDown,
-    handleEnvelopeStageMouseMove,
-    handleEnvelopeStageMouseLeave,
-    handleEnvelopePointDoubleClick,
-    handleEnvelopePointContextMenu,
     canUndoMixParam,
     handleUndoMixParam,
     pushExternalUndoStep,

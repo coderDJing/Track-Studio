@@ -9,6 +9,9 @@ type UseMixtapeShellUiOptions = {
   applyRenderZoomImmediate: () => void
   canUndoMixParam: ReadonlyRef<boolean>
   handleUndoMixParam: () => void
+  canRedoMixParam: ReadonlyRef<boolean>
+  handleRedoMixParam: () => void
+  handleEnvelopeKeydown: (event: KeyboardEvent) => void
   beatAlignDialogVisible: ReadonlyRef<boolean>
   outputDialogVisible: ReadonlyRef<boolean>
   autoGainDialogVisible: ReadonlyRef<boolean>
@@ -21,6 +24,9 @@ export const useMixtapeShellUi = ({
   applyRenderZoomImmediate,
   canUndoMixParam,
   handleUndoMixParam,
+  canRedoMixParam,
+  handleRedoMixParam,
+  handleEnvelopeKeydown,
   beatAlignDialogVisible,
   outputDialogVisible,
   autoGainDialogVisible,
@@ -64,12 +70,18 @@ export const useMixtapeShellUi = ({
     if (beatAlignDialogVisible.value || outputDialogVisible.value || autoGainDialogVisible.value) {
       return
     }
+    handleEnvelopeKeydown(event)
+    if (event.defaultPrevented) return
     const key = String(event.key || '').toLowerCase()
-    const isUndoShortcut = (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey
-    if (!isUndoShortcut || key !== 'z') return
-    if (!canUndoMixParam.value) return
-    event.preventDefault()
-    handleUndoMixParam()
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return
+    if ((key === 'z' && event.shiftKey) || (key === 'y' && !event.shiftKey)) {
+      if (!canRedoMixParam.value) return
+      event.preventDefault()
+      handleRedoMixParam()
+    } else if (key === 'z' && !event.shiftKey && canUndoMixParam.value) {
+      event.preventDefault()
+      handleUndoMixParam()
+    }
   }
 
   onMounted(() => {

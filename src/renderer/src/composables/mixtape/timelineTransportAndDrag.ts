@@ -427,7 +427,11 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
     if (!followPlayheadEnabled.value) return
     if (isTimelineManualScrolling()) return
     const viewport = resolveTimelineViewportEl()
-    if (!viewport) return
+    if (
+      !viewport ||
+      viewport.closest('.timeline')?.getAttribute('data-envelope-editing') === 'true'
+    )
+      return
     const viewportWidth = Math.max(
       1,
       Number(viewport.clientWidth || timelineViewportWidth.value || 0)

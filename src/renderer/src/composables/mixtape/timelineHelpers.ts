@@ -101,6 +101,7 @@ type TimelineHelpersContext = {
   waveformVersion: ValueRef<number>
   overviewWidth: ValueRef<number>
   timelineVisualScale: ValueRef<number>
+  envelopeLaneExpanded?: ValueRef<boolean>
   waveformTileCache: Map<string, WaveformCacheEntry>
   waveformTileCacheIndex: Map<string, Set<string>>
   waveformTileCacheTickRef: ValueRef<number>
@@ -125,6 +126,7 @@ export const createTimelineHelpersModule = (ctx: TimelineHelpersContext) => {
     timelineLayoutVersion,
     waveformVersion,
     timelineVisualScale,
+    envelopeLaneExpanded,
     waveformTileCache,
     waveformTileCacheIndex,
     waveformTileCacheTickRef,
@@ -204,9 +206,13 @@ export const createTimelineHelpersModule = (ctx: TimelineHelpersContext) => {
   }
 
   const resolveLaneHeightForZoom = (_value: number) =>
-    Math.round(MIXTAPE_BASE_TRACK_LANE_HEIGHT * resolveTimelineVisualScale())
+    Math.max(
+      envelopeLaneExpanded?.value ? 200 : 0,
+      Math.round(MIXTAPE_BASE_TRACK_LANE_HEIGHT * resolveTimelineVisualScale())
+    )
 
-  const resolveTimelineBufferId = (zoomValue: number) => `z:${Math.round(zoomValue * 1000)}`
+  const resolveTimelineBufferId = (zoomValue: number) =>
+    `z:${Math.round(zoomValue * 1000)}:h:${resolveLaneHeightForZoom(zoomValue)}`
 
   const laneHeight = computed(() => resolveLaneHeightForZoom(normalizedRenderZoom.value))
 

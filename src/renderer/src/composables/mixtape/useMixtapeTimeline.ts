@@ -1,4 +1,4 @@
-import { computed, markRaw, ref } from 'vue'
+import { computed, markRaw, ref, watch } from 'vue'
 import { RendererFilePathMap, RendererFilePathSet } from '@renderer/utils/filePathComparison'
 import type { Ref } from 'vue'
 import type { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
@@ -91,6 +91,7 @@ export const useMixtapeTimeline = (options: UseMixtapeTimelineOptions) => {
   const isTimelinePanning = ref(false)
   const isTimelineZooming = ref(false)
   const timelineVisualScale = ref(1)
+  const envelopeLaneExpanded = ref(false)
   const envelopePreviewRef = ref<HTMLElement | null>(null)
   const overviewRef = ref<HTMLElement | null>(null)
   const overviewWidth = ref(0)
@@ -223,6 +224,7 @@ export const useMixtapeTimeline = (options: UseMixtapeTimelineOptions) => {
     waveformVersion,
     overviewWidth,
     timelineVisualScale,
+    envelopeLaneExpanded,
     waveformTileCache,
     waveformTileCacheIndex,
     waveformTileCacheTickRef,
@@ -958,6 +960,12 @@ export const useMixtapeTimeline = (options: UseMixtapeTimelineOptions) => {
     handleWaveformUpdated,
     scheduleTransportPreload
   })
+  watch(envelopeLaneExpanded, () => {
+    clearTimelineLayoutCache()
+    scheduleTimelineDraw()
+    scheduleFullPreRender()
+    scheduleWorkerPreRender()
+  })
   setupTimelineVisualScaleLifecycle({
     tracks,
     timelineRootRef,
@@ -1014,6 +1022,7 @@ export const useMixtapeTimeline = (options: UseMixtapeTimelineOptions) => {
     timelineRootRef,
     rulerRef,
     timelineVisualScale,
+    envelopeLaneExpanded,
     timelineScrollWrapRef,
     isTimelinePanning,
     handleTimelinePanStart,

@@ -1,6 +1,5 @@
 <script setup lang="ts">
-defineProps<{ visible: boolean; polygon: string; polyline: string }>()
-const emit = defineEmits<{ (event: 'segment-mousedown', value: MouseEvent): void }>()
+defineProps<{ visible: boolean; polygon: string; polyline: string; hoverLine?: string }>()
 </script>
 
 <template>
@@ -27,8 +26,8 @@ const emit = defineEmits<{ (event: 'segment-mousedown', value: MouseEvent): void
       class="lane-track__envelope-segment-hit"
       :class="{ 'is-hidden': !visible }"
       :points="polyline"
-      @mousedown.stop.prevent="emit('segment-mousedown', $event)"
     />
+    <polyline v-if="visible && hoverLine" class="lane-track__envelope-hover" :points="hoverLine" />
   </svg>
 </template>
 
@@ -86,8 +85,16 @@ const emit = defineEmits<{ (event: 'segment-mousedown', value: MouseEvent): void
   stroke: transparent;
   stroke-width: 16;
   vector-effect: non-scaling-stroke;
-  pointer-events: stroke;
+  pointer-events: none;
   cursor: ns-resize;
+}
+
+.lane-track__envelope-hover {
+  fill: none;
+  stroke: var(--mix-envelope-line-color);
+  stroke-width: 4;
+  opacity: 0.55;
+  vector-effect: non-scaling-stroke;
 }
 
 .lane-track__envelope-segment-hit.is-hidden {

@@ -308,18 +308,37 @@ export const buildGainEnvelopePolylineByControlPoints = (params: {
   durationSec: number
   minDb: number
   maxDb: number
+  normalize?: boolean
 }) => {
   const { points, durationSec, minDb, maxDb } = params
   const safeDuration = Math.max(0, Number(durationSec) || 0)
-  const normalized = normalizeGainEnvelopePoints(points, safeDuration)
+  const normalized =
+    params.normalize === false ? (points ?? []) : normalizeGainEnvelopePoints(points, safeDuration)
   if (!normalized.length) return ''
   const segments: string[] = []
-  for (const point of normalized) {
+  const append = (point: MixtapeGainPoint) => {
     const ratio = safeDuration > 0 ? clampNumber(point.sec / safeDuration, 0, 1) : 0
     const x = (ratio * 100).toFixed(3)
     const y = mapGainToEnvelopeYPercent(point.gain, minDb, maxDb).toFixed(3)
     segments.push(`${x},${y}`)
   }
+  append(normalized[0])
+  // Playback interpolates linear gain. Sample that same curve before converting to dB pixels,
+  // so inserting a point does not change the displayed shape of an existing envelope.
+  const subdivide = (left: MixtapeGainPoint, right: MixtapeGainPoint, depth: number) => {
+    const middle = { sec: (left.sec + right.sec) / 2, gain: (left.gain + right.gain) / 2 }
+    const expected =
+      (mapGainToEnvelopeYPercent(left.gain, minDb, maxDb) +
+        mapGainToEnvelopeYPercent(right.gain, minDb, maxDb)) /
+      2
+    const actual = mapGainToEnvelopeYPercent(middle.gain, minDb, maxDb)
+    if (right.sec > left.sec && Math.abs(actual - expected) > 0.25 && depth < 7) {
+      subdivide(left, middle, depth + 1)
+      subdivide(middle, right, depth + 1)
+    } else append(right)
+  }
+  for (let index = 1; index < normalized.length; index++)
+    subdivide(normalized[index - 1], normalized[index], 0)
   if (segments.length === 1) {
     segments.push(segments[0])
   }
@@ -330,13 +349,16 @@ export const buildMixEnvelopePolylineByControlPoints = (params: {
   param: MixtapeEnvelopeParamId
   points?: MixtapeGainPoint[]
   durationSec: number
+  normalize?: boolean
 }) => {
   const { param, points, durationSec } = params
   const config = resolveEnvelopeConfig(param)
   return buildGainEnvelopePolylineByControlPoints({
-    points: normalizeMixEnvelopePoints(param, points, durationSec),
+    points:
+      params.normalize === false ? points : normalizeMixEnvelopePoints(param, points, durationSec),
     durationSec,
     minDb: config.minDb,
-    maxDb: config.maxDb
+    maxDb: config.maxDb,
+    normalize: params.normalize
   })
 }
