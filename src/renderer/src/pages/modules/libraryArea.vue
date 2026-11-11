@@ -13,6 +13,7 @@ import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import bubbleBox from '@renderer/components/bubbleBox.vue'
 import { DEFAULT_MIXTAPE_STEM_PROFILE } from '@shared/mixtapeStemProfiles'
 import { useLibraryTreeSortUi } from '@renderer/composables/useLibraryTreeSortUi'
+import { canRevealLibraryRootInExplorer } from '@renderer/components/libraryItem/libraryContextMenuHelpers'
 import { emptyRecycleBinWithOptimisticUpdate } from '@renderer/utils/recycleBinActions'
 import {
   persistMixtapeProjectMode,
@@ -24,7 +25,7 @@ import {
   SEARCH_FOCUS_WINDOW_SCOPE,
   useSearchFocusTarget
 } from '@renderer/composables/useSearchFocus'
-import type { IDir } from 'src/types/globals'
+import type { IDir, IMenu } from 'src/types/globals'
 
 const runtime = useRuntimeStore()
 const props = defineProps({
@@ -254,14 +255,24 @@ const createNow = async () => {
   playlistSearch.value = ''
 }
 
-const menuArr = ref([
+const menuArr = ref<IMenu[][]>([
   [{ menuName: 'library.createPlaylist' }, { menuName: 'library.createFolder' }]
 ])
+// 这些库的根目录在磁盘上是真实存在的文件夹，空白处右键可直接定位到资源管理器
+const canRevealRootInExplorer = computed(() =>
+  canRevealLibraryRootInExplorer(runtime.libraryAreaSelected)
+)
+const revealLibraryRootInExplorer = () => {
+  const libraryPath = libraryUtils.findDirPathByUuid(libraryData.value.uuid)
+  if (!libraryPath) return
+  window.electron.ipcRenderer.send('openFileExplorer', libraryPath)
+}
 const contextmenuEvent = async (event: MouseEvent) => {
+  let baseMenuArr: IMenu[][]
   if (runtime.libraryAreaSelected === 'RecycleBin') {
-    menuArr.value = [[{ menuName: 'recycleBin.emptyRecycleBin' }]]
+    baseMenuArr = [[{ menuName: 'recycleBin.emptyRecycleBin' }]]
   } else if (runtime.libraryAreaSelected === 'MixtapeLibrary') {
-    menuArr.value = [
+    baseMenuArr = [
       [
         { menuName: 'library.createStemMixtape' },
         { menuName: 'library.createEqMixtape' },
@@ -269,15 +280,21 @@ const contextmenuEvent = async (event: MouseEvent) => {
       ]
     ]
   } else if (runtime.libraryAreaSelected === 'SetLibrary') {
-    menuArr.value = [
+    baseMenuArr = [
       [{ menuName: 'library.createSetPlaylist' }, { menuName: 'library.createSetFolder' }]
     ]
   } else {
-    menuArr.value = [[{ menuName: 'library.createPlaylist' }, { menuName: 'library.createFolder' }]]
+    baseMenuArr = [[{ menuName: 'library.createPlaylist' }, { menuName: 'library.createFolder' }]]
   }
+  if (canRevealRootInExplorer.value) {
+    baseMenuArr.push([{ menuName: 'tracks.showInFileExplorer' }])
+  }
+  menuArr.value = baseMenuArr
   let result = await rightClickMenu({ menuArr: menuArr.value, clickEvent: event })
   if (result !== 'cancel') {
-    if (result.menuName == 'library.createPlaylist') {
+    if (result.menuName == 'tracks.showInFileExplorer') {
+      revealLibraryRootInExplorer()
+    } else if (result.menuName == 'library.createPlaylist') {
       const newUuid = uuidV4()
       libraryData.value.children = libraryData.value.children || []
       libraryData.value.children.unshift({

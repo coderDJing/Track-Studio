@@ -39,6 +39,16 @@ const canShowMissingAnalysisMenu = (
   creatingSongListUUID !== node.uuid &&
   (node.type === 'library' || node.type === 'dir' || node.type === 'songList')
 
+/**
+ * 这些库的根目录在磁盘上是真实存在的文件夹，可以在文件资源浏览器中直接定位。
+ * 混音库 / Set 库 / 外部歌单 / 先锋设备不作为「文件夹」定位目标，故不在此列。
+ */
+export const canRevealLibraryRootInExplorer = (libraryAreaSelected: string): boolean =>
+  libraryAreaSelected === 'FilterLibrary' ||
+  libraryAreaSelected === 'CuratedLibrary' ||
+  libraryAreaSelected === 'RecordingLibrary' ||
+  libraryAreaSelected === 'RecycleBin'
+
 export const buildLibraryContextMenuArr = ({
   dirData,
   libraryAreaSelected,
@@ -76,6 +86,7 @@ export const buildLibraryContextMenuArr = ({
     return [
       [{ menuName: 'library.createPlaylist' }, { menuName: 'library.createFolder' }],
       [{ menuName: 'common.rename' }, { menuName: 'common.delete' }],
+      [{ menuName: 'tracks.showInFileExplorer' }],
       [{ menuName: 'playlist.batchRename' }],
       [{ menuName: 'similarTracks.menu' }],
       ...(canShowMissingAnalysisMenu(dirData, libraryName, creatingSongListUUID)
