@@ -38,6 +38,10 @@ component licenses below.
   - `rust_package/native/ffmpeg`
 - Source: https://ffmpeg.org/
 - Windows build source: https://github.com/BtbN/FFmpeg-Builds
+- macOS executable build source: https://ffmpeg.martin-riedl.de/
+- macOS executables use the pinned 9.0.2 static builds for arm64 and Intel,
+  with archive SHA-256 values recorded in `scripts/lib/macos-media-tools.mjs`.
+  Both report GPL version 3 or later; the Homebrew libraries are separate native build inputs.
 - Current bundled Windows build: GPL-3.0-or-later. The bundled
   `vendor/ffmpeg/win32-x64/ffmpeg.exe` reports `--enable-gpl --enable-version3`
   and `ffmpeg -L` reports GNU GPL version 3 or later.

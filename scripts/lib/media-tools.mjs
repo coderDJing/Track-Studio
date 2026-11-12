@@ -3,6 +3,7 @@ import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { once } from 'node:events'
 import { Readable } from 'node:stream'
+import { ensureMacosFfmpeg, validateMacosMediaTool } from './macos-media-tools.mjs'
 import {
   createConsoleDownloadProgressReporter,
   fetchWithRuntimeProxy
@@ -11,10 +12,7 @@ import {
 const WINDOWS_FFMPEG_RELEASE_API = 'https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest'
 
 const WINDOWS_REQUIREMENTS = {
-  exactPaths: [
-    'ffmpeg/win32-x64/ffmpeg.exe',
-    'ffmpeg/win32-x64/ffprobe.exe'
-  ],
+  exactPaths: ['ffmpeg/win32-x64/ffmpeg.exe', 'ffmpeg/win32-x64/ffprobe.exe'],
   alternativeGroups: []
 }
 
@@ -123,6 +121,7 @@ export const validateBundledMediaTools = ({ mode, platformKey, vendorRoot }) => 
     }
   }
   const requirements = resolveMediaToolsRequirements({ mode, platformKey })
+  const selectedPaths = [...requirements.exactPaths]
   const failures = [
     ...requirements.exactPaths
       .filter((relativePath) => !pathExists(vendorRoot, relativePath))
@@ -131,7 +130,10 @@ export const validateBundledMediaTools = ({ mode, platformKey, vendorRoot }) => 
       const matchedSet = group.candidateSets.find((relativePaths) =>
         relativePaths.every((relativePath) => pathExists(vendorRoot, relativePath))
       )
-      if (matchedSet) return []
+      if (matchedSet) {
+        selectedPaths.push(...matchedSet)
+        return []
+      }
       return [
         `${group.label} missing, expected one of: ${group.candidateSets
           .map((relativePaths) => `[${describePathSet(vendorRoot, relativePaths)}]`)
@@ -139,6 +141,21 @@ export const validateBundledMediaTools = ({ mode, platformKey, vendorRoot }) => 
       ]
     })
   ]
+  if (platformKey.startsWith('darwin') && failures.length === 0) {
+    if (process.platform !== 'darwin') {
+      failures.push('macOS media tool validation requires macOS (lipo + otool)')
+    } else {
+      const architectures =
+        mode === 'package' || platformKey === 'darwin-universal'
+          ? ['arm64', 'x64']
+          : [platformKey === 'darwin-arm64' ? 'arm64' : 'x64']
+      for (const relativePath of selectedPaths) {
+        failures.push(
+          ...validateMacosMediaTool(resolveVendorPath(vendorRoot, relativePath), architectures)
+        )
+      }
+    }
+  }
   return {
     mode,
     platformKey,
@@ -349,6 +366,13 @@ export const ensureBundledMediaTools = async ({ mode, platformKey, vendorRoot })
   let changed = false
   if (platformKey === 'win32-x64') {
     changed = (await ensureWindowsFfmpeg(vendorRoot)) || changed
+  } else if (platformKey.startsWith('darwin')) {
+    changed = await ensureMacosFfmpeg({
+      mode,
+      platformKey,
+      vendorRoot,
+      downloadFile: downloadFileIfMissing
+    })
   }
 
   const finalResult = validateBundledMediaTools({
@@ -357,9 +381,6 @@ export const ensureBundledMediaTools = async ({ mode, platformKey, vendorRoot })
     vendorRoot
   })
   if (finalResult.failures.length > 0) {
-    if (platformKey !== 'win32-x64') {
-      throw new Error(`[media-tools] 自动准备暂未支持 ${platformKey}，请先手动补齐资源后重试。`)
-    }
     const error = new Error('[media-tools] 媒体工具自动准备后校验仍未通过')
     error.cause = finalResult.failures.join('\n')
     throw error

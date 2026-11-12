@@ -599,137 +599,19 @@ jobs:
       - name: Validate Rekordbox Desktop runtime (macOS universal)
         run: pnpm run rekordbox:runtime:validate:mac-universal
 
-      - name: Prepare FFmpeg (macOS both arch)
-        run: |
-          set -euxo pipefail
-          mkdir -p vendor/ffmpeg/darwin-arm64 vendor/ffmpeg/darwin-x64 vendor/ffmpeg/darwin
-
-          echo "=== Host uname ==="
-          uname -a
-          sw_vers
-
-          # 使用 Homebrew 安装 arm64 版本 (native on arm64 runner)
-          echo "Installing arm64 ffmpeg via Homebrew"
-          # Keep unrelated broken taps from making Homebrew metadata updates noisy.
-          if brew tap | grep -Fxq 'hashicorp/tap'; then
-            # The runner may have packer installed from this tap; force only
-            # removes the tap metadata and leaves unrelated formulae intact.
-            brew untap --force hashicorp/tap
-          fi
-          brew update
-          brew install ffmpeg
-          ARM64_FFMPEG_PATH="$(brew --prefix)/bin/ffmpeg"
-          ARM64_FFPROBE_PATH="$(brew --prefix)/bin/ffprobe"
-          file "$ARM64_FFMPEG_PATH"
-          file "$ARM64_FFPROBE_PATH"
-          install -m 755 "$ARM64_FFMPEG_PATH" vendor/ffmpeg/darwin-arm64/ffmpeg
-          install -m 755 "$ARM64_FFPROBE_PATH" vendor/ffmpeg/darwin-arm64/ffprobe
-
-          download_and_verify_zip() {
-            local url="$1"
-            local output="$2"
-            local attempt
-
-            for attempt in 1 2 3 4 5; do
-              rm -f "$output"
-              echo "Downloading $output (attempt ${attempt}/5)"
-              if curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 --connect-timeout 30 --max-time 600 "$url" -o "$output" \
-                && unzip -tq "$output" >/dev/null; then
-                return 0
-              fi
-
-              echo "WARN: downloaded archive is missing or invalid: $output"
-              if [ -f "$output" ]; then
-                file "$output" || true
-                wc -c "$output" || true
-              fi
-              sleep $((attempt * 3))
-            done
-
-            echo "ERROR: failed to download a valid zip archive: $output"
-            exit 1
-          }
-
-          # 带 zip 校验重试下载 x64 版本，避免 GitHub 资产链路偶发返回错误页却被当成包解压。
-          echo "Downloading x64 ffmpeg/ffprobe from ffbinaries..."
-          download_and_verify_zip "https://github.com/ffbinaries/ffbinaries-prebuilt/releases/download/v4.4.1/ffmpeg-4.4.1-osx-64.zip" ffmpeg-x64.zip
-          download_and_verify_zip "https://github.com/ffbinaries/ffbinaries-prebuilt/releases/download/v4.4.1/ffprobe-4.4.1-osx-64.zip" ffprobe-x64.zip
-          unzip -q ffmpeg-x64.zip -d ffmpeg-x64-temp
-          unzip -q ffprobe-x64.zip -d ffprobe-x64-temp
-          X64_FFMPEG_PATH="$(find ffmpeg-x64-temp -type f -name ffmpeg | head -n 1 || true)"
-          X64_FFPROBE_PATH="$(find ffprobe-x64-temp -type f -name ffprobe | head -n 1 || true)"
-          if [ -z "$X64_FFMPEG_PATH" ] || [ -z "$X64_FFPROBE_PATH" ]; then
-            echo "ERROR: x64 ffmpeg/ffprobe binary missing from downloaded archives"
-            exit 1
-          fi
-          file "$X64_FFMPEG_PATH"
-          file "$X64_FFPROBE_PATH"
-          if ! file "$X64_FFMPEG_PATH" | grep -q "x86_64"; then
-            echo "ERROR: x64 ffmpeg artifact is not x86_64"
-            exit 1
-          fi
-          if ! file "$X64_FFPROBE_PATH" | grep -q "x86_64"; then
-            echo "ERROR: x64 ffprobe artifact is not x86_64"
-            exit 1
-          fi
-          install -m 755 "$X64_FFMPEG_PATH" vendor/ffmpeg/darwin-x64/ffmpeg
-          install -m 755 "$X64_FFPROBE_PATH" vendor/ffmpeg/darwin-x64/ffprobe
-          rm -rf ffmpeg-x64-temp ffprobe-x64-temp ffmpeg-x64.zip ffprobe-x64.zip
-          if [ ! -f vendor/ffmpeg/darwin-x64/ffprobe ]; then
-            echo "ERROR: x64 ffprobe is missing"
-            exit 1
-          fi
-
-          # 输出原始二进制信息
-          echo "=== Raw arm64 binary ==="
-          file vendor/ffmpeg/darwin-arm64/ffmpeg
-          file vendor/ffmpeg/darwin-arm64/ffprobe
-          ls -lh vendor/ffmpeg/darwin-arm64/ffmpeg
-          ls -lh vendor/ffmpeg/darwin-arm64/ffprobe
-          shasum -a 256 vendor/ffmpeg/darwin-arm64/ffmpeg || true
-          shasum -a 256 vendor/ffmpeg/darwin-arm64/ffprobe || true
-          lipo -archs vendor/ffmpeg/darwin-arm64/ffmpeg || true
-
-          echo "=== Raw x64 binary ==="
-          file vendor/ffmpeg/darwin-x64/ffmpeg
-          file vendor/ffmpeg/darwin-x64/ffprobe
-          ls -lh vendor/ffmpeg/darwin-x64/ffmpeg
-          ls -lh vendor/ffmpeg/darwin-x64/ffprobe
-          shasum -a 256 vendor/ffmpeg/darwin-x64/ffmpeg || true
-          shasum -a 256 vendor/ffmpeg/darwin-x64/ffprobe || true
-          lipo -archs vendor/ffmpeg/darwin-x64/ffmpeg || true
-
-          # 生成通用二进制并放入固定目录
-          echo "Creating universal ffmpeg via lipo"
-          lipo -create -output vendor/ffmpeg/darwin/ffmpeg \
-            vendor/ffmpeg/darwin-arm64/ffmpeg \
-            vendor/ffmpeg/darwin-x64/ffmpeg
-          echo "Creating universal ffprobe via lipo"
-          lipo -create -output vendor/ffmpeg/darwin/ffprobe \
-            vendor/ffmpeg/darwin-arm64/ffprobe \
-            vendor/ffmpeg/darwin-x64/ffprobe
-          chmod +x vendor/ffmpeg/darwin/ffmpeg
-          chmod +x vendor/ffmpeg/darwin/ffprobe
-
-          echo "=== Universal binary ==="
-          file vendor/ffmpeg/darwin/ffmpeg
-          file vendor/ffmpeg/darwin/ffprobe
-          ls -lh vendor/ffmpeg/darwin/ffmpeg
-          ls -lh vendor/ffmpeg/darwin/ffprobe
-          shasum -a 256 vendor/ffmpeg/darwin/ffmpeg || true
-          shasum -a 256 vendor/ffmpeg/darwin/ffprobe || true
-          lipo -archs vendor/ffmpeg/darwin/ffmpeg || true
-          lipo -archs vendor/ffmpeg/darwin/ffprobe || true
-
-          # 清理单架构副本
-          rm -rf vendor/ffmpeg/darwin-arm64 vendor/ffmpeg/darwin-x64
-
-          echo "Listing vendor/ffmpeg directory"
-          find vendor/ffmpeg -maxdepth 2 -type f -exec ls -l {} \;
+      - name: Prepare portable FFmpeg (macOS universal)
+        run: node scripts/ensure-bundled-media-tools.mjs --mode package --platform-key darwin-universal
 
       - name: Prepare FFmpeg native dependencies (macOS)
         run: |
           set -euxo pipefail
+
+          # Homebrew is used only for Rust link inputs, never shipped executables.
+          if brew tap | grep -Fxq 'hashicorp/tap'; then
+            brew untap --force hashicorp/tap
+          fi
+          brew update
+          brew install ffmpeg
 
           copy_ffmpeg_dev_files() {
             local source_prefix="$1"
@@ -846,6 +728,9 @@ jobs:
             echo "macOS resources directory not found: ${RESOURCES_DIR}"
             exit 1
           fi
+
+          node scripts/validate-bundled-media-tools.mjs \
+            --mode package --platform-key darwin-universal --root "$RESOURCES_DIR"
 
           REQUIRED_PATHS=(
             "ffmpeg/darwin/ffmpeg"

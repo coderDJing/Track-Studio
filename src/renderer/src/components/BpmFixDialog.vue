@@ -138,7 +138,11 @@ onUnmounted(() => {
 
 <template>
   <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
-    <div v-dialog-drag="'.dialog-title'" class="inner bpm-fix-dialog">
+    <div
+      v-dialog-drag="'.dialog-title'"
+      class="inner bpm-fix-dialog"
+      :class="{ 'bpm-fix-dialog--advanced': advanced }"
+    >
       <div class="dialog-title dialog-header">
         <span>{{ t('bpmFix.title') }}</span>
       </div>
@@ -166,16 +170,12 @@ onUnmounted(() => {
               <div :style="{ width: `${snapshot.percent}%` }" />
             </div>
           </div>
-          <p v-if="!advanced && snapshot.status === 'pending'" class="hint">
-            {{ t('bpmFix.automaticHint') }}
-          </p>
-          <singleCheckbox
-            v-if="snapshot.status === 'pending'"
-            v-model="advanced"
-            :disabled="submitting"
-          >
-            {{ t('bpmFix.advanced') }}
-          </singleCheckbox>
+          <div v-if="snapshot.status === 'pending'" class="analysis-options">
+            <p v-if="!advanced" class="hint">{{ t('bpmFix.automaticHint') }}</p>
+            <singleCheckbox v-model="advanced" :disabled="submitting">
+              {{ t('bpmFix.advanced') }}
+            </singleCheckbox>
+          </div>
           <div v-if="editable" class="batch-tools">
             <button class="button" @click="selectReliable(true)">
               {{ t('bpmFix.selectAll') }}
@@ -219,11 +219,11 @@ onUnmounted(() => {
                 <tr>
                   <th v-if="advanced" class="selection-column">{{ t('bpmFix.process') }}</th>
                   <th class="song-column">{{ t('bpmFix.song') }}</th>
-                  <th>{{ t('bpmFix.detected') }}</th>
-                  <th v-if="advanced">{{ t('bpmFix.confidence') }}</th>
+                  <th class="number-column">{{ t('bpmFix.detected') }}</th>
+                  <th v-if="advanced" class="confidence-column">{{ t('bpmFix.confidence') }}</th>
                   <th v-if="advanced" class="tempo-column">{{ t('bpmFix.interpretation') }}</th>
                   <th class="target-column">{{ t('bpmFix.target') }}</th>
-                  <th>{{ t('bpmFix.status') }}</th>
+                  <th class="status-column">{{ t('bpmFix.status') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -252,9 +252,10 @@ onUnmounted(() => {
                       ><span>{{ fileName(track.filePath) }}</span></bubbleBoxTrigger
                     >
                   </td>
-                  <td>{{ number(track.analysis?.sourceBpm) }}</td>
+                  <td class="number-cell">{{ number(track.analysis?.sourceBpm) }}</td>
                   <td
                     v-if="advanced"
+                    class="number-cell"
                     :class="{
                       warning:
                         track.analysis &&
@@ -263,7 +264,7 @@ onUnmounted(() => {
                   >
                     {{ percent(track.analysis?.confidence) }}
                   </td>
-                  <td v-if="advanced">
+                  <td v-if="advanced" class="tempo-cell">
                     <BaseSelect
                       v-if="draft.tracks[track.id]"
                       v-model="draft.tracks[track.id].tempoFactor"
@@ -273,7 +274,7 @@ onUnmounted(() => {
                       :aria-label="t('bpmFix.interpretation')"
                     />
                   </td>
-                  <td>
+                  <td class="number-cell">
                     <input
                       v-if="advanced && draft.tracks[track.id]"
                       :value="draft.tracks[track.id].targetBpm ?? ''"
@@ -386,7 +387,7 @@ onUnmounted(() => {
               <BaseSelect
                 v-model="draft.saveMode"
                 :options="saveModeOptions"
-                :width="180"
+                width="100%"
                 :disabled="!canConfigure"
                 :aria-label="t('bpmFix.saveMode')"
               />
@@ -396,7 +397,7 @@ onUnmounted(() => {
               <BaseSelect
                 v-model="draft.format"
                 :options="formatOptions"
-                :width="160"
+                width="100%"
                 :disabled="!canConfigure"
                 :aria-label="t('bpmFix.format')"
               />
@@ -414,7 +415,7 @@ onUnmounted(() => {
       <div v-if="snapshot" class="dialog-footer bpm-footer">
         <button
           v-if="snapshot.status === 'pending' || snapshot.status === 'ready'"
-          class="button"
+          class="button button-primary"
           :disabled="(snapshot.status === 'ready' && !selected) || submitting"
           @click="start"
         >
@@ -440,45 +441,65 @@ onUnmounted(() => {
 .bpm-fix-dialog {
   --bpm-fix-warning: var(--warning-text);
   --bpm-fix-error: var(--danger-text);
-  width: min(1060px, calc(100vw - 32px));
+  width: min(860px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
   display: flex;
   flex-direction: column;
   color: var(--text);
   background: var(--bg-elev);
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.bpm-fix-dialog--advanced {
+  width: min(1060px, calc(100vw - 32px));
+}
+.dialog-header {
+  min-height: 40px;
+  padding: 0 20px;
 }
 .bpm-body-scroll {
   flex: 1 1 auto;
   min-height: 0;
 }
 .bpm-body {
-  padding: 16px 20px 12px;
-  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+}
+.bpm-body p {
+  margin: 0;
+}
+.analysis-options {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
 }
 .hint {
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.6;
 }
-.batch-tools,
-.save-options {
+.batch-tools {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 12px 0;
+  gap: 10px 12px;
   flex-wrap: wrap;
 }
 .task-card {
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--waveform-bg-elev);
+  background: var(--bg);
 }
 .task-status {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
   color: var(--text-secondary);
 }
 .task-status strong {
@@ -504,6 +525,7 @@ onUnmounted(() => {
   transition: width 0.2s;
 }
 .track-table {
+  flex: none;
   max-height: 290px;
   overflow: auto;
   border: 1px solid var(--border);
@@ -511,9 +533,11 @@ onUnmounted(() => {
 }
 table {
   width: 100%;
-  min-width: 780px;
+  min-width: 800px;
   border-collapse: collapse;
   table-layout: fixed;
+  font: inherit;
+  color: var(--text);
 }
 th {
   position: sticky;
@@ -525,26 +549,52 @@ th {
 }
 th,
 td {
-  padding: 9px 7px;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+tbody tr:last-child td {
+  border-bottom: 0;
 }
 th.selection-column {
-  width: 42px;
+  width: 56px;
+  text-align: center;
 }
 th.song-column {
-  width: 28%;
+  width: auto;
+}
+th.number-column {
+  width: 116px;
+  text-align: center;
+}
+th.confidence-column {
+  width: 112px;
+  text-align: center;
 }
 th.tempo-column {
-  width: 76px;
+  width: 104px;
+  text-align: center;
 }
 th.target-column {
-  width: 88px;
+  width: 108px;
+  text-align: center;
+}
+th.status-column {
+  width: 132px;
+}
+.number-cell,
+.tempo-cell,
+.advanced-table td:first-child {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.tempo-cell :deep(.base-select) {
+  margin-inline: auto;
 }
 table:not(.advanced-table) {
-  min-width: 480px;
-  .song-column {
-    width: 44%;
-  }
+  min-width: 600px;
 }
 tbody tr {
   cursor: pointer;
@@ -597,12 +647,31 @@ input:disabled {
   cursor: default;
 }
 .button {
-  box-sizing: content-box;
-  border: 0;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
   color: var(--text);
-  font-family: inherit;
+  font: inherit;
+  white-space: nowrap;
 }
 .button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+  border-color: var(--text-secondary);
+}
+.button-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.button-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 85%, var(--text));
+  border-color: var(--accent);
   color: #fff;
 }
 .button:disabled {
@@ -617,17 +686,19 @@ button.link {
   font: inherit;
 }
 .details {
-  margin: 14px 0;
-  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--waveform-bg-elev);
+  background: var(--bg);
+  overflow-wrap: anywhere;
 }
 .metrics {
   display: flex;
   gap: 8px 20px;
   flex-wrap: wrap;
-  margin-top: 10px;
 }
 .warning {
   color: var(--bpm-fix-warning);
@@ -635,21 +706,53 @@ button.link {
 .error {
   color: var(--bpm-fix-error);
 }
-.save-option {
+.save-options {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 16px 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.save-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 180px);
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+.save-option > span {
+  white-space: nowrap;
+}
+.save-option :deep(.base-select) {
+  height: 30px;
+}
+.bpm-footer {
+  padding: 12px 20px;
+  gap: 8px;
 }
 @media (max-width: 560px) {
   .bpm-body {
-    padding: 14px 12px 10px;
+    padding: 16px 12px;
   }
   .selection-count {
     margin-left: 0;
   }
+  .save-options {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .save-option {
+    grid-template-columns: minmax(80px, auto) minmax(0, 1fr);
+  }
+  .bpm-footer {
+    padding: 12px;
+  }
 }
 .bpm-footer .button {
-  min-width: 90px;
+  min-width: 96px;
+  height: 32px;
   text-align: center;
   white-space: nowrap;
 }
