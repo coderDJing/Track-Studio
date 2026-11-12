@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { is } from '@electron-toolkit/utils'
 import { KeyAnalysisQueue } from './keyAnalysis/queue'
 import type {
   KeyAnalysisBackgroundStatus,
@@ -10,6 +11,8 @@ import { KEY_ANALYSIS_WORKER_MAX, normalizePath } from './keyAnalysis/types'
 import * as LibraryCacheDb from '../libraryCacheDb'
 import { isLibraryMergeMutationLocked } from './libraryMerge/mutationGate'
 import type { AnalysisBpmRangePresetId } from '../../shared/analysisBpmRange'
+import type { AnalysisGridMode } from '../../shared/analysisGridMode'
+import { isAnalysisGridModeSupported } from '../../shared/analysisGridMode'
 
 type EnqueueKeyAnalysisOptions = KeyAnalysisRequestFlags & {
   urgent?: boolean
@@ -21,6 +24,7 @@ type EnqueueKeyAnalysisOptions = KeyAnalysisRequestFlags & {
   waveformOnly?: boolean
   includeStructure?: boolean
   analysisBpmRangeId?: AnalysisBpmRangePresetId
+  analysisGridMode?: AnalysisGridMode
   manualBatchId?: string
   manualBatchIds?: string[]
 }
@@ -303,10 +307,17 @@ export function enqueueManualKeyAnalysisBatch(
   options?: {
     titleKey?: string
     analysisBpmRangeId?: AnalysisBpmRangePresetId
+    analysisGridMode?: AnalysisGridMode
     includeStructure?: boolean
   } & KeyAnalysisRequestFlags
 ) {
   if (isLibraryMergeMutationLocked()) return { batchId: '', queued: 0 }
+  if (
+    options?.analysisGridMode === 'dynamic' &&
+    !isAnalysisGridModeSupported(options.analysisGridMode, { isDevelopment: is.dev })
+  ) {
+    return { batchId: '', queued: 0, blocked: true, reason: 'dynamic-grid-unavailable' }
+  }
   pruneUntrackedManualBatchPaths()
   const pendingByPath = new Map<string, string>()
   for (const filePath of Array.isArray(filePaths) ? filePaths : []) {
@@ -346,6 +357,7 @@ export function enqueueManualKeyAnalysisBatch(
     manualBatchId: batchId,
     forceAnalysis: options?.forceAnalysis,
     analysisTargets: options?.analysisTargets,
+    analysisGridMode: options?.analysisGridMode,
     analysisBpmRangeId: options?.analysisBpmRangeId,
     includeStructure: options?.includeStructure ?? true
   })

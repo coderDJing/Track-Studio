@@ -1,4 +1,5 @@
 import path from 'node:path'
+import fs from 'node:fs/promises'
 import type { EventEmitter } from 'node:events'
 import { Worker } from 'node:worker_threads'
 import { log } from '../../log'
@@ -9,6 +10,17 @@ import type { AnalysisBpmRangePresetId } from '../../../shared/analysisBpmRange'
 import { hasCurrentKeyAnalysisJobOwnership } from './jobOwnership'
 import { getKeyAnalysisJobDiagnostics, recordKeyAnalysisDiagnosticPhase } from './diagnostics'
 import { createStageDiagnostics } from '../stageDiagnostics'
+import {
+  readAnalysisGridMode,
+  readDynamicGridOutcomeFromResult,
+  readDynamicGridSidecarPid,
+  DYNAMIC_GRID_DEFERRED_STRUCTURE_ERROR
+} from './dynamicGridIntegration'
+import { terminateOwnedPidExact } from '../childProcessRegistry'
+import { createDynamicSidecarTracker } from './dynamicSidecarTracker'
+import { normalizeDynamicGridPublicProgress } from '../../../shared/dynamicGridProgress'
+import { createWorkerPersistGuard } from './persistGuard'
+import type { AudioIdentity } from './persistGuard'
 import {
   isNoBpmBeatGridResultError,
   isValidBpm,
@@ -38,6 +50,8 @@ type KeyAnalysisWorkerPoolDeps = {
   clearExpectedWorkerTermination: (worker: Worker) => void
   hasExpectedWorkerTermination: (worker: Worker) => boolean
   consumeExpectedWorkerTermination: (worker: Worker) => string | null
+  /** 只用于提交资格：路径最新网格请求代次是否仍是该 job。 */
+  isCurrentGridRequest: (job: KeyAnalysisJob) => boolean
   persistence: KeyAnalysisPersistence
   background: KeyAnalysisBackground
   enqueue: (
@@ -88,6 +102,15 @@ export const collectKeyAnalysisJobResultErrors = (
     errors.push(`bpm: ${payloadResult.bpmError}`)
   }
   if (
+    payloadResult &&
+    !payloadResult.bpmError &&
+    readAnalysisGridMode(job) === 'dynamic' &&
+    !readDynamicGridOutcomeFromResult(payloadResult)
+  ) {
+    // 请求 dynamic 但结果没有可校验的 outcome：不能按固定网格提交。
+    errors.push('bpm: dynamic grid outcome missing or invalid')
+  }
+  if (
     job?.needsEnergy === true &&
     payloadResult?.energyScore === undefined &&
     !payloadResult?.bpmError
@@ -96,7 +119,10 @@ export const collectKeyAnalysisJobResultErrors = (
   }
   if (job?.needsStructure === true) {
     if (payloadResult?.songStructureError) {
-      errors.push(`structure: ${payloadResult.songStructureError}`)
+      // Dynamic 网格本期不启动段落分析，未执行项不作为任务失败。
+      if (payloadResult.songStructureError !== DYNAMIC_GRID_DEFERRED_STRUCTURE_ERROR) {
+        errors.push(`structure: ${payloadResult.songStructureError}`)
+      }
     } else if (!payloadResult?.songStructure) {
       errors.push('structure: missing v23 structure result from analyzer')
     }
@@ -114,8 +140,58 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
       activeJob: deps.activeByPath.get(job.normalizedPath)
     })
 
+  // Dynamic 推理 sidecar 由 worker 拥有；硬终止 worker 不会触发其 process exit hook，
+  // 因此主进程按“本任务上报过的精确 PID”清理，绝不按进程名批量终止。
+  const dynamicSidecarTracker = createDynamicSidecarTracker({
+    terminatePid: (pid) => terminateOwnedPidExact(pid, 'dynamic-grid-sidecar')
+  })
+
+  const releaseDynamicSidecar = (worker: Worker, kill: boolean) => {
+    dynamicSidecarTracker.release(worker, kill)
+  }
+
+  const trackDynamicSidecar = (
+    worker: Worker,
+    job: KeyAnalysisJob,
+    progress: KeyAnalysisProgress
+  ) => {
+    if (!progress.dynamicGrid) return
+    if (deps.busy.get(worker) === job.jobId) {
+      // 只有确认该 job 真的占着这个 worker 时才开启新生命周期。
+      dynamicSidecarTracker.begin(worker, job)
+    }
+    dynamicSidecarTracker.track({
+      workerKey: worker,
+      jobKey: job,
+      pid: readDynamicGridSidecarPid(progress.dynamicGrid),
+      canCommit: () => isCurrentWorkerJob(worker, job) && !deps.hasExpectedWorkerTermination(worker)
+    })
+  }
+
+  /**
+   * 取消/失去资格后仍可能收到 progress；此时同样要读取 PID，把迟到的 sidecar 精确终止，
+   * 不能因为整条进度被丢弃而永久泄漏子进程。
+   */
+  const absorbLateDynamicSidecar = (
+    worker: Worker,
+    job: KeyAnalysisJob | undefined,
+    progress: KeyAnalysisProgress
+  ) => {
+    if (!progress.dynamicGrid) return
+    const busyJobId = deps.busy.get(worker)
+    const busyJob = typeof busyJobId === 'number' ? deps.inFlight.get(busyJobId) : undefined
+    if (busyJob) dynamicSidecarTracker.begin(worker, busyJob)
+    dynamicSidecarTracker.track({
+      workerKey: worker,
+      jobKey: job ?? null,
+      pid: readDynamicGridSidecarPid(progress.dynamicGrid),
+      canCommit: () => false
+    })
+  }
+
   const terminateWorker = (worker: Worker, reason: string) => {
     deps.markExpectedWorkerTermination(worker, reason)
+    releaseDynamicSidecar(worker, true)
     void worker.terminate().catch(() => {
       deps.clearExpectedWorkerTermination(worker)
     })
@@ -178,9 +254,12 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
     }
     job.trace = trace
 
+    trackDynamicSidecar(worker, job, progress)
     deps.onJobProgress(worker, job, progress)
 
-    // 推送分析阶段到 renderer，用于 UI 进度显示
+    // 推送分析阶段到 renderer，用于 UI 进度显示。
+    // dynamicGrid 只发 shared 公开契约字段，sidecarPid 等实现细节绝不跨 IPC。
+    const publicDynamicGrid = normalizeDynamicGridPublicProgress(progress.dynamicGrid)
     deps.events.emit('analysis-stage-update', {
       filePath: job.filePath,
       stage: progress.stage,
@@ -189,7 +268,8 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
       needsWaveform: job.needsWaveform,
       needsEnergy: job.needsEnergy,
       needsStructure: job.needsStructure,
-      manualBatchIds: job.manualBatchIds
+      manualBatchIds: job.manualBatchIds,
+      ...(publicDynamicGrid ? { dynamicGrid: publicDynamicGrid } : {})
     })
   }
 
@@ -240,6 +320,53 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
   ): string =>
     collectFatalJobResultErrors(job, payloadResult, payloadError).join('; ').slice(0, 300)
 
+  const readCurrentAudioIdentity = async (filePath: string): Promise<AudioIdentity | null> => {
+    try {
+      const stat = await fs.stat(filePath)
+      return { size: stat.size, mtimeMs: stat.mtimeMs }
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * 提交资格 = 当前请求代次 + worker 归属 + 音频身份未变化。
+   * 生成代次由 queue 提供，仅用于提交，不影响 worker 清理所有权。
+   * 人工网格修订竞争由持久化层按磁盘定义再次校验。
+   */
+  const resolveJobAudioIdentity = (job: KeyAnalysisJob): AudioIdentity | undefined =>
+    typeof job.fileSize === 'number' && typeof job.fileMtimeMs === 'number'
+      ? { size: job.fileSize, mtimeMs: job.fileMtimeMs }
+      : undefined
+
+  // 入队时探测到的时长与 outcome 自带时长互相校验；缺探针时才退回 outcome 值。
+  const resolveExpectedAudioDurationSec = (job: KeyAnalysisJob, fallback?: number) => {
+    const probeDurationSec = Number(job.probe?.durationSec)
+    if (Number.isFinite(probeDurationSec) && probeDurationSec > 0) return probeDurationSec
+    return fallback
+  }
+
+  const createPersistGuard = (worker: Worker, job: KeyAnalysisJob) => {
+    // 只有真正带代次的新请求才检查 gridRequestGeneration；旧 Normal 任务没有该字段，
+    // 继续以 worker 归属判定，避免把历史入口整体拒绝。
+    const hasGridGeneration = typeof job.gridRequestGeneration === 'number'
+    return createWorkerPersistGuard({
+      isCurrentJob: () =>
+        (!hasGridGeneration || deps.isCurrentGridRequest(job)) && isCurrentWorkerJob(worker, job),
+      expectedAudioIdentity: resolveJobAudioIdentity(job) ?? null,
+      readCurrentAudioIdentity: () => readCurrentAudioIdentity(job.filePath)
+    })
+  }
+
+  const readSuccessfulDynamicGridOutcome = (value: unknown) => {
+    const outcome = readDynamicGridOutcomeFromResult(value)
+    if (!outcome) return { outcome: undefined, durationAudioSec: undefined }
+    if (outcome.status !== 'fixed' && outcome.status !== 'dynamic') {
+      return { outcome, durationAudioSec: undefined }
+    }
+    return { outcome, durationAudioSec: outcome.durationAudioSec }
+  }
+
   const persistAnalyzePartialResult = async (
     worker: Worker,
     job: KeyAnalysisJob,
@@ -248,7 +375,13 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
     if (progress.stage !== 'analyze-done') return
     const partialResult = progress.partialResult
     if (!partialResult) return
-    const shouldPersist = () => isCurrentWorkerJob(worker, job)
+    const shouldPersist = await createPersistGuard(worker, job)
+    const { outcome: dynamicGridOutcome, durationAudioSec } =
+      readSuccessfulDynamicGridOutcome(partialResult)
+    const expectedAudioIdentity = resolveJobAudioIdentity(job)
+    const isDynamicJob = readAnalysisGridMode(job) === 'dynamic'
+    const dynamicOutcomeMissing = isDynamicJob && !dynamicGridOutcome
+    const expectedDurationSec = resolveExpectedAudioDurationSec(job, durationAudioSec)
 
     let keyPersisted = false
     let bpmPersisted = false
@@ -258,17 +391,35 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
       keyPersisted = shouldPersist()
     }
 
-    if (shouldPersist() && !partialResult.bpmError && isValidBpm(partialResult.bpm)) {
+    if (
+      shouldPersist() &&
+      !dynamicOutcomeMissing &&
+      !partialResult.bpmError &&
+      isValidBpm(partialResult.bpm)
+    ) {
       await deps.persistence.persistBpm(
         job.filePath,
         partialResult.bpm,
         partialResult.firstBeatMs,
         partialResult.downbeatBeatOffset,
         partialResult.timeBasisOffsetMs,
-        { firstBeatCoordinate: 'audio', shouldPersist }
+        {
+          firstBeatCoordinate: 'audio',
+          shouldPersist,
+          ...(dynamicGridOutcome ? { dynamicGridOutcome } : {}),
+          ...(expectedDurationSec === undefined
+            ? {}
+            : { expectedAudioDurationSec: expectedDurationSec }),
+          ...(expectedAudioIdentity ? { expectedAudioIdentity } : {})
+        }
       )
       bpmPersisted = shouldPersist()
-    } else if (shouldPersist() && isNoBpmBeatGridResultError(partialResult.bpmError)) {
+    } else if (
+      shouldPersist() &&
+      !isDynamicJob &&
+      isNoBpmBeatGridResultError(partialResult.bpmError)
+    ) {
+      // 只有真正的 Normal 模型 no-bpm 才落 no-bpm；Dynamic 失败不进入这里。
       await deps.persistence.persistNoBpm(job.filePath, { shouldPersist })
       bpmPersisted = shouldPersist()
     }
@@ -361,6 +512,8 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
     removeWorkerFromList(deps.workers, worker)
     removeWorkerFromList(deps.idle, worker)
     deps.retiringWorkers.delete(worker)
+    // worker 异常/退出不会执行其内部 process exit hook，按记录的精确 PID 清理 sidecar。
+    releaseDynamicSidecar(worker, true)
 
     const isConcurrencyShrink =
       expectedTerminationReason === 'concurrency-retire' ||
@@ -414,13 +567,16 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
       if (job && isCurrentWorkerJob(worker, job)) {
         applyWorkerProgress(worker, job, payloadProgress)
         await persistAnalyzePartialResult(worker, job, payloadProgress)
-      } else if (!workerTerminationExpected) {
-        log.error('[闲时分析] 收到进度但任务不存在', {
-          jobId,
-          filePath: payload?.filePath,
-          workerThreadId: worker.threadId,
-          stage: payloadProgress.stage
-        })
+      } else {
+        absorbLateDynamicSidecar(worker, job, payloadProgress)
+        if (!workerTerminationExpected) {
+          log.error('[闲时分析] 收到进度但任务不存在', {
+            jobId,
+            filePath: payload?.filePath,
+            workerThreadId: worker.threadId,
+            stage: payloadProgress.stage
+          })
+        }
       }
       return
     }
@@ -432,7 +588,15 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
       return
     }
 
-    const shouldPersist = () => isCurrentWorkerJob(worker, job)
+    const shouldPersist = await createPersistGuard(worker, job)
+    // worker 已交付终态结果，sidecar 会话由 scanner 关闭；只清记录，不按 PID 击杀。
+    releaseDynamicSidecar(worker, false)
+    const { outcome: dynamicGridOutcome, durationAudioSec } =
+      readSuccessfulDynamicGridOutcome(payloadResult)
+    const expectedAudioIdentity = resolveJobAudioIdentity(job)
+    const isDynamicJob = readAnalysisGridMode(job) === 'dynamic'
+    const dynamicOutcomeMissing = isDynamicJob && !dynamicGridOutcome
+    const expectedDurationSec = resolveExpectedAudioDurationSec(job, durationAudioSec)
 
     let terminalProgress: KeyAnalysisProgress | null = null
     let resultErrorDetail = ''
@@ -467,9 +631,10 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
       }
 
       if (shouldPersist() && payloadResult) {
-        if (isNoBpmBeatGridResultError(payloadResult.bpmError)) {
+        if (!isDynamicJob && isNoBpmBeatGridResultError(payloadResult.bpmError)) {
+          // 只有真正的 Normal 模型 no-bpm 才落 no-bpm；Dynamic 失败不进入这里。
           await deps.persistence.persistNoBpm(job.filePath, { shouldPersist })
-        } else if (!payloadResult.bpmError) {
+        } else if (!dynamicOutcomeMissing && !payloadResult.bpmError) {
           const bpmValue = payloadResult.bpm
           if (isValidBpm(bpmValue)) {
             await deps.persistence.persistBpm(
@@ -478,18 +643,32 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
               payloadResult.firstBeatMs,
               payloadResult.downbeatBeatOffset,
               payloadResult.timeBasisOffsetMs,
-              { firstBeatCoordinate: 'audio', shouldPersist }
+              {
+                firstBeatCoordinate: 'audio',
+                shouldPersist,
+                ...(dynamicGridOutcome ? { dynamicGridOutcome } : {}),
+                ...(expectedDurationSec === undefined
+                  ? {}
+                  : { expectedAudioDurationSec: expectedDurationSec }),
+                ...(expectedAudioIdentity ? { expectedAudioIdentity } : {})
+              }
             )
           }
         }
       }
 
       if (shouldPersist() && payloadResult?.energyScore !== undefined) {
+        const sourceGridSignature = payloadResult.energySourceGridSignature
         await deps.persistence.persistEnergy(
           job.filePath,
           payloadResult.energyScore,
           payloadResult.energyAlgorithmVersion,
-          payloadResult.energyAnalysis
+          payloadResult.energyAnalysis,
+          {
+            shouldPersist,
+            ...(sourceGridSignature ? { sourceGridSignature } : {}),
+            ...(expectedAudioIdentity ? { expectedAudioIdentity } : {})
+          }
         )
       }
 
@@ -538,9 +717,21 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
       })
     }
 
-    if (!shouldPersist()) return
+    // 结果不再有提交资格（新代次/文件被替换）时跳过写库与成功通知，
+    // 但仍要完成 worker/inFlight 清理，避免占用并发额度或让批次永久等待。
+    const canCommit = shouldPersist()
 
-    if (terminalProgress) {
+    if (!canCommit && terminalProgress) {
+      // stale 任务也必须发带 manualBatchIds 的终态事件，否则 UI 与手动批次会永久 pending。
+      // 这里只发 job-error（携带旧 job 自己的 filePath/manualBatchIds），绝不冒用新任务成功。
+      applyWorkerProgress(worker, job, {
+        stage: 'job-error',
+        elapsedMs: terminalProgress.elapsedMs,
+        detail: '分析结果已作废（请求代次更新或音频被替换）'
+      })
+    }
+
+    if (canCommit && terminalProgress) {
       applyWorkerProgress(worker, job, terminalProgress)
       if (payloadError) {
         deps.onJobFailure(job, 'worker-error', String(payloadError).slice(0, 300))
@@ -706,7 +897,9 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
     getIdleWorker,
     getReservedWorker,
     maybePreemptForJob,
-    refreshForegroundWorker
+    refreshForegroundWorker,
+    /** 供 queue 的直接终止路径调用：只清理该 worker 上报过的 sidecar PID。 */
+    cleanupDynamicSidecar: (worker: Worker) => releaseDynamicSidecar(worker, true)
   }
 }
 

@@ -8,6 +8,10 @@ import {
   hasUsableKeyAnalysis,
   hasUsableSongBeatGridAnalysis
 } from '@shared/songAnalysisCompleteness'
+import {
+  normalizeDynamicGridPublicProgress,
+  type DynamicGridPublicProgress
+} from '@shared/dynamicGridProgress'
 
 type AnalysisStage =
   | 'job-received'
@@ -20,13 +24,15 @@ type AnalysisStage =
   | 'job-done'
   | 'job-error'
 
-type StageUpdatePayload = {
+export type StageUpdatePayload = {
   filePath: string
   stage: AnalysisStage
   needsKey?: boolean
   needsBpm?: boolean
   needsWaveform?: boolean
   needsStructure?: boolean
+  /** 主进程归一化后的 Dynamic 子阶段进度；非法值回退旧行为。 */
+  dynamicGrid?: unknown
 }
 
 // 每个阶段的基础权重
@@ -86,15 +92,37 @@ const computePercent = (
   }
 }
 
-const isDisplayableProgressEntry = (
-  entry?: {
-    stage: AnalysisStage
-    displayPercent: number
-  } | null
-): entry is {
-  stage: AnalysisStage
-  displayPercent: number
-} => Boolean(entry && entry.stage !== 'job-received' && entry.displayPercent > 0)
+const isDisplayableProgressEntry = <T extends { stage: AnalysisStage; displayPercent: number }>(
+  entry?: T | null
+): entry is T => Boolean(entry && entry.stage !== 'job-received' && entry.displayPercent > 0)
+
+/**
+ * Dynamic 全曲扫描进度：按真实窗口完成比例推进，阶段之间保留合理区间。
+ * fit/persist 只做收尾，保存前最高 99，只有 job-done 才到 100。
+ */
+const DYNAMIC_PROGRESS_RANGES = {
+  scan: { start: 5, end: 55 },
+  refine: { start: 55, end: 85 },
+  fit: { start: 85, end: 92 },
+  persist: { start: 92, end: 99 }
+} as const
+
+export const computeDynamicGridAnalysisPercent = (progress: DynamicGridPublicProgress): number => {
+  if (progress.phase === 'fit') return DYNAMIC_PROGRESS_RANGES.fit.end - 4
+  if (progress.phase === 'persist') return DYNAMIC_PROGRESS_RANGES.persist.end - 1
+  const range = DYNAMIC_PROGRESS_RANGES[progress.phase]
+  const totalWindows = progress.totalWindows
+  const completedWindows = progress.completedWindows
+  if (
+    typeof totalWindows !== 'number' ||
+    totalWindows <= 0 ||
+    typeof completedWindows !== 'number'
+  ) {
+    return range.start
+  }
+  const ratio = Math.max(0, Math.min(1, completedWindows / totalWindows))
+  return range.start + (range.end - range.start) * ratio
+}
 
 // 阶段内平滑过渡：估算每个阶段的持续时间（ms）
 const PHASE_DURATION_MS = {
@@ -128,6 +156,8 @@ const progressMap = ref(
       needsBpm?: boolean
       needsWaveform?: boolean
       needsStructure?: boolean
+      isDynamic?: boolean
+      dynamicGrid?: DynamicGridPublicProgress
     }
   >()
 )
@@ -172,7 +202,7 @@ const touchProgress = () => {
   progressVersion.value += 1
 }
 
-const updateProgress = (payload: StageUpdatePayload) => {
+export const applyAnalysisStageUpdate = (payload: StageUpdatePayload) => {
   const filePath = normalizePath(payload.filePath)
   if (!filePath) return
 
@@ -180,6 +210,32 @@ const updateProgress = (payload: StageUpdatePayload) => {
   if (payload.stage === 'job-done' || payload.stage === 'job-error') {
     stopAnimTimer(filePath)
     progressMap.value.delete(filePath)
+    touchProgress()
+    return
+  }
+
+  const existing = progressMap.value.get(filePath)
+  const dynamicGrid = normalizeDynamicGridPublicProgress(payload.dynamicGrid)
+  // 一旦确认是 Dynamic 任务，后续没有 dynamicGrid 的阶段也不能回到固定假动画。
+  if (dynamicGrid || existing?.isDynamic === true) {
+    const target = dynamicGrid
+      ? computeDynamicGridAnalysisPercent(dynamicGrid)
+      : (existing?.percent ?? 0)
+    const bounded = Math.min(99, Math.max(0, target))
+    // 精扫窗口总量增长时比例可能回退，显示值只前进不后退。
+    const displayPercent = Math.max(existing?.displayPercent ?? 0, bounded)
+    stopAnimTimer(filePath)
+    progressMap.value.set(filePath, {
+      stage: payload.stage,
+      percent: displayPercent,
+      displayPercent,
+      needsKey: payload.needsKey,
+      needsBpm: payload.needsBpm,
+      needsWaveform: payload.needsWaveform,
+      needsStructure: payload.needsStructure,
+      isDynamic: true,
+      dynamicGrid: dynamicGrid ?? existing?.dynamicGrid
+    })
     touchProgress()
     return
   }
@@ -193,7 +249,6 @@ const updateProgress = (payload: StageUpdatePayload) => {
   )
   const phase = STAGE_TO_PHASE[payload.stage]
 
-  const existing = progressMap.value.get(filePath)
   // 阶段开始事件：从当前显示值开始，向目标值平滑过渡
   if (phase && payload.stage.endsWith('-start')) {
     const startPercent = existing?.displayPercent ?? percent
@@ -231,7 +286,7 @@ const bindIpcListener = () => {
   window.electron.ipcRenderer.on(
     'key-analysis:stage-update',
     (_event: unknown, payload: StageUpdatePayload) => {
-      updateProgress(payload)
+      applyAnalysisStageUpdate(payload)
     }
   )
 }
@@ -281,6 +336,13 @@ export function useKeyAnalysisProgress(params: {
     return null
   }
 
+  const getAnalysisDynamicGrid = (filePath: string): DynamicGridPublicProgress | null => {
+    progressVersion.value
+    const entry = progressMap.value.get(normalizePath(filePath))
+    if (!isDisplayableProgressEntry(entry)) return null
+    return entry.dynamicGrid ?? null
+  }
+
   const isSongNeedsAnalysis = (filePath: string): boolean => {
     const normalized = normalizePath(filePath)
     const entry = progressMap.value.get(normalized)
@@ -307,6 +369,7 @@ export function useKeyAnalysisProgress(params: {
 
   return {
     getAnalysisProgress,
+    getAnalysisDynamicGrid,
     isSongNeedsAnalysis,
     hasAnyAnalysisProgress
   }

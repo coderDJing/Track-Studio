@@ -5,6 +5,7 @@ import { log } from '../log'
 import type { ISongInfo } from '../../types/globals'
 import { normalizeSongBeatGridMapV2 } from '../../shared/songBeatGridMapV2'
 import type { SongCacheEntry } from './types'
+import type { SongCacheWriteOptions } from './songCacheWriteTypes'
 import {
   toNumber,
   resolveListRootInput,
@@ -772,6 +773,9 @@ export function stripSongCoreAnalysisFields(
     delete next.beatGridStatus
     delete next.beatGridMap
     delete next.beatGridAlgorithmVersion
+    delete next.beatGridAnalysisMode
+    delete next.beatGridResultShape
+    delete next.beatGridPolicyVersion
     delete next.timeBasisOffsetMs
     delete next.timeBasisOffsetAlgorithmVersion
   }
@@ -779,6 +783,7 @@ export function stripSongCoreAnalysisFields(
     delete next.energyScore
     delete next.energyAlgorithmVersion
     delete next.energyAnalysis
+    delete next.energySourceGridSignature
   }
   if (shouldClear('structure')) {
     delete next.songStructure
@@ -895,7 +900,8 @@ export async function upsertSongCacheEntry(
   listRoot: string,
   filePath: string,
   entry: SongCacheEntry,
-  oldFilePath?: string
+  oldFilePath?: string,
+  options?: SongCacheWriteOptions
 ): Promise<boolean> {
   const db = getLibraryDb()
   if (!db || !listRoot || !filePath) return false
@@ -916,7 +922,36 @@ export async function upsertSongCacheEntry(
       'INSERT INTO song_cache (list_root, file_path, size, mtime_ms, info_json) VALUES (?, ?, ?, ?, ?) ON CONFLICT(list_root, file_path) DO UPDATE SET size = excluded.size, mtime_ms = excluded.mtime_ms, info_json = excluded.info_json'
     )
     const remove = db.prepare('DELETE FROM song_cache WHERE list_root = ? AND file_path = ?')
+    const latestListRoots = legacyListRoot ? [listRootKey, legacyListRoot] : [listRootKey]
+    const latestFilePaths = [
+      fileKey,
+      resolvedFile.keyRaw,
+      legacyListRoot ? resolvedFile.legacyAbs : ''
+    ].filter((value): value is string => Boolean(value))
+    let written = false
     const run = db.transaction(() => {
+      if (options && options.shouldPersist && !options.shouldPersist()) {
+        if (options.result) options.result.reason = 'generation'
+        return
+      }
+      let infoToWrite = entry.info
+      if (options && options.decide) {
+        const hit = getSongCacheRowLoose(db, latestListRoots, latestFilePaths)
+        const decision = options.decide({
+          info: hit ? parseInfoJson(hit.row.info_json) : null,
+          size: hit ? toNumber(hit.row.size) : null,
+          mtimeMs: hit ? toNumber(hit.row.mtime_ms) : null
+        })
+        if (!decision.info) {
+          if (options.result) options.result.reason = decision.reason || 'skipped'
+          return
+        }
+        if (options.shouldPersist && !options.shouldPersist()) {
+          if (options.result) options.result.reason = 'generation'
+          return
+        }
+        infoToWrite = decision.info
+      }
       if (oldFilePath && oldFilePath !== filePath) {
         const resolvedOldFile = resolveFilePathInput(listRootAbs, oldFilePath)
         if (resolvedOldFile) {
@@ -935,12 +970,14 @@ export async function upsertSongCacheEntry(
       }
       const absFilePath = resolveAbsoluteFilePath(listRootKey, fileKey)
       const infoJson = normalizeInfoJsonFilePath(
-        JSON.stringify(normalizeSongCacheInfoForStorage(entry.info, absFilePath)),
+        JSON.stringify(normalizeSongCacheInfoForStorage(infoToWrite, absFilePath)),
         absFilePath
       )
       insert.run(listRootKey, fileKey, entry.size, entry.mtimeMs, infoJson)
+      written = true
     })
     run()
+    if (!written) return false
     markPlaylistViewSnapshotContentStale(listRootKey)
     return true
   } catch (error) {

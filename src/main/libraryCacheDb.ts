@@ -17,6 +17,11 @@ export {
 } from './libraryCacheDb/songCache'
 
 export type {
+  SongCacheWriteDecision,
+  SongCacheWriteOptions
+} from './libraryCacheDb/songCacheWriteTypes'
+
+export type {
   PlaylistViewSnapshotMeta,
   PlaylistViewSnapshotRecord,
   PlaylistViewSnapshotWriteInput
@@ -116,7 +121,9 @@ export {
   type ExternalAnalysisContext,
   type ExternalAnalysisActiveEntry,
   type ExternalAnalysisSourceKind,
-  type ExternalAnalysisCacheEntry
+  type ExternalAnalysisCacheEntry,
+  type ExternalAnalysisWriteDecision,
+  type ExternalAnalysisWriteOptions
 } from './libraryCacheDb/externalAnalysisCache'
 
 export {

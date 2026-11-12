@@ -7,6 +7,7 @@ import type { SongStructureAnalysis } from '../shared/songStructure'
 import type { SongBeatGridMapV2 } from '../shared/songBeatGridMapV2'
 import type { PlaybackRangeMode, PlaybackRangeSectionMatchMode } from '../shared/playbackRange'
 import type { AnalysisBpmRangePresetId } from '../shared/analysisBpmRange'
+import type { AnalysisGridMode } from '../shared/analysisGridMode'
 import type { TrackReanalysisUserSelection } from '../shared/trackReanalysisSelection'
 import type { BrowserPlayerRightTrackInfoField } from '../shared/browserPlayerRightTrackInfo'
 import type { SongEnergyAnalysisV5 } from '../shared/songEnergy'
@@ -58,10 +59,18 @@ interface ISongInfo {
   beatGridSource?: 'manual' | 'analysis' | 'rekordbox' | 'serato' | 'traktor'
   beatGridStatus?: BeatGridStatus
   beatGridMap?: SongBeatGridMapV2
+  /** 网格分析来源模式：normal 为现有固定网格，dynamic 为全曲分段网格。 */
+  beatGridAnalysisMode?: 'normal' | 'dynamic'
+  /** 实际结果形态；请求 dynamic 但结果为 fixed 属正常组合。 */
+  beatGridResultShape?: 'fixed' | 'dynamic'
+  /** Dynamic 网格 policy 版本，用于追踪与重算。 */
+  beatGridPolicyVersion?: string
   rekordboxGridEntries?: IRekordboxBeatGridEntry[]
   energyScore?: number
   energyAlgorithmVersion?: number
   energyAnalysis?: SongEnergyAnalysisV5
+  /** 能量结果所依据的网格签名；网格改变后据此判 stale。 */
+  energySourceGridSignature?: string
   songStructure?: SongStructureAnalysis
   playlistTrackNumber?: number
   addedAtMs?: number
@@ -505,12 +514,7 @@ interface IBatchRenameTrackInput {
 }
 
 type IBatchRenamePreviewStatus =
-  | 'executable'
-  | 'unchanged'
-  | 'invalid_chars'
-  | 'too_long'
-  | 'source_missing'
-  | 'invalid_name'
+  'executable' | 'unchanged' | 'invalid_chars' | 'too_long' | 'source_missing' | 'invalid_name'
 
 interface IBatchRenamePreviewItem {
   id: string
@@ -644,11 +648,7 @@ interface ILayoutConfig {
 }
 
 type PlayerGlobalShortcutAction =
-  | 'togglePlayPause'
-  | 'fastForward'
-  | 'fastBackward'
-  | 'nextSong'
-  | 'previousSong'
+  'togglePlayPause' | 'fastForward' | 'fastBackward' | 'nextSong' | 'previousSong'
 
 interface IPlayerGlobalShortcuts {
   togglePlayPause: string
@@ -684,6 +684,8 @@ interface ISettingConfig {
   showIdleAnalysisStatus?: boolean
   // Beat This BPM 候选范围；用户选择的范围决定半速/倍速解释。
   analysisBpmRange?: AnalysisBpmRangePresetId
+  // 网格分析模式：normal（现有 120 秒固定网格，默认）/ dynamic（全曲分段网格，实验）。
+  analysisGridMode?: AnalysisGridMode
   // 首次/补缺分析弹窗勾选（Key、网格、波形、能量、段落）。
   trackAnalysisSelection?: TrackReanalysisUserSelection
   // 重新分析弹窗勾选（Key、网格、波形、能量、段落）。

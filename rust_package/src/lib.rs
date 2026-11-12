@@ -99,6 +99,8 @@ pub struct DecodeAudioResult {
   pub channels: u8,
   /// 总帧数
   pub total_frames: f64,
+  /// 实际输出起点（相对可听音频起点，秒）；仅 native PCM 分块解码提供
+  pub actual_start_sec: Option<f64>,
   /// 解码后端（symphonia / ffmpeg / ffmpeg-fallback）
   pub decoder_backend: Option<String>,
   /// 错误描述（当解码失败时）
@@ -266,6 +268,7 @@ pub fn decode_audio_file(file_path: String) -> DecodeAudioResult {
         sample_rate: 0,
         channels: 0,
         total_frames: 0.0,
+        actual_start_sec: None,
         decoder_backend: Some("ffmpeg".to_string()),
         error: Some(format!("FFmpeg 解码失败: {}", ffmpeg_err)),
       },
@@ -290,6 +293,7 @@ pub fn decode_audio_file(file_path: String) -> DecodeAudioResult {
         sample_rate: 0,
         channels: 0,
         total_frames: 0.0,
+        actual_start_sec: None,
         decoder_backend: None,
         error: Some(format!(
           "Symphonia 解码失败: {}; FFmpeg 解码失败: {}",
@@ -315,6 +319,7 @@ pub fn decode_audio_file_native_pcm(
       sample_rate: 0,
       channels: 0,
       total_frames: 0.0,
+      actual_start_sec: None,
       decoder_backend: Some("ffmpeg-native".to_string()),
       error: Some("native PCM 解码采样率无效".to_string()),
     };
@@ -325,6 +330,7 @@ pub fn decode_audio_file_native_pcm(
       sample_rate: 0,
       channels: 0,
       total_frames: 0.0,
+      actual_start_sec: None,
       decoder_backend: Some("ffmpeg-native".to_string()),
       error: Some("native PCM 解码声道数无效".to_string()),
     };
@@ -337,7 +343,7 @@ pub fn decode_audio_file_native_pcm(
     sample_rate,
     channels as u16,
   ) {
-    Ok((pcm_f32, decoded_sample_rate, decoded_channels, _native_ms, _convert_ms)) => {
+    Ok((pcm_f32, decoded_sample_rate, decoded_channels, _native_ms, _convert_ms, actual_start_sec)) => {
       let total_frames = if decoded_channels > 0 {
         pcm_f32.len() as f64 / decoded_channels as f64
       } else {
@@ -348,6 +354,7 @@ pub fn decode_audio_file_native_pcm(
         sample_rate: decoded_sample_rate,
         channels: decoded_channels.min(u8::MAX as u16) as u8,
         total_frames,
+        actual_start_sec: Some(actual_start_sec),
         decoder_backend: Some("ffmpeg-native".to_string()),
         error: None,
       }
@@ -357,6 +364,7 @@ pub fn decode_audio_file_native_pcm(
       sample_rate: 0,
       channels: 0,
       total_frames: 0.0,
+      actual_start_sec: None,
       decoder_backend: Some("ffmpeg-native".to_string()),
       error: Some(error),
     },
@@ -610,6 +618,7 @@ fn decode_audio_to_pcm(mut format: Box<dyn FormatReader>) -> napi::Result<Decode
     sample_rate,
     channels,
     total_frames: total_frames as f64,
+    actual_start_sec: None,
     decoder_backend: None,
     error: None,
   })
@@ -664,6 +673,7 @@ fn decode_with_ffmpeg(path: &Path) -> StdResult<DecodeAudioResult, String> {
     sample_rate: ffmpeg_pcm.sample_rate,
     channels: channels_u8,
     total_frames: ffmpeg_pcm.total_frames as f64,
+    actual_start_sec: Some(ffmpeg_pcm.actual_start_sec),
     decoder_backend: Some("ffmpeg-native".to_string()),
     error: None,
   })

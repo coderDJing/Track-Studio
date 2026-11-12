@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { is } from '@electron-toolkit/utils'
 import {
   cancelKeyAnalysisBackground,
   cancelManualKeyAnalysisBatch,
@@ -13,6 +14,7 @@ import { isInRecordingLibraryAbsPath } from '../recordingLibraryService'
 import { isLibraryMergeMutationLocked } from '../services/libraryMerge/runtime'
 import { shouldEnqueuePlayingAnalysis } from '../services/keyAnalysis/playingQueuePolicy'
 import { normalizeAnalysisBpmRangeId } from '../../shared/analysisBpmRange'
+import { isAnalysisGridMode, isAnalysisGridModeSupported } from '../../shared/analysisGridMode'
 
 type VisibleQueuePayload = {
   analysisAuthority?: 'frkb'
@@ -26,6 +28,8 @@ type ManualBatchPayload = {
   filePaths?: string[]
   titleKey?: string
   analysisBpmRangeId?: string
+  /** 缺失分析弹窗选择的网格模式；缺省时由队列按全局设置解析。 */
+  analysisGridMode?: unknown
   includeStructure?: boolean
   analysisTargets?: {
     key?: boolean
@@ -125,6 +129,15 @@ export function registerKeyAnalysisHandlers() {
       return { batchId: '', queued: 0, blocked: true }
     }
     if (!hasFrkbAnalysisAuthority(payload)) return { batchId: '', queued: 0, blocked: true }
+    const analysisGridMode = isAnalysisGridMode(payload?.analysisGridMode)
+      ? payload.analysisGridMode
+      : undefined
+    if (
+      analysisGridMode === 'dynamic' &&
+      !isAnalysisGridModeSupported(analysisGridMode, { isDevelopment: is.dev })
+    ) {
+      return { batchId: '', queued: 0, blocked: true, reason: 'dynamic-grid-unavailable' }
+    }
     const paths = Array.isArray(payload?.filePaths) ? payload.filePaths : []
     const normalized = paths
       .filter((p) => typeof p === 'string' && p.trim().length > 0)
@@ -132,6 +145,7 @@ export function registerKeyAnalysisHandlers() {
     return enqueueManualKeyAnalysisBatch(normalized, {
       titleKey: typeof payload?.titleKey === 'string' ? payload.titleKey : undefined,
       analysisBpmRangeId: normalizeAnalysisBpmRangeId(payload?.analysisBpmRangeId),
+      analysisGridMode,
       includeStructure: payload?.includeStructure,
       analysisTargets: payload?.analysisTargets
     })

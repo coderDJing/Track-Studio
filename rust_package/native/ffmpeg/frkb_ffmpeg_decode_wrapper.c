@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <math.h>
 
 /* Error codes */
 #define FRKB_ERR_OPEN_INPUT     1
@@ -32,6 +33,11 @@
 #define FRKB_ERR_DECODE         9
 #define FRKB_ERR_INVALID_ARG    10
 #define FRKB_ERR_CANCELLED      11
+
+/* Bounded decoder/resampler warm-up when seeking. MP3 bit reservoir and the
+ * swr filter state need preceding audio; the preroll is decoded but fully
+ * discarded before the audible target. It never applies to start_sec == 0. */
+#define TRANSPORT_PREROLL_SEC 0.5
 
 /* Target output format: interleaved s16, stereo */
 #define TARGET_SAMPLE_FMT AV_SAMPLE_FMT_S16
@@ -166,6 +172,29 @@ static int frame_start_seconds(
     if (pts == AV_NOPTS_VALUE) return 0;
     *frame_start_sec = (double)pts * av_q2d(stream->time_base);
     return 1;
+}
+
+/**
+ * Stream timestamps are relative to the container/encoder origin, while the
+ * public start_sec contract is relative to the first audible sample. MP3 with
+ * LAME gapless metadata (and similar containers) exposes that origin through
+ * stream.start_time; the demuxer/decoder needs it added before seeking and
+ * before comparing frame PTS with the requested position. Only positive
+ * origins are used, matching probe_audio_time_basis_offset_ms.
+ */
+static double resolve_audio_origin_seconds(
+    AVFormatContext *fmt_ctx,
+    AVStream *stream)
+{
+    if (stream && stream->start_time != AV_NOPTS_VALUE) {
+        double origin_sec = (double)stream->start_time * av_q2d(stream->time_base);
+        return (isfinite(origin_sec) && origin_sec > 0.0) ? origin_sec : 0.0;
+    }
+    if (fmt_ctx && fmt_ctx->start_time != AV_NOPTS_VALUE) {
+        double origin_sec = (double)fmt_ctx->start_time / (double)AV_TIME_BASE;
+        return (isfinite(origin_sec) && origin_sec > 0.0) ? origin_sec : 0.0;
+    }
+    return 0.0;
 }
 
 static int decode_should_cancel(void *cancel_opaque, int (*should_cancel)(void *))
@@ -331,6 +360,7 @@ int frkb_ffmpeg_transport_decode(
     size_t *sample_count_out,
     int *sample_rate_out,
     int *channels_out,
+    double *actual_start_sec_out,
     void *cancel_opaque,
     int (*should_cancel)(void *cancel_opaque))
 {
@@ -341,6 +371,7 @@ int frkb_ffmpeg_transport_decode(
     *sample_count_out = 0;
     *sample_rate_out = 0;
     *channels_out = 0;
+    if (actual_start_sec_out) *actual_start_sec_out = 0.0;
 
     if (start_sec < 0.0) start_sec = 0.0;
 
@@ -354,9 +385,19 @@ int frkb_ffmpeg_transport_decode(
     }
 
     AVStream *stream = ctx.fmt_ctx->streams[ctx.audio_stream_idx];
+    const double origin_sec = resolve_audio_origin_seconds(ctx.fmt_ctx, stream);
+    const double audible_target_sec = start_sec > 0.0 ? start_sec + origin_sec : 0.0;
+    double decode_start_sec = 0.0;
     if (start_sec > 0.0) {
+        decode_start_sec = audible_target_sec - TRANSPORT_PREROLL_SEC;
+        if (decode_start_sec < origin_sec) decode_start_sec = origin_sec;
+        if (decode_start_sec < 0.0) decode_start_sec = 0.0;
+        /* Seeking to the very beginning adds nothing; decode from it instead. */
+        if (decode_start_sec <= origin_sec + 1e-6) decode_start_sec = 0.0;
+    }
+    if (decode_start_sec > 0.0) {
         int64_t seek_ts = av_rescale_q(
-            (int64_t)(start_sec * AV_TIME_BASE),
+            (int64_t)(decode_start_sec * AV_TIME_BASE),
             AV_TIME_BASE_Q,
             stream->time_base);
         ret = av_seek_frame(ctx.fmt_ctx, ctx.audio_stream_idx, seek_ts, AVSEEK_FLAG_BACKWARD);
@@ -377,6 +418,7 @@ int frkb_ffmpeg_transport_decode(
         : INT64_MAX;
     int64_t written_frames = 0;
     int reached_limit = 0;
+    int captured_actual_start = 0;
 
     AVPacket *pkt = av_packet_alloc();
     AVFrame *frame = av_frame_alloc();
@@ -465,7 +507,7 @@ int frkb_ffmpeg_transport_decode(
             if (start_sec > 0.0) {
                 double current_frame_start_sec = 0.0;
                 if (frame_start_seconds(frame, stream, &current_frame_start_sec)) {
-                    double delta_sec = start_sec - current_frame_start_sec;
+                    double delta_sec = audible_target_sec - current_frame_start_sec;
                     if (delta_sec > 0.0) {
                         skip_frames = (int)(delta_sec * ctx.out_sample_rate + 0.5);
                         if (skip_frames >= converted) {
@@ -486,6 +528,24 @@ int frkb_ffmpeg_transport_decode(
             if ((int64_t)take_frames > remaining_frames) {
                 take_frames = (int)remaining_frames;
                 reached_limit = 1;
+            }
+            if (!captured_actual_start && take_frames > 0 && actual_start_sec_out) {
+                double frame_start_sec = audible_target_sec;
+                int has_frame_start = frame_start_seconds(frame, stream, &frame_start_sec);
+                if (start_sec > 0.0 && !has_frame_start) {
+                    /* Preroll cannot be trimmed without timestamps; fail closed
+                     * instead of returning audio earlier than requested. */
+                    ret = FRKB_ERR_DECODE;
+                    goto finish_transport;
+                }
+                double audible_start_sec = 0.0;
+                if (start_sec > 0.0) {
+                    audible_start_sec =
+                        (has_frame_start ? frame_start_sec : audible_target_sec) - origin_sec
+                        + (double)skip_frames / (double)ctx.out_sample_rate;
+                }
+                *actual_start_sec_out = audible_start_sec < 0.0 ? 0.0 : audible_start_sec;
+                captured_actual_start = 1;
             }
 
             const int16_t *source = buf + ((size_t)skip_frames * ctx.out_channels);
@@ -550,6 +610,21 @@ int frkb_ffmpeg_transport_decode(
                 if ((int64_t)take_frames > remaining_frames) {
                     take_frames = (int)remaining_frames;
                     reached_limit = 1;
+                }
+                if (!captured_actual_start && take_frames > 0 && actual_start_sec_out) {
+                    double frame_start_sec = audible_target_sec;
+                    int has_frame_start = frame_start_seconds(frame, stream, &frame_start_sec);
+                    if (start_sec > 0.0 && !has_frame_start) {
+                        ret = FRKB_ERR_DECODE;
+                        goto finish_transport;
+                    }
+                    double audible_start_sec = 0.0;
+                    if (start_sec > 0.0) {
+                        audible_start_sec =
+                            (has_frame_start ? frame_start_sec : audible_target_sec) - origin_sec;
+                    }
+                    *actual_start_sec_out = audible_start_sec < 0.0 ? 0.0 : audible_start_sec;
+                    captured_actual_start = 1;
                 }
                 ret = append_i16_samples(
                     &samples,

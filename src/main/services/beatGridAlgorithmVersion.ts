@@ -1,6 +1,6 @@
 import type { BeatGridStatus } from '../../types/globals'
 
-export const CURRENT_BEAT_GRID_ALGORITHM_VERSION = 9
+export const CURRENT_BEAT_GRID_ALGORITHM_VERSION = 10
 export const BEAT_GRID_STATUS_NO_BPM: BeatGridStatus = 'no-bpm'
 
 export const normalizeBeatGridAlgorithmVersion = (value: unknown) => {

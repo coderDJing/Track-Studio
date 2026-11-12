@@ -49,3 +49,36 @@ export function terminateRegisteredChildProcesses(): void {
     removeRegisteredChild(entry)
   }
 }
+
+/**
+ * 精确 PID 终止：只用于本应用自己 spawn、并由 worker 上报过的 sidecar。
+ *
+ * 主进程没有该 ChildProcess 句柄（它属于 worker），因此只按“我方记录过的精确 PID”
+ * 终止单个进程树，绝不按名称/全局模式批量杀 python/node。
+ */
+export function terminateOwnedPidExact(pid: number, label = 'owned-sidecar'): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false
+  if (process.platform === 'win32') {
+    try {
+      const result = childProcess.spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], {
+        windowsHide: true,
+        stdio: 'ignore'
+      })
+      return result.status === 0
+    } catch (error) {
+      log.error('[process] terminate owned pid failed', { label, pid, error })
+      return false
+    }
+  }
+  try {
+    process.kill(pid, 'SIGTERM')
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | null)?.code
+    // 进程已退出时视为已清理，不再重复处理。
+    if (code !== 'ESRCH') {
+      log.error('[process] terminate owned pid failed', { label, pid, error })
+    }
+    return false
+  }
+}

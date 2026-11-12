@@ -26,9 +26,13 @@ export const IGNORED_SONG_LIST_REFRESH_DIFF_FIELDS: ReadonlySet<string> = new Se
   'bpm',
   'beatGridMap',
   'beatGridStatus',
+  'beatGridAnalysisMode',
+  'beatGridResultShape',
+  'beatGridPolicyVersion',
   'energyScore',
   'energyAlgorithmVersion',
   'energyAnalysis',
+  'energySourceGridSignature',
   'songStructure'
 ])
 
@@ -124,11 +128,19 @@ export function createSongListItemComparator(
       normalizeComparableNumber(right.beatGridAlgorithmVersion) &&
     normalizeComparableText(left.beatGridStatus) ===
       normalizeComparableText(right.beatGridStatus) &&
+    normalizeComparableText(left.beatGridAnalysisMode) ===
+      normalizeComparableText(right.beatGridAnalysisMode) &&
+    normalizeComparableText(left.beatGridResultShape) ===
+      normalizeComparableText(right.beatGridResultShape) &&
+    normalizeComparableText(left.beatGridPolicyVersion) ===
+      normalizeComparableText(right.beatGridPolicyVersion) &&
     normalizeComparableNumber(left.energyScore) === normalizeComparableNumber(right.energyScore) &&
     normalizeComparableNumber(left.energyAlgorithmVersion) ===
       normalizeComparableNumber(right.energyAlgorithmVersion) &&
     normalizeComparableJson(left.energyAnalysis) ===
       normalizeComparableJson(right.energyAnalysis) &&
+    normalizeComparableText(left.energySourceGridSignature) ===
+      normalizeComparableText(right.energySourceGridSignature) &&
     normalizeComparableSongStructure(left.songStructure) ===
       normalizeComparableSongStructure(right.songStructure) &&
     normalizeComparableNumber(left.timeBasisOffsetMs) ===
@@ -237,8 +249,12 @@ export function createSongListItemComparator(
     }
     pushIfNumberDiff('beatGridAlgorithmVersion')
     pushIfTextDiff('beatGridStatus')
+    pushIfTextDiff('beatGridAnalysisMode')
+    pushIfTextDiff('beatGridResultShape')
+    pushIfTextDiff('beatGridPolicyVersion')
     pushIfNumberDiff('energyScore')
     pushIfNumberDiff('energyAlgorithmVersion')
+    pushIfTextDiff('energySourceGridSignature')
     if (
       normalizeComparableJson(left.energyAnalysis) !== normalizeComparableJson(right.energyAnalysis)
     ) {

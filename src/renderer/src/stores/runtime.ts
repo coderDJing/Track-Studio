@@ -447,6 +447,7 @@ export const useRuntimeStore = defineStore('runtime', {
         keyDisplayStyle: 'Classic',
         browserPlayerRightTrackInfo: DEFAULT_BROWSER_PLAYER_RIGHT_TRACK_INFO,
         analysisBpmRange: '70-180',
+        analysisGridMode: 'normal',
         trackAnalysisSelection: {
           key: true,
           beatGrid: true,

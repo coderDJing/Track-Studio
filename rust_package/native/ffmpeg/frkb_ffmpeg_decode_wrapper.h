@@ -29,8 +29,14 @@ int frkb_ffmpeg_chromaprint_generate(
  * 使用 FFmpeg libav* 直接解码横向浏览播放器所需的音频片段。
  * 输出格式刻意对齐现有 CLI 路径：交错 s16le、target_sample_rate Hz、target_channels 声道。
  *
+ * start_sec 契约：相对“第一份可听音频样本”的秒数，而不是容器/编码时间戳。
+ * wrapper 会用 stream/format 的正 start_time 与 skip_samples 把请求位置换算到
+ * 流时间戳，并返回第一份实际输出样本的可听起点，调用方可校验坐标。
+ * 非零 start_sec 会先做有界 preroll（TRANSPORT_PREROLL_SEC）恢复解码器/重采样器
+ * 状态，preroll 样本全部丢弃，不进入输出；start_sec == 0 不做 preroll。
+ *
  * @param file_path             音频文件路径。
- * @param start_sec             开始位置，单位秒。
+ * @param start_sec             开始位置，单位秒（相对可听音频起点）。
  * @param max_duration_sec      最大解码时长，0 表示不限。
  * @param target_sample_rate    输出采样率，0 表示保留源采样率；transport 通常为 44100。
  * @param target_channels       输出声道数，0 表示按源声道保留 mono/stereo；transport 通常为 2。
@@ -38,6 +44,7 @@ int frkb_ffmpeg_chromaprint_generate(
  * @param sample_count_out      接收 i16 样本数，不是帧数。
  * @param sample_rate_out       接收输出采样率。
  * @param channels_out          接收输出声道数。
+ * @param actual_start_sec_out  接收第一份输出样本的可听起点秒数；可为 NULL。
  * @return 成功返回 0，失败返回非 0 错误码。
  */
 int frkb_ffmpeg_transport_decode(
@@ -50,6 +57,7 @@ int frkb_ffmpeg_transport_decode(
     size_t *sample_count_out,
     int *sample_rate_out,
     int *channels_out,
+    double *actual_start_sec_out,
     void *cancel_opaque,
     int (*should_cancel)(void *cancel_opaque)
 );

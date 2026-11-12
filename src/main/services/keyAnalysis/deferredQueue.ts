@@ -9,11 +9,16 @@ import {
   resolveAnalysisBpmRange,
   type AnalysisBpmRangePresetId
 } from '../../../shared/analysisBpmRange'
+import type { AnalysisGridMode } from '../../../shared/analysisGridMode'
 import {
   hasAnyKeyAnalysisTarget,
   hasUncoveredForcedReanalysisTarget,
   normalizeKeyAnalysisTargets
 } from './analysisTargets'
+import {
+  requiresAnalysisGridModeFollowUp,
+  resolveRequestedAnalysisGridMode
+} from './queueJobOptions'
 
 type DeferredRequestOptions = KeyAnalysisRequestFlags & {
   fastAnalysis?: boolean
@@ -22,6 +27,7 @@ type DeferredRequestOptions = KeyAnalysisRequestFlags & {
   waveformOnly?: boolean
   includeStructure?: boolean
   analysisBpmRangeId?: AnalysisBpmRangePresetId
+  analysisGridMode?: AnalysisGridMode
 }
 
 type DeferredQueueHelpers = {
@@ -35,6 +41,8 @@ type DeferredQueueHelpers = {
   addFocusSlotToJob: (job: KeyAnalysisJob, focusSlot?: string) => void
   removeManualBatchIdFromJob: (job: KeyAnalysisJob, batchId: string) => boolean
   isManualOnlyJob: (job: KeyAnalysisJob) => boolean
+  resolveGridMode: (fallback?: unknown) => AnalysisGridMode
+  nextGridRequestGeneration: (normalizedPath: string) => number
 }
 
 export class KeyAnalysisDeferredQueue {
@@ -70,7 +78,13 @@ export class KeyAnalysisDeferredQueue {
     const requiresForcedAnalysisUpgrade =
       (options.forceAnalysis === true && active.forceAnalysis !== true) ||
       hasUncoveredForcedReanalysisTarget(active, options)
-    return requiresStructureUpgrade || requiresFullAnalysisUpgrade || requiresForcedAnalysisUpgrade
+    const requiresGridModeUpgrade = requiresAnalysisGridModeFollowUp(active, options)
+    return (
+      requiresStructureUpgrade ||
+      requiresFullAnalysisUpgrade ||
+      requiresForcedAnalysisUpgrade ||
+      requiresGridModeUpgrade
+    )
   }
 
   defer(
@@ -84,6 +98,14 @@ export class KeyAnalysisDeferredQueue {
   ) {
     const existing = this.jobsByPath.get(active.normalizedPath)
     if (existing) {
+      if (requiresAnalysisGridModeFollowUp(existing, options)) {
+        // 最新显式模式优先，但复用同一个等待任务：原有 batch / focus / 优先级全部保留。
+        const requestedMode = resolveRequestedAnalysisGridMode(options.analysisGridMode)
+        if (requestedMode) {
+          existing.analysisGridMode = requestedMode
+          existing.gridRequestGeneration = helpers.nextGridRequestGeneration(active.normalizedPath)
+        }
+      }
       if (helpers.isHigherPriority(priority, existing.priority)) {
         existing.priority = priority
         existing.source = source
@@ -99,7 +121,29 @@ export class KeyAnalysisDeferredQueue {
       return
     }
 
-    const deferred: KeyAnalysisJob = {
+    const deferred = this.buildDeferredJob(
+      active,
+      priority,
+      source,
+      options,
+      focusSlot,
+      manualBatchIds,
+      helpers
+    )
+    this.jobsByPath.set(active.normalizedPath, deferred)
+  }
+
+  private buildDeferredJob(
+    active: KeyAnalysisJob,
+    priority: KeyAnalysisPriority,
+    source: KeyAnalysisSource,
+    options: DeferredRequestOptions,
+    focusSlot: string,
+    manualBatchIds: string[],
+    helpers: DeferredQueueHelpers
+  ): KeyAnalysisJob {
+    const explicitMode = resolveRequestedAnalysisGridMode(options.analysisGridMode)
+    const job: KeyAnalysisJob = {
       jobId: helpers.nextJobId(),
       filePath: active.filePath,
       normalizedPath: active.normalizedPath,
@@ -114,12 +158,18 @@ export class KeyAnalysisDeferredQueue {
         options.analysisBpmRangeId,
         active.analysisBpmRange?.id
       ),
+      analysisGridMode: explicitMode
+        ? explicitMode
+        : helpers.resolveGridMode(active.analysisGridMode),
+      gridRequestGeneration: helpers.nextGridRequestGeneration(active.normalizedPath),
       forceAnalysis: options.forceAnalysis === true,
       analysisTargets: normalizeKeyAnalysisTargets(options.analysisTargets),
       manualBatchIds: manualBatchIds.length ? manualBatchIds : undefined
     }
-    helpers.addFocusSlotToJob(deferred, focusSlot)
-    this.jobsByPath.set(active.normalizedPath, deferred)
+    helpers.addFocusSlotToJob(job, focusSlot)
+    helpers.applyWaveformOnlyOption(job, options.waveformOnly)
+    helpers.applyQueueCategory(job, options.category)
+    return job
   }
 
   promote(

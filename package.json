@@ -1,6 +1,6 @@
 {
   "name": "frkb",
-  "version": "1.2.8-rc.202611122325",
+  "version": "1.2.8-rc.202611130002",
   "packageManager": "pnpm@9.15.9",
   "description": "Track Studio — Rapid Audio Organization Tool",
   "license": "PolyForm-Noncommercial-1.0.0",
@@ -28,6 +28,10 @@
       {
         "from": "scripts/beat_this_bridge.py",
         "to": "demucs/bootstrap/beat_this_bridge.py"
+      },
+      {
+        "from": "scripts/beat_this_dynamic_windows.py",
+        "to": "demucs/bootstrap/beat_this_dynamic_windows.py"
       },
       {
         "from": "scripts/beat_this_grid_solver.py",

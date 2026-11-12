@@ -17,6 +17,7 @@ extern "C" {
     sample_count_out: *mut usize,
     sample_rate_out: *mut c_int,
     channels_out: *mut c_int,
+    actual_start_sec_out: *mut c_double,
     cancel_opaque: *mut c_void,
     should_cancel: Option<unsafe extern "C" fn(*mut c_void) -> c_int>,
   ) -> c_int;
@@ -40,6 +41,7 @@ pub(crate) struct FfmpegPcmData {
   pub(crate) sample_rate: u32,
   pub(crate) channels: u16,
   pub(crate) total_frames: u64,
+  pub(crate) actual_start_sec: f64,
 }
 
 #[derive(Debug)]
@@ -112,6 +114,7 @@ where
   let mut sample_count: usize = 0;
   let mut sample_rate: c_int = 0;
   let mut channels: c_int = 0;
+  let mut actual_start_sec: c_double = 0.0;
 
   let native_started_at = Instant::now();
   let rc = unsafe {
@@ -125,6 +128,7 @@ where
       &mut sample_count,
       &mut sample_rate,
       &mut channels,
+      &mut actual_start_sec,
       &should_cancel as *const F as *mut c_void,
       Some(cancel_trampoline::<F>),
     )
@@ -169,6 +173,7 @@ where
       sample_rate: sample_rate as u32,
       channels: channels as u16,
       total_frames,
+      actual_start_sec,
     },
     native_ms,
   )))
@@ -198,7 +203,7 @@ pub(crate) fn ffmpeg_decode_native_f32(
   max_duration_sec: Option<f64>,
   target_sample_rate: u32,
   target_channels: u16,
-) -> StdResult<(Vec<f32>, u32, u16, f64, f64), String> {
+) -> StdResult<(Vec<f32>, u32, u16, f64, f64, f64), String> {
   ffmpeg_decode_native_f32_cancellable(
     path,
     start_sec,
@@ -217,7 +222,7 @@ pub(crate) fn ffmpeg_decode_native_f32_cancellable<F>(
   target_sample_rate: u32,
   target_channels: u16,
   should_cancel: F,
-) -> StdResult<Option<(Vec<f32>, u32, u16, f64, f64)>, String>
+) -> StdResult<Option<(Vec<f32>, u32, u16, f64, f64, f64)>, String>
 where
   F: Fn() -> bool,
 {
@@ -245,6 +250,7 @@ where
     decoded.channels,
     native_ms,
     convert_ms,
+    decoded.actual_start_sec,
   )))
 }
 
@@ -266,7 +272,7 @@ pub(crate) fn ffmpeg_decode_transport_native_cancellable<F>(
 where
   F: Fn() -> bool,
 {
-  let Some((samples_f32, sample_rate, channels, native_ms, convert_ms)) =
+  let Some((samples_f32, sample_rate, channels, native_ms, convert_ms, _actual_start_sec)) =
     ffmpeg_decode_native_f32_cancellable(
       path,
       start_sec,

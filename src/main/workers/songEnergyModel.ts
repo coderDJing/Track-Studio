@@ -9,16 +9,25 @@ import {
   type SongEnergyCurveRole,
   type SongEnergyScorePayload
 } from '../../shared/songEnergy'
+import {
+  createSongBeatGridRuntimeV2,
+  normalizeSongBeatGridMapV2,
+  type SongBeatGridMapV2
+} from '../../shared/songBeatGridMapV2'
 
-export const SONG_ENERGY_MODEL_SAMPLE_RATE = 16000
-export const SONG_ENERGY_MODEL_CHANNELS = 1
+import {
+  buildSongEnergyMelFrames,
+  FFT_HALF_SIZE,
+  FFT_SIZE,
+  FRAME_HOP_SIZE,
+  MEL_BAND_COUNT,
+  PATCH_FRAME_COUNT,
+  SONG_ENERGY_MODEL_CHANNELS,
+  SONG_ENERGY_MODEL_SAMPLE_RATE
+} from './songEnergyMel'
 
-const FFT_SIZE = 512
-const FFT_HALF_SIZE = FFT_SIZE / 2
-const SPECTRUM_SIZE = FFT_HALF_SIZE + 1
-const FRAME_HOP_SIZE = 256
-const MEL_BAND_COUNT = 96
-const PATCH_FRAME_COUNT = 187
+export { SONG_ENERGY_MODEL_CHANNELS, SONG_ENERGY_MODEL_SAMPLE_RATE, buildSongEnergyMelFrames }
+
 const PATCH_HOP_FRAMES = 93
 const SUSTAINED_WINDOW_SECONDS = 24
 const SUSTAINED_WINDOW_PATCHES = Math.max(
@@ -43,11 +52,6 @@ const EMBEDDING_OUTPUT = 'embeddings'
 const AROUSAL_INPUT = 'model/Placeholder:0'
 const AROUSAL_OUTPUT = 'model/Identity:0'
 
-type MelFilter = {
-  startBin: number
-  coefficients: Float64Array
-}
-
 type SongEnergyModelSessions = {
   embedding: ort.InferenceSession
   deam: ort.InferenceSession
@@ -59,74 +63,6 @@ export type SongEnergyModelResult = SongEnergyScorePayload & {
 }
 
 let modelSessionsPromise: Promise<SongEnergyModelSessions> | null = null
-
-const hannWindow = Float64Array.from(
-  { length: FFT_SIZE },
-  (_, index) => 0.5 * (1 - Math.cos((2 * Math.PI * index) / (FFT_SIZE - 1)))
-)
-
-const bitReversedIndices = (() => {
-  const result = new Uint16Array(FFT_SIZE)
-  const bitCount = Math.log2(FFT_SIZE)
-  for (let index = 0; index < FFT_SIZE; index += 1) {
-    let source = index
-    let reversed = 0
-    for (let bit = 0; bit < bitCount; bit += 1) {
-      reversed = (reversed << 1) | (source & 1)
-      source >>= 1
-    }
-    result[index] = reversed
-  }
-  return result
-})()
-
-const hzToSlaneyMel = (frequency: number) => {
-  const linearStep = 200 / 3
-  if (frequency < 1000) return frequency / linearStep
-  const minimumLogMel = 1000 / linearStep
-  const logStep = Math.log(6.4) / 27
-  return minimumLogMel + Math.log(frequency / 1000) / logStep
-}
-
-const slaneyMelToHz = (mel: number) => {
-  const linearStep = 200 / 3
-  const minimumLogMel = 1000 / linearStep
-  if (mel < minimumLogMel) return mel * linearStep
-  const logStep = Math.log(6.4) / 27
-  return 1000 * Math.exp(logStep * (mel - minimumLogMel))
-}
-
-const melFilters = (() => {
-  const pointCount = MEL_BAND_COUNT + 2
-  const maximumMel = hzToSlaneyMel(SONG_ENERGY_MODEL_SAMPLE_RATE / 2)
-  const frequencies = Float64Array.from({ length: pointCount }, (_, index) =>
-    slaneyMelToHz((index * maximumMel) / (pointCount - 1))
-  )
-
-  const filters: MelFilter[] = []
-  for (let bandIndex = 0; bandIndex < MEL_BAND_COUNT; bandIndex += 1) {
-    const left = frequencies[bandIndex]
-    const center = frequencies[bandIndex + 1]
-    const right = frequencies[bandIndex + 2]
-    const startBin = Math.max(0, Math.ceil((left * FFT_SIZE) / SONG_ENERGY_MODEL_SAMPLE_RATE))
-    const endBin = Math.min(
-      SPECTRUM_SIZE - 1,
-      Math.floor((right * FFT_SIZE) / SONG_ENERGY_MODEL_SAMPLE_RATE)
-    )
-    const coefficients = new Float64Array(Math.max(0, endBin - startBin + 1))
-    const slaneyNormalization = 2 / (right - left)
-    for (let bin = startBin; bin <= endBin; bin += 1) {
-      const frequency = (bin * SONG_ENERGY_MODEL_SAMPLE_RATE) / FFT_SIZE
-      const triangle =
-        frequency <= center
-          ? (frequency - left) / (center - left)
-          : (right - frequency) / (right - center)
-      coefficients[bin - startBin] = Math.max(0, triangle) * slaneyNormalization
-    }
-    filters.push({ startBin, coefficients })
-  }
-  return filters
-})()
 
 const toFloat32Samples = (value: ArrayBuffer | ArrayBufferView): Float32Array => {
   if (value instanceof Float32Array) return value
@@ -172,74 +108,6 @@ const normalizeEnergyInputLevel = (samples: Float32Array) => {
   if (Math.abs(safeGain - 1) < 0.01) return { samples, loudnessDb, truePeakDb }
   const normalized = Float32Array.from(samples, (sample) => sample * safeGain)
   return { samples: normalized, loudnessDb, truePeakDb }
-}
-
-const transformRealFft = (real: Float64Array, imaginary: Float64Array) => {
-  for (let index = 0; index < FFT_SIZE; index += 1) {
-    const reversedIndex = bitReversedIndices[index]
-    if (reversedIndex <= index) continue
-    const realValue = real[index]
-    real[index] = real[reversedIndex]
-    real[reversedIndex] = realValue
-  }
-
-  for (let size = 2; size <= FFT_SIZE; size *= 2) {
-    const halfSize = size / 2
-    const angle = (-2 * Math.PI) / size
-    const phaseStepReal = Math.cos(angle)
-    const phaseStepImaginary = Math.sin(angle)
-    for (let start = 0; start < FFT_SIZE; start += size) {
-      let phaseReal = 1
-      let phaseImaginary = 0
-      for (let offset = 0; offset < halfSize; offset += 1) {
-        const evenIndex = start + offset
-        const oddIndex = evenIndex + halfSize
-        const oddReal = real[oddIndex] * phaseReal - imaginary[oddIndex] * phaseImaginary
-        const oddImaginary = real[oddIndex] * phaseImaginary + imaginary[oddIndex] * phaseReal
-        const evenReal = real[evenIndex]
-        const evenImaginary = imaginary[evenIndex]
-        real[evenIndex] = evenReal + oddReal
-        imaginary[evenIndex] = evenImaginary + oddImaginary
-        real[oddIndex] = evenReal - oddReal
-        imaginary[oddIndex] = evenImaginary - oddImaginary
-        const nextPhaseReal = phaseReal * phaseStepReal - phaseImaginary * phaseStepImaginary
-        phaseImaginary = phaseReal * phaseStepImaginary + phaseImaginary * phaseStepReal
-        phaseReal = nextPhaseReal
-      }
-    }
-  }
-}
-
-export const buildSongEnergyMelFrames = (samples: Float32Array) => {
-  const frameCount = Math.floor(samples.length / FRAME_HOP_SIZE) + 1
-  const frames = new Float32Array(frameCount * MEL_BAND_COUNT)
-  const real = new Float64Array(FFT_SIZE)
-  const imaginary = new Float64Array(FFT_SIZE)
-  const powerSpectrum = new Float64Array(SPECTRUM_SIZE)
-
-  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
-    const sampleStart = frameIndex * FRAME_HOP_SIZE - FFT_HALF_SIZE
-    for (let index = 0; index < FFT_SIZE; index += 1) {
-      const sample = samples[sampleStart + index] ?? 0
-      real[index] = (Number.isFinite(sample) ? sample : 0) * hannWindow[index]
-      imaginary[index] = 0
-    }
-    transformRealFft(real, imaginary)
-    for (let bin = 0; bin < SPECTRUM_SIZE; bin += 1) {
-      powerSpectrum[bin] = real[bin] * real[bin] + imaginary[bin] * imaginary[bin]
-    }
-
-    const outputOffset = frameIndex * MEL_BAND_COUNT
-    for (let bandIndex = 0; bandIndex < MEL_BAND_COUNT; bandIndex += 1) {
-      const filter = melFilters[bandIndex]
-      let melPower = 0
-      for (let index = 0; index < filter.coefficients.length; index += 1) {
-        melPower += powerSpectrum[filter.startBin + index] * filter.coefficients[index]
-      }
-      frames[outputOffset + bandIndex] = Math.log10(1 + 10000 * Math.max(0, melPower))
-    }
-  }
-  return { frames, frameCount }
 }
 
 const calculatePatchRms = (samples: Float32Array, patchStartFrame: number) => {
@@ -538,6 +406,72 @@ const buildSongEnergyBeatValues = (params: {
   return beatValues.length >= 32 ? beatValues : null
 }
 
+export type SongEnergyBeatLine = {
+  sec: number
+  beatOrdinal: number
+}
+
+/**
+ * Dynamic 网格：按完整 audio 拍线（ordinal）分桶，而不是用单一 BPM 反推节拍序号。
+ * 帧时间单调递增，因此游标只需单向推进。
+ */
+export const buildSongEnergyBeatValuesFromLines = (params: {
+  frameRms: readonly number[]
+  lowBandRatios: readonly number[]
+  beatLines: readonly SongEnergyBeatLine[]
+}): SongEnergyBeatValue[] | null => {
+  const beatLines = params.beatLines
+  if (beatLines.length < 2) return null
+  if (params.frameRms.length <= 0 || params.lowBandRatios.length !== params.frameRms.length) {
+    return null
+  }
+  const beatBuckets = new Map<number, { rms: number; low: number; count: number }>()
+  let cursor = 0
+  for (let frameIndex = 0; frameIndex < params.frameRms.length; frameIndex += 1) {
+    const frameSeconds = (frameIndex * FRAME_HOP_SIZE) / SONG_ENERGY_MODEL_SAMPLE_RATE
+    if (frameSeconds < beatLines[0].sec) continue
+    while (cursor + 1 < beatLines.length && beatLines[cursor + 1].sec <= frameSeconds) {
+      cursor += 1
+    }
+    const beatOrdinal = beatLines[cursor].beatOrdinal
+    const bucket = beatBuckets.get(beatOrdinal) || { rms: 0, low: 0, count: 0 }
+    bucket.rms += params.frameRms[frameIndex]
+    bucket.low += params.lowBandRatios[frameIndex]
+    bucket.count += 1
+    beatBuckets.set(beatOrdinal, bucket)
+  }
+  const beatValues = Array.from(beatBuckets.entries())
+    .sort(([left], [right]) => left - right)
+    .map(([beatIndex, bucket]) => ({
+      beatIndex,
+      rms: bucket.rms / Math.max(1, bucket.count),
+      low: bucket.low / Math.max(1, bucket.count)
+    }))
+  return beatValues.length >= 32 ? beatValues : null
+}
+
+export const buildSongEnergyBeatLinesFromMap = (
+  beatGridMapAudio: unknown,
+  durationAudioSec: number
+): SongEnergyBeatLine[] | null => {
+  const map = normalizeSongBeatGridMapV2(beatGridMapAudio, { allowSingleClip: true })
+  if (!map || !Number.isFinite(durationAudioSec) || durationAudioSec <= 0) return null
+  const runtime = createSongBeatGridRuntimeV2(map, durationAudioSec)
+  if (!runtime) return null
+  const beatLines = runtime.lines.map((line) => ({ sec: line.sec, beatOrdinal: line.beatOrdinal }))
+  return beatLines.length >= 2 ? beatLines : null
+}
+
+export const resolveSongEnergyMapBpm = (beatGridMapAudio: unknown): number | undefined => {
+  const map: SongBeatGridMapV2 | null = normalizeSongBeatGridMapV2(beatGridMapAudio, {
+    allowSingleClip: true
+  })
+  if (!map) return undefined
+  const values = map.clips.map((clip) => clip.bpm).filter((bpm) => Number.isFinite(bpm) && bpm > 0)
+  if (!values.length) return undefined
+  return values.sort((left, right) => left - right)[Math.floor(values.length / 2)]
+}
+
 const summarizeBeatPhraseTransitions = (params: {
   beatValues: readonly SongEnergyBeatValue[]
   phraseSize?: number
@@ -785,7 +719,7 @@ export const summarizeSongEnergyTemporalSegments = (
   }
 }
 
-const buildSongEnergyTemporalSegments = (params: {
+export const buildSongEnergyTemporalSegments = (params: {
   modelScores: readonly number[]
   patchStarts: readonly number[]
   frameRms: readonly number[]
@@ -793,6 +727,7 @@ const buildSongEnergyTemporalSegments = (params: {
   lowBandRatios: readonly number[]
   bpm?: number
   firstBeatMs?: number
+  beatLines?: readonly SongEnergyBeatLine[]
 }) => {
   if (params.modelScores.length <= 0 || params.modelScores.length !== params.patchStarts.length) {
     return []
@@ -812,12 +747,7 @@ const buildSongEnergyTemporalSegments = (params: {
   const lowBandLow = percentileNumber(params.lowBandRatios, 0.2)
   const lowBandHigh = Math.max(lowBandLow + 1e-5, percentileNumber(params.lowBandRatios, 0.85))
   const segments: SongEnergyTemporalSegment[] = []
-  for (
-    let startSeconds = segmentStart;
-    startSeconds < durationSeconds;
-    startSeconds += segmentSeconds
-  ) {
-    const endSeconds = Math.min(durationSeconds, startSeconds + segmentSeconds)
+  const appendSegment = (startSeconds: number, endSeconds: number) => {
     const modelValues: number[] = []
     for (let index = 0; index < params.patchStarts.length; index += 1) {
       const patchCenterSeconds =
@@ -841,7 +771,7 @@ const buildSongEnergyTemporalSegments = (params: {
     const rmsValues = params.frameRms.slice(firstFrame, lastFrame)
     const fluxValues = params.frameFlux.slice(firstFrame, lastFrame)
     const lowBandValues = params.lowBandRatios.slice(firstFrame, lastFrame)
-    if (modelValues.length <= 0 || rmsValues.length <= 0) continue
+    if (modelValues.length <= 0 || rmsValues.length <= 0) return
     const localRms = mean(rmsValues)
     const localFlux = percentileNumber(fluxValues, 0.8)
     const localLowBand = mean(lowBandValues)
@@ -856,6 +786,23 @@ const buildSongEnergyTemporalSegments = (params: {
       )
     })
   }
+  const beatLines = params.beatLines
+  if (beatLines && beatLines.length >= 2) {
+    // Dynamic：分析窗口由真实拍线 ordinal 决定，保持 16 拍一段，最后一段对齐曲尾。
+    for (let index = 0; index + 1 < beatLines.length; index += 16) {
+      const startSeconds = beatLines[index].sec
+      const endSeconds = index + 16 < beatLines.length ? beatLines[index + 16].sec : durationSeconds
+      if (endSeconds > startSeconds) appendSegment(startSeconds, endSeconds)
+    }
+  } else {
+    for (
+      let startSeconds = segmentStart;
+      startSeconds < durationSeconds;
+      startSeconds += segmentSeconds
+    ) {
+      appendSegment(startSeconds, Math.min(durationSeconds, startSeconds + segmentSeconds))
+    }
+  }
   return segments
 }
 
@@ -865,6 +812,7 @@ const summarizeAcousticEnergy = (params: {
   frameCount: number
   bpm?: number
   firstBeatMs?: number
+  beatLines?: readonly SongEnergyBeatLine[]
 }) => {
   const frameRms: number[] = []
   const frameFlux: number[] = []
@@ -911,12 +859,15 @@ const summarizeAcousticEnergy = (params: {
               : 100 - ((bpmValue - 175) / 35) * 45
         )
       : 50
-  const beatValues = buildSongEnergyBeatValues({
-    frameRms,
-    lowBandRatios,
-    bpm: params.bpm,
-    firstBeatMs: params.firstBeatMs
-  })
+  const beatValues =
+    params.beatLines && params.beatLines.length >= 2
+      ? buildSongEnergyBeatValuesFromLines({ frameRms, lowBandRatios, beatLines: params.beatLines })
+      : buildSongEnergyBeatValues({
+          frameRms,
+          lowBandRatios,
+          bpm: params.bpm,
+          firstBeatMs: params.firstBeatMs
+        })
   const beatPhraseScales = beatValues
     ? [4, 8, 16, 32].map((phraseSize) => summarizeBeatPhraseTransitions({ beatValues, phraseSize }))
     : []
@@ -984,6 +935,8 @@ export const analyzeSongEnergyWithModel = async (params: {
   channels: number
   bpm?: number
   firstBeatMs?: number
+  /** Dynamic：完整 audio 坐标网格；提供时会以其拍线 ordinal 分桶与切窗。 */
+  beatGridMapAudio?: SongBeatGridMapV2
   onDiagnosticPhase?: (phase: string) => void
 }): Promise<SongEnergyModelResult | null> => {
   if (
@@ -996,6 +949,18 @@ export const analyzeSongEnergyWithModel = async (params: {
   params.onDiagnosticPhase?.('energy:normalize-input')
   const { samples } = normalizeEnergyInputLevel(rawSamples)
   if (samples.length < SONG_ENERGY_MODEL_SAMPLE_RATE * 3) return null
+  const durationAudioSec = samples.length / SONG_ENERGY_MODEL_SAMPLE_RATE
+  const dynamicBeatLines = params.beatGridMapAudio
+    ? buildSongEnergyBeatLinesFromMap(params.beatGridMapAudio, durationAudioSec)
+    : null
+  if (params.beatGridMapAudio && !dynamicBeatLines) {
+    // 完整网格无法在当前解码区间展开时不能退回首段固定分桶。
+    throw new Error('dynamic song energy requires a full-length beat grid and decoded audio')
+  }
+  const beatLines = dynamicBeatLines ?? undefined
+  const effectiveBpm = params.beatGridMapAudio
+    ? resolveSongEnergyMapBpm(params.beatGridMapAudio)
+    : params.bpm
   params.onDiagnosticPhase?.('energy:mel-frames')
   const { frames, frameCount } = buildSongEnergyMelFrames(samples)
   const patchStarts = collectActivePatchStarts(samples, frameCount)
@@ -1008,8 +973,9 @@ export const analyzeSongEnergyWithModel = async (params: {
     samples,
     frames,
     frameCount,
-    bpm: params.bpm,
-    firstBeatMs: params.firstBeatMs
+    bpm: effectiveBpm,
+    firstBeatMs: params.firstBeatMs,
+    beatLines
   })
   const ensembleScores = predictions.deam.map((value, index) =>
     arousalToScore((value + predictions.emomusic[index]) / 2)
@@ -1021,8 +987,9 @@ export const analyzeSongEnergyWithModel = async (params: {
       frameRms: acoustic.frameRms,
       frameFlux: acoustic.frameFlux,
       lowBandRatios: acoustic.lowBandRatios,
-      bpm: params.bpm,
-      firstBeatMs: params.firstBeatMs
+      bpm: effectiveBpm,
+      firstBeatMs: params.firstBeatMs,
+      beatLines
     })
   )
   const sustainedEnergy = analysis.sustainedScore

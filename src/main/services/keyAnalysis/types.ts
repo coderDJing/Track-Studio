@@ -6,6 +6,9 @@ import type { BeatGridStatus } from '../../../types/globals'
 import type { SongStructureAnalysis } from '../../../shared/songStructure'
 import type { SongBeatGridMapV2 } from '../../../shared/songBeatGridMapV2'
 import type { AnalysisBpmRange } from '../../../shared/analysisBpmRange'
+import type { AnalysisGridMode } from '../../../shared/analysisGridMode'
+import type { DynamicGridOutcome } from '../../../shared/dynamicBeatGridTypes'
+import type { DynamicGridProgress } from './dynamicGridIntegration'
 import type { SongEnergyAnalysisV5 } from '../../../shared/songEnergy'
 
 export type KeyAnalysisPriority = 'high' | 'medium' | 'low' | 'background'
@@ -51,6 +54,8 @@ export type KeyAnalysisProgress = {
   needsEnergy?: boolean
   needsStructure?: boolean
   detail?: string
+  /** Dynamic 网格子阶段进度；Normal 任务不携带。 */
+  dynamicGrid?: DynamicGridProgress
   partialResult?: KeyAnalysisWorkerPartialResult
 }
 
@@ -122,6 +127,10 @@ export type KeyAnalysisJob = {
   waveformOnly?: boolean
   includeStructure?: boolean
   analysisBpmRange?: AnalysisBpmRange
+  /** 入队时冻结的网格分析模式；已执行任务不允许修改。 */
+  analysisGridMode?: AnalysisGridMode
+  /** 每路径网格请求代次；旧任务不得覆盖更新代次的结果。 */
+  gridRequestGeneration?: number
   forceAnalysis?: boolean
   analysisTargets?: KeyAnalysisTargets
   focusSlots?: string[]
@@ -193,6 +202,7 @@ export type DoneEntry = {
   energyScore?: number
   energyAlgorithmVersion?: number
   energyAnalysis?: SongEnergyAnalysisV5
+  energySourceGridSignature?: string
   songStructure?: SongStructureAnalysis
   hasWaveform?: boolean
 }
@@ -213,12 +223,16 @@ type KeyAnalysisWorkerPartialResult = {
   firstBeatMs?: number
   downbeatBeatOffset?: number
   timeBasisOffsetMs?: number
+  /** Dynamic 全曲网格结果；Normal 任务不携带。 */
+  dynamicGridOutcome?: DynamicGridOutcome
   bpmError?: string
   songStructureError?: string
   energyError?: string
   energyScore?: number
   energyAlgorithmVersion?: number
   energyAnalysis?: SongEnergyAnalysisV5
+  /** 能量结果来自哪个网格签名；持久化按此判定 stale。 */
+  energySourceGridSignature?: string
   songStructure?: SongStructureAnalysis
 }
 

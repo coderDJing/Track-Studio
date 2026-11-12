@@ -90,7 +90,10 @@ afterEach(() => {
   unmount?.()
 })
 
-const mount = async (canSelectStructureAlone: boolean) => {
+const mount = async (
+  canSelectStructureAlone: boolean,
+  options: { initialGridMode?: 'normal' | 'dynamic' } = {}
+) => {
   const root = new HostNode('root')
   const confirmCallback = vi.fn()
   const cancelCallback = vi.fn()
@@ -98,6 +101,7 @@ const mount = async (canSelectStructureAlone: boolean) => {
     count: 50,
     initialSelection: { ...DEFAULT_TRACK_REANALYSIS_SELECTION },
     canSelectStructureAlone,
+    initialGridMode: options.initialGridMode,
     confirmCallback,
     cancelCallback
   })
@@ -150,7 +154,16 @@ describe.each([true, false])('track reanalysis dialog with existing grid: %s', (
     await dialog.click(dialog.button('tracks.analysisStart'))
     expect(dialog.confirmCallback).toHaveBeenCalledWith({
       selection: { key: false, waveform: false, energy: true, structure: true, beatGrid: true },
-      analysisBpmRangeId: expect.any(String)
+      analysisBpmRangeId: expect.any(String),
+      analysisGridMode: 'normal'
     })
+  })
+
+  it('把弹窗选择的网格模式原样提交给重新分析调用', async () => {
+    const dialog = await mount(hasGrid, { initialGridMode: 'dynamic' })
+    await dialog.click(dialog.button('tracks.analysisStart'))
+    expect(dialog.confirmCallback).toHaveBeenCalledWith(
+      expect.objectContaining({ analysisGridMode: 'dynamic' })
+    )
   })
 })

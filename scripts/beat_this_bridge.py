@@ -90,6 +90,7 @@ from beat_this_runtime_constant_grid import (
     try_solve_runtime_constant_grid_dp as _try_solve_runtime_constant_grid_dp,
 )
 from beat_this_window_selection import select_anchor_window_result as _select_anchor_window_result
+from beat_this_dynamic_windows import handle_analyze_beat_windows_command
 
 _ORIGINAL_BEAT_THIS_LOAD_MODEL = _beat_this_inference.load_model
 _ORIGINAL_TORCH_AUTOCAST = torch.autocast
@@ -979,6 +980,22 @@ def serve(device: str, dbn: bool) -> int:
         if command == "shutdown":
             _emit({"type": "shutdown", "requestId": request_id})
             return 0
+
+        if command == "analyze_beat_windows":
+            if not handle_analyze_beat_windows_command(
+                header,
+                request_id,
+                read_exact=_read_exact,
+                decode_signal=_decode_signal,
+                predict_beats=lambda window_signal, sample_rate: _predict_beats(
+                    predictor, window_signal, sample_rate, device, cpu_spect
+                ),
+                emit=_emit,
+            ):
+                # Malformed PCM framing cannot be resynchronised; never parse
+                # the remaining binary audio as the next JSON header.
+                return 1
+            continue
 
         if command != "analyze_pcm":
             _emit(

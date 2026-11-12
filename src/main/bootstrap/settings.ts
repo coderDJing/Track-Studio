@@ -17,6 +17,10 @@ import {
   normalizeAnalysisBpmRangeId
 } from '../../shared/analysisBpmRange'
 import {
+  DEFAULT_ANALYSIS_GRID_MODE,
+  normalizeAnalysisGridMode
+} from '../../shared/analysisGridMode'
+import {
   DEFAULT_BROWSER_PLAYER_RIGHT_TRACK_INFO,
   normalizeBrowserPlayerRightTrackInfo
 } from '../../shared/browserPlayerRightTrackInfo'
@@ -98,6 +102,7 @@ const defaultSettings = {
   browserPlayerRightTrackInfo: DEFAULT_BROWSER_PLAYER_RIGHT_TRACK_INFO,
   showIdleAnalysisStatus: false,
   analysisBpmRange: DEFAULT_ANALYSIS_BPM_RANGE_ID,
+  analysisGridMode: DEFAULT_ANALYSIS_GRID_MODE,
   trackAnalysisSelection: {
     key: true,
     beatGrid: true,
@@ -202,6 +207,7 @@ export function loadInitialSettings(options: LoadSettingsOptions): ISettingConfi
     loadedSettings.analysisBpmRange,
     settingFileExisted ? LEGACY_ANALYSIS_BPM_RANGE.id : DEFAULT_ANALYSIS_BPM_RANGE_ID
   )
+  finalSettings.analysisGridMode = normalizeAnalysisGridMode(loadedSettings.analysisGridMode)
   finalSettings.trackAnalysisSelection = normalizeTrackReanalysisSelection(
     loadedSettings.trackAnalysisSelection
   )

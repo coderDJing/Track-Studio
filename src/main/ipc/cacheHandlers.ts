@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { is } from '@electron-toolkit/utils'
 import { FIXED_MIXTAPE_STEM_MODE } from '../../shared/mixtapeStemMode'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -14,6 +15,14 @@ import { scheduleStartupLibraryTreeReconcile } from '../libraryTreeWatcher'
 import { enqueueKeyAnalysisList, enqueueManualKeyAnalysisBatch } from '../services/keyAnalysisQueue'
 import { isInRecordingLibraryAbsPath } from '../recordingLibraryService'
 import { normalizeAnalysisBpmRangeId } from '../../shared/analysisBpmRange'
+import store from '../store'
+import {
+  isAnalysisGridModeSupported,
+  isDynamicGridReanalysis,
+  normalizeAnalysisGridMode,
+  resolveGridReanalysisClearPlan,
+  resolveGridReanalysisTargets
+} from '../../shared/analysisGridMode'
 import {
   hasAnyTrackReanalysisUserSelection,
   isFullTrackReanalysisPlan,
@@ -38,6 +47,8 @@ type TrackCacheClearBatchPayload = {
   filePaths?: string[]
   selection?: unknown
   analysisBpmRangeId?: string
+  /** Dynamic 重新分析请求的网格模式；缺省时沿用全局设置。 */
+  gridMode?: unknown
 }
 
 const normalizeClearBatchFilePaths = (payload: unknown) => {
@@ -83,6 +94,18 @@ const isMissingFileError = (error: unknown): boolean => {
       ? String((error as { code?: unknown }).code || '')
       : ''
   return code === 'ENOENT' || code === 'ENOTDIR'
+}
+
+type ReanalysisSourceState = 'ok' | 'missing-file' | 'unreadable-file'
+
+/** Dynamic 重新分析入队前的精确磁盘核对；缺失/不可读文件不能计入已清理。 */
+const verifyReanalysisSource = async (filePath: string): Promise<ReanalysisSourceState> => {
+  try {
+    const fsStat = await fs.stat(filePath)
+    return fsStat.isFile() ? 'ok' : 'unreadable-file'
+  } catch (error) {
+    return isMissingFileError(error) ? 'missing-file' : 'unreadable-file'
+  }
 }
 
 const readCacheFileStat = async (filePath: string): Promise<CacheFileStatResult> => {
@@ -264,6 +287,26 @@ export function registerCacheHandlers() {
         return { cleared: 0, queued: 0, skipped: 0, skippedItems: [] }
       }
 
+      const gridMode = normalizeAnalysisGridMode(
+        Array.isArray(payload) ? undefined : payload?.gridMode,
+        normalizeAnalysisGridMode(store.settingConfig?.analysisGridMode)
+      )
+      if (!isAnalysisGridModeSupported(gridMode, { isDevelopment: is.dev })) {
+        // 发布启用开关关闭：明确拒绝，不静默改跑 Normal。
+        const skippedItems = files.map((filePath) => ({
+          filePath,
+          reason: 'dynamic-grid-unavailable'
+        }))
+        return { cleared: 0, queued: 0, skipped: skippedItems.length, skippedItems }
+      }
+      // Dynamic：先计算后替换。旧 BPM / 网格保留到新结果成功；段落本期不执行，
+      // 因此也不清空旧段落；能量仍按用户勾选透传，网格变化后由签名失效。
+      const dynamicGridReanalysis = isDynamicGridReanalysis(plan, gridMode)
+      const clearPlan = dynamicGridReanalysis
+        ? resolveGridReanalysisClearPlan(plan, gridMode)
+        : plan
+      const analysisTargets = resolveGridReanalysisTargets(plan, gridMode)
+
       const progressId = `reanalyze_${Date.now()}`
       const sendProgress = (now: number, dismiss = false) => {
         mainWindow.instance?.webContents.send('progressSet', {
@@ -282,6 +325,26 @@ export function registerCacheHandlers() {
         const filePath = files[i]
         if (isInRecordingLibraryAbsPath(filePath)) {
           skippedItems.push({ filePath, reason: 'recording-library-unsupported' })
+        } else if (dynamicGridReanalysis) {
+          const sourceState = await verifyReanalysisSource(filePath)
+          if (sourceState !== 'ok') {
+            skippedItems.push({ filePath, reason: sourceState })
+          } else {
+            const result = hasAnyTrackReanalysisUserSelection(clearPlan)
+              ? await clearTrackCoreAnalysisForReanalysis(filePath, clearPlan)
+              : null
+            // 清理只是附带动作：Dynamic 网格本身不先清空，清理失败也不能阻止强制重算，
+            // 但位置不支持时不能谎称已清理。
+            if (
+              result &&
+              result.status === 'skipped' &&
+              (result.reason === 'unsupported-location' || result.reason === 'invalid-path')
+            ) {
+              skippedItems.push({ filePath: result.filePath, reason: result.reason })
+            } else {
+              clearedFiles.push(result?.filePath || filePath)
+            }
+          }
         } else {
           const result = await clearTrackCoreAnalysisForReanalysis(filePath, plan)
           if (result.status === 'cleared') {
@@ -299,15 +362,11 @@ export function registerCacheHandlers() {
       if (clearedFiles.length > 0) {
         enqueueManualKeyAnalysisBatch(clearedFiles, {
           titleKey: 'tracks.reanalyzingTracks',
-          forceAnalysis: isFullTrackReanalysisPlan(plan),
-          analysisTargets: {
-            key: plan.key,
-            bpm: plan.beatGrid,
-            waveform: plan.waveform,
-            energy: plan.energy,
-            structure: plan.structure
-          },
-          includeStructure: plan.structure,
+          // Dynamic 必须强制计算 BPM，不能被 complete-grid / no-bpm 缓存跳过。
+          forceAnalysis: isFullTrackReanalysisPlan(plan) || dynamicGridReanalysis,
+          analysisTargets,
+          includeStructure: dynamicGridReanalysis ? false : plan.structure,
+          analysisGridMode: gridMode,
           analysisBpmRangeId: plan.beatGrid
             ? normalizeAnalysisBpmRangeId(
                 Array.isArray(payload) ? undefined : payload?.analysisBpmRangeId

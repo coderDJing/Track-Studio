@@ -10,6 +10,7 @@ import {
   normalizeAnalysisBpmRangeId,
   type AnalysisBpmRangePresetId
 } from '@shared/analysisBpmRange'
+import type { AnalysisGridMode } from '@shared/analysisGridMode'
 import { t } from '@renderer/utils/translate'
 
 export {
@@ -78,6 +79,7 @@ export const queueManualKeyAnalysisBatch = async (
   analysisBpmRangeId: AnalysisBpmRangePresetId,
   options?: {
     includeStructure?: boolean
+    analysisGridMode?: AnalysisGridMode
     analysisTargets?: {
       key?: boolean
       bpm?: boolean
@@ -92,6 +94,7 @@ export const queueManualKeyAnalysisBatch = async (
     filePaths,
     titleKey,
     analysisBpmRangeId,
+    analysisGridMode: options?.analysisGridMode,
     includeStructure: options?.includeStructure,
     analysisTargets: options?.analysisTargets
   })
@@ -157,6 +160,7 @@ export const promptAndQueueManualKeyAnalysisBatch = async (
     : normalizeAnalysisBpmRangeId(useRuntimeStore().setting.analysisBpmRange)
   const queued = await queueManualKeyAnalysisBatch(queueFiles, titleKey, rangeId, {
     includeStructure: prompted.selection.structure,
+    analysisGridMode: prompted.analysisGridMode,
     analysisTargets: {
       key: prompted.selection.key,
       bpm: prompted.selection.beatGrid,

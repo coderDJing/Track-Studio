@@ -1,6 +1,7 @@
 import type { EventEmitter } from 'node:events'
 import type { Worker } from 'node:worker_threads'
 import path from 'node:path'
+import { is } from '@electron-toolkit/utils'
 import { createKeyAnalysisBackground, type KeyAnalysisBackground } from './background'
 import { createKeyAnalysisPersistence, type KeyAnalysisPersistence } from './persistence'
 import { createKeyAnalysisWorkerPool, type KeyAnalysisWorkerPool } from './workerPool'
@@ -8,30 +9,37 @@ import { createKeyAnalysisFailureTracker, type KeyAnalysisFailureTracker } from 
 import { hasCurrentKeyAnalysisJobOwnership } from './jobOwnership'
 import { KeyAnalysisDeferredQueue } from './deferredQueue'
 import { buildKeyAnalysisWorkerMessage } from './workerDispatch'
+import { terminateWorkerWithDynamicSidecarCleanup } from './workerTermination'
 import { getKeyAnalysisJobDiagnostics } from './diagnostics'
 import {
   addManualBatchIdsToJob,
   applyKeyAnalysisIncludeStructureOption,
   applyKeyAnalysisQueueCategory,
+  applyKeyAnalysisReRequestOptions,
   applyKeyAnalysisRequestFlags,
   applyKeyAnalysisWaveformOnlyOption,
+  applyPendingAnalysisGridModeReRequest,
   isHigherKeyAnalysisPriority,
+  narrowKeyAnalysisNeedsForDynamicGrid,
   normalizeKeyAnalysisFocusSlot,
   normalizeManualBatchIds,
   removeManualBatchIdFromJob,
+  resolveRequestedAnalysisGridMode,
   type KeyAnalysisEnqueueOptions
 } from './queueJobOptions'
 import { normalizeKeyAnalysisTargets } from './analysisTargets'
+import { KeyAnalysisGridRequestTracker } from './gridRequestTracking'
+import { DynamicGridSingleFlight, isDynamicGridHeavyJob } from './dynamicGridScheduler'
+import { getEstimatedAnalysisDurationSec, getKeyAnalysisStageTimeoutMs } from './jobTimeoutPolicy'
 import { log } from '../../log'
 import store from '../../store'
+import {
+  resolveAnalysisGridMode,
+  isAnalysisGridModeSupported
+} from '../../../shared/analysisGridMode'
 import { resolveAnalysisBpmRange } from '../../../shared/analysisBpmRange'
 import {
   BACKGROUND_MAX_INFLIGHT,
-  KEY_ANALYSIS_ANALYZE_STAGE_TIMEOUT_MS,
-  KEY_ANALYSIS_DECODE_STAGE_TIMEOUT_MS,
-  KEY_ANALYSIS_JOB_TIMEOUT_MS,
-  KEY_ANALYSIS_STAGE_TIMEOUT_MAX_MS,
-  KEY_ANALYSIS_WAVEFORM_STAGE_TIMEOUT_MS,
   KEY_ANALYSIS_WORKER_MAX,
   normalizePath,
   type KeyAnalysisAudioProbe,
@@ -65,6 +73,8 @@ export class KeyAnalysisQueue {
   private focusPathBySlot = new Map<string, string>()
   private doneByPath = new Map<string, DoneEntry>()
   private failedByPath = new Map<string, KeyAnalysisFailureRecord>()
+  private gridRequests = new KeyAnalysisGridRequestTracker()
+  private dynamicGridScheduler = new DynamicGridSingleFlight()
   private failureProbeInFlight = new Set<string>()
   private probeCache = new Map<
     string,
@@ -101,7 +111,11 @@ export class KeyAnalysisQueue {
       this.addFocusSlotToJob(job, focusSlot),
     removeManualBatchIdFromJob: (job: KeyAnalysisJob, batchId: string) =>
       removeManualBatchIdFromJob(job, batchId),
-    isManualOnlyJob: (job: KeyAnalysisJob) => this.isManualOnlyJob(job)
+    isManualOnlyJob: (job: KeyAnalysisJob) => this.isManualOnlyJob(job),
+    resolveGridMode: (fallback?: unknown) =>
+      resolveAnalysisGridMode(fallback, store.settingConfig?.analysisGridMode),
+    nextGridRequestGeneration: (normalizedPath: string) =>
+      this.nextGridRequestGeneration(normalizedPath)
   }
 
   /** workerCount 是所有任务共享的全局并发上限。 */
@@ -152,6 +166,8 @@ export class KeyAnalysisQueue {
       },
       hasExpectedWorkerTermination: (worker) => this.expectedWorkerTerminations.has(worker),
       consumeExpectedWorkerTermination: (worker) => this.consumeExpectedWorkerTermination(worker),
+      // 只用于提交资格，不参与 worker 清理/退出判断。
+      isCurrentGridRequest: (job) => this.isCurrentGridRequest(job),
       persistence: this.persistence,
       background: this.background,
       enqueue: (filePath, priority, options) => this.enqueue(filePath, priority, options),
@@ -263,7 +279,7 @@ export class KeyAnalysisQueue {
         const idleIdx = this.idle.indexOf(worker)
         if (idleIdx !== -1) this.idle.splice(idleIdx, 1)
         this.markExpectedWorkerTermination(worker, 'concurrency-downscale')
-        void worker.terminate().catch(() => {
+        void this.terminateWorker(worker, () => {
           this.clearExpectedWorkerTermination(worker)
           this.retiringWorkers.delete(worker)
         })
@@ -287,7 +303,7 @@ export class KeyAnalysisQueue {
     const idleIdx = this.idle.indexOf(worker)
     if (idleIdx !== -1) this.idle.splice(idleIdx, 1)
     this.markExpectedWorkerTermination(worker, 'concurrency-retire')
-    void worker.terminate().catch(() => {
+    void this.terminateWorker(worker, () => {
       this.clearExpectedWorkerTermination(worker)
     })
     this.workerPool.refreshForegroundWorker()
@@ -300,6 +316,20 @@ export class KeyAnalysisQueue {
       inFlightJob: this.inFlight.get(job.jobId),
       activeJob: this.activeByPath.get(job.normalizedPath)
     })
+  }
+
+  private nextGridRequestGeneration(normalizedPath: string): number {
+    return this.gridRequests.nextGeneration(normalizedPath)
+  }
+
+  /** 主集成交接：读取路径当前网格请求代次，旧代次结果不得提交。 */
+  getGridRequestGeneration(normalizedPath: string): number {
+    return this.gridRequests.getGeneration(normalizePath(normalizedPath))
+  }
+
+  /** 任务仍持有该路径最新网格代次时才算有效。 */
+  isCurrentGridRequest(job: KeyAnalysisJob): boolean {
+    return this.gridRequests.isCurrent(job)
   }
 
   startBackgroundSweep() {
@@ -349,6 +379,11 @@ export class KeyAnalysisQueue {
     const source = options.source || (priority === 'background' ? 'background' : 'foreground')
     const focusSlot = normalizeKeyAnalysisFocusSlot(options.focusSlot)
     const manualBatchIds = normalizeManualBatchIds(options)
+    const requestedGridMode = resolveRequestedAnalysisGridMode(options.analysisGridMode)
+    // 抢占重入队不会回传模式：只消费同一批次留下的一次性快照，不影响之后独立请求的默认语义。
+    const restoredGridMode = requestedGridMode
+      ? undefined
+      : this.gridRequests.consumeFrozenMode(normalizedPath, manualBatchIds)
     if (source === 'foreground') {
       this.background.touchForeground()
     }
@@ -376,41 +411,33 @@ export class KeyAnalysisQueue {
     }
     const existing = this.pendingByPath.get(normalizedPath)
     if (existing) {
-      if (isHigherKeyAnalysisPriority(priority, existing.priority)) {
-        this.removePending(existing)
-        existing.priority = priority
-        existing.source = source
-        if (options.fastAnalysis !== undefined) {
-          existing.fastAnalysis = options.fastAnalysis
-        }
-        if (options.preemptible !== undefined) {
-          existing.preemptible = options.preemptible
-        }
-        applyKeyAnalysisQueueCategory(existing, options.category)
-        applyKeyAnalysisWaveformOnlyOption(existing, options.waveformOnly)
-        applyKeyAnalysisIncludeStructureOption(existing, options.includeStructure)
-        applyKeyAnalysisRequestFlags(existing, options)
-        addManualBatchIdsToJob(existing, manualBatchIds)
-        this.addFocusSlotToJob(existing, focusSlot)
-        this.addPending(existing, options.urgent)
-      } else {
-        if (options.preemptible !== undefined) {
-          existing.preemptible = options.preemptible
-        }
-        applyKeyAnalysisQueueCategory(existing, options.category)
-        applyKeyAnalysisWaveformOnlyOption(existing, options.waveformOnly)
-        applyKeyAnalysisIncludeStructureOption(existing, options.includeStructure)
-        applyKeyAnalysisRequestFlags(existing, options)
-        addManualBatchIdsToJob(existing, manualBatchIds)
-        this.addFocusSlotToJob(existing, focusSlot)
-      }
-      if (options.urgent && existing.priority === 'high') {
-        this.removePending(existing)
-        this.addPending(existing, true)
-      }
+      // 最新显式模式优先，但必须复用同一个待执行任务：旧等待方的 batch / focus / 优先级都保留。
+      applyPendingAnalysisGridModeReRequest(existing, options, () =>
+        this.nextGridRequestGeneration(normalizedPath)
+      )
+      const shouldReorder =
+        isHigherKeyAnalysisPriority(priority, existing.priority) ||
+        (options.urgent === true && existing.priority === 'high')
+      if (shouldReorder) this.removePending(existing)
+      applyKeyAnalysisReRequestOptions(existing, options, priority, source, manualBatchIds)
+      this.addFocusSlotToJob(existing, focusSlot)
+      if (shouldReorder) this.addPending(existing, options.urgent)
       return
     }
 
+    const analysisGridMode = resolveAnalysisGridMode(
+      requestedGridMode,
+      restoredGridMode,
+      store.settingConfig?.analysisGridMode
+    )
+    if (!isAnalysisGridModeSupported(analysisGridMode, { isDevelopment: is.dev })) {
+      // 发布启用开关关闭的 Dynamic 不得静默改跑 Normal；显式拒绝并让手动批次正常结算。
+      this.events.emit('analysis-job-skipped', {
+        filePath,
+        manualBatchIds: manualBatchIds.length ? manualBatchIds : undefined
+      })
+      return
+    }
     const job: KeyAnalysisJob = {
       jobId: ++this.nextJobId,
       filePath,
@@ -425,9 +452,14 @@ export class KeyAnalysisQueue {
       analysisBpmRange: resolveAnalysisBpmRange(
         options.analysisBpmRangeId ?? store.settingConfig.analysisBpmRange
       ),
+      analysisGridMode,
+      gridRequestGeneration: this.nextGridRequestGeneration(normalizedPath),
       forceAnalysis: options.forceAnalysis === true,
       analysisTargets: normalizeKeyAnalysisTargets(options.analysisTargets),
       manualBatchIds: manualBatchIds.length ? manualBatchIds : undefined
+    }
+    if (requestedGridMode && manualBatchIds.length > 0) {
+      this.gridRequests.rememberFrozenMode(normalizedPath, requestedGridMode, manualBatchIds)
     }
     this.addFocusSlotToJob(job, focusSlot)
     this.addPending(job, options.urgent)
@@ -454,7 +486,7 @@ export class KeyAnalysisQueue {
       if (job && job.source === 'background') {
         this.background.unmarkProcessing(job.jobId)
         this.markExpectedWorkerTermination(worker, 'background-cancel')
-        void worker.terminate().catch(() => {
+        void this.terminateWorker(worker, () => {
           this.clearExpectedWorkerTermination(worker)
         })
       }
@@ -481,6 +513,7 @@ export class KeyAnalysisQueue {
       this.doneByPath.delete(normalizedPath)
       this.failedByPath.delete(normalizedPath)
       this.probeCache.delete(normalizedPath)
+      this.gridRequests.forget(normalizedPath)
     }
 
     for (const [focusSlot, normalizedPath] of this.focusPathBySlot.entries()) {
@@ -493,12 +526,13 @@ export class KeyAnalysisQueue {
     for (const [worker, jobId] of Array.from(this.busy.entries())) {
       const job = this.inFlight.get(jobId)
       if (!job || !normalizedPaths.has(job.normalizedPath)) continue
+      this.dynamicGridScheduler.release(job.jobId)
       if (job.source === 'background') {
         this.background.unmarkProcessing(job.jobId)
       }
       this.markExpectedWorkerTermination(worker, 'path-cancel')
       terminations.push(
-        worker.terminate().catch(() => {
+        this.terminateWorker(worker, () => {
           this.clearExpectedWorkerTermination(worker)
         })
       )
@@ -535,7 +569,7 @@ export class KeyAnalysisQueue {
       if (job.manualBatchIds || !this.isManualOnlyJob(job)) continue
       this.markExpectedWorkerTermination(worker, 'manual-batch-cancel')
       terminations.push(
-        worker.terminate().catch(() => {
+        this.terminateWorker(worker, () => {
           this.clearExpectedWorkerTermination(worker)
         })
       )
@@ -570,9 +604,10 @@ export class KeyAnalysisQueue {
       if (job?.source === 'background') {
         this.background.unmarkProcessing(job.jobId)
       }
+      this.dynamicGridScheduler.release(jobId)
       this.markExpectedWorkerTermination(worker, 'library-merge-cancel')
       terminations.push(
-        worker.terminate().catch(() => {
+        this.terminateWorker(worker, () => {
           this.clearExpectedWorkerTermination(worker)
         })
       )
@@ -585,6 +620,15 @@ export class KeyAnalysisQueue {
 
   private markExpectedWorkerTermination(worker: Worker, reason: string) {
     this.expectedWorkerTerminations.set(worker, reason)
+  }
+
+  /** terminate() 不触发 worker 内 process.exit hook：Dynamic sidecar 由 workerPool 在终止前后清理。 */
+  private terminateWorker(worker: Worker, onSettled?: () => void): Promise<unknown> {
+    return terminateWorkerWithDynamicSidecarCleanup(
+      worker,
+      (target) => this.workerPool.cleanupDynamicSidecar(target),
+      onSettled
+    )
   }
 
   private clearExpectedWorkerTermination(worker: Worker) {
@@ -730,71 +774,6 @@ export class KeyAnalysisQueue {
     return this.workerPool.countBackgroundInFlight()
   }
 
-  private clampStageTimeoutMs(timeoutMs: number): number {
-    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return KEY_ANALYSIS_JOB_TIMEOUT_MS
-    return Math.max(1000, Math.min(Math.round(timeoutMs), KEY_ANALYSIS_STAGE_TIMEOUT_MAX_MS))
-  }
-
-  private getEstimatedDurationSec(job: KeyAnalysisJob): number | undefined {
-    const probeDuration = Number(job.probe?.durationSec)
-    if (Number.isFinite(probeDuration) && probeDuration > 0) {
-      return probeDuration
-    }
-    const trace = job.trace
-    const framesToProcess = Number(trace?.framesToProcess)
-    const sampleRate = Number(trace?.sampleRate)
-    if (
-      Number.isFinite(framesToProcess) &&
-      framesToProcess > 0 &&
-      Number.isFinite(sampleRate) &&
-      sampleRate > 0
-    ) {
-      return framesToProcess / sampleRate
-    }
-    const totalFrames = Number(trace?.totalFrames)
-    if (
-      Number.isFinite(totalFrames) &&
-      totalFrames > 0 &&
-      Number.isFinite(sampleRate) &&
-      sampleRate > 0
-    ) {
-      return totalFrames / sampleRate
-    }
-    return undefined
-  }
-
-  private getStageTimeoutMs(job: KeyAnalysisJob, stage?: KeyAnalysisProgress['stage']): number {
-    const estimatedDurationSec = this.getEstimatedDurationSec(job)
-    const hasDuration = Number.isFinite(estimatedDurationSec) && Number(estimatedDurationSec) > 0
-    const durationSec = hasDuration ? Number(estimatedDurationSec) : 0
-    if (stage === 'decode-start') {
-      let timeoutMs = KEY_ANALYSIS_DECODE_STAGE_TIMEOUT_MS
-      if (hasDuration) {
-        timeoutMs = Math.max(timeoutMs, durationSec * 1000 * 1.25 + 120000)
-      } else {
-        const fileSizeMb = Math.max(0, Number(job.fileSize || 0)) / (1024 * 1024)
-        timeoutMs = Math.max(timeoutMs, 120000 + fileSizeMb * 12000)
-      }
-      return this.clampStageTimeoutMs(timeoutMs)
-    }
-
-    if (stage === 'analyze-start') {
-      const timeoutMs = hasDuration
-        ? Math.max(KEY_ANALYSIS_ANALYZE_STAGE_TIMEOUT_MS, durationSec * 1000 * 0.6 + 30000)
-        : KEY_ANALYSIS_ANALYZE_STAGE_TIMEOUT_MS
-      return this.clampStageTimeoutMs(timeoutMs)
-    }
-
-    if (stage === 'waveform-start') {
-      const timeoutMs = hasDuration
-        ? Math.max(KEY_ANALYSIS_WAVEFORM_STAGE_TIMEOUT_MS, durationSec * 1000 * 0.25 + 20000)
-        : KEY_ANALYSIS_WAVEFORM_STAGE_TIMEOUT_MS
-      return this.clampStageTimeoutMs(timeoutMs)
-    }
-
-    return KEY_ANALYSIS_JOB_TIMEOUT_MS
-  }
-
   private clearJobTimeout(jobId: number) {
     const timer = this.jobTimeouts.get(jobId)
     if (!timer) return
@@ -817,8 +796,8 @@ export class KeyAnalysisQueue {
     stage: KeyAnalysisProgress['stage'] = job.trace?.lastStage || 'job-received'
   ) {
     this.clearJobTimeout(job.jobId)
-    const timeoutMs = this.getStageTimeoutMs(job, stage)
-    const estimatedDurationSec = this.getEstimatedDurationSec(job)
+    const timeoutMs = getKeyAnalysisStageTimeoutMs(job, stage)
+    const estimatedDurationSec = getEstimatedAnalysisDurationSec(job)
     const timer = setTimeout(() => {
       this.jobTimeouts.delete(job.jobId)
       const activeJob = this.inFlight.get(job.jobId)
@@ -856,7 +835,7 @@ export class KeyAnalysisQueue {
         estimatedDurationSec
       })
       this.markExpectedWorkerTermination(worker, 'timeout')
-      void worker.terminate().catch(() => {
+      void this.terminateWorker(worker, () => {
         this.clearExpectedWorkerTermination(worker)
       })
     }, timeoutMs)
@@ -867,6 +846,9 @@ export class KeyAnalysisQueue {
     if (this.busy.get(worker) !== job.jobId) return
     if (progress.stage === 'job-done' || progress.stage === 'job-error') {
       this.clearJobTimeout(job.jobId)
+      this.dynamicGridScheduler.release(job.jobId)
+      // 正常结算后不再需要抢占恢复快照，避免影响该路径后续独立请求的默认模式。
+      this.gridRequests.clearRestore(job.normalizedPath)
       return
     }
     if (
@@ -893,6 +875,7 @@ export class KeyAnalysisQueue {
 
   /** 按优先级分配任务，同时限制后台任务占用的 worker 数量。 */
   private drain() {
+    this.dynamicGridScheduler.releaseIfInactive((jobId) => this.inFlight.has(jobId))
     this.deferred.promote(
       (normalizedPath) =>
         this.activeByPath.has(normalizedPath) || this.pendingByPath.has(normalizedPath),
@@ -901,6 +884,8 @@ export class KeyAnalysisQueue {
     this.failureTracker.cleanupStaleFailures()
     this.failureTracker.cleanupStaleProbeCache()
     this.cleanupStaleJobTimeouts()
+    // 本轮被全局单飞挡下的 Dynamic 任务先挪出队列，避免阻塞同轮其它任务。
+    const heldDynamicJobs: KeyAnalysisJob[] = []
     while (this.idle.length > 0) {
       if (this.busy.size >= this.globalConcurrencyLimit) break
       const hasForegroundPending =
@@ -926,6 +911,12 @@ export class KeyAnalysisQueue {
         this.idle.push(worker)
         break
       }
+      // 全局只允许一个 Dynamic 重任务真正开始（此检查在预解码之前）；等待者仍可取消。
+      if (isDynamicGridHeavyJob(job) && !this.dynamicGridScheduler.tryAcquire(job.jobId)) {
+        heldDynamicJobs.push(job)
+        this.idle.push(worker)
+        continue
+      }
       this.busy.set(worker, job.jobId)
       this.inFlight.set(job.jobId, job)
       this.activeByPath.set(job.normalizedPath, job)
@@ -934,7 +925,9 @@ export class KeyAnalysisQueue {
         const ready = await this.persistence.prepareJob(job)
         if (!this.isCurrentWorkerJob(worker, job)) return
         if (!ready) {
+          this.dynamicGridScheduler.release(job.jobId)
           this.emitCachedEnergyIfVisible(job)
+          this.gridRequests.clearRestore(job.normalizedPath)
           this.events.emit('analysis-job-skipped', {
             filePath: job.filePath,
             manualBatchIds: job.manualBatchIds
@@ -949,11 +942,15 @@ export class KeyAnalysisQueue {
           this.drain()
           return
         }
+        // Dynamic 网格只隔离尚未适配的段落阶段，并把强制分析收窄回调用方明确勾选的目标。
+        narrowKeyAnalysisNeedsForDynamicGrid(job)
         const coolingRecord =
           job.needsKey || job.needsBpm || job.needsEnergy || job.needsStructure
             ? this.failureTracker.getFailureCooldownRecord(job)
             : null
         if (coolingRecord) {
+          this.dynamicGridScheduler.release(job.jobId)
+          this.gridRequests.clearRestore(job.normalizedPath)
           this.events.emit('analysis-job-skipped', {
             filePath: job.filePath,
             manualBatchIds: job.manualBatchIds
@@ -1002,6 +999,9 @@ export class KeyAnalysisQueue {
           job.cachedUnifiedDisplayWaveformData = undefined
         }
       })()
+    }
+    for (const heldJob of heldDynamicJobs) {
+      this.addPending(heldJob)
     }
     if (this.isIdle()) {
       this.background.scheduleBackgroundScan()
@@ -1076,6 +1076,7 @@ export class KeyAnalysisQueue {
       }
     }
 
+    this.gridRequests.remap(fromNormalizedPath, toNormalizedPath)
     for (const [focusSlot, normalizedPath] of this.focusPathBySlot.entries()) {
       if (normalizedPath === fromNormalizedPath) {
         this.focusPathBySlot.set(focusSlot, toNormalizedPath)

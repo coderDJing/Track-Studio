@@ -168,6 +168,7 @@ export const createPersistSongStructure = (params: CreateStructurePersistencePar
         energyScore: existing?.energyScore,
         energyAlgorithmVersion: existing?.energyAlgorithmVersion,
         energyAnalysis: existing?.energyAnalysis,
+        energySourceGridSignature: existing?.energySourceGridSignature,
         songStructure: normalizedSongStructure,
         hasWaveform: existing?.hasWaveform
       })

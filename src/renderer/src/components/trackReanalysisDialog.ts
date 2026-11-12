@@ -2,6 +2,7 @@ import { createVNode, render } from 'vue'
 import { attachAppContext } from '@renderer/utils/appContext'
 import TrackReanalysisDialog from './trackReanalysisDialog.vue'
 import type { AnalysisBpmRangePresetId } from '@shared/analysisBpmRange'
+import type { AnalysisGridMode } from '@shared/analysisGridMode'
 import type { TrackReanalysisUserSelection } from '@shared/trackReanalysisSelection'
 
 export type TrackAnalysisDialogPurpose = 'reanalysis' | 'missing'
@@ -9,6 +10,7 @@ export type TrackAnalysisDialogPurpose = 'reanalysis' | 'missing'
 export type TrackAnalysisDialogResult = {
   selection: TrackReanalysisUserSelection
   analysisBpmRangeId?: AnalysisBpmRangePresetId
+  analysisGridMode?: AnalysisGridMode
 }
 
 type TrackReanalysisDialogOptions = {
@@ -17,6 +19,7 @@ type TrackReanalysisDialogOptions = {
   canSelectStructureAlone: boolean
   purpose?: TrackAnalysisDialogPurpose
   initialBpmRangeId?: AnalysisBpmRangePresetId
+  initialGridMode?: AnalysisGridMode
 }
 
 export default (options: TrackReanalysisDialogOptions) =>

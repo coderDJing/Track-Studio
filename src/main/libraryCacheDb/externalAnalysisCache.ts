@@ -50,6 +50,21 @@ const rowToWaveformData = (row: ExternalAnalysisCacheRow | undefined | null) => 
   return decodeMixxxWaveformData({ sampleRate, step, duration, frames }, payload)
 }
 
+export type ExternalAnalysisWriteDecision = {
+  info: ISongInfo | null
+  reason?: string
+}
+
+export type ExternalAnalysisWriteOptions = {
+  shouldPersist?: () => boolean
+  decide?: (context: {
+    info: ISongInfo | null
+    size: number | null
+    mtimeMs: number | null
+  }) => ExternalAnalysisWriteDecision
+  result?: { reason?: string }
+}
+
 export type ExternalAnalysisCacheEntry = {
   sourceKind: ExternalAnalysisSourceKind
   sourceId: string
@@ -541,7 +556,8 @@ export async function touchExternalAnalysisCacheEntrySeen(
 export async function upsertExternalAnalysisCacheEntry(
   context: Partial<ExternalAnalysisContext> | null | undefined,
   stat: { size: number; mtimeMs: number },
-  info: ISongInfo
+  info: ISongInfo,
+  options?: ExternalAnalysisWriteOptions
 ) {
   const db = getLibraryDb()
   const normalized = normalizeContext(context)
@@ -559,7 +575,7 @@ export async function upsertExternalAnalysisCacheEntry(
       normalizedInfo.externalSourceKind = externalSourceKind
     }
     stripBeatThisDebugInfo(normalizedInfo)
-    db.prepare(
+    const insert = db.prepare(
       `INSERT INTO ${EXTERNAL_ANALYSIS_CACHE_TABLE}
        (source_kind, source_id, relative_path, file_path, size, mtime_ms, info_json,
         last_seen_at_ms, updated_at_ms)
@@ -575,17 +591,57 @@ export async function upsertExternalAnalysisCacheEntry(
            ELSE last_seen_at_ms
          END,
          updated_at_ms = excluded.updated_at_ms`
-    ).run(
-      normalized.sourceKind,
-      normalized.sourceId,
-      normalized.relativePath,
-      normalized.filePath,
-      stat.size,
-      stat.mtimeMs,
-      JSON.stringify(normalizedInfo),
-      now,
-      now
     )
+    const select = db.prepare<{
+      info_json?: unknown
+      size?: unknown
+      mtime_ms?: unknown
+    }>(
+      `SELECT info_json, size, mtime_ms FROM ${EXTERNAL_ANALYSIS_CACHE_TABLE}
+       WHERE source_kind = ? AND source_id = ? AND relative_path = ? LIMIT 1`
+    )
+    const run = db.transaction(() => {
+      if (options && options.shouldPersist && !options.shouldPersist()) {
+        if (options.result) options.result.reason = 'generation'
+        return false
+      }
+      let infoToWrite = normalizedInfo
+      if (options && options.decide) {
+        const row = select.get(normalized.sourceKind, normalized.sourceId, normalized.relativePath)
+        const decision = options.decide({
+          info: row ? parseInfoJson(row.info_json) : null,
+          size: row ? toNumber(row.size) : null,
+          mtimeMs: row ? toNumber(row.mtime_ms) : null
+        })
+        if (!decision.info) {
+          if (options.result) options.result.reason = decision.reason || 'skipped'
+          return false
+        }
+        if (options.shouldPersist && !options.shouldPersist()) {
+          if (options.result) options.result.reason = 'generation'
+          return false
+        }
+        infoToWrite = {
+          ...decision.info,
+          filePath: normalized.filePath
+        }
+        if (externalSourceKind) infoToWrite.externalSourceKind = externalSourceKind
+        stripBeatThisDebugInfo(infoToWrite)
+      }
+      insert.run(
+        normalized.sourceKind,
+        normalized.sourceId,
+        normalized.relativePath,
+        normalized.filePath,
+        stat.size,
+        stat.mtimeMs,
+        JSON.stringify(infoToWrite),
+        now,
+        now
+      )
+      return true
+    })
+    if (!run()) return false
     await touchExternalAnalysisDevice(
       normalized.sourceKind,
       normalized.sourceId,

@@ -10,6 +10,14 @@
       "start": "开始分析",
       "legacyOption": "{range}（原有范围）"
     },
+    "analysisGridMode": {
+      "label": "网格分析模式",
+      "normal": "Normal",
+      "dynamic": "Dynamic（实验）",
+      "settingsHint": "Normal 保持现有 120 秒扫描与固定网格。Dynamic 扫描全曲并输出分段网格，耗时明显更长，参数仍在实验阶段。",
+      "dynamicScopeHint": "Dynamic 会扫描全曲并输出分段网格，可能明显更慢，结果仍属实验性质。本期段落分析不会随 Dynamic 网格任务一起执行；能量分析仍按勾选执行。",
+      "productionDisabled": "Dynamic 参数尚未经真实音频标定，当前版本不可用。"
+    },
     "showPlaylistTrackCount": "在歌单名称后显示曲目数量",
     "curatedArtistTracking": {
       "title": "精选表演者联动",

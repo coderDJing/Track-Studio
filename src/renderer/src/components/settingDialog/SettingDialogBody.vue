@@ -26,6 +26,8 @@ import {
   normalizeAnalysisBpmRangeId,
   type AnalysisBpmRangePresetId
 } from '@shared/analysisBpmRange'
+import { ANALYSIS_GRID_MODE_HINT_KEYS } from '@renderer/utils/analysisGridModeUi'
+import { useAnalysisGridModeSetting } from '@renderer/components/settingDialog/useAnalysisGridModeSetting'
 import {
   BROWSER_PLAYER_RIGHT_TRACK_INFO_BPM_KEY,
   BROWSER_PLAYER_RIGHT_TRACK_INFO_COLUMN_KEYS,
@@ -160,6 +162,13 @@ const analysisBpmRangeModel = computed<AnalysisBpmRangePresetId>({
 const analysisBpmRangeOptions = computed(() =>
   buildAnalysisBpmRangeOptions(analysisBpmRangeModel.value)
 )
+
+const {
+  available: analysisGridModeAvailable,
+  model: analysisGridModeModel,
+  options: analysisGridModeOptions,
+  hint: analysisGridModeHint
+} = useAnalysisGridModeSetting(runtime)
 
 const browserPlayerRightTrackInfoModel = computed<BrowserPlayerRightTrackInfoField>({
   get: () => normalizeBrowserPlayerRightTrackInfo(runtime.setting.browserPlayerRightTrackInfo),
@@ -839,6 +848,31 @@ const traktorTrackStorageDirText = computed(
               <div class="setting-hint">{{ t('settings.analysisBpmRange.settingsHint') }}</div>
               <div class="setting-hint">
                 {{ t('settings.analysisBpmRange.settingsScopeHint') }}
+              </div>
+            </div>
+
+            <div class="setting-block">{{ tLabel('settings.analysisGridMode.label') }}</div>
+            <div class="setting-control">
+              <bubbleBoxTrigger
+                tag="div"
+                class="analysis-grid-mode-select"
+                :title="
+                  analysisGridModeAvailable
+                    ? ''
+                    : t(ANALYSIS_GRID_MODE_HINT_KEYS.productionDisabled)
+                "
+              >
+                <BaseSelect
+                  v-model="analysisGridModeModel"
+                  :options="analysisGridModeOptions"
+                  :width="220"
+                  :max-height="200"
+                  @change="setSetting"
+                />
+              </bubbleBoxTrigger>
+              <div class="setting-hint">{{ analysisGridModeHint }}</div>
+              <div v-if="!analysisGridModeAvailable" class="setting-hint setting-hint--warning">
+                {{ t(ANALYSIS_GRID_MODE_HINT_KEYS.productionDisabled) }}
               </div>
             </div>
 

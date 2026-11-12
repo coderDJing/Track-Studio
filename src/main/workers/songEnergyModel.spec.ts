@@ -8,12 +8,16 @@ import {
   aggregateSongArousal,
   analyzeSongEnergyWithModel,
   buildSongEnergyMelFrames,
+  buildSongEnergyBeatValuesFromLines,
+  buildSongEnergyTemporalSegments,
   normalizeRhythmicFluxScore,
   normalizeSongEnergyBeatGrid,
+  resolveSongEnergyMapBpm,
   summarizeSongEnergyPredictions,
   summarizeSongEnergyTemporalSegments,
   SONG_ENERGY_MODEL_SAMPLE_RATE
 } from './songEnergyModel'
+import { createSongBeatGridMapV2FromClips } from '../../shared/songBeatGridMapV2'
 
 const buildSineWave = (seconds: number, frequency = 440) => {
   const sampleCount = Math.floor(SONG_ENERGY_MODEL_SAMPLE_RATE * seconds)
@@ -168,5 +172,71 @@ describe('songEnergyModel', () => {
     expect(result?.analysis.danceabilityScore).toBeGreaterThanOrEqual(0)
     expect(result?.energyScore).toBeGreaterThanOrEqual(0)
     expect(result?.energyScore).toBeLessThanOrEqual(100)
+  })
+
+  it('buckets energy frames by the audio beat ordinal across clips', () => {
+    const beatLines = Array.from({ length: 48 }, (_, index) => ({
+      sec: index < 24 ? index * 0.5 : 12 + (index - 23) * 0.4,
+      beatOrdinal: index
+    }))
+    const framesPerSecond = SONG_ENERGY_MODEL_SAMPLE_RATE / 256
+    const frameCount = Math.round(framesPerSecond * 30)
+    const frameRms = Array.from({ length: frameCount }, () => 0.2)
+    const lowBandRatios = Array.from({ length: frameCount }, () => 0.3)
+
+    const beatValues = buildSongEnergyBeatValuesFromLines({ frameRms, lowBandRatios, beatLines })
+
+    expect(beatValues).not.toBeNull()
+    const values = beatValues ?? []
+    expect(values.length).toBe(48)
+    expect(values[0].beatIndex).toBe(0)
+    expect(values[values.length - 1].beatIndex).toBe(47)
+    for (let index = 1; index < values.length; index += 1) {
+      expect(values[index].beatIndex).toBeGreaterThan(values[index - 1].beatIndex)
+    }
+  })
+
+  it('uses the median clip bpm instead of the first clip only', () => {
+    const map = createSongBeatGridMapV2FromClips(
+      [
+        { startSec: 0, anchorSec: 0, bpm: 120, downbeatBeatOffset: 0 },
+        { startSec: 30, anchorSec: 30, bpm: 130, downbeatBeatOffset: 0 },
+        { startSec: 60, anchorSec: 60, bpm: 140, downbeatBeatOffset: 0 }
+      ],
+      'analysis',
+      { allowSingleClip: true }
+    )
+    expect(resolveSongEnergyMapBpm(map)).toBe(130)
+    expect(resolveSongEnergyMapBpm(null)).toBeUndefined()
+  })
+
+  it('builds 16-beat windows from the full beat line and aligns the tail', () => {
+    const beatLines = Array.from({ length: 121 }, (_, index) => ({
+      sec: index * 0.5,
+      beatOrdinal: index
+    }))
+    const frameCount = Math.round((SONG_ENERGY_MODEL_SAMPLE_RATE / 256) * 60)
+    const frameRms = Array.from({ length: frameCount }, () => 0.2)
+    const frameFlux = Array.from({ length: frameCount }, () => 0.1)
+    const lowBandRatios = Array.from({ length: frameCount }, () => 0.3)
+    const patchStarts: number[] = []
+    for (let start = 0; start + 187 <= frameCount; start += 93) patchStarts.push(start)
+    const modelScores = patchStarts.map(() => 55)
+
+    const segments = buildSongEnergyTemporalSegments({
+      modelScores,
+      patchStarts,
+      frameRms,
+      frameFlux,
+      lowBandRatios,
+      beatLines
+    })
+
+    expect(segments.length).toBeGreaterThan(2)
+    expect(segments[0].startSeconds).toBe(0)
+    expect(segments[0].endSeconds).toBeCloseTo(8, 6)
+    expect(segments[1].startSeconds).toBeCloseTo(8, 6)
+    expect(segments[segments.length - 1].endSeconds).toBeCloseTo(60, 6)
+    expect(segments.every((segment) => segment.endSeconds > segment.startSeconds)).toBe(true)
   })
 })

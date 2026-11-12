@@ -221,6 +221,14 @@ label.setting-block {
   line-height: 1.5;
 }
 
+.setting-hint--warning {
+  color: var(--warning, #b67500);
+}
+
+.analysis-grid-mode-select {
+  display: inline-flex;
+}
+
 .model-manager-row {
   display: flex;
   flex-wrap: wrap;

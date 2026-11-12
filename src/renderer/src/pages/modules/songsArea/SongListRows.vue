@@ -372,8 +372,8 @@ const { listViewportWidth } = useRowAnalysisViewport({
   scrollHostElement: scrollHostElementRef
 })
 
-const { getAnalysisProgress, isSongNeedsAnalysis, hasAnyAnalysisProgress } = useKeyAnalysisProgress(
-  {
+const { getAnalysisProgress, getAnalysisDynamicGrid, isSongNeedsAnalysis, hasAnyAnalysisProgress } =
+  useKeyAnalysisProgress({
     visibleSongsWithIndex,
     requiresRuntimeAnalysis,
     isAnalysisCompleteOverride: (filePath) => {
@@ -383,8 +383,7 @@ const { getAnalysisProgress, isSongNeedsAnalysis, hasAnyAnalysisProgress } = use
         (item) => rendererFilePathKey(String(item || '')) === normalized
       )
     }
-  }
-)
+  })
 const showAnalysisProgressBar = computed(
   () => sourceLibraryNameRef.value !== 'RecordingLibrary' && hasAnyAnalysisProgress.value
 )
@@ -844,6 +843,7 @@ onUnmounted(() => {
             <RowAnalysisBar
               v-if="showAnalysisProgressBar && !item.song.fileMissing"
               :progress="getAnalysisProgress(item.song.filePath)"
+              :dynamic-grid="getAnalysisDynamicGrid(item.song.filePath)"
               :viewport-width="listViewportWidth"
               :scroll-left="scrollLeft"
             />

@@ -16,12 +16,18 @@ export const mergeSetSongGridAnalysis = (
   delete next.beatGridSource
   delete next.beatGridStatus
   delete next.beatGridMap
+  delete next.beatGridAnalysisMode
+  delete next.beatGridResultShape
+  delete next.beatGridPolicyVersion
   delete next.timeBasisOffsetMs
   delete next.timeBasisOffsetAlgorithmVersion
   if (grid.kind === 'grid') {
     next.beatGridMap = grid.beatGridMap
     next.timeBasisOffsetMs = source.timeBasisOffsetMs
     next.timeBasisOffsetAlgorithmVersion = source.timeBasisOffsetAlgorithmVersion
+    if (source.beatGridAnalysisMode) next.beatGridAnalysisMode = source.beatGridAnalysisMode
+    if (source.beatGridResultShape) next.beatGridResultShape = source.beatGridResultShape
+    if (source.beatGridPolicyVersion) next.beatGridPolicyVersion = source.beatGridPolicyVersion
   } else {
     next.beatGridStatus = 'no-bpm'
   }

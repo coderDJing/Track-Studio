@@ -15,6 +15,16 @@ import {
   type AnalysisBpmRangePresetId
 } from '@shared/analysisBpmRange'
 import {
+  isDynamicAnalysisGridAvailable,
+  normalizeAnalysisGridMode,
+  type AnalysisGridMode
+} from '@shared/analysisGridMode'
+import {
+  ANALYSIS_GRID_MODE_HINT_KEYS,
+  buildAnalysisGridModeOptions,
+  isAnalysisGridSubmitBlocked
+} from '@renderer/utils/analysisGridModeUi'
+import {
   applyTrackReanalysisSelectionDependencies,
   hasAnyTrackReanalysisUserSelection,
   isTrackReanalysisBeatGridLocked,
@@ -26,6 +36,7 @@ type TrackAnalysisDialogPurpose = 'reanalysis' | 'missing'
 type TrackAnalysisDialogResult = {
   selection: TrackReanalysisUserSelection
   analysisBpmRangeId?: AnalysisBpmRangePresetId
+  analysisGridMode?: AnalysisGridMode
 }
 
 const props = defineProps<{
@@ -34,6 +45,7 @@ const props = defineProps<{
   canSelectStructureAlone: boolean
   purpose?: TrackAnalysisDialogPurpose
   initialBpmRangeId?: AnalysisBpmRangePresetId
+  initialGridMode?: AnalysisGridMode
   confirmCallback?: (value: TrackAnalysisDialogResult) => void
   cancelCallback?: () => void
 }>()
@@ -51,15 +63,34 @@ const selectedBpmRangeId = ref<AnalysisBpmRangePresetId>(
   normalizeAnalysisBpmRangeId(props.initialBpmRangeId)
 )
 const bpmRangeOptions = computed(() => buildAnalysisBpmRangeOptions(selectedBpmRangeId.value))
+const selectedGridMode = ref<AnalysisGridMode>(normalizeAnalysisGridMode(props.initialGridMode))
+const gridModeAvailable = isDynamicAnalysisGridAvailable({ isDevelopment: import.meta.env.DEV })
+const gridModeOptions = computed(() =>
+  buildAnalysisGridModeOptions({ dynamicAvailable: gridModeAvailable })
+)
+const gridModeHintText = computed(() =>
+  gridModeAvailable
+    ? t(ANALYSIS_GRID_MODE_HINT_KEYS.dynamicScope)
+    : t(ANALYSIS_GRID_MODE_HINT_KEYS.productionDisabled)
+)
 const { dialogVisible, closeWithAnimation } = useDialogTransition()
 const beatGridLocked = computed(() =>
   isTrackReanalysisBeatGridLocked(selection.value, props.canSelectStructureAlone)
 )
 const showBpmRange = computed(() => selection.value.beatGrid === true)
+const gridSubmitBlocked = computed(() =>
+  isAnalysisGridSubmitBlocked({
+    beatGridSelected: showBpmRange.value,
+    mode: selectedGridMode.value,
+    dynamicAvailable: gridModeAvailable
+  })
+)
 const warnGridWithoutStructure = computed(
   () => selection.value.beatGrid && !selection.value.structure
 )
-const canConfirm = computed(() => hasAnyTrackReanalysisUserSelection(selection.value))
+const canConfirm = computed(
+  () => hasAnyTrackReanalysisUserSelection(selection.value) && !gridSubmitBlocked.value
+)
 const dialogTitle = computed(() =>
   purpose.value === 'missing' ? t('tracks.analysisDialogTitle') : t('tracks.reanalysisDialogTitle')
 )
@@ -80,7 +111,7 @@ const dependencyHintText = computed(() => {
 })
 
 const confirm = () => {
-  if (!canConfirm.value) return
+  if (!canConfirm.value || gridSubmitBlocked.value) return
   const next = applyTrackReanalysisSelectionDependencies(
     selection.value,
     props.canSelectStructureAlone
@@ -89,7 +120,8 @@ const confirm = () => {
   closeWithAnimation(() =>
     props.confirmCallback?.({
       selection: next,
-      analysisBpmRangeId: next.beatGrid ? selectedBpmRangeId.value : undefined
+      analysisBpmRangeId: next.beatGrid ? selectedBpmRangeId.value : undefined,
+      analysisGridMode: next.beatGrid ? selectedGridMode.value : undefined
     })
   )
 }
@@ -164,6 +196,30 @@ onUnmounted(() => {
               />
             </bubbleBoxTrigger>
           </div>
+          <div
+            class="track-reanalysis-dialog__grid-mode"
+            :class="{ 'is-hidden': !showBpmRange }"
+            :inert="!showBpmRange"
+          >
+            <span>{{ t('settings.analysisGridMode.label') }}</span>
+            <bubbleBoxTrigger
+              tag="div"
+              class="track-reanalysis-dialog__mode-select"
+              :title="showBpmRange ? gridModeHintText : ''"
+            >
+              <BaseSelect
+                v-model="selectedGridMode"
+                :options="gridModeOptions"
+                :disabled="!showBpmRange"
+                :show-bubble="false"
+                :width="168"
+                :max-height="200"
+              />
+            </bubbleBoxTrigger>
+          </div>
+          <div class="track-reanalysis-dialog__mode-hint" :class="{ 'is-hidden': !showBpmRange }">
+            {{ gridModeHintText }}
+          </div>
           <singleCheckbox id="reanalysis-option-waveform" v-model="selection.waveform">
             {{ t('tracks.reanalysisOptionWaveform') }}
           </singleCheckbox>
@@ -188,7 +244,11 @@ onUnmounted(() => {
           v-if="!canConfirm"
           tag="div"
           class="button track-reanalysis-dialog__button is-disabled"
-          :title="t('tracks.reanalysisSelectAtLeastOne')"
+          :title="
+            gridSubmitBlocked
+              ? t(ANALYSIS_GRID_MODE_HINT_KEYS.productionDisabled)
+              : t('tracks.reanalysisSelectAtLeastOne')
+          "
         >
           {{ startButtonText }} (E)
         </bubbleBoxTrigger>
@@ -258,6 +318,35 @@ onUnmounted(() => {
 }
 
 .track-reanalysis-dialog__bpm.is-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.track-reanalysis-dialog__grid-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 30px;
+  color: var(--text-secondary, #8c8c8c);
+  font-size: 13px;
+}
+
+.track-reanalysis-dialog__grid-mode.is-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.track-reanalysis-dialog__mode-select {
+  display: inline-flex;
+}
+
+.track-reanalysis-dialog__mode-hint {
+  color: var(--text-secondary, #8c8c8c);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.track-reanalysis-dialog__mode-hint.is-hidden {
   visibility: hidden;
   pointer-events: none;
 }

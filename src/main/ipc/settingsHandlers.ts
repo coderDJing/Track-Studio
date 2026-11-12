@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
+import { is } from '@electron-toolkit/utils'
 import store from '../store'
 import { applyThemeFromSettings, broadcastSystemThemeIfNeeded } from '../bootstrap/settings'
 import {
@@ -21,6 +22,10 @@ import {
 } from '../curatedArtistLibrary'
 import { assertLibraryMergeMutationAllowed } from '../services/libraryMerge/runtime'
 import { normalizeAnalysisBpmRangeId } from '../../shared/analysisBpmRange'
+import {
+  isAnalysisGridModeSupported,
+  normalizeAnalysisGridMode
+} from '../../shared/analysisGridMode'
 import { normalizeTrackReanalysisSelection } from '../../shared/trackReanalysisSelection'
 import {
   normalizeCloudSyncAutoEnabled,
@@ -39,7 +44,7 @@ export function registerSettingsHandlers(deps: Dependencies) {
   })
 
   // 串行化队列，防止快速连续调用导致 prevMode/prevContextMenu 比较不准确
-  let setSettingQueue: Promise<void> = Promise.resolve()
+  let setSettingQueue: Promise<unknown> = Promise.resolve()
 
   ipcMain.handle('setSetting', async (_event, setting) => {
     assertLibraryMergeMutationAllowed()
@@ -47,6 +52,15 @@ export function registerSettingsHandlers(deps: Dependencies) {
       .catch(() => undefined)
       .then(async () => {
         assertLibraryMergeMutationAllowed()
+        const requestedGridMode = normalizeAnalysisGridMode(setting?.analysisGridMode)
+        const storedGridMode = normalizeAnalysisGridMode(store.settingConfig?.analysisGridMode)
+        if (
+          requestedGridMode !== storedGridMode &&
+          !isAnalysisGridModeSupported(requestedGridMode, { isDevelopment: is.dev })
+        ) {
+          // 已存 dynamic 不会被静默改回 normal，但禁止在发布启用开关关闭时新写入该模式。
+          return { blocked: true, reason: 'dynamic-grid-unavailable' }
+        }
         const prevAutoEnabled = normalizeCloudSyncAutoEnabled(
           store.settingConfig?.cloudSyncAutoEnabled
         )
@@ -62,6 +76,7 @@ export function registerSettingsHandlers(deps: Dependencies) {
           // userKey 只能由 cloudSync/config/save 校验后修改，不能被 renderer 的旧设置覆盖。
           cloudSyncUserKey: store.settingConfig.cloudSyncUserKey,
           analysisBpmRange: normalizeAnalysisBpmRangeId(setting?.analysisBpmRange),
+          analysisGridMode: normalizeAnalysisGridMode(setting?.analysisGridMode),
           trackAnalysisSelection: normalizeTrackReanalysisSelection(
             setting?.trackAnalysisSelection
           ),

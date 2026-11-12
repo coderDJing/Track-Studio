@@ -10,6 +10,7 @@ import {
   type TrackReanalysisUserSelection
 } from '@shared/trackReanalysisSelection'
 import { normalizeAnalysisBpmRangeId } from '@shared/analysisBpmRange'
+import { normalizeAnalysisGridMode, type AnalysisGridMode } from '@shared/analysisGridMode'
 import {
   isCurrentRendererWindowsPathPlatform,
   normalizeFilePathForComparison
@@ -21,7 +22,8 @@ const normalizeFilePathKey = (filePath: string) =>
 const persistTrackAnalysisDialogSettings = async (
   purpose: TrackAnalysisDialogPurpose,
   selection: TrackReanalysisUserSelection,
-  analysisBpmRangeId?: string
+  analysisBpmRangeId?: string,
+  analysisGridMode?: AnalysisGridMode
 ) => {
   const runtime = useRuntimeStore()
   if (purpose === 'missing') {
@@ -31,6 +33,9 @@ const persistTrackAnalysisDialogSettings = async (
   }
   if (analysisBpmRangeId) {
     runtime.setting.analysisBpmRange = normalizeAnalysisBpmRangeId(analysisBpmRangeId)
+  }
+  if (analysisGridMode) {
+    runtime.setting.analysisGridMode = normalizeAnalysisGridMode(analysisGridMode)
   }
   await window.electron.ipcRenderer.invoke(
     'setSetting',
@@ -70,19 +75,22 @@ export const promptTrackAnalysisSelection = async (options: {
       files,
       isCurrentRendererWindowsPathPlatform()
     ),
-    initialBpmRangeId: normalizeAnalysisBpmRangeId(runtime.setting.analysisBpmRange)
+    initialBpmRangeId: normalizeAnalysisBpmRangeId(runtime.setting.analysisBpmRange),
+    initialGridMode: normalizeAnalysisGridMode(runtime.setting.analysisGridMode)
   })
   if (!result) return null
 
   await persistTrackAnalysisDialogSettings(
     options.purpose,
     result.selection,
-    result.analysisBpmRangeId
+    result.analysisBpmRangeId,
+    result.analysisGridMode
   )
   return {
     files,
     selection: result.selection,
-    analysisBpmRangeId: result.analysisBpmRangeId
+    analysisBpmRangeId: result.analysisBpmRangeId,
+    analysisGridMode: result.analysisGridMode
   }
 }
 
@@ -104,7 +112,8 @@ export const promptAndStartTrackReanalysis = async (
     return await window.electron.ipcRenderer.invoke('track:cache:clear:batch', {
       filePaths: prompted.files,
       selection: prompted.selection,
-      analysisBpmRangeId: prompted.analysisBpmRangeId
+      analysisBpmRangeId: prompted.analysisBpmRangeId,
+      gridMode: prompted.analysisGridMode
     })
   } finally {
     if (shouldHoldProgress) runtime.isProgressing = false

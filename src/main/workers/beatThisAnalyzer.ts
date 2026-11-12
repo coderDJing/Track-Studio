@@ -10,6 +10,17 @@ import {
 } from './beatThisRuntime'
 import { lowerAnalysisProcessPriority } from './analysisRuntimeTuning'
 import { registerChildProcess, terminateChildProcess } from '../services/childProcessRegistry'
+import {
+  BEAT_WINDOW_PROTOCOL_VERSION,
+  DOWNBEAT_MATCH_TOLERANCE_SEC,
+  MAX_WINDOW_RESPONSE_JSON_CHARS,
+  beatThisWindowProtocolError,
+  normalizeBeatWindowResponse,
+  normalizeWindowRequest,
+  resolveWindowRequestTimeoutMs,
+  type BeatWindowRequestWindow,
+  type DynamicBeatWindowEvidence
+} from './beatThisWindowProtocol'
 
 type BeatThisAnalyzeResult = {
   bpm: number
@@ -61,6 +72,66 @@ type BeatThisBridgeMessage =
       type: 'shutdown'
       requestId?: string
     }
+
+export type BeatWindowAnalyzeParams = {
+  pcmData: Buffer
+  sampleRate: number
+  channels: number
+  chunkStartAudioSec: number
+  windows: BeatWindowRequestWindow[]
+  timeoutMs?: number
+  signal?: AbortSignal
+  onDiagnosticPhase?: (phase: string) => void
+}
+
+export type BeatThisWindowSession = {
+  readonly pid: number | null
+  analyzeWindows: (params: BeatWindowAnalyzeParams) => Promise<DynamicBeatWindowEvidence[]>
+  close: () => Promise<void>
+}
+
+export type BeatThisWindowSessionOptions = {
+  /**
+   * Called synchronously right after spawn with the owned PID, and with null
+   * only after that exact child process has really exited/closed. A newer
+   * spawn is never cleared by an older child's late exit event.
+   */
+  onProcessChange?: (pid: number | null) => void
+}
+
+type BeatWindowsBridgeMessage =
+  | {
+      type: 'ready'
+    }
+  | {
+      type: 'beat-windows-result'
+      protocolVersion?: number
+      requestId?: string
+      windows?: unknown
+    }
+  | {
+      type: 'error' | 'fatal'
+      requestId?: string
+      error?: string
+    }
+  | {
+      type: 'shutdown'
+      requestId?: string
+    }
+
+type PendingWindowRequest = {
+  resolve: (value: DynamicBeatWindowEvidence[]) => void
+  reject: (error: Error) => void
+  cleanup: () => void
+  expected: {
+    requestId: string
+    chunkStartAudioSec: number
+    windows: BeatWindowRequestWindow[]
+  }
+}
+
+const WINDOW_READY_TIMEOUT_MS = 120_000
+const WINDOW_SESSION_CLOSE_TIMEOUT_MS = 1_500
 
 type PendingRequest = {
   resolve: (value: BeatThisAnalyzeResult) => void
@@ -501,4 +572,471 @@ export const analyzeBeatGridWithBeatThisSlidingWindowsFromPcm = async (params: {
     maxBpm: params.maxBpm,
     onDiagnosticPhase: params.onDiagnosticPhase
   })
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic beat-window bridge (protocolVersion 1)
+// ---------------------------------------------------------------------------
+
+const ownedWindowSessionTerminators = new Set<() => void>()
+let ownedWindowCleanupRegistered = false
+
+const registerOwnedWindowTerminator = (terminate: () => void) => {
+  ownedWindowSessionTerminators.add(terminate)
+  if (!ownedWindowCleanupRegistered) {
+    ownedWindowCleanupRegistered = true
+    process.once('exit', () => {
+      for (const cleanup of Array.from(ownedWindowSessionTerminators)) {
+        try {
+          cleanup()
+        } catch {}
+      }
+      ownedWindowSessionTerminators.clear()
+    })
+  }
+  return () => {
+    ownedWindowSessionTerminators.delete(terminate)
+  }
+}
+
+export const createBeatThisWindowSession = (
+  options: BeatThisWindowSessionOptions = {}
+): BeatThisWindowSession => {
+  let child: ChildProcessWithoutNullStreams | null = null
+  let readyPromise: Promise<void> | null = null
+  let settleReady: ((error?: Error) => void) | null = null
+  let ready = false
+  let readyTimer: ReturnType<typeof setTimeout> | null = null
+  let stdoutBuffer = ''
+  let stderrBuffer = ''
+  let requestCounter = 0
+  let queue: Promise<unknown> = Promise.resolve()
+  let closing = false
+  let unregisterOwned: (() => void) | null = null
+  let processGeneration = 0
+  let announcedPid: number | null = null
+  const pendingRequests = new Map<string, PendingWindowRequest>()
+
+  const emitProcessChange = (pid: number | null) => {
+    try {
+      options.onProcessChange?.(pid)
+    } catch {}
+  }
+
+  const clearReadyTimer = () => {
+    if (!readyTimer) return
+    clearTimeout(readyTimer)
+    readyTimer = null
+  }
+
+  const rejectAllPending = (error: Error) => {
+    for (const request of Array.from(pendingRequests.values())) {
+      request.cleanup()
+      request.reject(error)
+    }
+    pendingRequests.clear()
+  }
+
+  const detachOwned = () => {
+    unregisterOwned?.()
+    unregisterOwned = null
+  }
+
+  const abandonOwnedProcess = (error: Error) => {
+    const current = child
+    const pendingReady = settleReady
+    child = null
+    ready = false
+    readyPromise = null
+    settleReady = null
+    clearReadyTimer()
+    stdoutBuffer = ''
+    stderrBuffer = ''
+    detachOwned()
+    if (current) {
+      terminateChildProcess(current, 'beat-this:dynamic-windows')
+    }
+    pendingReady?.(error)
+    rejectAllPending(error)
+  }
+
+  const handleMessage = (message: BeatWindowsBridgeMessage) => {
+    if (message.type === 'ready') {
+      ready = true
+      clearReadyTimer()
+      settleReady?.()
+      settleReady = null
+      return
+    }
+
+    if (message.type === 'fatal') {
+      abandonOwnedProcess(
+        beatThisWindowProtocolError(
+          'bridge-exited',
+          message.error || 'Beat This! dynamic window bridge fatal error'
+        )
+      )
+      return
+    }
+
+    const requestId = String(message.requestId || '').trim()
+    if (!requestId) return
+    const pending = pendingRequests.get(requestId)
+    if (!pending) return
+    pendingRequests.delete(requestId)
+    pending.cleanup()
+
+    if (message.type === 'beat-windows-result') {
+      try {
+        pending.resolve(normalizeBeatWindowResponse(message, pending.expected))
+      } catch (error) {
+        pending.reject(error instanceof Error ? error : new Error(String(error)))
+      }
+      return
+    }
+
+    if (message.type === 'error') {
+      const errorText = message.error || 'Beat This! dynamic window request failed'
+      if (/unsupported command/i.test(errorText)) {
+        pending.reject(
+          beatThisWindowProtocolError(
+            'bridge-unsupported-command',
+            'Beat This! runtime does not support analyze_beat_windows (protocolVersion 1); ' +
+              'update the bundled runtime instead of falling back to Normal analysis'
+          )
+        )
+        return
+      }
+      pending.reject(beatThisWindowProtocolError('bridge-exited', errorText))
+    }
+  }
+
+  const handleStdoutChunk = (chunk: Buffer | string) => {
+    const text = chunk.toString()
+    if (stdoutBuffer.length + text.length > MAX_WINDOW_RESPONSE_JSON_CHARS) {
+      abandonOwnedProcess(
+        beatThisWindowProtocolError('response-too-large', 'dynamic window response is too large')
+      )
+      return
+    }
+    stdoutBuffer += text
+    while (true) {
+      const lineBreakIndex = stdoutBuffer.indexOf('\n')
+      if (lineBreakIndex < 0) return
+      const line = stdoutBuffer.slice(0, lineBreakIndex).trim()
+      stdoutBuffer = stdoutBuffer.slice(lineBreakIndex + 1)
+      if (!line) continue
+      if (line.length > MAX_WINDOW_RESPONSE_JSON_CHARS) {
+        abandonOwnedProcess(
+          beatThisWindowProtocolError('response-too-large', 'dynamic window response is too large')
+        )
+        return
+      }
+      try {
+        handleMessage(JSON.parse(line) as BeatWindowsBridgeMessage)
+      } catch (error) {
+        abandonOwnedProcess(
+          beatThisWindowProtocolError(
+            'malformed-response',
+            `Beat This! dynamic window bridge returned invalid JSON: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          )
+        )
+        return
+      }
+    }
+  }
+
+  const spawnOwnedBridge = () => {
+    const resolvedRuntime = resolveBeatThisRuntime()
+    if (!resolvedRuntime) {
+      throw beatThisWindowProtocolError('bridge-exited', 'Beat This! Python runtime not available')
+    }
+    const bridgePath = resolveBridgeScriptPath()
+    if (!bridgePath || !fs.existsSync(bridgePath)) {
+      throw beatThisWindowProtocolError(
+        'bridge-exited',
+        `Beat This! bridge missing: ${bridgePath || '<empty>'}`
+      )
+    }
+    const device = resolvedRuntime.selectedDeviceArg || 'cpu'
+    const dbnEnabled = /^(1|true|yes|on)$/i.test(
+      String(process.env[ENV_BEAT_THIS_DBN] || '').trim()
+    )
+    const spawned = childProcess.spawn(
+      resolvedRuntime.candidate.command,
+      [
+        ...resolvedRuntime.candidate.args,
+        bridgePath,
+        '--serve',
+        device,
+        dbnEnabled ? 'true' : 'false'
+      ],
+      {
+        windowsHide: true,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: buildBeatThisChildEnv(resolvedRuntime.candidate)
+      }
+    )
+
+    child = spawned
+    // Announce synchronously, before the model load/ready handshake begins.
+    // The generation guard keeps a late exit of an older child from clearing a
+    // newer PID (which may even have been reused by the OS).
+    const generation = ++processGeneration
+    announcedPid = spawned.pid ?? null
+    emitProcessChange(announcedPid)
+    let processGoneNotified = false
+    const notifyProcessGone = () => {
+      if (processGoneNotified) return
+      processGoneNotified = true
+      if (generation !== processGeneration) return
+      if (announcedPid === null) return
+      announcedPid = null
+      emitProcessChange(null)
+    }
+    spawned.once('exit', notifyProcessGone)
+    spawned.once('close', notifyProcessGone)
+    registerChildProcess(spawned, 'beat-this:dynamic-windows')
+    lowerAnalysisProcessPriority(spawned)
+
+    readyPromise = new Promise<void>((resolve, reject) => {
+      settleReady = (error?: Error) => {
+        if (error) reject(error)
+        else resolve()
+      }
+    })
+    readyTimer = setTimeout(() => {
+      abandonOwnedProcess(
+        beatThisWindowProtocolError(
+          'bridge-ready-timeout',
+          `Beat This! dynamic window bridge did not become ready within ${WINDOW_READY_TIMEOUT_MS}ms`
+        )
+      )
+    }, WINDOW_READY_TIMEOUT_MS)
+    unregisterOwned = registerOwnedWindowTerminator(() => {
+      if (child === spawned) {
+        terminateChildProcess(spawned, 'beat-this:dynamic-windows')
+      }
+    })
+
+    spawned.stdout.on('data', handleStdoutChunk)
+    spawned.stderr.on('data', (chunk: Buffer | string) => {
+      stderrBuffer += chunk.toString()
+      if (stderrBuffer.length > 4000) {
+        stderrBuffer = stderrBuffer.slice(-4000)
+      }
+    })
+    spawned.once('error', (error: Error) => {
+      if (child !== spawned) return
+      abandonOwnedProcess(
+        beatThisWindowProtocolError(
+          'bridge-exited',
+          `Beat This! dynamic window bridge failed: ${error.message}`
+        )
+      )
+    })
+    spawned.once('exit', (code, signal) => {
+      if (child !== spawned) return
+      const stderrTail = stderrBuffer.trim()
+      abandonOwnedProcess(
+        beatThisWindowProtocolError(
+          'bridge-exited',
+          `Beat This! dynamic window bridge exited unexpectedly ` +
+            `(code=${String(code ?? '')}, signal=${String(signal ?? '')})` +
+            (stderrTail ? ` stderr=${stderrTail}` : '')
+        )
+      )
+    })
+  }
+
+  const ensureProcess = async () => {
+    if (child && ready) return child
+    if (!child) spawnOwnedBridge()
+    if (readyPromise) await readyPromise
+    if (!child) {
+      throw beatThisWindowProtocolError(
+        'bridge-exited',
+        'Beat This! dynamic window bridge unavailable'
+      )
+    }
+    return child
+  }
+
+  const runRequest = async (
+    params: BeatWindowAnalyzeParams
+  ): Promise<DynamicBeatWindowEvidence[]> => {
+    if (closing) {
+      throw beatThisWindowProtocolError('session-closed', 'dynamic window session is closed')
+    }
+    const normalized = normalizeWindowRequest(params)
+    // Queued requests that were cancelled while waiting must not spawn a sidecar.
+    if (params.signal?.aborted) {
+      throw beatThisWindowProtocolError('request-cancelled', 'dynamic window request was cancelled')
+    }
+
+    params.onDiagnosticPhase?.('dynamic-windows:bridge-ready')
+    const spawned = await ensureProcess()
+    const requestId = `dyn-${Date.now()}-${++requestCounter}`
+    const header = JSON.stringify({
+      type: 'analyze_beat_windows',
+      protocolVersion: BEAT_WINDOW_PROTOCOL_VERSION,
+      requestId,
+      chunkStartAudioSec: normalized.chunkStartAudioSec,
+      sampleRate: normalized.sampleRate,
+      channels: normalized.channels,
+      byteLength: normalized.pcmData.byteLength,
+      downbeatMatchToleranceSec: DOWNBEAT_MATCH_TOLERANCE_SEC,
+      windows: normalized.windows
+    })
+    const expected = {
+      requestId,
+      chunkStartAudioSec: normalized.chunkStartAudioSec,
+      windows: normalized.windows
+    }
+    const timeoutMs = resolveWindowRequestTimeoutMs(normalized.windows.length, params.timeoutMs)
+
+    const response = new Promise<DynamicBeatWindowEvidence[]>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | null = null
+      let request: PendingWindowRequest | null = null
+      const failAndAbandon = (error: Error) => {
+        pendingRequests.delete(requestId)
+        request?.cleanup()
+        request?.reject(error)
+        abandonOwnedProcess(error)
+      }
+      const abortHandler = () => {
+        failAndAbandon(
+          beatThisWindowProtocolError('request-cancelled', 'dynamic window request was cancelled')
+        )
+      }
+      request = {
+        resolve: (value) => {
+          clearTimeout(timer ?? undefined)
+          params.signal?.removeEventListener('abort', abortHandler)
+          resolve(value)
+        },
+        reject: (error) => {
+          clearTimeout(timer ?? undefined)
+          params.signal?.removeEventListener('abort', abortHandler)
+          reject(error)
+        },
+        cleanup: () => {
+          clearTimeout(timer ?? undefined)
+          params.signal?.removeEventListener('abort', abortHandler)
+        },
+        expected
+      }
+      pendingRequests.set(requestId, request)
+      timer = setTimeout(() => {
+        failAndAbandon(
+          beatThisWindowProtocolError(
+            'request-timeout',
+            `dynamic window request timed out after ${timeoutMs}ms`
+          )
+        )
+      }, timeoutMs)
+      params.signal?.addEventListener('abort', abortHandler, { once: true })
+    })
+
+    try {
+      params.onDiagnosticPhase?.('dynamic-windows:write')
+      await writeToBridge(spawned, `${header}\n`)
+      await writeToBridge(spawned, normalized.pcmData)
+      params.onDiagnosticPhase?.('dynamic-windows:inference-wait')
+      const evidence = await response
+      params.onDiagnosticPhase?.('dynamic-windows:result')
+      return evidence
+    } catch (error) {
+      const pending = pendingRequests.get(requestId)
+      if (pending) {
+        pendingRequests.delete(requestId)
+        pending.cleanup()
+      }
+      if (child) {
+        abandonOwnedProcess(error instanceof Error ? error : new Error(String(error)))
+      }
+      throw error
+    }
+  }
+
+  const analyzeWindows = (params: BeatWindowAnalyzeParams) => {
+    const run = queue.catch(() => undefined).then(() => runRequest(params))
+    queue = run.catch(() => undefined)
+    return run
+  }
+
+  const close = async () => {
+    if (closing) return
+    closing = true
+    const current = child
+    if (!current) {
+      detachOwned()
+      closing = false
+      return
+    }
+    if (pendingRequests.size > 0) {
+      abandonOwnedProcess(
+        beatThisWindowProtocolError(
+          'session-closed',
+          'dynamic window session closed with a pending request'
+        )
+      )
+      closing = false
+      return
+    }
+    try {
+      await writeToBridge(
+        current,
+        `${JSON.stringify({ type: 'shutdown', requestId: `dyn-close-${Date.now()}` })}\n`
+      )
+    } catch {}
+    try {
+      current.stdin.end()
+    } catch {}
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        if (child === current) {
+          abandonOwnedProcess(
+            beatThisWindowProtocolError(
+              'session-closed',
+              'dynamic window bridge did not exit during shutdown'
+            )
+          )
+        }
+        resolve()
+      }, WINDOW_SESSION_CLOSE_TIMEOUT_MS)
+      current.once('exit', () => {
+        clearTimeout(timer)
+        if (child === current) {
+          child = null
+          ready = false
+          readyPromise = null
+          detachOwned()
+        }
+        resolve()
+      })
+    })
+    closing = false
+  }
+
+  return {
+    get pid() {
+      return child?.pid ?? null
+    },
+    analyzeWindows,
+    close
+  }
+}
+
+export const analyzeBeatWindowsWithBeatThisFromPcm = async (
+  params: BeatWindowAnalyzeParams
+): Promise<DynamicBeatWindowEvidence[]> => {
+  const session = createBeatThisWindowSession()
+  try {
+    return await session.analyzeWindows(params)
+  } finally {
+    await session.close()
+  }
 }

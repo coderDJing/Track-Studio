@@ -43,7 +43,10 @@ const createHelpers = () => {
       return true
     },
     isManualOnlyJob: (job: KeyAnalysisJob) =>
-      job.category === 'manual-batch' && !job.focusSlots?.length
+      job.category === 'manual-batch' && !job.focusSlots?.length,
+    resolveGridMode: (fallback?: unknown) =>
+      fallback === 'dynamic' ? ('dynamic' as const) : ('normal' as const),
+    nextGridRequestGeneration: () => ++nextJobId
   }
 }
 

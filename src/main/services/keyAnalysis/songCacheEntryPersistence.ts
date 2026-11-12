@@ -12,6 +12,7 @@ import {
   normalizeSongStructureAnalysis,
   type SongStructureAnalysis
 } from '../../../shared/songStructure'
+import { applyGridAnalysisMetadata } from './gridAnalysisMetadata'
 
 export type EnsureSongCacheEntryPayload = {
   keyText?: string
@@ -19,9 +20,13 @@ export type EnsureSongCacheEntryPayload = {
   beatGridAlgorithmVersion?: number | null
   beatGridStatus?: ISongInfo['beatGridStatus']
   beatGridMap?: SongBeatGridMapV2 | null
+  beatGridAnalysisMode?: 'normal' | 'dynamic'
+  beatGridResultShape?: 'fixed' | 'dynamic'
+  beatGridPolicyVersion?: string
   energyScore?: number
   energyAlgorithmVersion?: number
   energyAnalysis?: SongEnergyAnalysisV5
+  energySourceGridSignature?: string
   songStructure?: SongStructureAnalysis | null
 }
 
@@ -88,11 +93,27 @@ export const ensureSongCacheEntry = async (
       delete info.beatGridMap
     }
   }
+  if (
+    payload.beatGridAnalysisMode !== undefined ||
+    payload.beatGridResultShape !== undefined ||
+    payload.beatGridPolicyVersion !== undefined
+  ) {
+    applyGridAnalysisMetadata(info, {
+      mode: payload.beatGridAnalysisMode,
+      shape: payload.beatGridResultShape,
+      policyVersion: payload.beatGridPolicyVersion
+    })
+  }
   if (payload.energyScore !== undefined) {
     info.energyScore = payload.energyScore
     info.energyAlgorithmVersion =
       payload.energyAlgorithmVersion ?? CURRENT_SONG_ENERGY_ALGORITHM_VERSION
     info.energyAnalysis = payload.energyAnalysis
+    if (payload.energySourceGridSignature) {
+      info.energySourceGridSignature = payload.energySourceGridSignature
+    } else {
+      delete info.energySourceGridSignature
+    }
   }
   if (Object.prototype.hasOwnProperty.call(payload, 'songStructure')) {
     const songStructure = normalizeSongStructureAnalysis(payload.songStructure)

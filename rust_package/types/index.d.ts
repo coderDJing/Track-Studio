@@ -27,6 +27,8 @@ export interface DecodeAudioResult {
   channels: number
   /** 总帧数 */
   totalFrames: number
+  /** 实际输出起点（相对可听音频起点，秒）；仅 native PCM 分块解码提供 */
+  actualStartSec?: number
   /** 解码后端（symphonia / ffmpeg / ffmpeg-fallback） */
   decoderBackend?: string
   /** 错误描述（当解码失败时） */

@@ -25,6 +25,13 @@ vi.mock('node:worker_threads', async () => {
 
 vi.mock('../../log', () => ({ log: { error: vi.fn() } }))
 vi.mock('../../libraryCacheDb', () => ({}))
+// keyAnalysisQueue 间接依赖 electron-toolkit；测试不启动 Electron，提供最小上下文。
+vi.mock('@electron-toolkit/utils', () => ({
+  is: { dev: false, macOS: false, windows: true, linux: false },
+  electronApp: { setAppUserModelId: vi.fn() },
+  optimizer: { watchWindowShortcuts: vi.fn() },
+  platform: { isWindows: true, isMacOS: false, isLinux: false }
+}))
 vi.mock('../libraryMerge/mutationGate', () => ({ isLibraryMergeMutationLocked: () => false }))
 // 此测试使用真实 worker 生命周期和手动批次结算；不启动扫描、解码和调度线程。
 vi.mock('./queue', () => ({
@@ -62,6 +69,7 @@ const createHarness = (events = new EventEmitter()) => {
       expected.delete(worker)
       return reason
     },
+    isCurrentGridRequest: () => true,
     persistence: {
       persistKey: vi.fn<PoolDeps['persistence']['persistKey']>(),
       persistBpm: vi.fn<PoolDeps['persistence']['persistBpm']>(),

@@ -35,6 +35,18 @@ import type { SongStructureAnalysisV23 } from '../../shared/songStructureV23Comm
 import type { AnalysisBpmRange } from '../../shared/analysisBpmRange'
 import type { SongEnergyAnalysisV5 } from '../../shared/songEnergy'
 import type { KeyAnalysisDiagnosticPhase } from '../services/keyAnalysis/types'
+import type { AnalysisGridMode } from '../../shared/analysisGridMode'
+import { normalizeAnalysisGridMode } from '../../shared/analysisGridMode'
+import type { DynamicGridOutcome } from '../../shared/dynamicBeatGridTypes'
+import { convertDynamicTimelineGridMapToAudio } from '../../shared/dynamicBeatGridCoordinates'
+import {
+  DYNAMIC_GRID_DEFERRED_STRUCTURE_ERROR,
+  buildDynamicGridFailureDetail,
+  resolveDynamicGridTimelineDefinition,
+  type DynamicGridProgress,
+  type DynamicGridTimelineDefinition
+} from '../services/keyAnalysis/dynamicGridIntegration'
+import { runDynamicBeatGridAnalysis } from './dynamicGridAnalysisRunner'
 
 type KeyJob = {
   jobId: number
@@ -47,6 +59,8 @@ type KeyJob = {
   needsEnergy?: boolean
   needsStructure?: boolean
   analysisBpmRange?: AnalysisBpmRange
+  analysisGridMode?: AnalysisGridMode
+  audioDurationSec?: number
   cachedBpm?: number
   cachedBeatGridMap?: SongBeatGridMapV2
   cachedUnifiedDisplayWaveformData?: UnifiedDisplayWaveformDetailData
@@ -65,9 +79,11 @@ type KeyResultPayload = {
   energyError?: string
   songStructure?: SongStructureAnalysisV23
   structureBeatGridMap?: SongBeatGridMapV2
+  dynamicGridOutcome?: DynamicGridOutcome
   energyScore?: number
   energyAlgorithmVersion?: number
   energyAnalysis?: SongEnergyAnalysisV5
+  energySourceGridSignature?: string
   mixxxWaveformData?: MixxxWaveformData | null
   unifiedDisplayWaveformData?: UnifiedDisplayWaveformDetailData | null
 }
@@ -98,6 +114,7 @@ type KeyProgressPayload = {
   needsEnergy?: boolean
   needsStructure?: boolean
   detail?: string
+  dynamicGrid?: DynamicGridProgress
   partialResult?: Omit<KeyResultPayload, 'mixxxWaveformData' | 'unifiedDisplayWaveformData'>
 }
 
@@ -297,6 +314,8 @@ const analyzeKeyForFile = (
     cachedUnifiedDisplayWaveformData?: UnifiedDisplayWaveformDetailData
     analyzedTimeBasisOffsetMs?: number
     analysisBpmRange?: AnalysisBpmRange
+    analysisGridMode?: AnalysisGridMode
+    audioDurationSec?: number
   },
   reportProgress: (progress: Omit<KeyProgressPayload, 'elapsedMs'>) => void,
   reportDiagnosticPhase?: (phase: string) => void
@@ -318,6 +337,8 @@ const analyzeKeyForFileInternal = async (
     cachedUnifiedDisplayWaveformData?: UnifiedDisplayWaveformDetailData
     analyzedTimeBasisOffsetMs?: number
     analysisBpmRange?: AnalysisBpmRange
+    analysisGridMode?: AnalysisGridMode
+    audioDurationSec?: number
   },
   reportProgress: (progress: Omit<KeyProgressPayload, 'elapsedMs'>) => void,
   reportDiagnosticPhase?: (phase: string) => void
@@ -328,6 +349,10 @@ const analyzeKeyForFileInternal = async (
   const needsWaveform = Boolean(options.needsWaveform)
   const needsEnergy = Boolean(options.needsEnergy)
   const needsStructure = Boolean(options.needsStructure)
+  const analysisGridMode = normalizeAnalysisGridMode(options.analysisGridMode, 'normal')
+  // Dynamic 不做 120s 预解码：窗口扫描由有界 scanner 负责。
+  const isDynamicGrid = needsBpm && analysisGridMode === 'dynamic'
+  let dynamicTimelineDefinition: DynamicGridTimelineDefinition | null = null
   const cachedUnifiedDisplayWaveformData = needsStructure
     ? resolveCachedUnifiedDisplayWaveformData(options.cachedUnifiedDisplayWaveformData)
     : null
@@ -371,7 +396,7 @@ const analyzeKeyForFileInternal = async (
         throw new Error(rustDecoded.error)
       }
       decoded = rustDecoded
-    } else if (needsBpm) {
+    } else if (needsBpm && !isDynamicGrid) {
       reportDiagnosticPhase?.('decode:beat-grid-pcm')
       beatGridDecoded = await decodeBeatGridPcmForFile(filePath)
     }
@@ -446,7 +471,56 @@ const analyzeKeyForFileInternal = async (
       }
     }
 
-    if (needsBpm) {
+    if (needsBpm && isDynamicGrid) {
+      const rawTimeBasisOffsetMs = options.analyzedTimeBasisOffsetMs
+      const hasTimeBasis =
+        rawTimeBasisOffsetMs !== undefined && Number.isFinite(Number(rawTimeBasisOffsetMs))
+      let outcome: DynamicGridOutcome = hasTimeBasis
+        ? await runDynamicBeatGridAnalysis({
+            filePath,
+            durationAudioSec: options.audioDurationSec,
+            minBpm: options.analysisBpmRange?.minBpm,
+            maxBpm: options.analysisBpmRange?.maxBpm,
+            onProgress: (dynamicGrid) => {
+              reportProgress({
+                stage: 'analyze-start',
+                needsKey,
+                needsBpm,
+                needsStructure,
+                dynamicGrid,
+                detail: `dynamic-grid:${dynamicGrid.phase}`
+              })
+            }
+          })
+        : { status: 'error', reason: 'audio-time-basis-unavailable' }
+      if (outcome.status === 'fixed' || outcome.status === 'dynamic') {
+        const definition = resolveDynamicGridTimelineDefinition({
+          outcome,
+          timeBasisOffsetMs: rawTimeBasisOffsetMs,
+          expectedDurationAudioSec: options.audioDurationSec
+        })
+        if (definition.ok) {
+          dynamicTimelineDefinition = definition.value
+          result.bpm = definition.value.projection.bpm
+          result.firstBeatMs = definition.value.projection.firstBeatMs
+          result.downbeatBeatOffset = definition.value.projection.downbeatBeatOffset
+          result.timeBasisOffsetMs = rawTimeBasisOffsetMs
+          result.bpmError = undefined
+        } else {
+          outcome = { status: 'error', reason: definition.reason }
+        }
+      }
+      result.dynamicGridOutcome = outcome
+      if (outcome.status !== 'fixed' && outcome.status !== 'dynamic') {
+        // 无法确认网格 ≠ 没有节拍：绝不写 no-bpm，也不回退首段固定网格。
+        result.bpm = undefined
+        result.firstBeatMs = undefined
+        result.downbeatBeatOffset = undefined
+        result.bpmError = buildDynamicGridFailureDetail(outcome)
+      }
+      reportDiagnosticPhase?.(result.bpmError ? 'bpm:failed' : 'bpm:dynamic-done')
+      if (result.bpmError) hasAnalysisError = true
+    } else if (needsBpm) {
       try {
         if (!beatGridDecoded) {
           reportDiagnosticPhase?.('bpm:decode')
@@ -507,11 +581,17 @@ const analyzeKeyForFileInternal = async (
         firstBeatMs: result.firstBeatMs,
         downbeatBeatOffset: result.downbeatBeatOffset,
         timeBasisOffsetMs: result.timeBasisOffsetMs,
-        bpmError: result.bpmError
+        bpmError: result.bpmError,
+        dynamicGridOutcome: result.dynamicGridOutcome
       }
     })
   }
 
+  const dynamicOutcome = result.dynamicGridOutcome
+  const dynamicAudioGridMap =
+    dynamicOutcome && (dynamicOutcome.status === 'fixed' || dynamicOutcome.status === 'dynamic')
+      ? dynamicOutcome.beatGridMap
+      : null
   if (needsEnergy && !(needsBpm && result.bpmError)) {
     reportDiagnosticPhase?.('energy:start')
     try {
@@ -532,18 +612,57 @@ const analyzeKeyForFileInternal = async (
       if (!energyGrid) {
         throw new Error('song energy requires a valid beat-grid first beat')
       }
+      const dynamicDefinition = dynamicAudioGridMap ? dynamicTimelineDefinition : null
+      if (dynamicAudioGridMap && !dynamicDefinition) {
+        throw new Error('dynamic song energy requires a validated timeline grid')
+      }
+      if (dynamicDefinition) {
+        const decodedAudioSec = energyDecoded.totalFrames / energyDecoded.sampleRate
+        if (Math.abs(decodedAudioSec - dynamicDefinition.durationAudioSec) > 0.25) {
+          throw new Error('song energy audio duration does not match dynamic grid duration')
+        }
+      }
+      // 人工/既有完整 map 也必须用 audio 坐标参与能量计算，而不是退回首段固定分桶。
+      let energyAudioGridMap = dynamicAudioGridMap
+      let energySourceGridSignature = dynamicDefinition?.map.signature
+      if (!energyAudioGridMap) {
+        const cachedMap = normalizeSongBeatGridMapV2(options.cachedBeatGridMap, {
+          allowSingleClip: true
+        })
+        if (cachedMap && cachedMap.clips.length > 1) {
+          const timeBasisOffsetMs = Number(options.analyzedTimeBasisOffsetMs)
+          if (!Number.isFinite(timeBasisOffsetMs) || timeBasisOffsetMs < 0) {
+            throw new Error('manual dynamic grid requires a valid audio time basis offset')
+          }
+          const audioDurationSec = energyDecoded.totalFrames / energyDecoded.sampleRate
+          const conversion = convertDynamicTimelineGridMapToAudio({
+            beatGridMap: cachedMap,
+            timelineDurationSec: audioDurationSec + timeBasisOffsetMs / 1000,
+            timeBasisOffsetMs,
+            audioDurationSec
+          })
+          if (conversion.status === 'error') {
+            throw new Error(`manual dynamic grid audio conversion failed: ${conversion.reason}`)
+          }
+          energyAudioGridMap = conversion.map
+          energySourceGridSignature = cachedMap.signature
+        }
+      }
       const energy = await analyzeSongEnergyWithModel({
         pcmData: energyDecoded.pcmData,
         sampleRate: energyDecoded.sampleRate,
         channels: energyDecoded.channels,
-        bpm: energyGrid.bpm,
-        firstBeatMs: energyGrid.firstBeatMs,
+        bpm: dynamicDefinition?.projection.bpm ?? energyGrid.bpm,
+        firstBeatMs: energyAudioGridMap ? undefined : energyGrid.firstBeatMs,
+        ...(energyAudioGridMap ? { beatGridMapAudio: energyAudioGridMap } : {}),
         onDiagnosticPhase: reportDiagnosticPhase
       })
       if (!energy) throw new Error('audio is silent or shorter than the model input window')
       result.energyScore = energy.energyScore
       result.energyAlgorithmVersion = energy.energyAlgorithmVersion
       result.energyAnalysis = energy.analysis
+      // 派生能量绑定有效源网格签名，后续 clip 变化即可判定 stale。
+      result.energySourceGridSignature = energySourceGridSignature
     } catch (error) {
       result.energyError = error instanceof Error ? error.message : String(error)
     }
@@ -641,7 +760,11 @@ const analyzeKeyForFileInternal = async (
     }
   }
 
-  if (needsStructure) {
+  if (needsStructure && isDynamicGrid) {
+    // 段落算法正在独立重构：不启动基于首段投影的段落计算，也不让网格任务因此失败。
+    reportDiagnosticPhase?.('structure:deferred-dynamic-grid')
+    result.songStructureError = DYNAMIC_GRID_DEFERRED_STRUCTURE_ERROR
+  } else if (needsStructure) {
     reportDiagnosticPhase?.('structure:start')
     const cachedBeatGridMap = normalizeSongBeatGridMapV2(options.cachedBeatGridMap, {
       allowSingleClip: true
@@ -760,7 +883,9 @@ parentPort?.on('message', async (job: KeyJob) => {
         cachedBeatGridMap: job.cachedBeatGridMap,
         cachedUnifiedDisplayWaveformData: job.cachedUnifiedDisplayWaveformData,
         analyzedTimeBasisOffsetMs: job.analyzedTimeBasisOffsetMs,
-        analysisBpmRange: job.analysisBpmRange
+        analysisBpmRange: job.analysisBpmRange,
+        analysisGridMode: job.analysisGridMode,
+        audioDurationSec: job.audioDurationSec
       },
       reportProgress,
       reportDiagnosticPhase

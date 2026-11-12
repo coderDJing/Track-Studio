@@ -25,6 +25,8 @@ extraResources:
     to: licenses/LICENSE
   - from: scripts/beat_this_bridge.py
     to: demucs/bootstrap/beat_this_bridge.py
+  - from: scripts/beat_this_dynamic_windows.py
+    to: demucs/bootstrap/beat_this_dynamic_windows.py
   - from: scripts/beat_this_grid_solver.py
     to: demucs/bootstrap/beat_this_grid_solver.py
   - from: scripts/beat_this_candidate_solver.py
