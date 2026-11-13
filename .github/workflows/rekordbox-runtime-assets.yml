@@ -44,6 +44,8 @@ jobs:
         run: node scripts/validate-rekordbox-desktop-runtime.mjs --platform-key ${{ matrix.platform }}
       - name: Package immutable runtime asset
         run: node scripts/package-rekordbox-runtime-assets.mjs --platform-key ${{ matrix.platform }} --output-root dist/rekordbox-runtime --version ${{ github.run_id }}.${{ github.run_attempt }}
+      - name: Validate extracted runtime in a new location
+        run: node scripts/validate-rekordbox-runtime-archive.mjs dist/rekordbox-runtime ${{ matrix.platform }}
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.platform }}
