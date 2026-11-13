@@ -1,0 +1,94 @@
+name: Rekordbox Runtime Assets
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rekordbox-runtime-assets
+  cancel-in-progress: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: win32-x64
+            runner: windows-latest
+          - platform: darwin-arm64
+            runner: macos-latest
+          - platform: darwin-x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+          run_install: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install build dependencies
+        run: pnpm install --frozen-lockfile=false --prefer-offline --ignore-scripts
+      - name: Build portable runtime
+        run: node scripts/ensure-rekordbox-desktop-runtime.mjs --platform-key ${{ matrix.platform }}
+      - name: Validate Python imports
+        run: node scripts/validate-rekordbox-desktop-runtime.mjs --platform-key ${{ matrix.platform }}
+      - name: Package immutable runtime asset
+        run: node scripts/package-rekordbox-runtime-assets.mjs --platform-key ${{ matrix.platform }} --output-root dist/rekordbox-runtime --version ${{ github.run_id }}.${{ github.run_attempt }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.platform }}
+          path: dist/rekordbox-runtime/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts/rekordbox-runtime
+      - name: Verify and merge all platforms
+        run: node scripts/merge-rekordbox-runtime-assets.mjs
+      - name: Publish archives before manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=rekordbox-runtime-assets
+          if ! gh release view "$tag" --json tagName >/dev/null 2>&1; then
+            gh release create "$tag" --title "Rekordbox portable runtime assets" \
+              --notes "Optional Windows and macOS Python components for rekordbox integration. Downloaded on first use; not included in application installers." \
+              --latest=false --draft
+          fi
+          # Versioned archives are immutable. Keep old ones for installed clients.
+          for archive in dist/rekordbox-runtime-release/*.tar.gz; do
+            name="$(basename "$archive")"
+            expected="sha256:$(sha256sum "$archive" | cut -d ' ' -f 1)"
+            actual="$(gh release view "$tag" --json assets --jq ".assets[] | select(.name == \"$name\") | .digest")"
+            if [[ -z "$actual" ]]; then
+              gh release upload "$tag" "$archive"
+              actual="$(gh release view "$tag" --json assets --jq ".assets[] | select(.name == \"$name\") | .digest")"
+            fi
+            if [[ "$actual" != "$expected" ]]; then
+              echo "::error::Uploaded archive checksum mismatch: $name"
+              exit 1
+            fi
+          done
+          # Publish the complete manifest only after every archive upload succeeds.
+          gh release upload "$tag" dist/rekordbox-runtime-release/rekordbox-runtime-manifest.json --clobber
+          gh release edit "$tag" --draft=false --latest=false
