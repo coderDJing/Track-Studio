@@ -6,8 +6,9 @@
       "files": [
         {
           "name": "955717e8-8726e21a.th",
-          "url": "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/955717e8-8726e21a.th",
-          "sha256": "8726e21a993978c7ba086d3872e7608d7d5bfca646ca4aca459ffda844faa8b4"
+          "url": "https://github.com/coderDJing/Track-Studio/releases/download/demucs-base-model-assets/955717e8-8726e21a.th",
+          "sha256": "8726e21a993978c7ba086d3872e7608d7d5bfca646ca4aca459ffda844faa8b4",
+          "upstreamUrl": "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/955717e8-8726e21a.th"
         }
       ]
     },
@@ -17,23 +18,27 @@
       "files": [
         {
           "name": "83fc094f-4a16d450.th",
-          "url": "https://dl.fbaipublicfiles.com/demucs/mdx_final/83fc094f-4a16d450.th",
-          "sha256": "4a16d450fd8c9277494e23865cadaa4a3e64141c45411d84243b8c95ea4b7cae"
+          "url": "https://github.com/coderDJing/Track-Studio/releases/download/demucs-base-model-assets/83fc094f-4a16d450.th",
+          "sha256": "4a16d450fd8c9277494e23865cadaa4a3e64141c45411d84243b8c95ea4b7cae",
+          "upstreamUrl": "https://dl.fbaipublicfiles.com/demucs/mdx_final/83fc094f-4a16d450.th"
         },
         {
           "name": "464b36d7-e5a9386e.th",
-          "url": "https://dl.fbaipublicfiles.com/demucs/mdx_final/464b36d7-e5a9386e.th",
-          "sha256": "e5a9386ecbf6f30bb2bdc7ae162f471d87f3b5bffba1a8cb2cebe4403280967e"
+          "url": "https://github.com/coderDJing/Track-Studio/releases/download/demucs-base-model-assets/464b36d7-e5a9386e.th",
+          "sha256": "e5a9386ecbf6f30bb2bdc7ae162f471d87f3b5bffba1a8cb2cebe4403280967e",
+          "upstreamUrl": "https://dl.fbaipublicfiles.com/demucs/mdx_final/464b36d7-e5a9386e.th"
         },
         {
           "name": "14fc6a69-a89dd0ee.th",
-          "url": "https://dl.fbaipublicfiles.com/demucs/mdx_final/14fc6a69-a89dd0ee.th",
-          "sha256": "a89dd0eeb547221dcfd6c0a47baa768ce0bce548eaf86b9a404d6b1088b5d22f"
+          "url": "https://github.com/coderDJing/Track-Studio/releases/download/demucs-base-model-assets/14fc6a69-a89dd0ee.th",
+          "sha256": "a89dd0eeb547221dcfd6c0a47baa768ce0bce548eaf86b9a404d6b1088b5d22f",
+          "upstreamUrl": "https://dl.fbaipublicfiles.com/demucs/mdx_final/14fc6a69-a89dd0ee.th"
         },
         {
           "name": "7fd6ef75-a905dd85.th",
-          "url": "https://dl.fbaipublicfiles.com/demucs/mdx_final/7fd6ef75-a905dd85.th",
-          "sha256": "a905dd8548f7389f1a3686c24c09d7bee61b716e3372e778e2acec88333ecdf4"
+          "url": "https://github.com/coderDJing/Track-Studio/releases/download/demucs-base-model-assets/7fd6ef75-a905dd85.th",
+          "sha256": "a905dd8548f7389f1a3686c24c09d7bee61b716e3372e778e2acec88333ecdf4",
+          "upstreamUrl": "https://dl.fbaipublicfiles.com/demucs/mdx_final/7fd6ef75-a905dd85.th"
         }
       ]
     }

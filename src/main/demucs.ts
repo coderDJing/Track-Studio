@@ -95,10 +95,17 @@ export function resolveInstalledDemucsModelsRootPath(): string {
   return path.join(app.getPath('userData'), 'demucs-models')
 }
 
+export function resolveBaseDemucsModelsRootPath(): string {
+  return path.join(app.getPath('userData'), 'demucs-models')
+}
+
 export function resolveInstalledDemucsModelPath(modelName: string): string {
   const normalizedName = String(modelName || '')
     .trim()
     .replace(/[^a-zA-Z0-9_-]/g, '')
+  if (normalizedName === 'htdemucs' || normalizedName === 'mdx_extra_q') {
+    return path.join(resolveBaseDemucsModelsRootPath(), normalizedName)
+  }
   return path.join(resolveInstalledDemucsModelsRootPath(), normalizedName || 'unknown')
 }
 
@@ -132,6 +139,11 @@ export function resolveBundledDemucsPythonPath(runtimeDir?: string): string {
 
 export function resolveBundledDemucsModelsPath(): string {
   return resolveExistingBundledDemucsSubPath(['models'])
+}
+
+export function resolveDevVendorDemucsModelsPath(): string {
+  if (app.isPackaged) return ''
+  return path.join(path.resolve(__dirname, '../../vendor/demucs'), 'models')
 }
 
 export type BundledDemucsRuntimeCandidate = {

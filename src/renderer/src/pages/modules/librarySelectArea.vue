@@ -37,6 +37,7 @@ import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { RECORDING_LIBRARY_CHANGED_EVENT, RECORDING_LIBRARY_UUID } from '@shared/recordingLibrary'
 import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
 import { useRekordboxSourceIcons } from './librarySelectArea/useRekordboxSourceIcons'
+import RekordboxRuntimeMissingEntry from './librarySelectArea/RekordboxRuntimeMissingEntry.vue'
 import { useExternalDjSourceIcons } from './librarySelectArea/useExternalDjSourceIcons'
 import { useLibraryBatchActions } from './librarySelectArea/useLibraryBatchActions'
 import { resolveActivePlaybackSongListUUIDs } from '@renderer/utils/playbackSongListSources'
@@ -294,6 +295,9 @@ const { handleIconContextmenu } = useLibraryBatchActions({ runtime, findLibraryN
 const {
   pioneerDriveGroups,
   desktopLibraryIcon,
+  desktopRuntimeMissing,
+  desktopRuntimeDownloading,
+  downloadDesktopRuntime,
   clickPioneerDriveIcon,
   clickDesktopLibraryIcon,
   handlePioneerDriveContextmenu,
@@ -326,6 +330,7 @@ const hasDynamicEntries = computed(
   () =>
     dynamicIconArr.value.length > 0 ||
     Boolean(desktopLibraryIcon.value) ||
+    desktopRuntimeMissing.value ||
     externalDjSourceIcons.value.length > 0 ||
     pioneerDriveGroups.value.length > 0
 )
@@ -338,8 +343,7 @@ const dynamicScrollState = reactive({
 let dynamicScrollViewportEl: HTMLElement | null = null
 const updateDynamicScrollState = () => {
   const viewport = dynamicIconsScrollRef.value?.osInstance()?.elements().viewport as
-    | HTMLElement
-    | undefined
+    HTMLElement | undefined
   if (!viewport) {
     dynamicScrollState.canScroll = false
     dynamicScrollState.atTop = true
@@ -357,8 +361,7 @@ const handleDynamicScroll = () => {
 const syncDynamicScrollViewport = async () => {
   await nextTick()
   const viewport = dynamicIconsScrollRef.value?.osInstance()?.elements().viewport as
-    | HTMLElement
-    | undefined
+    HTMLElement | undefined
   if (dynamicScrollViewportEl !== viewport) {
     dynamicScrollViewportEl?.removeEventListener('scroll', handleDynamicScroll)
     dynamicScrollViewportEl = viewport || null
@@ -383,8 +386,7 @@ const scrollSelectedDynamicIconIntoView = async () => {
   if (!key) return
   await nextTick()
   const viewport = dynamicIconsScrollRef.value?.osInstance()?.elements().viewport as
-    | HTMLElement
-    | undefined
+    HTMLElement | undefined
   const target = scrollItemRefMap[key]
   if (!viewport || !target) return
   if (props.containScroll) scrollIntoContainerView(target, viewport)
@@ -682,16 +684,26 @@ watch(
             </div>
           </div>
           <div
-            v-if="desktopLibraryIcon || externalDjSourceIcons.length"
+            v-if="desktopLibraryIcon || desktopRuntimeMissing || externalDjSourceIcons.length"
             class="deviceGroup deviceGroup--desktop"
             :class="{
               'deviceGroup--selected':
                 isSelectedDesktopLibraryIcon ||
                 externalDjSourceIcons.some((item) => isSelectedExternalDjSourceIcon(item)),
-              'deviceGroup--multi': externalDjSourceIcons.length + (desktopLibraryIcon ? 1 : 0) > 1
+              'deviceGroup--multi':
+                externalDjSourceIcons.length +
+                  (desktopLibraryIcon || desktopRuntimeMissing ? 1 : 0) >
+                1
             }"
           >
             <div class="deviceGroupInner">
+              <RekordboxRuntimeMissingEntry
+                v-if="desktopRuntimeMissing"
+                :icon-asset="rekordboxIconAsset"
+                :downloading="desktopRuntimeDownloading"
+                :hint="t('optionalComponents.rekordboxMissingHint')"
+                @download="downloadDesktopRuntime"
+              />
               <div
                 v-if="desktopLibraryIcon"
                 :ref="(el) => setScrollItemRef(desktopLibraryIcon?.key || '', el)"

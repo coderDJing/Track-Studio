@@ -4,6 +4,7 @@ import type {
   RekordboxDesktopLibraryProbe
 } from './types'
 import { runRekordboxDesktopHelper } from './helper'
+import { rekordboxRuntimeEvents } from '../rekordboxRuntimeDownload'
 import type {
   RekordboxDesktopWriteAvailability,
   RekordboxDesktopWriteAvailabilityStatus
@@ -20,6 +21,11 @@ const probeCache = new Map<
   }
 >()
 const probeInflight = new Map<ProbeMode, Promise<RekordboxDesktopLibraryProbe>>()
+
+// 运行时安装完成后，上一次“缺少运行时”的探测结果必须立刻失效。
+rekordboxRuntimeEvents.on('installed', () => {
+  probeCache.clear()
+})
 
 const toTrimmedString = (value: unknown) => String(value || '').trim()
 

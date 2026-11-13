@@ -4,7 +4,8 @@ import { createHash } from 'node:crypto'
 import { Readable } from 'node:stream'
 import {
   createConsoleDownloadProgressReporter,
-  fetchWithRuntimeProxy
+  fetchWithRuntimeProxy,
+  formatErrorWithCause
 } from './demucs-runtime-support.mjs'
 
 const normalizeModelName = (value) => {
@@ -130,7 +131,14 @@ const parsePositiveInteger = (value, fallback) => {
   return rounded
 }
 
-const downloadToFile = async ({ url, targetPath, timeoutSec, retries, toShortText }) => {
+export const downloadToFile = async ({
+  url,
+  targetPath,
+  timeoutSec,
+  retries,
+  toShortText,
+  fetchImpl = fetchWithRuntimeProxy
+}) => {
   const timeoutMs = timeoutSec * 1000
   const tempPath = `${targetPath}.tmp-${process.pid}-${Date.now()}`
   let lastError = null
@@ -139,7 +147,7 @@ const downloadToFile = async ({ url, targetPath, timeoutSec, retries, toShortTex
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     let writer = null
     try {
-      const response = await fetchWithRuntimeProxy(url, {
+      const response = await fetchImpl(url, {
         signal: controller.signal,
         redirect: 'follow'
       })
@@ -178,14 +186,15 @@ const downloadToFile = async ({ url, targetPath, timeoutSec, retries, toShortTex
       lastError = error
       if (attempt < retries) {
         console.warn(
-          `[demucs-runtime-ensure] Download retry (${attempt}/${retries}): ${path.basename(targetPath)} -> ${toShortText(error instanceof Error ? error.message : String(error || ''))}`
+          `[demucs-runtime-ensure] Download retry (${attempt}/${retries}): ${path.basename(targetPath)} -> ${formatErrorWithCause(
+            error,
+            toShortText
+          )}`
         )
       }
     }
   }
-  const reason = toShortText(
-    lastError instanceof Error ? lastError.message : String(lastError || '')
-  )
+  const reason = formatErrorWithCause(lastError, toShortText)
   throw new Error(`[demucs-runtime-ensure] Download failed: ${url} (${reason || 'unknown'})`)
 }
 

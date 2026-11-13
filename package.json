@@ -18,10 +18,6 @@
         "to": "ffmpeg"
       },
       {
-        "from": "vendor/rekordbox-desktop-runtime",
-        "to": "rekordboxDesktopRuntime"
-      },
-      {
         "from": "resources/rekordboxDesktopLibrary",
         "to": "rekordboxDesktopLibrary"
       },
@@ -108,6 +104,7 @@
     "files": [
       "**/*",
       "!vendor{,/**/*}",
+      "!dist{,/**/*}",
       "!drafts{,/**/*}",
       "!tmp{,/**/*}",
       "!.codex_tmp{,/**/*}",
@@ -162,10 +159,6 @@
       "executableName": "FRKB",
       "extraResources": [
         {
-          "from": "vendor/demucs/models",
-          "to": "demucs/models"
-        },
-        {
           "from": "vendor/demucs/bootstrap",
           "to": "demucs/bootstrap"
         },
@@ -193,10 +186,6 @@
       "mergeASARs": false,
       "extraResources": [
         {
-          "from": "vendor/demucs/models",
-          "to": "demucs/models"
-        },
-        {
           "from": "vendor/demucs/bootstrap",
           "to": "demucs/bootstrap"
         },
@@ -205,7 +194,7 @@
           "to": "r3-stretch/darwin-universal"
         }
       ],
-      "x64ArchFiles": "{Contents/Frameworks/**/*,Contents/Resources/ffmpeg/darwin/{ffmpeg,ffprobe},Contents/Resources/rekordboxDesktopRuntime/**/*,Contents/Resources/app.asar.unpacked/node_modules/@parcel/watcher-darwin-arm64/**/*,Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3/**/*,Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3-multiple-ciphers/**/*,Contents/Resources/app.asar.unpacked/node_modules/serato-connect/node_modules/better-sqlite3-multiple-ciphers/**/*,Contents/Resources/app.asar.unpacked/node_modules/onnxruntime-node/bin/napi-v3/darwin/**/*,Contents/Resources/app.asar.unpacked/node_modules/rust_package/**/*}",
+      "x64ArchFiles": "{Contents/Frameworks/**/*,Contents/Resources/ffmpeg/darwin/{ffmpeg,ffprobe},Contents/Resources/app.asar.unpacked/node_modules/@parcel/watcher-darwin-arm64/**/*,Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3/**/*,Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3-multiple-ciphers/**/*,Contents/Resources/app.asar.unpacked/node_modules/serato-connect/node_modules/better-sqlite3-multiple-ciphers/**/*,Contents/Resources/app.asar.unpacked/node_modules/onnxruntime-node/bin/napi-v3/darwin/**/*,Contents/Resources/app.asar.unpacked/node_modules/rust_package/**/*}",
       "artifactName": "Track-Studio-${version}-universal.${ext}"
     },
     "dmg": {
@@ -286,9 +275,9 @@
     "postinstall": "electron-builder install-app-deps",
     "clean": "rimraf dist",
     "installer-ui:build": "node scripts/build-windows-installer-ui.mjs",
-    "build:unpack": "npm run media-tools:ensure:package && npm run build && npm run rekordbox:runtime:ensure && npm run rekordbox:runtime:validate && electron-builder --dir",
-    "build:win": "npm run clean && npm run installer-ui:build && npm run media-tools:ensure:win && npm run build && npm run rekordbox:runtime:ensure && npm run rekordbox:runtime:validate && electron-builder --win",
-    "build:mac": "npm run clean && npm run media-tools:ensure:package && npm run build && npm run rekordbox:runtime:ensure:mac-universal && npm run rekordbox:runtime:validate:mac-universal && electron-builder --mac",
+    "build:unpack": "npm run media-tools:ensure:package && npm run build && electron-builder --dir",
+    "build:win": "npm run clean && npm run installer-ui:build && npm run media-tools:ensure:win && npm run build && electron-builder --win",
+    "build:mac": "npm run clean && npm run media-tools:ensure:package && npm run build && electron-builder --mac",
     "build:linux": "npm run clean && npm run build && electron-builder --linux",
     "demucs:runtime:prepare": "node scripts/prepare-demucs-runtimes.mjs",
     "demucs:runtime:ensure": "node scripts/ensure-demucs-runtime.mjs",
@@ -331,6 +320,7 @@
     "pinia": "^3.0.4",
     "rust_package": "./rust_package",
     "serato-connect": "1.4.6",
+    "tar": "7.5.22",
     "undici": "^8.12.1",
     "uuid": "^14.0.3",
     "vue-draggable-plus": "^0.6.1",

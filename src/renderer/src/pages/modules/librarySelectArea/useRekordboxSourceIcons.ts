@@ -21,6 +21,11 @@ import {
 import { analyzeFingerprintsForPaths } from '@renderer/utils/fingerprintActions'
 import { buildRekordboxSourceChannel } from '@shared/rekordboxSources'
 import { importCuratedArtistsFromPioneerSource } from '@renderer/composables/rekordboxDesktop/useImportCuratedArtists'
+import {
+  isRepairableRekordboxRuntimeError,
+  useRekordboxRuntimeDownload
+} from './rekordboxRuntimeDownload'
+import { buildPioneerDriveEjectErrorContent } from './pioneerDriveEjectError'
 import { groupPioneerDriveIcons } from './groupPioneerDriveIcons'
 import {
   buildDesktopSourceIcon,
@@ -120,6 +125,8 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
 
   const pioneerDriveIcons = ref<PioneerDriveIcon[]>([])
   const desktopLibraryIcon = ref<RekordboxDesktopIcon | null>(null)
+  // 仅当 probe 明确缺 Python runtime 时出现可发现入口；其它不可用原因保持原行为。
+  const desktopRuntimeMissing = ref(false)
   const ejectingDriveKeys = ref<string[]>([])
   const wholeLibraryArtistImportBusy = ref<WholeLibraryArtistImportBusySource | null>(null)
   let refreshTimer: ReturnType<typeof setInterval> | null = null
@@ -444,11 +451,16 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
   const refreshDesktopLibraryIcon = async (options: { force?: boolean } = {}) => {
     try {
       const previousIcon = desktopLibraryIcon.value
-      const probe = await window.electron.ipcRenderer.invoke(
+      const probe = (await window.electron.ipcRenderer.invoke(
         buildRekordboxSourceChannel('desktop', 'probe'),
         { forceRefresh: options.force === true }
-      )
+      )) as {
+        available?: boolean
+        sourceRootPath?: string
+        errorCode?: string
+      } | null
       if (!probe?.available || !probe?.sourceRootPath) {
+        desktopRuntimeMissing.value = isRepairableRekordboxRuntimeError(probe?.errorCode)
         clearRekordboxSourceCachesByKind('desktop')
         desktopLibraryIcon.value = null
         if (runtime.pioneerDeviceLibrary.selectedSourceKind === 'desktop') {
@@ -457,6 +469,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
         }
         return
       }
+      desktopRuntimeMissing.value = false
 
       const desktopLabel = t('library.rekordboxDesktopLibrary')
       const nextIcon = buildDesktopSourceIcon(probe, desktopLabel, rekordboxDesktopIconAsset)
@@ -478,6 +491,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
       }
     } catch (error) {
       console.error('[librarySelectArea] refresh desktop rekordbox failed', error)
+      desktopRuntimeMissing.value = false
       desktopLibraryIcon.value = null
     }
   }
@@ -514,6 +528,9 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
       }
     }
   }
+
+  const { downloading: desktopRuntimeDownloading, download: downloadDesktopRuntime } =
+    useRekordboxRuntimeDownload(() => refreshRekordboxSourceIcons({ force: true }))
 
   const clearExternalDjSelection = () => {
     runtime.externalDjLibrary.selectedKind = null
@@ -730,21 +747,8 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
     return snapshot
   }
 
-  const buildPioneerDriveEjectErrorContent = (result?: PioneerDriveEjectResult) => {
-    if (result?.code === 'INVALID_PATH') {
-      return [t('library.ejectUsbDriveInvalidPath')]
-    }
-
-    const content = [t('library.ejectUsbDriveFailed')]
-    const detail = String(result?.detail || '').trim()
-    if (detail) {
-      content.push(detail)
-    }
-    if (result?.code === 'EJECT_TIMEOUT' || result?.code === 'EJECT_COMMAND_FAILED') {
-      content.push(t('library.ejectUsbDriveFailedHint'))
-    }
-    return content
-  }
+  const buildEjectErrorContent = (result?: PioneerDriveEjectResult) =>
+    buildPioneerDriveEjectErrorContent(result)
 
   const ejectPioneerDriveIcon = async (item: PioneerDriveIcon) => {
     if (isEjectingPioneerDriveIcon(item)) return
@@ -760,7 +764,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
       if (!result?.success) {
         await confirm({
           title: t('common.error'),
-          content: buildPioneerDriveEjectErrorContent(result),
+          content: buildEjectErrorContent(result),
           confirmShow: false,
           innerHeight: 0,
           canCopyText: true
@@ -787,7 +791,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
       }
       await confirm({
         title: t('common.error'),
-        content: buildPioneerDriveEjectErrorContent({
+        content: buildEjectErrorContent({
           success: false,
           path: item.path,
           code: 'EJECT_COMMAND_FAILED',
@@ -1076,6 +1080,9 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
     pioneerDriveIcons,
     pioneerDriveGroups,
     desktopLibraryIcon,
+    desktopRuntimeMissing,
+    desktopRuntimeDownloading,
+    downloadDesktopRuntime,
     refreshRekordboxSourceIcons,
     clickPioneerDriveIcon,
     clickDesktopLibraryIcon,

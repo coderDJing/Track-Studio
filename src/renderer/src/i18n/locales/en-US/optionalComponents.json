@@ -1,0 +1,23 @@
+{
+  "optionalComponents": {
+    "panelTitle": "Optional downloads",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "retrying": "Retrying…",
+    "statusDownloading": "Downloading {percent}%",
+    "statusInstalling": "Installing…",
+    "statusReady": "Completed",
+    "statusFailed": "Download failed",
+    "stemHtdemucs": "Base Stem model",
+    "stemMdxExtraQ": "Enhanced Stem model",
+    "rekordboxRuntime": "Rekordbox support component",
+    "rekordboxDownloadTitle": "Repair Rekordbox support component",
+    "rekordboxDownloadContent": "Reading the Rekordbox library requires this component. It downloads on first use or when the component is damaged.",
+    "downloadNow": "Download",
+    "downloadFailedTitle": "Download failed",
+    "downloadFailedContent": "The component download failed. Please try again later.",
+    "rekordboxMissingHint": "The Rekordbox support component is missing or damaged. Download it to continue using the Rekordbox library.",
+    "rekordboxEntryLabel": "Rekordbox",
+    "downloadingEntryLabel": "Downloading…"
+  }
+}

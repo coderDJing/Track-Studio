@@ -108,24 +108,6 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      - name: Restore Demucs models cache (Windows)
-        uses: actions/cache@v5
-        with:
-          path: |
-            vendor/demucs/models
-          key: demucs-models-${{ runner.os }}-${{ hashFiles('scripts/demucs-model-manifest.json', 'scripts/ensure-demucs-runtime.mjs', 'scripts/lib/*.mjs') }}
-          restore-keys: |
-            demucs-models-${{ runner.os }}-
-
-      - name: Restore Rekordbox runtime cache (Windows)
-        uses: actions/cache@v5
-        with:
-          path: |
-            vendor/rekordbox-desktop-runtime/win32-x64/python
-          key: rekordbox-runtime-${{ runner.os }}-${{ hashFiles('scripts/ensure-rekordbox-desktop-runtime.mjs', 'scripts/rekordbox-desktop-runtime-requirements.txt', 'scripts/lib/demucs-standalone-python.mjs', 'scripts/lib/demucs-runtime-support.mjs') }}
-          restore-keys: |
-            rekordbox-runtime-${{ runner.os }}-
-
       - name: Setup Python (for node-gyp)
         uses: actions/setup-python@v6
         with:
@@ -163,15 +145,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile=false --prefer-offline
-
-      - name: Ensure Demucs models (Windows)
-        run: node scripts/ensure-demucs-runtime.mjs --models-only --ci
-
-      - name: Ensure Rekordbox Desktop runtime (Windows)
-        run: pnpm run rekordbox:runtime:ensure
-
-      - name: Validate Rekordbox Desktop runtime (Windows)
-        run: pnpm run rekordbox:runtime:validate -- --platform-key win32-x64
 
       - name: Prepare FFmpeg (Windows)
         shell: pwsh
@@ -336,11 +309,7 @@ jobs:
             "demucs/bootstrap/bpm_fix_crosscheck.py",
             "demucs/bootstrap/bpm_fix_rubberband.py",
             "demucs/bootstrap/rkb_official_phase_selector.py",
-            "demucs/models/htdemucs.yaml",
-            "demucs/models/955717e8-8726e21a.th",
-            "rekordboxDesktopLibrary/bridge.py",
-            "rekordboxDesktopRuntime/win32-x64/python/python.exe",
-            "rekordboxDesktopRuntime/win32-x64/python/Lib/site-packages/pyrekordbox/__init__.py"
+            "rekordboxDesktopLibrary/bridge.py"
           )
 
           $missing = @()
@@ -350,6 +319,9 @@ jobs:
               $missing += $relativePath
             }
           }
+
+          node scripts/verify-optional-component-packaging.mjs --resources-root "$resourcesRoot"
+          if ($LASTEXITCODE -ne 0) { throw "Optional component payloads must be excluded" }
 
           $unexpectedRuntimeRoot = Join-Path $resourcesRoot "demucs/win32-x64"
           if (Test-Path $unexpectedRuntimeRoot) {
@@ -380,7 +352,7 @@ jobs:
             dist/*.blockmap
             dist/*.yml
 
-  build_rekordbox_runtime_mac_x64:
+  build_ffmpeg_mac_x64:
     needs: [validate_release_tag]
     if: >-
       ${{
@@ -400,40 +372,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 22
-
-      - name: Restore Rekordbox runtime cache (macOS x64)
-        uses: actions/cache@v5
-        with:
-          path: |
-            vendor/rekordbox-desktop-runtime/darwin-x64/python
-          key: rekordbox-runtime-${{ runner.os }}-${{ runner.arch }}-darwin-x64-${{ hashFiles('scripts/ensure-rekordbox-desktop-runtime.mjs', 'scripts/rekordbox-desktop-runtime-requirements.txt', 'scripts/lib/demucs-standalone-python.mjs', 'scripts/lib/demucs-runtime-support.mjs') }}
-          restore-keys: |
-            rekordbox-runtime-${{ runner.os }}-${{ runner.arch }}-darwin-x64-
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-
-      - name: Ensure Rekordbox Desktop runtime (macOS x64)
-        run: node scripts/ensure-rekordbox-desktop-runtime.mjs --platform-key darwin-x64
-
-      - name: Validate Rekordbox Desktop runtime (macOS x64)
-        run: node scripts/validate-rekordbox-desktop-runtime.mjs --platform-key darwin-x64
-
-      - name: Archive Rekordbox Desktop runtime (macOS x64)
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          tar -czf dist/rekordbox-runtime-darwin-x64.tar.gz \
-            -C vendor/rekordbox-desktop-runtime/darwin-x64 \
-            python
-
-      - name: Upload Rekordbox runtime artifact (macOS x64)
-        uses: actions/upload-artifact@v7
-        with:
-          name: rekordbox-runtime-darwin-x64
-          path: dist/rekordbox-runtime-darwin-x64.tar.gz
 
       - name: Restore Intel FFmpeg static libs cache
         uses: actions/cache@v5
@@ -503,7 +441,7 @@ jobs:
         )
       }}
     runs-on: macos-latest
-    needs: [validate_release_tag, build_rekordbox_runtime_mac_x64]
+    needs: [validate_release_tag, build_ffmpeg_mac_x64]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -520,15 +458,6 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
-
-      - name: Restore Rekordbox runtime cache (macOS arm64)
-        uses: actions/cache@v5
-        with:
-          path: |
-            vendor/rekordbox-desktop-runtime/darwin-arm64/python
-          key: rekordbox-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/ensure-rekordbox-desktop-runtime.mjs', 'scripts/rekordbox-desktop-runtime-requirements.txt', 'scripts/lib/demucs-standalone-python.mjs', 'scripts/lib/demucs-runtime-support.mjs') }}
-          restore-keys: |
-            rekordbox-runtime-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Setup Python (for node-gyp)
         uses: actions/setup-python@v6
@@ -571,33 +500,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile=false --prefer-offline
 
-      - name: Ensure Demucs models (macOS)
-        run: node scripts/ensure-demucs-runtime.mjs --models-only --ci
-
-      - name: Ensure Rekordbox Desktop runtime (macOS arm64)
-        run: pnpm run rekordbox:runtime:ensure
-
       - name: Download Intel FFmpeg dev artifact
         uses: actions/download-artifact@v8
         with:
           name: ffmpeg-x64-dev
           path: artifacts/ffmpeg-x64-dev
-
-      - name: Download Rekordbox runtime artifact (macOS x64)
-        uses: actions/download-artifact@v8
-        with:
-          name: rekordbox-runtime-darwin-x64
-          path: artifacts/rekordbox-runtime-darwin-x64
-
-      - name: Restore Rekordbox runtime artifact (macOS x64)
-        run: |
-          set -euo pipefail
-          mkdir -p vendor/rekordbox-desktop-runtime/darwin-x64
-          tar -xzf artifacts/rekordbox-runtime-darwin-x64/rekordbox-runtime-darwin-x64.tar.gz \
-            -C vendor/rekordbox-desktop-runtime/darwin-x64
-
-      - name: Validate Rekordbox Desktop runtime (macOS universal)
-        run: pnpm run rekordbox:runtime:validate:mac-universal
 
       - name: Prepare portable FFmpeg (macOS universal)
         run: node scripts/ensure-bundled-media-tools.mjs --mode package --platform-key darwin-universal
@@ -742,12 +649,9 @@ jobs:
             "demucs/bootstrap/bpm_fix_crosscheck.py"
             "demucs/bootstrap/bpm_fix_rubberband.py"
             "demucs/bootstrap/rkb_official_phase_selector.py"
-            "demucs/models/htdemucs.yaml"
-            "demucs/models/955717e8-8726e21a.th"
             "rekordboxDesktopLibrary/bridge.py"
-            "rekordboxDesktopRuntime/darwin-arm64/python/bin/python3"
-            "rekordboxDesktopRuntime/darwin-x64/python/bin/python3"
           )
+          node scripts/verify-optional-component-packaging.mjs --resources-root "$RESOURCES_DIR"
           UNEXPECTED_PATHS=(
             "demucs/darwin-arm64"
             "demucs/darwin-x64"

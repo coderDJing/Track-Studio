@@ -78,7 +78,14 @@ component licenses below.
   - `vendor/demucs`
   - `scripts/beat_this_*.py`
 - Current use: stem separation and beat-grid analysis runtime support.
-- Notes: The bundled Python runtimes and site-packages include multiple
+- Base Demucs weights (`htdemucs` and `mdx_extra_q`) are distributed unchanged
+  through the project's `demucs-base-model-assets` resource release. Original
+  source URLs and pinned SHA-256 values are retained in
+  `scripts/demucs-model-manifest.json`; the resource release also includes the
+  upstream Demucs MIT license and checksum list.
+- Base weights are downloaded when their Stem model is first selected; they are
+  excluded from Windows and macOS application installers.
+- Notes: The downloadable Python runtimes and site-packages include multiple
   third-party packages with their own licenses. Notable license families in the
   current bundled runtime include MIT, BSD, Apache-2.0, MPL-2.0, LGPL, and Intel
   runtime licenses. The package license files are retained under the bundled
@@ -89,8 +96,11 @@ component licenses below.
 - Repository path: `vendor/rekordbox-desktop-runtime`
 - Current use: Python runtime and Python packages used by the Rekordbox desktop
   library bridge.
-- Notes: The bundled runtime and site-packages include third-party packages
-  with their own licenses. License files are retained under the bundled
+- Distribution: Downloaded on demand from the project's `rekordbox-runtime-assets`
+  resource release, separately for Windows x64, macOS arm64, and macOS x64.
+  Application installers retain the small bridge scripts, without the Python runtime.
+- Notes: The downloadable runtime and site-packages include third-party packages
+  with their own licenses. License files are retained under the distributed
   `vendor/rekordbox-desktop-runtime/**/Lib/site-packages/**.dist-info` and
   runtime license paths.
 

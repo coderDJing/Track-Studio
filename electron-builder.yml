@@ -11,6 +11,7 @@ files:
   - '!{.eslintignore,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!drafts{,/**/*}'
+  - '!dist{,/**/*}'
   - '!tmp{,/**/*}'
   - '!.codex_tmp{,/**/*}'
   - '!test-data{,/**/*}'
@@ -73,8 +74,6 @@ extraResources:
       - rkb_runtime_candidate_utils.py
       - rkb_runtime_grid_common.py
       - models/rkb-official-downbeat-rotation-candidate-v1.json
-  - from: vendor/rekordbox-desktop-runtime
-    to: rekordboxDesktopRuntime
   - from: resources/rekordboxDesktopLibrary
     to: rekordboxDesktopLibrary
 fileAssociations:
@@ -104,8 +103,6 @@ fileAssociations:
 win:
   executableName: FRKB
   extraResources:
-    - from: vendor/demucs/models
-      to: demucs/models
     - from: vendor/demucs/bootstrap
       to: demucs/bootstrap
     - from: vendor/ffmpeg/win32-x64/dll
@@ -128,8 +125,6 @@ mac:
     - dmg
     - zip
   extraResources:
-    - from: vendor/demucs/models
-      to: demucs/models
     - from: vendor/demucs/bootstrap
       to: demucs/bootstrap
     - from: vendor/r3-stretch/darwin-universal

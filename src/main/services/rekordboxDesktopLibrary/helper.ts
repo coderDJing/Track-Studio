@@ -4,6 +4,13 @@ import path from 'node:path'
 import childProcess from 'node:child_process'
 import { log } from '../../log'
 import { registerChildProcess, terminateChildProcess } from '../childProcessRegistry'
+import {
+  probeInstalledRekordboxDesktopRuntime,
+  rekordboxRuntimeEvents,
+  resolveInstalledRekordboxDesktopRuntimeRootPath
+} from '../rekordboxRuntimeDownload'
+import { buildPortablePythonLaunch } from '../rekordboxRuntimePythonLaunch'
+import { resolveRekordboxRuntimePlatformKey } from '../../../shared/rekordboxRuntimeDownload'
 import type {
   RekordboxDesktopHelperError,
   RekordboxDesktopHelperProgressPayload,
@@ -58,7 +65,9 @@ type RunRekordboxDesktopHelperOptions = {
 type ResolvedPythonCommand = {
   command: string
   args: string[]
-  runtimeSource: 'bundled' | 'env-python' | 'dev-launcher'
+  runtimeSource: 'bundled' | 'env-python' | 'env-runtime-root' | 'installed'
+  /** portable runtime 的 Python prefix（Windows 启动时会转扩展长度路径）。 */
+  runtimeHome?: string
 }
 
 const BENIGN_STDERR_PATTERNS = [
@@ -78,11 +87,8 @@ const normalizeFsPath = (value: string) => {
   return normalized ? path.normalize(normalized) : ''
 }
 
-const resolveDesktopRuntimePlatformDir = () => {
-  if (process.platform === 'win32') return 'win32-x64'
-  if (process.platform === 'darwin') return process.arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64'
-  return ''
-}
+const resolveDesktopRuntimePlatformDir = () =>
+  resolveRekordboxRuntimePlatformKey(process.platform, process.arch) ?? ''
 
 const resolveDevAppRootCandidates = () => {
   const candidates: string[] = []
@@ -105,8 +111,20 @@ const resolveDevAppRootCandidates = () => {
   return candidates
 }
 
+const resolveInstalledRuntimeRootPath = () => {
+  try {
+    return normalizeFsPath(resolveInstalledRekordboxDesktopRuntimeRootPath())
+  } catch {
+    return ''
+  }
+}
+
+/** helper 读取的已安装 runtime 根目录（userData/rekordbox-desktop-runtime）。 */
+export const resolveRekordboxDesktopInstalledRuntimeRootPath = () =>
+  resolveInstalledRuntimeRootPath()
+
 const resolveDefaultRuntimeRootPath = () => {
-  if (app.isPackaged) {
+  if (app.isPackaged && typeof process.resourcesPath === 'string' && process.resourcesPath) {
     return path.join(process.resourcesPath, 'rekordboxDesktopRuntime')
   }
   const appRootCandidates = resolveDevAppRootCandidates()
@@ -128,6 +146,8 @@ const resolveRuntimeRootCandidates = () => {
   }
 
   addCandidate(process.env[ENV_RUNTIME_ROOT] || '')
+  // 旧安装包里曾经内置过 runtime，升级用户仍可继续使用。
+  // userData 下的按需安装目录走 installer 的 metadata 校验，避免误用残留半包。
   addCandidate(resolveDefaultRuntimeRootPath())
   return candidates
 }
@@ -196,6 +216,32 @@ const resolveBridgeScriptPath = () => {
   return candidates[0] || ''
 }
 
+const resolveInstalledPythonPath = () => {
+  try {
+    const installed = probeInstalledRekordboxDesktopRuntime()
+    if (!installed || !fs.existsSync(installed.pythonPath)) return ''
+    return installed.pythonPath
+  } catch {
+    return ''
+  }
+}
+
+/** 用户显式指定的 runtime root 优先于按需安装目录。 */
+const resolveEnvRuntimeDir = () => {
+  const rootPath = normalizeFsPath(process.env[ENV_RUNTIME_ROOT] || '')
+  const platformDir = resolveDesktopRuntimePlatformDir()
+  if (!rootPath || !platformDir) return ''
+  const runtimeDir = path.join(rootPath, platformDir, 'python')
+  return fs.existsSync(runtimeDir) ? runtimeDir : ''
+}
+
+const resolveEnvRuntimePythonPath = () => {
+  const runtimeDir = resolveEnvRuntimeDir()
+  if (!runtimeDir) return ''
+  const pythonPath = resolveBundledPythonPath(runtimeDir)
+  return pythonPath && fs.existsSync(pythonPath) ? pythonPath : ''
+}
+
 const resolvePythonCommand = (): ResolvedPythonCommand | null => {
   const envPython = normalizeFsPath(process.env[ENV_PYTHON] || '')
   if (envPython && fs.existsSync(envPython)) {
@@ -206,31 +252,40 @@ const resolvePythonCommand = (): ResolvedPythonCommand | null => {
     }
   }
 
+  // 显式 FRKB_REKORDBOX_DESKTOP_RUNTIME_ROOT 必须压过已安装组件。
+  const envRuntimePythonPath = resolveEnvRuntimePythonPath()
+  if (envRuntimePythonPath) {
+    return {
+      command: envRuntimePythonPath,
+      args: [],
+      runtimeSource: 'env-runtime-root',
+      runtimeHome: resolveEnvRuntimeDir()
+    }
+  }
+
+  // 按需安装的组件：只接受 installer 本地校验通过的完整安装。
+  const installedPythonPath = resolveInstalledPythonPath()
+  if (installedPythonPath) {
+    return {
+      command: installedPythonPath,
+      args: [],
+      runtimeSource: 'installed',
+      runtimeHome: path.dirname(installedPythonPath)
+    }
+  }
+
   const bundledRuntimeDir = resolveBundledRuntimeDir()
   const bundledPythonPath = resolveBundledPythonPath(bundledRuntimeDir)
   if (bundledPythonPath && fs.existsSync(bundledPythonPath)) {
     return {
       command: bundledPythonPath,
       args: [],
-      runtimeSource: 'bundled'
+      runtimeSource: 'bundled',
+      runtimeHome: bundledRuntimeDir
     }
   }
 
-  if (!app.isPackaged) {
-    if (process.platform === 'win32') {
-      return {
-        command: 'py',
-        args: ['-3.11'],
-        runtimeSource: 'dev-launcher'
-      }
-    }
-    return {
-      command: 'python3',
-      args: [],
-      runtimeSource: 'dev-launcher'
-    }
-  }
-
+  // 绝不回退系统 python：缺失时让调用方拿到 PYTHON_RUNTIME_MISSING，由用户显式触发下载。
   return null
 }
 
@@ -324,6 +379,13 @@ class RekordboxDesktopHelperSession {
     terminateChildProcess(child, 'rekordbox-desktop:persistent')
   }
 
+  /** 丢弃当前解释器进程：安装完成或运行时路径变化后必须重新解析。 */
+  reset() {
+    this.failWaiter(createHelperError('Rekordbox Desktop helper 已重置。', 'HELPER_RUNTIME_ERROR'))
+    this.clearIdle()
+    this.destroyChild()
+  }
+
   private failWaiter(error: Error) {
     const waiter = this.waiter
     this.waiter = null
@@ -352,18 +414,30 @@ class RekordboxDesktopHelperSession {
     }
 
     this.destroyChild()
+    const isPortableRuntime = pythonCommand.runtimeSource !== 'env-python'
+    const launch = isPortableRuntime
+      ? buildPortablePythonLaunch(pythonCommand.command, pythonCommand.runtimeHome ?? '')
+      : { command: pythonCommand.command, pythonHome: '' }
+    const childEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      PYTHONUTF8: '1',
+      PYTHONIOENCODING: 'utf-8',
+      PYTHONUNBUFFERED: '1'
+    }
+    if (isPortableRuntime) {
+      // 自带/按需安装的 runtime 固定到本包 prefix：隔离用户 site 与外部 PYTHONPATH，
+      // Windows 深目录下 PYTHONHOME 使用扩展长度路径，避免 DLL LoadLibrary 超 MAX_PATH。
+      childEnv.PYTHONHOME = launch.pythonHome
+      childEnv.PYTHONPATH = ''
+      childEnv.PYTHONNOUSERSITE = '1'
+    }
     const child = childProcess.spawn(
-      pythonCommand.command,
+      launch.command,
       [...pythonCommand.args, bridgePath, '--persistent'],
       {
         windowsHide: true,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          PYTHONUTF8: '1',
-          PYTHONIOENCODING: 'utf-8',
-          PYTHONUNBUFFERED: '1'
-        }
+        env: childEnv
       }
     )
     this.child = child
@@ -517,12 +591,21 @@ class RekordboxDesktopHelperSession {
 
 const helperSession = new RekordboxDesktopHelperSession()
 
+// 运行时刚安装/替换后，不能继续复用旧的缺失缓存或已损坏的子进程。
+rekordboxRuntimeEvents.on('installed', () => {
+  helperSession.reset()
+})
+
+export const resetRekordboxDesktopHelperRuntime = () => {
+  helperSession.reset()
+}
+
 export async function runRekordboxDesktopHelper<TResult, TPayload extends Record<string, unknown>>(
   command: RekordboxDesktopHelperCommand,
   payload: TPayload,
   options?: RunRekordboxDesktopHelperOptions
 ): Promise<TResult> {
-  if (process.platform !== 'win32' && process.platform !== 'darwin') {
+  if (!resolveRekordboxRuntimePlatformKey(process.platform, process.arch)) {
     throw createHelperError('当前平台暂不支持 Rekordbox 库。', 'UNSUPPORTED_PLATFORM')
   }
   const readCommands: RekordboxDesktopHelperCommand[] = [

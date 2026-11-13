@@ -116,6 +116,7 @@ import { songHotCueEvents } from './services/songHotCueEvents'
 import { songMemoryCueEvents } from './services/songMemoryCueEvents'
 import { analysisRuntimeDownloadEvents } from './services/analysisRuntimeDownload'
 import { demucsUltraModelDownloadEvents } from './services/demucsUltraModelDownload'
+import { registerOptionalComponentHandlers } from './ipc/optionalComponentHandlers'
 import { startMixtapeStemBackgroundResume } from './services/mixtapeStemBackgroundResume'
 import { isMixtapeStemQueueBusy } from './services/mixtapeStemQueue'
 import { isMixtapeWaveformQueueBusy } from './services/mixtapeWaveformQueue'
@@ -366,6 +367,7 @@ registerExportHandlers()
 registerKeyAnalysisHandlers()
 registerAnalysisRuntimeHandlers()
 registerDemucsModelHandlers()
+registerOptionalComponentHandlers()
 registerMixtapeHandlers()
 registerLibraryStemHandlers()
 registerBpmFixHandlers()

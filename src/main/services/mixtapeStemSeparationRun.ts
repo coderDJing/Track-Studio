@@ -3,11 +3,11 @@ import path from 'node:path'
 import { resolveBundledFfmpegPath } from '../ffmpeg'
 import {
   resolveBundledDemucsBootstrapDirPath,
-  resolveBundledDemucsModelsPath,
   resolveBundledDemucsPythonPath,
   resolveBundledDemucsRuntimeDir,
   resolveInstalledDemucsModelPath
 } from '../demucs'
+import { ensureDemucsBaseModel, isDemucsBaseModelName } from './demucsBaseModelDownload'
 import type { MixtapeStemMode } from '../mixtapeDb'
 import {
   DEFAULT_MIXTAPE_STEM_BASE_MODEL,
@@ -378,10 +378,18 @@ export const runStemSeparation = async (params: {
   const requestedDemucsModelName =
     normalizeText(parsedModel.demucsModel, 128) || DEFAULT_MIXTAPE_STEM_BASE_MODEL
   const stemProfile = normalizeStemProfile(parsedModel.profile, DEFAULT_MIXTAPE_STEM_PROFILE)
-  const modelRepoPath =
-    stemProfile === 'ultra'
-      ? resolveInstalledDemucsModelPath(requestedDemucsModelName)
-      : resolveBundledDemucsModelsPath()
+  let modelRepoPath: string
+  if (stemProfile === 'ultra') {
+    modelRepoPath = resolveInstalledDemucsModelPath(requestedDemucsModelName)
+  } else {
+    if (!isDemucsBaseModelName(requestedDemucsModelName)) {
+      throw createStemError(
+        'STEM_MODEL_UNSUPPORTED',
+        `不支持的基础 Stem 模型: ${requestedDemucsModelName || '<empty>'}`
+      )
+    }
+    modelRepoPath = await ensureDemucsBaseModel(requestedDemucsModelName)
+  }
   const ffmpegPath = resolveBundledFfmpegPath()
   const ffprobePath = resolveBundledFfprobePath()
   if (!fs.existsSync(modelRepoPath)) {

@@ -1,0 +1,23 @@
+{
+  "optionalComponents": {
+    "panelTitle": "可选组件下载",
+    "collapse": "收起",
+    "expand": "展开",
+    "retrying": "重试中…",
+    "statusDownloading": "下载中 {percent}%",
+    "statusInstalling": "安装中…",
+    "statusReady": "已完成",
+    "statusFailed": "下载失败",
+    "stemHtdemucs": "基础 Stem 模型",
+    "stemMdxExtraQ": "增强 Stem 模型",
+    "rekordboxRuntime": "Rekordbox 支持组件",
+    "rekordboxDownloadTitle": "修复 Rekordbox 支持组件",
+    "rekordboxDownloadContent": "读取 Rekordbox 资料库需要该组件；首次使用或组件损坏时需联网下载。",
+    "downloadNow": "下载",
+    "downloadFailedTitle": "下载失败",
+    "downloadFailedContent": "组件下载失败，请稍后重试。",
+    "rekordboxMissingHint": "Rekordbox 支持组件缺失或损坏。点击下载后即可继续使用 Rekordbox 资料库。",
+    "rekordboxEntryLabel": "Rekordbox",
+    "downloadingEntryLabel": "下载中…"
+  }
+}

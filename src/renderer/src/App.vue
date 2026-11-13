@@ -33,6 +33,8 @@ import { createClickThroughGuard } from '@renderer/utils/clickThroughGuard'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 import HorizontalBrowseModeShell from '@renderer/components/HorizontalBrowseModeShell.vue'
 import AnalysisRuntimeDownloadOverlay from '@renderer/components/AnalysisRuntimeDownloadOverlay.vue'
+import OptionalComponentDownloadsOverlay from '@renderer/components/OptionalComponentDownloadsOverlay.vue'
+import { ensureOptionalComponentStatesLoaded } from '@renderer/composables/useOptionalComponentDownloads'
 import LibraryMergeDialog from '@renderer/components/LibraryMergeDialog.vue'
 import { startLibraryRelocateFromMenu } from '@renderer/utils/libraryRelocateActions'
 import { useAnalysisRuntimeDownload } from '@renderer/composables/useAnalysisRuntimeDownload'
@@ -721,6 +723,8 @@ const handleAnalysisRuntimeDownloadStateWrapper = (_e: unknown, payload: unknown
 }
 
 onMounted(() => {
+  // 只读取主进程内存中的可选组件状态；启动阶段绝不自动下载。
+  void ensureOptionalComponentStatesLoaded()
   currentTimeTimer = setInterval(() => {
     currentTime.value = formatCurrentTime()
   }, 1000)
@@ -1074,6 +1078,7 @@ onBeforeUnmount(() => {
     :percent="analysisRuntimeDownloadPercent"
     :hint="t('analysisRuntime.downloadBlockingHint')"
   />
+  <OptionalComponentDownloadsOverlay />
   <LibraryMergeDialog v-if="libraryMergeDialogVisible" @close="libraryMergeDialogVisible = false" />
   <LibraryMergeDialog
     v-if="curatedLibraryMergeDialogVisible"

@@ -15,20 +15,51 @@ const buildPortableRuntimeCopyOptions = () => ({
   ...(process.platform === 'darwin' ? { verbatimSymlinks: true } : {})
 })
 
-const formatErrorWithCause = (error, toShortText) => {
+const DEFAULT_ERROR_CAUSE_DEPTH = 6
+
+const redactErrorText = (value) =>
+  String(value || '').replace(/(https?:\/\/)[^\s/@]+:[^\s/@]+@/gi, '$1***@')
+
+/**
+ * Flatten a bounded error cause chain without ever printing proxy credentials.
+ * Codes are appended in brackets so TLS/DNS error codes survive the conversion.
+ */
+export const formatErrorWithCause = (
+  error,
+  toShortText = (value) => String(value),
+  maxDepth = DEFAULT_ERROR_CAUSE_DEPTH
+) => {
   const parts = []
+  const seen = new WeakSet()
+  const depthLimit = Math.max(1, Math.floor(Number(maxDepth) || DEFAULT_ERROR_CAUSE_DEPTH))
   let current = error
-  while (current) {
-    const text =
-      current instanceof Error
-        ? String(current.message || current.name || '').trim()
-        : String(current || '').trim()
+  let depth = 0
+  while (current && depth < depthLimit) {
+    if (typeof current === 'object') {
+      if (seen.has(current)) break
+      seen.add(current)
+    }
+    let text = ''
+    if (current instanceof Error) {
+      const message = redactErrorText(current.message || current.name || '').trim()
+      const code = redactErrorText(current.code || '').trim()
+      text = message || String(current.name || '').trim() || 'Error'
+      if (code && !text.includes(code)) text = `${text} [${code}]`
+    } else if (typeof current === 'object') {
+      const message = redactErrorText(current.message || '').trim()
+      const code = redactErrorText(current.code || '').trim()
+      text = message || (code ? `[${code}]` : '')
+    } else {
+      text = redactErrorText(current).trim()
+    }
     if (text && !parts.includes(text)) {
       parts.push(text)
     }
-    current = current instanceof Error ? current.cause : null
+    current = typeof current === 'object' ? current.cause : null
+    depth += 1
   }
-  return toShortText(parts.join(' <- ') || 'unknown')
+  const formatter = typeof toShortText === 'function' ? toShortText : (value) => String(value)
+  return formatter(parts.join(' <- ') || 'unknown')
 }
 
 export const readJsonFileIfExists = (filePath) => {

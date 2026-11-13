@@ -127,14 +127,14 @@ const validateRuntime = (platformKey) => {
     )
   }
 
-  const normalizedRuntimeDir = path.normalize(runtimeDir)
+  const normalizedRuntimeDir = fs.realpathSync(runtimeDir)
   if (parsed.pyrekordbox !== requiredPyrekordboxVersion) {
     throw new Error(
       `[rekordbox-runtime] Version mismatch for ${platformKey}: ${parsed.pyrekordbox} expected=${requiredPyrekordboxVersion}`
     )
   }
-  const prefix = path.normalize(String(parsed.prefix || '').trim())
-  const basePrefix = path.normalize(String(parsed.base_prefix || '').trim())
+  const prefix = fs.realpathSync(String(parsed.prefix || '').trim())
+  const basePrefix = fs.realpathSync(String(parsed.base_prefix || '').trim())
   if (prefix !== normalizedRuntimeDir || basePrefix !== normalizedRuntimeDir) {
     throw new Error(
       `[rekordbox-runtime] Runtime prefix is not portable for ${platformKey}: prefix=${prefix} base_prefix=${basePrefix} expected=${normalizedRuntimeDir}`
