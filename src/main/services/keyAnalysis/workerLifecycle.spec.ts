@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import type { Worker } from 'node:worker_threads'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createKeyAnalysisWorkerPool } from './workerPool'
 import { normalizePath, type KeyAnalysisJob } from './types'
 import {
@@ -128,6 +128,77 @@ const createHarness = (events = new EventEmitter()) => {
 }
 
 describe('analysis worker lifecycle', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('backs off repeated idle worker failures instead of rebuilding in a tight loop', () => {
+    vi.useFakeTimers()
+    const { deps, pool } = createHarness()
+    deps.workers.push(pool.createWorker())
+    for (const delayMs of [1000, 2000, 4000, 8000, 16_000, 30_000, 30_000]) {
+      const worker = deps.workers[0]
+      worker.emit('error', new Error("Cannot find module 'electron'"))
+      worker.emit('exit', 1)
+      expect(deps.workers).toHaveLength(0)
+      expect(deps.idle).toHaveLength(0)
+      expect(vi.getTimerCount()).toBe(1)
+      vi.advanceTimersByTime(delayMs - 1)
+      expect(deps.workers).toHaveLength(0)
+      vi.advanceTimersByTime(1)
+      expect(deps.workers).toHaveLength(1)
+      expect(deps.idle).toHaveLength(1)
+    }
+  })
+
+  it('does not exceed the latest concurrency limit when a delayed replacement runs', () => {
+    vi.useFakeTimers()
+    const { deps, pool } = createHarness()
+    const worker = pool.createWorker()
+    deps.workers.push(worker)
+    worker.emit('error', new Error('startup failed'))
+    deps.getGlobalConcurrencyLimit = () => 1
+    deps.workers.push(pool.createWorker())
+    vi.advanceTimersByTime(1000)
+    expect(deps.workers).toHaveLength(1)
+    expect(deps.idle).toHaveLength(1)
+  })
+
+  it('also backs off a startup failure after dispatch, while settling the failed job once', () => {
+    vi.useFakeTimers()
+    const { deps, begin, progress } = createHarness()
+    const { worker, job } = begin(1)
+    job.trace = { lastStage: 'job-received', elapsedMs: 0 }
+    worker.emit('error', new Error("Cannot find module 'electron'"))
+    worker.emit('exit', 1)
+    expect(deps.workers).toHaveLength(0)
+    expect(deps.inFlight.size).toBe(0)
+    expect(deps.activeByPath.size).toBe(0)
+    expect(deps.onJobFailure).toHaveBeenCalledTimes(1)
+    expect(progress).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(1000)
+    expect(deps.workers).toHaveLength(1)
+  })
+
+  it('resets idle crash backoff after a worker successfully handles a job message', () => {
+    vi.useFakeTimers()
+    const { deps, pool, begin } = createHarness()
+    const worker = pool.createWorker()
+    deps.workers.push(worker)
+    worker.emit('error', new Error('startup failed'))
+    vi.advanceTimersByTime(1000)
+    const running = begin(1)
+    running.worker.emit('message', {
+      jobId: running.job.jobId,
+      filePath: running.job.filePath,
+      progress: { stage: 'decode-start', elapsedMs: 0 }
+    })
+    running.worker.emit('error', new Error('runtime failed'))
+    deps.workers[0].emit('error', new Error('startup failed again'))
+    vi.advanceTimersByTime(1000)
+    expect(deps.workers).toHaveLength(1)
+  })
+
   it('settles all seven timed-out tracks and releases their progress and batch ownership', () => {
     const { deps, begin, progress } = createHarness(keyAnalysisEvents)
     const batchProgress = vi.fn()

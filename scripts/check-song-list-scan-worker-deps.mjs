@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-const entry = path.resolve('out/main/workers/songListScanWorker.js')
+const entries = ['songListScanWorker', 'keyAnalysisWorker']
 const visited = new Set()
 
 const inspect = (filePath) => {
@@ -12,7 +12,7 @@ const inspect = (filePath) => {
   const staticRequires = /^(?:(?:const|let|var)\s+[\w$]+\s*=\s*)?require\(['"]([^'"]+)['"]\)/gm
   for (const [, dependency] of source.matchAll(staticRequires)) {
     if (dependency === 'electron') {
-      throw new Error(`songListScanWorker must not load Electron: ${path.relative(process.cwd(), filePath)}`)
+      throw new Error(`Worker must not load Electron: ${path.relative(process.cwd(), filePath)}`)
     }
     if (dependency.startsWith('.')) {
       inspect(path.resolve(path.dirname(filePath), dependency))
@@ -20,5 +20,7 @@ const inspect = (filePath) => {
   }
 }
 
-inspect(entry)
-console.log(`songListScanWorker dependency check passed (${visited.size} bundled files)`)
+for (const entry of entries) {
+  inspect(path.resolve(`out/main/workers/${entry}.js`))
+}
+console.log(`${entries.join(', ')} dependency check passed (${visited.size} bundled files)`)

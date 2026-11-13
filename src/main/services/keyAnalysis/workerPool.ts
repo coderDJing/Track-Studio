@@ -132,6 +132,8 @@ export const collectKeyAnalysisJobResultErrors = (
 }
 
 export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => {
+  let consecutiveWorkerStartFailures = 0
+
   const isCurrentWorkerJob = (worker: Worker, job: KeyAnalysisJob) =>
     hasCurrentKeyAnalysisJobOwnership(job, {
       terminationExpected: deps.hasExpectedWorkerTermination(worker),
@@ -519,10 +521,25 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
       expectedTerminationReason === 'concurrency-retire' ||
       expectedTerminationReason === 'concurrency-downscale'
     if (!wasRetiring && !isConcurrencyShrink) {
-      const replacement = createWorker()
-      deps.workers.push(replacement)
-      if (wasForegroundWorker) {
-        deps.setForegroundWorker(replacement)
+      if (!wasExpectedTermination && (!job || job.trace?.lastStage === 'job-received')) {
+        // 启动依赖损坏时，无任务 worker 也会退出；禁止以创建线程的速度无限补建。
+        consecutiveWorkerStartFailures = Math.min(consecutiveWorkerStartFailures + 1, 6)
+        const retryDelayMs = Math.min(1000 * 2 ** (consecutiveWorkerStartFailures - 1), 30_000)
+        const retryTimer = setTimeout(() => {
+          // 等待期间可能已缩容或手动扩容，按最新并发限制补建，避免超额线程。
+          if (deps.workers.length >= deps.getGlobalConcurrencyLimit()) return
+          const replacement = createWorker()
+          deps.workers.push(replacement)
+          refreshForegroundWorker()
+          deps.drain()
+        }, retryDelayMs)
+        retryTimer.unref()
+      } else {
+        const replacement = createWorker()
+        deps.workers.push(replacement)
+        if (wasForegroundWorker) {
+          deps.setForegroundWorker(replacement)
+        }
       }
     }
     refreshForegroundWorker()
@@ -551,6 +568,9 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
   const handleWorkerMessage = async (worker: Worker, payload: WorkerPayload) => {
     const jobId = payload?.jobId
     const job = deps.inFlight.get(jobId)
+    if (job && isCurrentWorkerJob(worker, job)) {
+      consecutiveWorkerStartFailures = 0
+    }
     const payloadProgress = payload?.progress
     const payloadResult = payload?.result
     const payloadError = payload?.error
