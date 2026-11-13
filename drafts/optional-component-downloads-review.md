@@ -5,7 +5,7 @@
 ## 使用流程
 
 - 基础 Stem：用户实际提交分离任务时，先校验所选模型；缺失时只下载该模型。`htdemucs` 约 84 MB，`mdx_extra_q` 四份权重合计约 168 MB。两种模型独立保存，同类并发请求合并。
-- rekordbox：启动及定时探测只读取本机状态。缺组件时资料库区域保留下载入口；用户点击并确认后下载当前平台对应环境。下载失败保留入口，支持重试。
+- rekordbox：启动及定时探测只读取本机状态。缺组件时，先用纯 Node 检查本机程序文件或已有资料库；确认存在后才在资料库区域显示下载入口。用户点击并确认后下载当前平台对应环境。下载失败保留入口，支持重试。
 - 下载状态显示在可收起的组件面板中，不复用 AI 运行时或 Ultra 模型的状态。错误提示脱敏，下载失败不改变现有歌单和选中状态。
 - 已安装组件支持离线复用。原有 CPU/GPU AI 运行时和 Ultra 模型继续使用各自下载链路。
 
@@ -44,6 +44,14 @@ Windows/macOS 的模型和 Python 环境从 `extraResources` 移除；应用构�
 
 应用预发布版本：`1.2.8-rc.202611131117`。按项目规则先提交并推送 main，再推送同名 tag 触发应用 Release；独立资源不设为应用最新版。
 
+## 本机存在性门控补充验收
+
+- 未检测到本机软件或资料库时，缺少组件统一返回 `REKORDBOX_NOT_FOUND`，不显示下载入口；正常可用的 helper 探测保持原路径。
+- Windows 只读注册表并验证真实 exe，兼容自定义安装目录与中文路径；Mac 检查系统及用户 Applications 中的有效应用包。
+- 读取 `options.json` 的 `db-path` 或真实 `PROPERTIES` XML 中的 `masterDbDirectory`，检查迁移后的 `master.db` 文件；空目录、失效记录、无效配置不作为证据。
+- 文件操作采用异步 I/O，Windows 注册表查询使用有界、隐藏窗口的 Unicode JSON 输出；不启动 Python、不下载、不解密数据库。无证据结果不永久缓存。
+- 6 个相关测试文件 / 56 项测试通过，覆盖软件缺失、安装但未初始化、迁移资料库、中文路径、Mac 应用较多、无效 XML、状态变化及 UI 入口隐藏。本机只读实测通过注册表识别到已有安装。
+
 ## 相关代码行数
 
 | 文件 | 实际行数 |
@@ -69,7 +77,7 @@ Windows/macOS 的模型和 Python 环境从 `extraResources` 移除；应用构�
 | `src/main/services/demucsBaseModelDownloadCore.ts` | 323 |
 | `src/main/services/mixtapeStemSeparationRun.ts` | 941 |
 | `src/main/services/optionalComponentEvents.ts` | 24 |
-| `src/main/services/rekordboxDesktopLibrary/detect.ts` | 233 |
+| `src/main/services/rekordboxDesktopLibrary/detect.ts` | 261 |
 | `src/main/services/rekordboxDesktopLibrary/helper.ts` | 619 |
 | `src/main/services/rekordboxRuntimeArchive.spec.ts` | 185 |
 | `src/main/services/rekordboxRuntimeArchive.ts` | 155 |
@@ -86,7 +94,11 @@ Windows/macOS 的模型和 Python 环境从 `extraResources` 移除；应用构�
 | `src/renderer/src/pages/modules/librarySelectArea/RekordboxRuntimeMissingEntry.vue` | 127 |
 | `src/renderer/src/pages/modules/librarySelectArea/pioneerDriveEjectError.ts` | 22 |
 | `src/renderer/src/pages/modules/librarySelectArea/rekordboxRuntimeDownload.ts` | 87 |
-| `src/renderer/src/pages/modules/librarySelectArea/useRekordboxSourceIcons.spec.ts` | 402 |
+| `src/renderer/src/pages/modules/librarySelectArea/useRekordboxSourceIcons.spec.ts` | 433 |
 | `src/renderer/src/pages/modules/librarySelectArea/useRekordboxSourceIcons.ts` | 1097 |
 | `src/shared/optionalComponentDownloads.ts` | 29 |
 | `src/shared/rekordboxRuntimeDownload.ts` | 227 |
+| `src/main/services/rekordboxDesktopLibrary/presence.ts` | 365 |
+| `src/main/services/rekordboxDesktopLibrary/presence.spec.ts` | 306 |
+| `src/main/services/rekordboxDesktopLibrary/presenceWindows.ts` | 162 |
+| `src/main/services/rekordboxDesktopLibrary/presenceWindows.spec.ts` | 48 |

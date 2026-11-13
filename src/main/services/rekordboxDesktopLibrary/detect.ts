@@ -4,6 +4,7 @@ import type {
   RekordboxDesktopLibraryProbe
 } from './types'
 import { runRekordboxDesktopHelper } from './helper'
+import { hasRekordboxDesktopPresence } from './presence'
 import { rekordboxRuntimeEvents } from '../rekordboxRuntimeDownload'
 import type {
   RekordboxDesktopWriteAvailability,
@@ -107,6 +108,31 @@ const normalizeProbeError = (error: unknown) => {
   })
 }
 
+/**
+ * 只有“本机确实装过 Rekordbox / 存在有效曲库”才保留缺组件错误，
+ * 否则改报 REKORDBOX_NOT_FOUND，让 Renderer 不显示组件下载入口。
+ * 该判定只在缺少 runtime 或 pyrekordbox 时执行：纯本地、无网络、无下载。
+ */
+const PRESENCE_GATED_ERROR_CODES = new Set<string>([
+  'PYTHON_RUNTIME_MISSING',
+  'PYREKORDBOX_UNAVAILABLE'
+])
+
+const applyPresenceGate = async (
+  probe: RekordboxDesktopLibraryProbe
+): Promise<RekordboxDesktopLibraryProbe> => {
+  if (probe.available || !probe.supported) return probe
+  if (!probe.errorCode || !PRESENCE_GATED_ERROR_CODES.has(probe.errorCode)) return probe
+
+  // 检测异常时保守处理：不把“没证据”当成有本机软件，避免误导用户下载。
+  const hasPresence = await hasRekordboxDesktopPresence().catch(() => false)
+  if (hasPresence) return probe
+  return createUnavailableProbe({
+    errorCode: 'REKORDBOX_NOT_FOUND',
+    errorMessage: '未检测到本机安装的 Rekordbox 或可用的曲库。'
+  })
+}
+
 const normalizeProbe = (
   payload: RekordboxDesktopHelperProbePayload | null | undefined
 ): RekordboxDesktopLibraryProbe => {
@@ -162,6 +188,8 @@ async function readLibraryProbe(
     } catch (error) {
       probe = normalizeProbeError(error)
     }
+    // helper 成功 payload 与异常统一在这里门控，正常可用/其它错误原样返回。
+    probe = await applyPresenceGate(probe)
 
     if (probe.available) {
       probeCache.set(mode, {

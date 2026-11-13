@@ -150,6 +150,37 @@ describe('rekordbox desktop runtime download entry', () => {
     expect(isRepairableRekordboxRuntimeError(undefined)).toBe(false)
   })
 
+  it('hides the component entry when the main process found no local rekordbox installation or library', async () => {
+    invoke.mockImplementation(async (channel: string) => {
+      if (channel === probeChannel) return { available: false, errorCode: 'REKORDBOX_NOT_FOUND' }
+      if (channel === 'pioneer-device-library:list-removable-drives') return []
+      throw new Error(`Unexpected IPC: ${channel}`)
+    })
+
+    const { state } = await fixture()
+
+    expect(state.desktopRuntimeMissing.value).toBe(false)
+    expect(state.desktopLibraryIcon.value).toBeNull()
+    expect(confirm).not.toHaveBeenCalled()
+    expect(invoke.mock.calls.some(([channel]) => channel === downloadChannel)).toBe(false)
+  })
+
+  it('removes a previously visible download entry when local rekordbox evidence disappears', async () => {
+    let errorCode = 'PYTHON_RUNTIME_MISSING'
+    invoke.mockImplementation(async (channel: string) => {
+      if (channel === probeChannel) return { available: false, errorCode }
+      if (channel === 'pioneer-device-library:list-removable-drives') return []
+      throw new Error(`Unexpected IPC: ${channel}`)
+    })
+
+    const { state } = await fixture()
+    expect(state.desktopRuntimeMissing.value).toBe(true)
+    errorCode = 'REKORDBOX_NOT_FOUND'
+    await state.refreshRekordboxSourceIcons({ force: true })
+    expect(state.desktopRuntimeMissing.value).toBe(false)
+    expect(invoke.mock.calls.some(([channel]) => channel === downloadChannel)).toBe(false)
+  })
+
   it('shows the repair entry for a damaged component without downloading', async () => {
     invoke.mockImplementation(async (channel: string) => {
       if (channel === probeChannel)
