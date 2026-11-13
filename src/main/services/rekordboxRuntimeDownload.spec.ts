@@ -460,6 +460,15 @@ describe.skipIf(!PLATFORM)('rekordbox runtime installer', () => {
     expect(fs.readFileSync(pythonPath, 'utf8')).toBe(original)
     expect(h.calls.download).toBe(2)
   })
+
+  it('rechecks Python dependencies during explicit repair even when sentinels are unchanged', async () => {
+    const h = harness()
+    const pythonPath = await h.installer.ensure()
+    h.setValidate({ ok: false, error: 'dependency removed after installation' })
+    await expect(h.installer.ensure()).rejects.toThrow(/dependency removed/)
+    expect(h.calls.download).toBe(2)
+    expect(fs.existsSync(pythonPath)).toBe(true)
+  })
 })
 
 describe('rekordbox helper runtime resolution', () => {

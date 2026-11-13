@@ -30,17 +30,19 @@ Windows/macOS 的模型和 Python 环境从 `extraResources` 移除；应用构�
 施工由原 CodeBuddy 会话并发完成，固定模型 `deepseek-v4.1-flash`；root 审核并运行检查。第一轮发现的归档根目录误拒绝、并发测试时序、UI fixture 和 USB 弹出回归均进入返工。
 
 - `npx vue-tsc --noEmit` 与 `pnpm run build` 通过；新增 IPC 的主进程、preload 白名单和 renderer 调用名已对照。
-- 18 个相关 Vitest 文件 / 111 项测试通过；Windows Python 启动路径测试另有 3 项通过、1 项非 Windows 分支跳过。Node 脚本 44 项测试通过。
+- 18 个相关 Vitest 文件 / 112 项测试通过；Windows Python 启动路径测试另有 3 项通过、1 项非 Windows 分支跳过。Node 脚本 44 项测试通过。
 - 两套真实基础权重经新安装核心完成 YAML / SHA 校验、按模型隔离安装、并发合并与零网络复用。默认 `htdemucs` 从新目录加载成功；旧 `mdx_extra_q` 的加载在本机 CPU 运行时缺少 DiffQ，此为既有运行时限制，本轮未修改该运行时或扩展模型选项。
 - 公开 GitHub Windows 资源已走生产下载函数完成清单读取、归档下载和 SHA 校验；同一公开归档在深层临时 userData 下完成暂存验证、激活后验证和新实例离线复用。另以只导入依赖的测试桥验证真实持久 helper 启动，未访问或写入用户资料库。
 - Windows 超过 MAX_PATH 的 Python 扩展库加载问题已修复：自有解释器入口与 Python home 统一使用扩展长度路径，保留用户显式解释器的环境语义。
 - 实际 Windows 目录打包成功，resources / ASAR 排除检查通过。自定义输出目录时旧 `dist` 曾被嵌入 ASAR，已在打包文件规则中显式排除；构建和打包必须串行，避免重建替换打包正在读取的文件。
-- Windows、Intel Mac、Apple Silicon 首批资源构建与独立资源 Release 发布成功。新增解包迁移检查发现 Mac `/var` 与 `/private/var` 路径别名误判，校验已改为比较真实路径；该检查的跨平台重跑结果待补记。
+- Windows、Intel Mac、Apple Silicon 首批资源构建与独立资源 Release 发布成功。新增解包迁移检查发现 Mac `/var` 与 `/private/var` 路径别名误判，校验已改为比较真实路径；三平台迁移解包重跑均已通过（资源工作流 `43357624606`）。
 - 亮暗主题均已用实际 Vue 组件在隐藏 Electron 窗口截图检查：下载状态、重试按钮可见，36px 入口完整落在 45px 侧栏内。截图见下。
 
 ![暗色主题](optional-component-downloads/theme-dark.png)
 
 ![亮色主题](optional-component-downloads/theme-light.png)
+
+应用预发布版本：`1.2.8-rc.202611131117`。按项目规则先提交并推送 main，再推送同名 tag 触发应用 Release；独立资源不设为应用最新版。
 
 ## 相关代码行数
 
@@ -65,14 +67,14 @@ Windows/macOS 的模型和 Python 环境从 `extraResources` 移除；应用构�
 | `src/main/services/demucsBaseModelDownload.ts` | 195 |
 | `src/main/services/demucsBaseModelDownloadCore.spec.ts` | 362 |
 | `src/main/services/demucsBaseModelDownloadCore.ts` | 323 |
-| `src/main/services/mixtapeStemSeparationRun.ts` | 944 |
+| `src/main/services/mixtapeStemSeparationRun.ts` | 941 |
 | `src/main/services/optionalComponentEvents.ts` | 24 |
 | `src/main/services/rekordboxDesktopLibrary/detect.ts` | 233 |
 | `src/main/services/rekordboxDesktopLibrary/helper.ts` | 619 |
 | `src/main/services/rekordboxRuntimeArchive.spec.ts` | 185 |
 | `src/main/services/rekordboxRuntimeArchive.ts` | 155 |
-| `src/main/services/rekordboxRuntimeDownload.spec.ts` | 517 |
-| `src/main/services/rekordboxRuntimeDownload.ts` | 684 |
+| `src/main/services/rekordboxRuntimeDownload.spec.ts` | 526 |
+| `src/main/services/rekordboxRuntimeDownload.ts` | 655 |
 | `src/main/services/rekordboxRuntimePythonLaunch.spec.ts` | 39 |
 | `src/main/services/rekordboxRuntimePythonLaunch.ts` | 28 |
 | `src/preload/index.ts` | 406 |
@@ -84,7 +86,7 @@ Windows/macOS 的模型和 Python 环境从 `extraResources` 移除；应用构�
 | `src/renderer/src/pages/modules/librarySelectArea/RekordboxRuntimeMissingEntry.vue` | 127 |
 | `src/renderer/src/pages/modules/librarySelectArea/pioneerDriveEjectError.ts` | 22 |
 | `src/renderer/src/pages/modules/librarySelectArea/rekordboxRuntimeDownload.ts` | 87 |
-| `src/renderer/src/pages/modules/librarySelectArea/useRekordboxSourceIcons.spec.ts` | 401 |
+| `src/renderer/src/pages/modules/librarySelectArea/useRekordboxSourceIcons.spec.ts` | 402 |
 | `src/renderer/src/pages/modules/librarySelectArea/useRekordboxSourceIcons.ts` | 1097 |
 | `src/shared/optionalComponentDownloads.ts` | 29 |
 | `src/shared/rekordboxRuntimeDownload.ts` | 227 |

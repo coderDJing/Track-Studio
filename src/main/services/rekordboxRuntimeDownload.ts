@@ -332,7 +332,6 @@ export const createRekordboxRuntimeInstaller = (
    * 只缓存“已通过 SHA + Python 校验”的状态；任何文件被同尺寸篡改都会改变 mtime/ctime，
    * 从而让缓存失效并重新完整校验。
    */
-  const verifiedSignatureByPlatform = new Map<RekordboxRuntimePlatformKey, string>()
 
   const resolveInstalledRootPath = () =>
     path.join(deps.resolveUserDataPath(), REKORDBOX_RUNTIME_INSTALL_DIR_NAME)
@@ -424,23 +423,6 @@ export const createRekordboxRuntimeInstaller = (
     if (!(await verifySentinelsAt(info.platformRootPath, meta))) return false
     const probe = await deps.validatePython(info.pythonPath).catch(() => ({ ok: false }))
     return probe.ok
-  }
-
-  /**
-   * 安装签名 = 版本/归档 sha/每个哨兵的 size+mtime+ctime。
-   * 同尺寸覆盖会刷新 mtime/ctime，签名随之变化，缓存不会掩盖损坏。
-   */
-  const buildInstalledSignature = (info: RekordboxRuntimeInstalledInfo): string | null => {
-    const meta = readInstalledMeta(path.join(info.platformRootPath, INSTALL_META_FILE_NAME))
-    if (!meta || meta.archiveSha256 !== info.archiveSha256) return null
-    const parts = [`${meta.version}:${meta.archiveSha256}`]
-    for (const sentinel of meta.sentinels) {
-      const targetPath = path.join(info.platformRootPath, ...sentinel.path.split('/'))
-      const stat = fs.statSync(targetPath, { throwIfNoEntry: false })
-      if (!stat || !stat.isFile() || stat.size !== sentinel.size) return null
-      parts.push(`${sentinel.path}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`)
-    }
-    return parts.join('|')
   }
 
   const install = async (platformKey: RekordboxRuntimePlatformKey): Promise<string> => {
@@ -587,10 +569,6 @@ export const createRekordboxRuntimeInstaller = (
       activeStage = ''
       await fsp.rm(archivePath, { force: true }).catch(() => {})
       archivePath = ''
-      verifiedSignatureByPlatform.set(
-        platformKey,
-        buildInstalledSignature(installed) ?? `${installed.version}:${installed.archiveSha256}`
-      )
 
       // 先同步通知 helper/detect 清掉旧解释器与旧 probe 缓存，再向 Renderer 宣布 ready，
       // 避免 UI 收到 ready 后立刻 probe 仍撞上旧 helper。
@@ -627,16 +605,9 @@ export const createRekordboxRuntimeInstaller = (
     const platformKey = currentPlatformKey()
     if (!platformKey) throw unsupportedPlatformError()
     const installed = probeInstalled()
-    if (installed) {
-      const signature = buildInstalledSignature(installed)
-      // 只有签名未变且此前已通过完整校验（哨兵 sha + Python 可用）才能直接复用。
-      if (signature && verifiedSignatureByPlatform.get(platformKey) === signature) {
-        return installed.pythonPath
-      }
-      if (await verifyInstalledIntegrity(installed)) {
-        if (signature) verifiedSignatureByPlatform.set(platformKey, signature)
-        return installed.pythonPath
-      }
+    // 仅由显式下载/修复入口调用。依赖文件也可能被移除，不能只缓存哨兵身份。
+    if (installed && (await verifyInstalledIntegrity(installed))) {
+      return installed.pythonPath
     }
 
     const existing = installPromiseByPlatform.get(platformKey)
