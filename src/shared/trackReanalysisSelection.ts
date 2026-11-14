@@ -80,6 +80,17 @@ export const resolveTrackReanalysisPlan = (
 export const isFullTrackReanalysisPlan = (plan: TrackReanalysisPlan) =>
   plan.key && plan.beatGrid && plan.waveform && plan.energy && plan.structure
 
+/**
+ * 本次重新分析是否必须依赖 Python 分析运行时（beat_this）。
+ *
+ * 只有节拍网格 / BPM 直接需要运行时：key 走本地 Rust，波形走本地解码，
+ * 能量与段落只要求“存在可用网格”，可以复用缓存网格。
+ * 能量与结构在缺少网格时会被 applyTrackReanalysisSelectionDependencies 强制带上 beatGrid，
+ * 因此这里只判断 beatGrid 即可覆盖那两种情况。
+ */
+export const requiresAnalysisRuntime = (selection: TrackReanalysisUserSelection) =>
+  selection.beatGrid === true
+
 export const isTrackReanalysisBeatGridLocked = (
   selection: TrackReanalysisUserSelection,
   canSelectStructureAlone = false

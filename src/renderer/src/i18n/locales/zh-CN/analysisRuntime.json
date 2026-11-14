@@ -17,6 +17,7 @@
     "downloadFailedHint": "分析组件下载失败，当前请求的功能暂不可用。",
     "downloadErrorHint": "错误详情：{error}",
     "horizontalBlockedHint": "当前分析组件尚不支持双轨横推，请先下载可用的组件。",
-    "stemBlockedHint": "当前分析组件尚不支持 Stem 工作台，请先下载可用的组件。"
+    "stemBlockedHint": "当前分析组件尚不支持 Stem 工作台，请先下载可用的组件。",
+    "trackAnalysisBlockedHint": "开始节拍网格分析需要分析运行时组件，当前组件尚未就绪，本次未提交任何改动。"
   }
 }

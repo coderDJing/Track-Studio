@@ -31,6 +31,7 @@ import {
   normalizeTrackReanalysisSelection,
   type TrackReanalysisUserSelection
 } from '@shared/trackReanalysisSelection'
+import { ensureAnalysisRuntimeForTrackReanalysis } from '@renderer/utils/trackReanalysisRuntimeGate'
 
 type TrackAnalysisDialogPurpose = 'reanalysis' | 'missing'
 type TrackAnalysisDialogResult = {
@@ -64,6 +65,7 @@ const selectedBpmRangeId = ref<AnalysisBpmRangePresetId>(
 )
 const bpmRangeOptions = computed(() => buildAnalysisBpmRangeOptions(selectedBpmRangeId.value))
 const selectedGridMode = ref<AnalysisGridMode>(normalizeAnalysisGridMode(props.initialGridMode))
+const gateBusy = ref(false)
 const gridModeAvailable = isDynamicAnalysisGridAvailable({ isDevelopment: import.meta.env.DEV })
 const gridModeOptions = computed(() =>
   buildAnalysisGridModeOptions({ dynamicAvailable: gridModeAvailable })
@@ -110,13 +112,23 @@ const dependencyHintText = computed(() => {
   return t('tracks.reanalysisStructureUnavailableHint')
 })
 
-const confirm = () => {
+const confirm = async () => {
   if (!canConfirm.value || gridSubmitBlocked.value) return
+  // 门禁等待提示框期间，快捷键与连续点击都不能重复提交。
+  if (gateBusy.value) return
   const next = applyTrackReanalysisSelectionDependencies(
     selection.value,
     props.canSelectStructureAlone
   )
   if (!hasAnyTrackReanalysisUserSelection(next)) return
+  gateBusy.value = true
+  try {
+    // 需要分析运行时却没就绪时，在这里就地给出下载中 / 下载确认 / 失败提示，本次不提交。
+    const runtimeReady = await ensureAnalysisRuntimeForTrackReanalysis(next)
+    if (!runtimeReady) return
+  } finally {
+    gateBusy.value = false
+  }
   closeWithAnimation(() =>
     props.confirmCallback?.({
       selection: next,
@@ -137,7 +149,10 @@ watch(beatGridLocked, (locked) => {
 
 onMounted(() => {
   runtime.confirmShow = true
-  hotkeys('E,Enter', uuid, confirm)
+  // hotkeys 的 handler 不能返回 Promise，门禁等待期间的重复触发由 gateBusy 拦截。
+  hotkeys('E,Enter', uuid, () => {
+    void confirm()
+  })
   hotkeys('Esc', uuid, cancel)
   utils.setHotkeysScpoe(uuid)
 })

@@ -234,7 +234,12 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
   const applyWorkerProgress = (
     worker: Worker,
     job: KeyAnalysisJob,
-    progress: KeyAnalysisProgress
+    progress: KeyAnalysisProgress,
+    /**
+     * 非空表示这是“真失败”的终态。手动批次按它统计失败数，
+     * 不能用 job-error 阶段直接判断：结果作废（stale）也会发 job-error，但那不算失败。
+     */
+    manualBatchFailureDetail = ''
   ) => {
     const trace = job.trace || {}
     trace.lastStage = progress.stage
@@ -271,6 +276,12 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
       needsEnergy: job.needsEnergy,
       needsStructure: job.needsStructure,
       manualBatchIds: job.manualBatchIds,
+      ...(manualBatchFailureDetail
+        ? {
+            manualBatchFailed: true,
+            manualBatchFailureDetail: manualBatchFailureDetail.slice(0, 200)
+          }
+        : {}),
       ...(publicDynamicGrid ? { dynamicGrid: publicDynamicGrid } : {})
     })
   }
@@ -550,10 +561,18 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
       !preemptedJob &&
       (!wasExpectedTermination || expectedTerminationReason === 'timeout')
     ) {
-      applyWorkerProgress(worker, job, {
-        stage: 'job-error',
-        elapsedMs: job.trace?.elapsedMs ?? 0
-      })
+      applyWorkerProgress(
+        worker,
+        job,
+        {
+          stage: 'job-error',
+          elapsedMs: job.trace?.elapsedMs ?? 0
+        },
+        // 超时与崩溃是用户需要知道的真失败，必须计入手动批次失败数。
+        expectedTerminationReason === 'timeout'
+          ? 'timeout'
+          : String(error?.message || 'worker terminated').slice(0, 200)
+      )
     }
     deps.drain()
     if (
@@ -752,7 +771,14 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
     }
 
     if (canCommit && terminalProgress) {
-      applyWorkerProgress(worker, job, terminalProgress)
+      // 失败详情必须在发终态之前算好，手动批次才能在同一个事件里把它计入失败。
+      // 段落延后（deferredStructureGridDetail）是正常结果，不计入批次失败。
+      applyWorkerProgress(
+        worker,
+        job,
+        terminalProgress,
+        payloadError || resultErrorDetail || persistenceErrorDetail
+      )
       if (payloadError) {
         deps.onJobFailure(job, 'worker-error', String(payloadError).slice(0, 300))
       } else if (resultErrorDetail || persistenceErrorDetail) {

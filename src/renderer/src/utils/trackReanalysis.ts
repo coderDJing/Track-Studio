@@ -15,6 +15,7 @@ import {
   isCurrentRendererWindowsPathPlatform,
   normalizeFilePathForComparison
 } from '@shared/filePathComparison'
+import { showTrackReanalysisRuntimeBlockedHint } from '@renderer/utils/trackReanalysisRuntimeGate'
 
 const normalizeFilePathKey = (filePath: string) =>
   normalizeFilePathForComparison(filePath, isCurrentRendererWindowsPathPlatform())
@@ -94,27 +95,55 @@ export const promptTrackAnalysisSelection = async (options: {
   }
 }
 
+/** 重新分析提交结果；blocked 表示主进程在清理前就拦下了本次请求，未改动任何缓存。 */
+export type TrackReanalysisStartResult = {
+  canceled?: boolean
+  cleared: number
+  queued: number
+  skipped: number
+  blocked?: boolean
+  reason?: string
+}
+
+const normalizeTrackReanalysisStartResult = (value: unknown): TrackReanalysisStartResult => {
+  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  return {
+    cleared: Number(record.cleared) || 0,
+    queued: Number(record.queued) || 0,
+    skipped: Number(record.skipped) || 0,
+    blocked: record.blocked === true,
+    reason: typeof record.reason === 'string' ? record.reason : undefined
+  }
+}
+
 export const promptAndStartTrackReanalysis = async (
   filePaths: string[],
   songs: Array<TrackReanalysisSongHint | null | undefined> = []
-) => {
+): Promise<TrackReanalysisStartResult> => {
   const prompted = await promptTrackAnalysisSelection({
     filePaths,
     songs,
     purpose: 'reanalysis'
   })
-  if (!prompted) return { canceled: true, queued: 0, cleared: 0 }
+  if (!prompted) return { canceled: true, queued: 0, cleared: 0, skipped: 0 }
 
   const runtime = useRuntimeStore()
   const shouldHoldProgress = !runtime.isProgressing
   if (shouldHoldProgress) runtime.isProgressing = true
   try {
-    return await window.electron.ipcRenderer.invoke('track:cache:clear:batch', {
+    const raw: unknown = await window.electron.ipcRenderer.invoke('track:cache:clear:batch', {
       filePaths: prompted.files,
       selection: prompted.selection,
       analysisBpmRangeId: prompted.analysisBpmRangeId,
       gridMode: prompted.analysisGridMode
     })
+    const result = normalizeTrackReanalysisStartResult(raw)
+    // 主进程兜底：提交瞬间运行时仍未就绪时不会清理任何缓存，这里补一次提示，
+    // 避免出现“点了没有任何反应”。
+    if (result.blocked) {
+      await showTrackReanalysisRuntimeBlockedHint(result.reason || '')
+    }
+    return result
   } finally {
     if (shouldHoldProgress) runtime.isProgressing = false
   }

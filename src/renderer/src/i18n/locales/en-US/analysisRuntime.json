@@ -17,6 +17,7 @@
     "downloadFailedHint": "The analysis component download failed. The requested feature is currently unavailable.",
     "downloadErrorHint": "Details: {error}",
     "horizontalBlockedHint": "The current analysis component does not support dual-track horizontal browse. Download a compatible component first.",
-    "stemBlockedHint": "The current analysis component does not support the Stem workspace. Download a compatible component first."
+    "stemBlockedHint": "The current analysis component does not support the Stem workspace. Download a compatible component first.",
+    "trackAnalysisBlockedHint": "Beat grid analysis requires the analysis runtime component, which is not ready yet. Nothing was submitted this time."
   }
 }

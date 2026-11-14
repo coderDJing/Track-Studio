@@ -5,7 +5,14 @@ import { DEFAULT_TRACK_REANALYSIS_SELECTION } from '@shared/trackReanalysisSelec
 import TrackReanalysisDialog from './trackReanalysisDialog.vue'
 
 vi.mock('hotkeys-js', () => ({ default: vi.fn() }))
-vi.mock('@renderer/stores/runtime', () => ({ useRuntimeStore: () => ({ confirmShow: false }) }))
+vi.mock('@renderer/stores/runtime', () => ({
+  useRuntimeStore: () => ({ confirmShow: false, analysisRuntime: { available: true } })
+}))
+const runtimeGateMock = vi.hoisted(() => ({ ensure: vi.fn(async () => true) }))
+vi.mock('@renderer/utils/trackReanalysisRuntimeGate', () => ({
+  ensureAnalysisRuntimeForTrackReanalysis: runtimeGateMock.ensure,
+  showTrackReanalysisRuntimeBlockedHint: vi.fn()
+}))
 vi.mock('@renderer/utils/utils', () => ({
   default: { setHotkeysScpoe: vi.fn(), delHotkeysScope: vi.fn() }
 }))
@@ -116,7 +123,7 @@ const mount = async (
   }
   const click = async (node: HostNode | undefined) => {
     if (!node) throw new Error('Missing button')
-    ;(node.props.onClick as () => void)()
+    await (node.props.onClick as (() => unknown) | undefined)?.()
     await nextTick()
   }
   const button = (text: string) => find(root, (node) => String(node.props.text).includes(text))
@@ -165,5 +172,42 @@ describe.each([true, false])('track reanalysis dialog with existing grid: %s', (
     expect(dialog.confirmCallback).toHaveBeenCalledWith(
       expect.objectContaining({ analysisGridMode: 'dynamic' })
     )
+  })
+})
+
+describe('track reanalysis dialog runtime gate', () => {
+  afterEach(() => {
+    runtimeGateMock.ensure.mockReset()
+    runtimeGateMock.ensure.mockImplementation(async () => true)
+  })
+
+  it('运行时未就绪时给出反馈且不提交、不关弹窗', async () => {
+    runtimeGateMock.ensure.mockResolvedValueOnce(false)
+    const dialog = await mount(true)
+    await dialog.click(dialog.button('tracks.analysisStart'))
+    expect(runtimeGateMock.ensure).toHaveBeenCalledOnce()
+    expect(dialog.confirmCallback).not.toHaveBeenCalled()
+    expect(dialog.cancelCallback).not.toHaveBeenCalled()
+    expect(dialog.checkbox('beat-grid').props.checked).toBe(true)
+  })
+
+  it('门禁等待期间的重复确认只提交一次', async () => {
+    let release: (ready: boolean) => void = () => {}
+    runtimeGateMock.ensure.mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => (release = resolve))
+    )
+    const dialog = await mount(true)
+    const onClick = dialog.button('tracks.analysisStart')?.props.onClick as
+      (() => Promise<void>) | undefined
+    if (!onClick) throw new Error('Missing start button handler')
+    const pending = onClick()
+    await nextTick()
+    // 第二次点击必须立刻返回，不能排队等第一次的门禁结果。
+    await onClick()
+    release(true)
+    await pending
+    await nextTick()
+    expect(runtimeGateMock.ensure).toHaveBeenCalledOnce()
+    expect(dialog.confirmCallback).toHaveBeenCalledOnce()
   })
 })

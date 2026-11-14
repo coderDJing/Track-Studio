@@ -8,7 +8,8 @@ import {
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string
 type ConfirmDialogFn = typeof import('@renderer/components/confirmDialog').default
 
-type AnalysisRuntimePromptSource = 'startup' | 'help' | 'horizontal' | 'stem' | 'bpm-fix'
+type AnalysisRuntimePromptSource =
+  'startup' | 'help' | 'horizontal' | 'stem' | 'bpm-fix' | 'analysis'
 type AnalysisRuntimePromptResult = 'ready' | 'started' | 'blocked' | 'handled'
 
 type AnalysisRuntimeDownloadStatus =

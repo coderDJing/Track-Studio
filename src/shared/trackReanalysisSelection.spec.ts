@@ -7,7 +7,9 @@ import {
   isFullTrackReanalysisPlan,
   isTrackReanalysisBeatGridLocked,
   normalizeTrackReanalysisSelection,
-  resolveTrackReanalysisPlan
+  requiresAnalysisRuntime,
+  resolveTrackReanalysisPlan,
+  type TrackReanalysisUserSelection
 } from './trackReanalysisSelection'
 
 describe('trackReanalysisSelection', () => {
@@ -169,5 +171,59 @@ describe('trackReanalysisSelection', () => {
         })
       )
     ).toBe(false)
+  })
+
+  it('只有节拍网格 / BPM 需要分析运行时', () => {
+    const withSelection = (patch: Partial<TrackReanalysisUserSelection>) =>
+      requiresAnalysisRuntime({
+        key: false,
+        beatGrid: false,
+        waveform: false,
+        energy: false,
+        structure: false,
+        ...patch
+      })
+    expect(withSelection({ beatGrid: true })).toBe(true)
+    // key 走本地 Rust、波形走本地解码，都不需要 Python 运行时。
+    expect(withSelection({ key: true })).toBe(false)
+    expect(withSelection({ waveform: true })).toBe(false)
+    expect(withSelection({ key: true, waveform: true })).toBe(false)
+  })
+
+  it('勾选能量或结构但未单独勾网格时仍需要运行时', () => {
+    const energyOnly = applyTrackReanalysisSelectionDependencies(
+      {
+        key: false,
+        beatGrid: false,
+        waveform: false,
+        energy: true,
+        structure: false
+      },
+      false
+    )
+    expect(requiresAnalysisRuntime(energyOnly)).toBe(true)
+    const structureOnly = applyTrackReanalysisSelectionDependencies(
+      {
+        key: false,
+        beatGrid: false,
+        waveform: false,
+        energy: false,
+        structure: true
+      },
+      false
+    )
+    expect(requiresAnalysisRuntime(structureOnly)).toBe(true)
+    // 已有网格时只重算段落可以复用缓存网格，不需要重新下载运行时。
+    const structureAlone = applyTrackReanalysisSelectionDependencies(
+      {
+        key: false,
+        beatGrid: false,
+        waveform: false,
+        energy: false,
+        structure: true
+      },
+      true
+    )
+    expect(requiresAnalysisRuntime(structureAlone)).toBe(false)
   })
 })

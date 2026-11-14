@@ -503,6 +503,48 @@ const handleManualKeyAnalysisBatchStart = (_event: unknown, payload?: { filePath
 }
 window.electron.ipcRenderer.on('key-analysis:manual-batch-start', handleManualKeyAnalysisBatchStart)
 
+/**
+ * 批次结束后只在“确有失败”时给一次汇总提示。
+ * 全部成功、用户取消、以及 no-bpm / 只差段落这类合法结果都不会走到这里
+ * （主进程已经把它们排除在失败计数之外）。
+ */
+type ManualBatchEndFailurePayload = {
+  canceled?: boolean
+  total?: number
+  failed?: number
+  failedItems?: Array<{ filePath?: string; detail?: string }>
+}
+let manualBatchFailureDialogBusy = false
+const handleManualBatchFailureSummary = async (
+  _event: unknown,
+  payload?: ManualBatchEndFailurePayload
+) => {
+  const failed = Number(payload?.failed) || 0
+  if (failed <= 0 || payload?.canceled === true) return
+  if (manualBatchFailureDialogBusy) return
+  manualBatchFailureDialogBusy = true
+  try {
+    const total = Math.max(failed, Number(payload?.total) || failed)
+    const content = [
+      t('tracks.analysisBatchFailedSummary', { total, failed }),
+      t('tracks.analysisBatchFailedHint')
+    ]
+    const firstDetail = String(payload?.failedItems?.[0]?.detail || '').trim()
+    if (firstDetail) content.push(t('tracks.analysisBatchFailedDetail', { error: firstDetail }))
+    await confirm({
+      title: t('common.warning'),
+      content,
+      confirmShow: false,
+      textAlign: 'left',
+      innerWidth: 560,
+      innerHeight: 0
+    })
+  } finally {
+    manualBatchFailureDialogBusy = false
+  }
+}
+window.electron.ipcRenderer.on('key-analysis:manual-batch-end', handleManualBatchFailureSummary)
+
 const normalizeLibraryStemTaskStatus = (value: unknown): LibraryStemTaskStatus | null => {
   if (
     value === 'idle' ||

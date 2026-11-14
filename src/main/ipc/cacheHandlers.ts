@@ -38,6 +38,8 @@ import {
   type WaveformGlobalOverviewData,
   type WaveformListPreviewData
 } from '../../shared/waveformSurfaceCache'
+import { getAnalysisRuntimeDownloadState } from '../services/analysisRuntimeDownload'
+import { getBeatThisRuntimeAvailabilitySnapshot } from '../workers/beatThisRuntime'
 import {
   assertLibraryMergeMutationAllowed,
   isLibraryMergeMutationLocked
@@ -64,6 +66,18 @@ const normalizeClearBatchFilePaths = (payload: unknown) => {
         .map((p) => p.trim())
     )
   )
+}
+
+/**
+ * 节拍网格 / BPM 是唯一需要 Python 分析运行时的目标。
+ * 这里只用内存态与本地快照判断，不做 Python 探测，避免给 IPC 调用路径引入秒级延迟；
+ * 判断口径与 worker 内部一致（快照为 false 时 worker 会跳过 BPM）。
+ */
+const resolveTrackAnalysisRuntimeBlockReason = (): string | null => {
+  const status = getAnalysisRuntimeDownloadState().status
+  if (status === 'downloading' || status === 'extracting') return 'analysis-runtime-downloading'
+  if (getBeatThisRuntimeAvailabilitySnapshot() === false) return 'analysis-runtime-unavailable'
+  return null
 }
 
 type PlayerWaveformCacheItem = {
@@ -298,6 +312,26 @@ export function registerCacheHandlers() {
           reason: 'dynamic-grid-unavailable'
         }))
         return { cleared: 0, queued: 0, skipped: skippedItems.length, skippedItems }
+      }
+
+      // 运行时未就绪时必须抢在清理之前拦下：否则旧网格被先清掉、新的又算不出来，
+      // 用户只会看到“分析完成但网格没了”，且没有任何报错。
+      if (plan.beatGrid) {
+        const runtimeBlockReason = resolveTrackAnalysisRuntimeBlockReason()
+        if (runtimeBlockReason) {
+          const skippedItems = files.map((filePath) => ({
+            filePath,
+            reason: runtimeBlockReason
+          }))
+          return {
+            cleared: 0,
+            queued: 0,
+            skipped: skippedItems.length,
+            skippedItems,
+            blocked: true,
+            reason: runtimeBlockReason
+          }
+        }
       }
       // Dynamic：先计算后替换。旧 BPM / 网格保留到新结果成功；段落本期不执行，
       // 因此也不清空旧段落；能量仍按用户勾选透传，网格变化后由签名失效。

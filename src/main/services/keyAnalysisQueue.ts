@@ -117,6 +117,8 @@ type ManualKeyAnalysisBatch = {
   titleKey: string
   filePaths: string[]
   pendingByPath: Map<string, string>
+  /** 本轮真失败的曲目与原因；只有它非空时批次结束才需要向用户汇总。 */
+  failedByPath: Map<string, string>
   total: number
   completed: number
   canceled: boolean
@@ -215,10 +217,18 @@ const finishManualBatch = (
   if (!manualBatches.has(batch.id)) return
   manualBatches.delete(batch.id)
   batch.canceled = canceled
+  // 取消的批次不汇总失败：用户已经主动中止，逐个报告失败没有意义。
+  const failedItems = canceled
+    ? []
+    : Array.from(batch.failedByPath, ([filePath, detail]) => ({ filePath, detail }))
   keyAnalysisEvents.emit('manual-batch-end', {
     batchId: batch.id,
     filePaths: batch.filePaths,
-    canceled
+    canceled,
+    total: batch.total,
+    failed: failedItems.length,
+    // 只带前若干条明细，避免大批量失败时把整份清单塞进 IPC。
+    failedItems: failedItems.slice(0, 20)
   })
   keyAnalysisEvents.emit('manual-batch-progress', {
     id: batch.id,
@@ -258,7 +268,11 @@ function pruneUntrackedManualBatchPaths() {
   }
 }
 
-const completeManualBatchFile = (filePath: string, manualBatchIds?: string[]) => {
+const completeManualBatchFile = (
+  filePath: string,
+  manualBatchIds?: string[],
+  failure?: { detail: string }
+) => {
   const normalizedPath = normalizePath(filePath)
   if (!normalizedPath) return
   const batchIdSet =
@@ -267,6 +281,7 @@ const completeManualBatchFile = (filePath: string, manualBatchIds?: string[]) =>
   for (const batch of manualBatches.values()) {
     if (batchIdSet && !batchIdSet.has(batch.id)) continue
     if (!batch.pendingByPath.has(normalizedPath)) continue
+    if (failure) batch.failedByPath.set(normalizedPath, failure.detail)
     batch.pendingByPath.delete(normalizedPath)
     batch.completed = Math.min(batch.total, batch.completed + 1)
     changed = true
@@ -283,10 +298,21 @@ const completeManualBatchFile = (filePath: string, manualBatchIds?: string[]) =>
 
 keyAnalysisEvents.on(
   'analysis-stage-update',
-  (payload?: { filePath?: string; stage?: string; manualBatchIds?: string[] }) => {
+  (payload?: {
+    filePath?: string
+    stage?: string
+    manualBatchIds?: string[]
+    manualBatchFailed?: boolean
+    manualBatchFailureDetail?: string
+  }) => {
     const stage = String(payload?.stage || '')
     if (stage !== 'job-done' && stage !== 'job-error') return
-    completeManualBatchFile(String(payload?.filePath || ''), payload?.manualBatchIds)
+    // 只有主进程明确标记过的“真失败”才计数：结果作废等 job-error 不算。
+    const failure =
+      payload?.manualBatchFailed === true
+        ? { detail: String(payload?.manualBatchFailureDetail || '').slice(0, 200) }
+        : undefined
+    completeManualBatchFile(String(payload?.filePath || ''), payload?.manualBatchIds, failure)
   }
 )
 
@@ -340,6 +366,7 @@ export function enqueueManualKeyAnalysisBatch(
     titleKey: String(options?.titleKey || 'tracks.analyzingTracks'),
     filePaths: uniqueFilePaths,
     pendingByPath,
+    failedByPath: new Map(),
     total: uniqueFilePaths.length,
     completed: 0,
     canceled: false
