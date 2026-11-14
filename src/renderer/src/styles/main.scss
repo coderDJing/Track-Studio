@@ -245,6 +245,31 @@ body:has(.dialog.dialog-visible) .window-controls .rightIcon:not(:hover)::after 
   }
 }
 
+/* 紧凑档：与 .button 同族，仅收尺寸，供右下角浮层等窄容器复用，不要另起一套视觉。 */
+.button--compact {
+  height: 22px;
+  line-height: 22px;
+  padding: 0 8px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+/* 主操作：常态即停在 .button 的 hover 视觉上，保证同一套语言。 */
+.button--primary {
+  color: #ffffff;
+  background-color: var(--accent);
+
+  &:hover {
+    color: #ffffff;
+    background-color: color-mix(in srgb, var(--accent) 86%, #ffffff);
+  }
+}
+
+.button:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 .os-scrollbar {
   // 滚动条的大小
   --os-size: 6px !important;

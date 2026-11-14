@@ -84,8 +84,8 @@ const actionDisabled = (task: DownloadTaskView, action: DownloadTaskAction) =>
           <button
             v-for="action of task.actions"
             :key="action.id"
-            class="download-tasks__action"
-            :class="{ 'download-tasks__action--primary': action.primary }"
+            class="button button--compact"
+            :class="{ 'button--primary': action.primary }"
             type="button"
             :disabled="actionDisabled(task, action)"
             @click="runAction(task, action.id)"
@@ -149,7 +149,7 @@ const actionDisabled = (task: DownloadTaskView, action: DownloadTaskAction) =>
   width: 22px;
   height: 18px;
   border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
-  border-radius: 6px;
+  border-radius: 5px;
   background: color-mix(in srgb, var(--bg) 76%, transparent);
   color: var(--text-weak);
   cursor: pointer;
@@ -244,40 +244,9 @@ const actionDisabled = (task: DownloadTaskView, action: DownloadTaskAction) =>
 .download-tasks__actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
   justify-content: flex-end;
-}
-
-.download-tasks__action {
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
-  border-radius: 6px;
-  padding: 2px 10px;
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
-  color: var(--text);
-  font-size: 11px;
-  line-height: 1.6;
-  cursor: pointer;
-}
-
-.download-tasks__action:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
-  background: color-mix(in srgb, var(--accent) 16%, var(--bg));
-}
-
-.download-tasks__action--primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--bg);
-}
-
-.download-tasks__action--primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 86%, #ffffff);
-  border-color: color-mix(in srgb, var(--accent) 86%, #ffffff);
-}
-
-.download-tasks__action:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 .download-tasks__pill {
@@ -300,7 +269,7 @@ const actionDisabled = (task: DownloadTaskView, action: DownloadTaskAction) =>
   padding: 0 4px;
   border-radius: 999px;
   background: var(--accent);
-  color: var(--bg);
+  color: #ffffff;
   font-size: 10px;
   line-height: 16px;
   text-align: center;
