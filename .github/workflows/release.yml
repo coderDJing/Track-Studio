@@ -14,11 +14,7 @@ jobs:
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' ||
-        startsWith(github.ref, 'refs/tags/') ||
-        (
-          github.ref == 'refs/heads/main' &&
-          startsWith(github.event.head_commit.message, 'chore(release):')
-        )
+        startsWith(github.ref, 'refs/tags/')
       }}
     runs-on: ubuntu-latest
     steps:
@@ -46,11 +42,7 @@ jobs:
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' ||
-        startsWith(github.ref, 'refs/tags/') ||
-        (
-          github.ref == 'refs/heads/main' &&
-          startsWith(github.event.head_commit.message, 'chore(release):')
-        )
+        startsWith(github.ref, 'refs/tags/')
       }}
     runs-on: windows-latest
     steps:
@@ -84,11 +76,7 @@ jobs:
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' ||
-        startsWith(github.ref, 'refs/tags/') ||
-        (
-          github.ref == 'refs/heads/main' &&
-          startsWith(github.event.head_commit.message, 'chore(release):')
-        )
+        startsWith(github.ref, 'refs/tags/')
       }}
     runs-on: windows-latest
     steps:
@@ -357,11 +345,7 @@ jobs:
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' ||
-        startsWith(github.ref, 'refs/tags/') ||
-        (
-          github.ref == 'refs/heads/main' &&
-          startsWith(github.event.head_commit.message, 'chore(release):')
-        )
+        startsWith(github.ref, 'refs/tags/')
       }}
     runs-on: macos-15-intel
     steps:
@@ -440,11 +424,7 @@ jobs:
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' ||
-        startsWith(github.ref, 'refs/tags/') ||
-        (
-          github.ref == 'refs/heads/main' &&
-          startsWith(github.event.head_commit.message, 'chore(release):')
-        )
+        startsWith(github.ref, 'refs/tags/')
       }}
     runs-on: macos-latest
     needs: [validate_release_tag, build_ffmpeg_mac_x64]
