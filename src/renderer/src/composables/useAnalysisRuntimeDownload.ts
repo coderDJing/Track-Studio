@@ -107,6 +107,19 @@ const normalizeAnalysisRuntimeStatusResponse = (value: unknown): AnalysisRuntime
 let analysisRuntimePromptBusy = false
 let analysisRuntimeStatusRequestPromise: Promise<AnalysisRuntimeStatusResponse> | null = null
 
+// 功能名与 i18n key 的映射：i18n 里用 camelCase，避免 key 中出现连字符
+const FEATURE_LABEL_KEY: Record<AnalysisRuntimeFeature, string> = {
+  analysis: 'analysis',
+  horizontal: 'horizontal',
+  stem: 'stem',
+  'bpm-fix': 'bpmFix'
+}
+
+const isHelpPromptSource = (source: AnalysisRuntimePromptSource) => source === 'help'
+
+const resolvePromptFeature = (source: AnalysisRuntimePromptSource): AnalysisRuntimeFeature =>
+  source === 'horizontal' || source === 'stem' || source === 'bpm-fix' ? source : 'analysis'
+
 const requestAnalysisRuntimeStatus = async () => {
   if (analysisRuntimeStatusRequestPromise) return await analysisRuntimeStatusRequestPromise
   analysisRuntimeStatusRequestPromise = window.electron.ipcRenderer
@@ -125,7 +138,10 @@ export const useAnalysisRuntimeDownload = (options: {
 }) => {
   let analysisRuntimeDownloadProgressHintAt = 0
 
-  const showAnalysisRuntimeDownloadInProgressHint = async () => {
+  const resolveFeatureLabel = (feature: AnalysisRuntimeFeature) =>
+    options.t(`analysisRuntime.feature.label.${FEATURE_LABEL_KEY[feature]}`)
+
+  const showAnalysisRuntimeDownloadInProgressHint = async (source: AnalysisRuntimePromptSource) => {
     const now = Date.now()
     if (now - analysisRuntimeDownloadProgressHintAt < 1200) return
     analysisRuntimeDownloadProgressHintAt = now
@@ -133,12 +149,14 @@ export const useAnalysisRuntimeDownload = (options: {
     const title = state.title
       ? options.t('analysisRuntime.downloadInProgressTitle', { title: state.title })
       : options.t('analysisRuntime.downloadInProgressTitleGeneric')
+    const featureHint = isHelpPromptSource(source)
+      ? options.t('analysisRuntime.downloadInProgressHintGeneric')
+      : options.t('analysisRuntime.downloadInProgressHint', {
+          feature: resolveFeatureLabel(resolvePromptFeature(source))
+        })
     await options.confirmDialog({
       title,
-      content: [
-        options.t('analysisRuntime.downloadInProgressHint'),
-        options.t('analysisRuntime.downloadInProgressProgressHint')
-      ],
+      content: [featureHint, options.t('analysisRuntime.downloadInProgressProgressHint')],
       confirmShow: false,
       textAlign: 'left',
       innerWidth: 560,
@@ -190,8 +208,9 @@ export const useAnalysisRuntimeDownload = (options: {
   const promptAnalysisRuntimeDownload = async (
     source: AnalysisRuntimePromptSource
   ): Promise<AnalysisRuntimePromptResult> => {
-    const feature: AnalysisRuntimeFeature =
-      source === 'horizontal' || source === 'stem' || source === 'bpm-fix' ? source : 'analysis'
+    const feature: AnalysisRuntimeFeature = resolvePromptFeature(source)
+    const isHelp = isHelpPromptSource(source)
+    const featureLabel = resolveFeatureLabel(feature)
     const isFeatureRequest = feature !== 'analysis'
     if (!isFeatureRequest && options.runtime.analysisRuntime.available) return 'ready'
     if (analysisRuntimePromptBusy) {
@@ -201,7 +220,7 @@ export const useAnalysisRuntimeDownload = (options: {
           : 'blocked'
         : resolvePromptResultFromCurrentState()
       if (currentResult === 'started') {
-        await showAnalysisRuntimeDownloadInProgressHint()
+        await showAnalysisRuntimeDownloadInProgressHint(source)
       }
       return currentResult
     }
@@ -220,14 +239,18 @@ export const useAnalysisRuntimeDownload = (options: {
         : await refreshAnalysisRuntimeStatus()
       if (preferred.alreadyAvailable) return 'ready'
       if (isAnalysisRuntimeDownloadActiveStatus(state.status)) {
-        await showAnalysisRuntimeDownloadInProgressHint()
+        await showAnalysisRuntimeDownloadInProgressHint(source)
         return 'started'
       }
 
       if (!preferred.supported) {
         await options.confirmDialog({
           title: options.t('analysisRuntime.unsupportedTitle'),
-          content: [options.t('analysisRuntime.unsupportedHint')],
+          content: [
+            isHelp
+              ? options.t('analysisRuntime.unsupportedHint')
+              : options.t('analysisRuntime.unsupportedHintFeature', { feature: featureLabel })
+          ],
           confirmShow: false,
           textAlign: 'left',
           innerWidth: 560,
@@ -268,19 +291,25 @@ export const useAnalysisRuntimeDownload = (options: {
       if (!preferred.downloadable || !preferred.profile) return 'blocked'
 
       const confirmResult = await options.confirmDialog({
-        title: options.t('analysisRuntime.promptTitle'),
+        title: isHelp
+          ? options.t('analysisRuntime.promptTitleHelp')
+          : options.t('analysisRuntime.promptTitleFeature', { feature: featureLabel }),
         content: [
-          options.t(
-            source === 'bpm-fix'
-              ? 'bpmFix.componentUpdatePrompt'
-              : isFeatureRequest && options.runtime.analysisRuntime.available
-                ? 'analysisRuntime.featureUpdateBody'
-                : 'analysisRuntime.promptBody',
-            {
-              title: preferred.title,
-              size: formatAnalysisRuntimeBytes(preferred.archiveSize)
-            }
-          ),
+          isHelp
+            ? options.t('analysisRuntime.promptBody', {
+                title: preferred.title,
+                size: formatAnalysisRuntimeBytes(preferred.archiveSize)
+              })
+            : options.t(
+                options.runtime.analysisRuntime.available
+                  ? 'analysisRuntime.featureUpdateBody'
+                  : 'analysisRuntime.promptBodyFeature',
+                {
+                  feature: featureLabel,
+                  title: preferred.title,
+                  size: formatAnalysisRuntimeBytes(preferred.archiveSize)
+                }
+              ),
           options.t('analysisRuntime.promptHint')
         ],
         confirmShow: true,
@@ -311,7 +340,9 @@ export const useAnalysisRuntimeDownload = (options: {
       await options.confirmDialog({
         title: options.t('analysisRuntime.unsupportedTitle'),
         content: [
-          options.t('analysisRuntime.downloadFailedHint'),
+          isHelp
+            ? options.t('analysisRuntime.downloadFailedHintGeneric')
+            : options.t('analysisRuntime.downloadFailedHint', { feature: featureLabel }),
           options.t('analysisRuntime.downloadErrorHint', {
             error: error instanceof Error ? error.message : String(error || 'unknown')
           })
@@ -385,7 +416,7 @@ export const useAnalysisRuntimeDownload = (options: {
       return
     }
     if (next.state.status === 'failed' && prevStatus !== 'failed') {
-      const content = [options.t('analysisRuntime.downloadFailedHint')]
+      const content = [options.t('analysisRuntime.downloadFailedHintGeneric')]
       if (next.state.error) {
         content.push(options.t('analysisRuntime.downloadErrorHint', { error: next.state.error }))
       }

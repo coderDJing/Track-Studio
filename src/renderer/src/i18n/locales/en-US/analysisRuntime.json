@@ -1,23 +1,38 @@
 {
   "analysisRuntime": {
-    "promptTitle": "An analysis runtime component is available",
-    "featureUpdateBody": "This feature requires downloading or updating the {title} analysis component (about {size}). Features already supported remain available.",
-    "promptBody": "This computer can download the {title} analysis component (about {size}) for supported analysis features.",
-    "promptHint": "If GitHub is unreachable from the current network, try enabling a VPN or make sure the system proxy / PAC is applied to Track Studio.",
+    "feature": {
+      "label": {
+        "analysis": "Beat grid / BPM analysis",
+        "horizontal": "Dual-deck horizontal / edit mode",
+        "stem": "Stem workspace",
+        "bpmFix": "Fix BPM Drift"
+      }
+    },
+    "promptTitleHelp": "Download the analysis runtime",
+    "promptTitleFeature": "\"{feature}\" needs the analysis runtime",
+    "promptBody": "The analysis runtime powers beat grid, BPM and Stem analysis. The {title} build can be downloaded now, about {size}.",
+    "promptBodyFeature": "It is not installed yet. Download the {title} build (about {size}).",
+    "featureUpdateBody": "The current component does not support this feature. Download or update to the {title} build (about {size}).",
+    "promptHint": "Run the same action again once it finishes installing. If GitHub is unreachable, enable a VPN or configure the system proxy.",
     "downloadNow": "Download now",
     "downloadLater": "Later",
-    "downloadInProgressTitle": "{title} is downloading",
-    "downloadInProgressTitleGeneric": "The analysis runtime is being prepared",
-    "downloadInProgressHint": "The analysis runtime is currently downloading or extracting. This feature stays unavailable until it finishes.",
-    "downloadInProgressProgressHint": "Check the Downloads card in the bottom-right corner for progress.",
-    "readyHint": "The {title} component is ready.",
+    "downloadInProgressTitle": "Downloading the {title} analysis runtime",
+    "downloadInProgressTitleGeneric": "The analysis runtime is downloading",
+    "downloadInProgressHint": "\"{feature}\" cannot be used until it finishes installing. Nothing was submitted this time.",
+    "downloadInProgressHintGeneric": "The analysis runtime is downloading or extracting. Features that need it stay unavailable until it finishes.",
+    "downloadInProgressProgressHint": "See the Downloads card in the bottom-right corner.",
+    "readyHint": "The {title} build is installed. Run the same action again.",
     "unsupportedTitle": "Analysis runtime unavailable",
-    "unsupportedHint": "This computer does not currently support the analysis component required by this feature.",
-    "manifestUnavailableHint": "Unable to fetch the analysis runtime manifest. This is usually caused by network, GitHub access, or proxy configuration issues.",
-    "downloadFailedHint": "The analysis component download failed. The requested feature is currently unavailable.",
+    "unsupportedHint": "No analysis runtime component matches this computer's hardware.",
+    "unsupportedHintFeature": "\"{feature}\" needs the analysis runtime, but no compatible component build is available for this computer.",
+    "manifestUnavailableHint": "Unable to fetch the analysis runtime manifest. This is usually a network or proxy issue.",
+    "downloadFailedHint": "Installation failed, so \"{feature}\" is unavailable for now.",
+    "downloadFailedHintGeneric": "Installation failed. Features that depend on it are unavailable for now.",
     "downloadErrorHint": "Details: {error}",
-    "horizontalBlockedHint": "The current analysis component does not support dual-track horizontal browse. Download a compatible component first.",
-    "stemBlockedHint": "The current analysis component does not support the Stem workspace. Download a compatible component first.",
-    "trackAnalysisBlockedHint": "Beat grid analysis requires the analysis runtime component, which is not ready yet. Nothing was submitted this time."
+    "horizontalBlockedHint": "\"Dual-deck horizontal / edit mode\" needs the analysis runtime. The current component does not support it.",
+    "stemBlockedHint": "\"Stem workspace\" needs the analysis runtime. The current component does not support it.",
+    "trackAnalysisBlockedHint": "\"Beat grid / BPM analysis\" needs the analysis runtime. It is not installed, so nothing was submitted.",
+    "trackAnalysisDownloadingTitle": "The analysis runtime is downloading",
+    "trackAnalysisDownloadingHint": "\"Beat grid / BPM analysis\" has to wait for it to finish. Nothing was submitted this time."
   }
 }

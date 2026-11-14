@@ -28,18 +28,15 @@ export const ensureAnalysisRuntimeForTrackReanalysis = async (
   return (await promptAnalysisRuntimeDownload('analysis')) === 'ready'
 }
 
-/** 主进程兜底拦截时的提示：复用下载中 / 未就绪的既有文案，不新增“分析失败”措辞。 */
+/** 主进程兜底拦截时的提示：说清是哪个功能、要哪个组件，不新增“分析失败”措辞。 */
 export const showTrackReanalysisRuntimeBlockedHint = async (reason: string) => {
   const downloading = reason === 'analysis-runtime-downloading'
   await confirm({
     title: downloading
-      ? t('analysisRuntime.downloadInProgressTitleGeneric')
+      ? t('analysisRuntime.trackAnalysisDownloadingTitle')
       : t('analysisRuntime.unsupportedTitle'),
     content: downloading
-      ? [
-          t('analysisRuntime.downloadInProgressHint'),
-          t('analysisRuntime.downloadInProgressProgressHint')
-        ]
+      ? [t('analysisRuntime.trackAnalysisDownloadingHint')]
       : [t('analysisRuntime.trackAnalysisBlockedHint')],
     confirmShow: false,
     textAlign: 'left',

@@ -1,23 +1,38 @@
 {
   "analysisRuntime": {
-    "promptTitle": "检测到可用的分析运行时组件",
-    "featureUpdateBody": "该功能需要下载或更新 {title} 分析组件（约 {size}）。已支持的功能仍可继续使用。",
-    "promptBody": "当前电脑可下载 {title} 分析组件（约 {size}），用于支持相应的分析功能。",
-    "promptHint": "如当前网络无法访问 GitHub，可尝试开启 VPN，或确认系统代理 / PAC 已对 Track Studio 生效。",
+    "feature": {
+      "label": {
+        "analysis": "节拍网格 / BPM 分析",
+        "horizontal": "双轨横推 / 编辑模式",
+        "stem": "Stem 工作台",
+        "bpmFix": "修复 BPM 漂移"
+      }
+    },
+    "promptTitleHelp": "下载分析运行时组件",
+    "promptTitleFeature": "「{feature}」需要分析运行时组件",
+    "promptBody": "分析运行时组件用于节拍网格、BPM 与 Stem 分轨等分析功能。当前可下载 {title} 版，约 {size}。",
+    "promptBodyFeature": "当前未安装，需要下载 {title} 版（约 {size}）。",
+    "featureUpdateBody": "当前组件不支持该功能，需要下载或更新 {title} 版（约 {size}）。",
+    "promptHint": "下载完成后重新执行一次该操作即可。无法访问 GitHub 时可开启 VPN 或配置系统代理。",
     "downloadNow": "立即下载",
     "downloadLater": "暂不下载",
-    "downloadInProgressTitle": "{title} 正在下载中",
-    "downloadInProgressTitleGeneric": "分析运行时正在准备中",
-    "downloadInProgressHint": "当前正在下载或解压分析运行时组件，请稍候；完成前该功能暂不可用。",
-    "downloadInProgressProgressHint": "进度可以在右下角的「下载任务」里查看。",
-    "readyHint": "{title} 组件已准备完成。",
+    "downloadInProgressTitle": "{title} 版分析运行时正在下载",
+    "downloadInProgressTitleGeneric": "分析运行时正在下载",
+    "downloadInProgressHint": "「{feature}」要等它安装完成后才能使用，本次操作没有提交。",
+    "downloadInProgressHintGeneric": "正在下载或解压分析运行时组件，完成前需要它的功能暂不可用。",
+    "downloadInProgressProgressHint": "进度见右下角「下载任务」。",
+    "readyHint": "{title} 版已安装完成，可以重新执行刚才的操作了。",
     "unsupportedTitle": "分析运行时不可用",
-    "unsupportedHint": "当前电脑暂不支持该功能所需的分析组件。",
-    "manifestUnavailableHint": "无法获取分析运行时下载清单，通常是网络连接、GitHub 访问或代理配置异常导致。",
-    "downloadFailedHint": "分析组件下载失败，当前请求的功能暂不可用。",
+    "unsupportedHint": "没有适配本机硬件的分析运行时组件。",
+    "unsupportedHintFeature": "「{feature}」需要分析运行时组件，但本机没有可用的组件版本。",
+    "manifestUnavailableHint": "无法获取分析运行时下载清单，通常是网络或代理问题。",
+    "downloadFailedHint": "组件安装失败，「{feature}」暂时无法使用。",
+    "downloadFailedHintGeneric": "组件安装失败，依赖它的功能暂时不可用。",
     "downloadErrorHint": "错误详情：{error}",
-    "horizontalBlockedHint": "当前分析组件尚不支持双轨横推，请先下载可用的组件。",
-    "stemBlockedHint": "当前分析组件尚不支持 Stem 工作台，请先下载可用的组件。",
-    "trackAnalysisBlockedHint": "开始节拍网格分析需要分析运行时组件，当前组件尚未就绪，本次未提交任何改动。"
+    "horizontalBlockedHint": "「双轨横推 / 编辑模式」需要分析运行时组件，当前组件尚不支持。",
+    "stemBlockedHint": "「Stem 工作台」需要分析运行时组件，当前组件尚不支持。",
+    "trackAnalysisBlockedHint": "「节拍网格 / BPM 分析」需要分析运行时组件，当前未安装，本次未提交任何改动。",
+    "trackAnalysisDownloadingTitle": "分析运行时正在下载",
+    "trackAnalysisDownloadingHint": "「节拍网格 / BPM 分析」要等下载完成，本次未提交任何改动。"
   }
 }
