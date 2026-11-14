@@ -1,13 +1,11 @@
 import { normalizeAnalysisRuntimeFeature } from '../../shared/analysisRuntimeFeatures'
 import { ipcMain } from 'electron'
-import store from '../store'
 import {
   clearInstalledAnalysisRuntimes,
   downloadPreferredAnalysisRuntime,
   getAnalysisRuntimeDownloadState,
   getPreferredAnalysisRuntimeDownloadInfo
 } from '../services/analysisRuntimeDownload'
-import { persistSettingConfig } from '../settingsPersistence'
 import mainWindow from '../window/mainWindow'
 
 const ANALYSIS_RUNTIME_CLEAR_PROGRESS_ID = 'analysis-runtime.clear-local'
@@ -42,10 +40,6 @@ export function registerAnalysisRuntimeHandlers() {
       })
       const cleared = await clearInstalledAnalysisRuntimes()
       const preferred = await getPreferredAnalysisRuntimeDownloadInfo()
-      if (store.settingConfig.analysisRuntimeStartupPromptShownVersion) {
-        store.settingConfig.analysisRuntimeStartupPromptShownVersion = ''
-        await persistSettingConfig(store.settingConfig)
-      }
       return {
         success:
           cleared.removedInstalledRoot &&

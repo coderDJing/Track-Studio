@@ -185,8 +185,7 @@ const {
 } = useAnalysisRuntimeDownload({
   runtime,
   t,
-  confirmDialog: confirm,
-  appVersion: String(pkg.version || '')
+  confirmDialog: confirm
 })
 const {
   identityVisible: userGuideIdentityVisible,
@@ -824,8 +823,9 @@ onMounted(() => {
     await waitForUserGuideIdentity()
     beginUserGuide()
     await waitForUserGuideIdle()
+    // 只刷新状态供底部卡片与设置页展示；启动时不再主动弹下载提示，
+    // 改由各功能入口在真正需要运行时组件时提示。
     await refreshAnalysisRuntimeStatus()
-    await promptAnalysisRuntimeDownload('startup')
   })()
 })
 

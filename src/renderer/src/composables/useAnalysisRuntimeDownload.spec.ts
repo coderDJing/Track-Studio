@@ -38,8 +38,7 @@ describe('BPM repair runtime gate', () => {
     const gate = useAnalysisRuntimeDownload({
       runtime: current as unknown as ReturnType<typeof useRuntimeStore>,
       t: (key) => key,
-      confirmDialog: confirm as unknown as typeof confirmDialog,
-      appVersion: '1.0.0'
+      confirmDialog: confirm as unknown as typeof confirmDialog
     })
     expect(await gate.ensureAnalysisRuntimeForHorizontalMode()).toBe(true)
     expect(invoke).toHaveBeenCalledWith('analysis-runtime:get-status', 'horizontal')
@@ -67,8 +66,7 @@ describe('BPM repair runtime gate', () => {
     const gate = useAnalysisRuntimeDownload({
       runtime: current as unknown as ReturnType<typeof useRuntimeStore>,
       t: (key) => key,
-      confirmDialog: confirm as unknown as typeof confirmDialog,
-      appVersion: '1.0.0'
+      confirmDialog: confirm as unknown as typeof confirmDialog
     })
     expect(await gate.ensureAnalysisRuntimeForBpmFix()).toBe(false)
     expect(current.analysisRuntime.available).toBe(true)
@@ -92,8 +90,7 @@ describe('BPM repair runtime gate', () => {
     const gate = useAnalysisRuntimeDownload({
       runtime: current as unknown as ReturnType<typeof useRuntimeStore>,
       t: (key) => key,
-      confirmDialog: confirm as unknown as typeof confirmDialog,
-      appVersion: '1.0.0'
+      confirmDialog: confirm as unknown as typeof confirmDialog
     })
     expect(await gate.ensureAnalysisRuntimeForHorizontalMode()).toBe(true)
     expect(confirm).not.toHaveBeenCalled()
@@ -116,8 +113,7 @@ describe('BPM repair runtime gate', () => {
     const gate = useAnalysisRuntimeDownload({
       runtime: current as unknown as ReturnType<typeof useRuntimeStore>,
       t: (key) => key,
-      confirmDialog: confirm as unknown as typeof confirmDialog,
-      appVersion: '1.0.0'
+      confirmDialog: confirm as unknown as typeof confirmDialog
     })
     expect(await gate.ensureAnalysisRuntimeForStemWorkbench()).toBe(true)
     expect(current.analysisRuntime.available).toBe(false)
@@ -134,8 +130,7 @@ describe('BPM repair runtime gate', () => {
     const gate = useAnalysisRuntimeDownload({
       runtime: current as unknown as ReturnType<typeof useRuntimeStore>,
       t: (key) => key,
-      confirmDialog: confirm as unknown as typeof confirmDialog,
-      appVersion: '1.0.0'
+      confirmDialog: confirm as unknown as typeof confirmDialog
     })
     expect(await gate.ensureAnalysisRuntimeForBpmFix()).toBe(false)
     expect(current.analysisRuntime.available).toBe(true)

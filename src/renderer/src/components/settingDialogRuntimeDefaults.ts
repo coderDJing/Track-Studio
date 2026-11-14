@@ -98,9 +98,6 @@ export const ensureSettingDialogRuntimeDefaults = (runtime: SettingDialogRuntime
   if (runtime.setting.autoFillSkipCompleted === undefined) {
     runtime.setting.autoFillSkipCompleted = true
   }
-  if (runtime.setting.analysisRuntimeStartupPromptShownVersion === undefined) {
-    runtime.setting.analysisRuntimeStartupPromptShownVersion = ''
-  }
   if (!Array.isArray(runtime.setting.userGuideDismissedSteps)) {
     runtime.setting.userGuideDismissedSteps = []
   }

@@ -156,7 +156,6 @@ const defaultSettings = {
   lastRunAppVersion: '',
   acoustIdClientKey: '',
   autoFillSkipCompleted: true,
-  analysisRuntimeStartupPromptShownVersion: '',
   userGuideDismissedSteps: []
 } as ISettingConfig
 
@@ -227,10 +226,6 @@ export function loadInitialSettings(options: LoadSettingsOptions): ISettingConfi
 
   if (typeof finalSettings.acoustIdClientKey !== 'string') {
     finalSettings.acoustIdClientKey = ''
-  }
-
-  if (typeof finalSettings.analysisRuntimeStartupPromptShownVersion !== 'string') {
-    finalSettings.analysisRuntimeStartupPromptShownVersion = ''
   }
 
   const audience = sanitizeUserGuideAudience(

@@ -8,8 +8,7 @@ import {
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string
 type ConfirmDialogFn = typeof import('@renderer/components/confirmDialog').default
 
-type AnalysisRuntimePromptSource =
-  'startup' | 'help' | 'horizontal' | 'stem' | 'bpm-fix' | 'analysis'
+type AnalysisRuntimePromptSource = 'help' | 'horizontal' | 'stem' | 'bpm-fix' | 'analysis'
 type AnalysisRuntimePromptResult = 'ready' | 'started' | 'blocked' | 'handled'
 
 type AnalysisRuntimeDownloadStatus =
@@ -123,31 +122,8 @@ export const useAnalysisRuntimeDownload = (options: {
   runtime: ReturnType<typeof useRuntimeStore>
   t: TranslateFn
   confirmDialog: ConfirmDialogFn
-  appVersion: string
 }) => {
   let analysisRuntimeDownloadProgressHintAt = 0
-  const normalizedAppVersion = String(options.appVersion || '').trim()
-
-  const persistAnalysisRuntimeStartupPromptShownVersion = async () => {
-    if (!normalizedAppVersion) return
-    if (options.runtime.setting.analysisRuntimeStartupPromptShownVersion === normalizedAppVersion) {
-      return
-    }
-    options.runtime.setting.analysisRuntimeStartupPromptShownVersion = normalizedAppVersion
-    try {
-      await window.electron.ipcRenderer.invoke(
-        'setSetting',
-        JSON.parse(JSON.stringify(options.runtime.setting))
-      )
-    } catch (error) {
-      console.error('[analysis-runtime] 保存启动提示状态失败', error)
-    }
-  }
-
-  const hasShownAnalysisRuntimeStartupPromptForCurrentVersion = () => {
-    if (!normalizedAppVersion) return false
-    return options.runtime.setting.analysisRuntimeStartupPromptShownVersion === normalizedAppVersion
-  }
 
   const showAnalysisRuntimeDownloadInProgressHint = async () => {
     const now = Date.now()
@@ -224,7 +200,7 @@ export const useAnalysisRuntimeDownload = (options: {
           ? 'started'
           : 'blocked'
         : resolvePromptResultFromCurrentState()
-      if (currentResult === 'started' && source !== 'startup') {
+      if (currentResult === 'started') {
         await showAnalysisRuntimeDownloadInProgressHint()
       }
       return currentResult
@@ -244,44 +220,38 @@ export const useAnalysisRuntimeDownload = (options: {
         : await refreshAnalysisRuntimeStatus()
       if (preferred.alreadyAvailable) return 'ready'
       if (isAnalysisRuntimeDownloadActiveStatus(state.status)) {
-        if (source !== 'startup') {
-          await showAnalysisRuntimeDownloadInProgressHint()
-        }
+        await showAnalysisRuntimeDownloadInProgressHint()
         return 'started'
       }
 
       if (!preferred.supported) {
-        if (source !== 'startup') {
-          await options.confirmDialog({
-            title: options.t('analysisRuntime.unsupportedTitle'),
-            content: [options.t('analysisRuntime.unsupportedHint')],
-            confirmShow: false,
-            textAlign: 'left',
-            innerWidth: 560,
-            innerHeight: 0
-          })
-        }
+        await options.confirmDialog({
+          title: options.t('analysisRuntime.unsupportedTitle'),
+          content: [options.t('analysisRuntime.unsupportedHint')],
+          confirmShow: false,
+          textAlign: 'left',
+          innerWidth: 560,
+          innerHeight: 0
+        })
         return 'blocked'
       }
 
       if (preferred.reason === 'manifest unavailable') {
-        if (source !== 'startup') {
-          const content = [
-            options.t('analysisRuntime.manifestUnavailableHint'),
-            options.t('mixtape.stemRuntimeNetworkHint')
-          ]
-          if (preferred.error) {
-            content.push(options.t('analysisRuntime.downloadErrorHint', { error: preferred.error }))
-          }
-          await options.confirmDialog({
-            title: options.t('analysisRuntime.unsupportedTitle'),
-            content,
-            confirmShow: false,
-            textAlign: 'left',
-            innerWidth: 560,
-            innerHeight: 0
-          })
+        const content = [
+          options.t('analysisRuntime.manifestUnavailableHint'),
+          options.t('mixtape.stemRuntimeNetworkHint')
+        ]
+        if (preferred.error) {
+          content.push(options.t('analysisRuntime.downloadErrorHint', { error: preferred.error }))
         }
+        await options.confirmDialog({
+          title: options.t('analysisRuntime.unsupportedTitle'),
+          content,
+          confirmShow: false,
+          textAlign: 'left',
+          innerWidth: 560,
+          innerHeight: 0
+        })
         return 'blocked'
       }
 
@@ -296,12 +266,6 @@ export const useAnalysisRuntimeDownload = (options: {
         return 'handled'
       }
       if (!preferred.downloadable || !preferred.profile) return 'blocked'
-      if (source === 'startup' && hasShownAnalysisRuntimeStartupPromptForCurrentVersion()) {
-        return 'blocked'
-      }
-      if (source === 'startup') {
-        await persistAnalysisRuntimeStartupPromptShownVersion()
-      }
 
       const confirmResult = await options.confirmDialog({
         title: options.t('analysisRuntime.promptTitle'),
@@ -344,21 +308,19 @@ export const useAnalysisRuntimeDownload = (options: {
         return 'started'
       return 'blocked'
     } catch (error) {
-      if (source !== 'startup') {
-        await options.confirmDialog({
-          title: options.t('analysisRuntime.unsupportedTitle'),
-          content: [
-            options.t('analysisRuntime.downloadFailedHint'),
-            options.t('analysisRuntime.downloadErrorHint', {
-              error: error instanceof Error ? error.message : String(error || 'unknown')
-            })
-          ],
-          confirmShow: false,
-          textAlign: 'left',
-          innerWidth: 560,
-          innerHeight: 0
-        })
-      }
+      await options.confirmDialog({
+        title: options.t('analysisRuntime.unsupportedTitle'),
+        content: [
+          options.t('analysisRuntime.downloadFailedHint'),
+          options.t('analysisRuntime.downloadErrorHint', {
+            error: error instanceof Error ? error.message : String(error || 'unknown')
+          })
+        ],
+        confirmShow: false,
+        textAlign: 'left',
+        innerWidth: 560,
+        innerHeight: 0
+      })
       return 'blocked'
     } finally {
       analysisRuntimePromptBusy = false

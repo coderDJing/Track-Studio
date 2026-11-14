@@ -536,8 +536,7 @@ const playerGlobalShortcutHandle = async (
 
 const chooseRekordboxDesktopTrackStorageDir = async () => {
   const folderPath = (await window.electron.ipcRenderer.invoke('select-folder', false)) as
-    | string[]
-    | null
+    string[] | null
   if (!Array.isArray(folderPath) || !folderPath[0]) return
   runtime.setting.rekordboxDesktopTrackStorageDir = String(folderPath[0] || '').trim()
   await setSetting()
@@ -545,8 +544,7 @@ const chooseRekordboxDesktopTrackStorageDir = async () => {
 
 const chooseSeratoTrackStorageDir = async () => {
   const folderPath = (await window.electron.ipcRenderer.invoke('select-folder', false)) as
-    | string[]
-    | null
+    string[] | null
   if (!Array.isArray(folderPath) || !folderPath[0]) return
   runtime.setting.seratoTrackStorageDir = String(folderPath[0] || '').trim()
   await setSetting()
@@ -554,8 +552,7 @@ const chooseSeratoTrackStorageDir = async () => {
 
 const chooseTraktorTrackStorageDir = async () => {
   const folderPath = (await window.electron.ipcRenderer.invoke('select-folder', false)) as
-    | string[]
-    | null
+    string[] | null
   if (!Array.isArray(folderPath) || !folderPath[0]) return
   runtime.setting.traktorTrackStorageDir = String(folderPath[0] || '').trim()
   await setSetting()
@@ -806,8 +803,6 @@ const clearAnalysisRuntime = async () => {
       })
       return
     }
-    runtime.setting.analysisRuntimeStartupPromptShownVersion = ''
-    await setSetting().catch(() => {})
     await confirm({
       title: t('common.success'),
       content: [

@@ -84,7 +84,6 @@ let settingConfig: ISettingConfig = {
   lastSeenWhatsNewVersion: '',
   pendingWhatsNewForVersion: '',
   lastRunAppVersion: '',
-  analysisRuntimeStartupPromptShownVersion: '',
   userGuideDismissedSteps: []
 } //设置config
 export default {

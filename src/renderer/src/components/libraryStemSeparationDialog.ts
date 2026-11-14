@@ -4,7 +4,6 @@ import { useRuntimeStore } from '@renderer/stores/runtime'
 import { t } from '@renderer/utils/translate'
 import confirm from '@renderer/components/confirmDialog'
 import { useAnalysisRuntimeDownload } from '@renderer/composables/useAnalysisRuntimeDownload'
-import pkg from '../../../../package.json'
 import LibraryStemSeparationDialog from './libraryStemSeparationDialog.vue'
 
 type OpenLibraryStemSeparationDialogArgs = {
@@ -28,8 +27,7 @@ const ensureStemWorkbenchAnalysisRuntime = async () => {
     stemWorkbenchRuntimeGate = useAnalysisRuntimeDownload({
       runtime: useRuntimeStore(),
       t,
-      confirmDialog: confirm,
-      appVersion: String(pkg.version || '')
+      confirmDialog: confirm
     })
   }
   return await stemWorkbenchRuntimeGate.ensureAnalysisRuntimeForStemWorkbench()

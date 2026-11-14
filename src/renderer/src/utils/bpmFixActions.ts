@@ -7,7 +7,6 @@ import { useAnalysisRuntimeDownload } from '@renderer/composables/useAnalysisRun
 import { t } from '@renderer/utils/translate'
 import emitter from '@renderer/utils/mitt'
 import type { BpmFixOptions, BpmFixSnapshot, BpmFixStart, BpmFixTrackOptions } from '@shared/bpmFix'
-import pkg from '../../../../package.json'
 
 export const bpmFixSnapshot = shallowRef<BpmFixSnapshot | null>(null)
 export const bpmFixDialogOpen = ref(false)
@@ -182,8 +181,7 @@ export const analyzeBpmFix = async (automatic = false) => {
   runtimeGate ??= useAnalysisRuntimeDownload({
     runtime: useRuntimeStore(),
     t,
-    confirmDialog: confirm,
-    appVersion: String(pkg.version)
+    confirmDialog: confirm
   })
   if (!(await runtimeGate.ensureAnalysisRuntimeForBpmFix())) return
   if (bpmFixSnapshot.value?.id !== snapshot.id) return
