@@ -102,14 +102,29 @@ const dialogSummary = computed(() =>
     : t('tracks.reanalysisDialogSummary', { count: props.count })
 )
 const startButtonText = computed(() => t('tracks.analysisStart'))
-const dependencyHintText = computed(() => {
-  if (beatGridLocked.value && selection.value.energy && !selection.value.structure) {
-    return t('tracks.analysisEnergyGridLockedHint')
+/** 网格被锁定时的原因，同时用于勾选框气泡与底部提示。 */
+const gridLockedHint = computed(() => {
+  if (!beatGridLocked.value) return ''
+  return selection.value.energy && !selection.value.structure
+    ? t('tracks.analysisEnergyGridLockedHint')
+    : t('tracks.analysisGridLockedHint')
+})
+/** 段落能否单独分析，放在段落的悬停气泡里，不占正文版面。 */
+const structureOptionHint = computed(() =>
+  props.canSelectStructureAlone
+    ? t('tracks.reanalysisStructureAloneHint')
+    : t('tracks.reanalysisStructureUnavailableHint')
+)
+/** 底部提示只在需要用户注意时出现，其余情况不保留空行。 */
+const statusHint = computed<{ text: string; warning: boolean } | null>(() => {
+  if (gridSubmitBlocked.value) {
+    return { text: t(ANALYSIS_GRID_MODE_HINT_KEYS.productionDisabled), warning: true }
   }
-  if (beatGridLocked.value) return t('tracks.analysisGridLockedHint')
-  if (warnGridWithoutStructure.value) return t('tracks.analysisGridWithoutStructureHint')
-  if (props.canSelectStructureAlone) return t('tracks.reanalysisStructureAloneHint')
-  return t('tracks.reanalysisStructureUnavailableHint')
+  if (gridLockedHint.value) return { text: gridLockedHint.value, warning: false }
+  if (warnGridWithoutStructure.value) {
+    return { text: t('tracks.analysisGridWithoutStructureHint'), warning: true }
+  }
+  return null
 })
 
 const confirm = async () => {
@@ -179,11 +194,12 @@ onUnmounted(() => {
           <singleCheckbox id="reanalysis-option-key" v-model="selection.key">
             {{ t('tracks.reanalysisOptionKey') }}
           </singleCheckbox>
-          <div class="track-reanalysis-dialog__grid-row">
+
+          <div class="track-reanalysis-dialog__grid-group">
             <bubbleBoxTrigger
               tag="div"
-              class="track-reanalysis-dialog__grid-option"
-              :title="beatGridLocked ? dependencyHintText : ''"
+              class="track-reanalysis-dialog__option-tip"
+              :title="gridLockedHint"
             >
               <singleCheckbox
                 id="reanalysis-option-beat-grid"
@@ -193,64 +209,81 @@ onUnmounted(() => {
                 {{ t('tracks.reanalysisOptionBeatGrid') }}
               </singleCheckbox>
             </bubbleBoxTrigger>
-            <bubbleBoxTrigger
-              tag="div"
-              class="track-reanalysis-dialog__bpm"
-              :class="{ 'is-hidden': !showBpmRange }"
-              :title="showBpmRange ? t('settings.analysisBpmRange.dialogHint') : ''"
+
+            <!-- 网格参数只在勾选网格时展开，收起时不占布局高度。 -->
+            <div
+              class="track-reanalysis-dialog__grid-settings"
+              :class="{ 'is-open': showBpmRange }"
               :inert="!showBpmRange"
             >
-              <span>{{ t('settings.analysisBpmRange.label') }}</span>
-              <BaseSelect
-                v-model="selectedBpmRangeId"
-                :options="bpmRangeOptions"
-                :disabled="!showBpmRange"
-                :show-bubble="false"
-                :width="168"
-                :max-height="280"
-              />
-            </bubbleBoxTrigger>
+              <div class="track-reanalysis-dialog__grid-settings-inner">
+                <div class="track-reanalysis-dialog__grid-settings-rows">
+                  <div class="track-reanalysis-dialog__spread">
+                    <span class="track-reanalysis-dialog__field-label">
+                      {{ t('settings.analysisBpmRange.label') }}
+                    </span>
+                    <bubbleBoxTrigger
+                      tag="div"
+                      class="track-reanalysis-dialog__field-control"
+                      :title="t('settings.analysisBpmRange.dialogHint')"
+                    >
+                      <BaseSelect
+                        v-model="selectedBpmRangeId"
+                        :options="bpmRangeOptions"
+                        :disabled="!showBpmRange"
+                        :show-bubble="false"
+                        :width="132"
+                        :max-height="280"
+                      />
+                    </bubbleBoxTrigger>
+                  </div>
+                  <div class="track-reanalysis-dialog__spread">
+                    <span class="track-reanalysis-dialog__field-label">
+                      {{ t('settings.analysisGridMode.label') }}
+                    </span>
+                    <bubbleBoxTrigger
+                      tag="div"
+                      class="track-reanalysis-dialog__field-control"
+                      :title="gridModeHintText"
+                    >
+                      <BaseSelect
+                        v-model="selectedGridMode"
+                        :options="gridModeOptions"
+                        :disabled="!showBpmRange"
+                        :show-bubble="false"
+                        :width="132"
+                        :max-height="200"
+                      />
+                    </bubbleBoxTrigger>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div
-            class="track-reanalysis-dialog__grid-mode"
-            :class="{ 'is-hidden': !showBpmRange }"
-            :inert="!showBpmRange"
-          >
-            <span>{{ t('settings.analysisGridMode.label') }}</span>
-            <bubbleBoxTrigger
-              tag="div"
-              class="track-reanalysis-dialog__mode-select"
-              :title="showBpmRange ? gridModeHintText : ''"
-            >
-              <BaseSelect
-                v-model="selectedGridMode"
-                :options="gridModeOptions"
-                :disabled="!showBpmRange"
-                :show-bubble="false"
-                :width="168"
-                :max-height="200"
-              />
-            </bubbleBoxTrigger>
-          </div>
-          <div class="track-reanalysis-dialog__mode-hint" :class="{ 'is-hidden': !showBpmRange }">
-            {{ gridModeHintText }}
-          </div>
+
           <singleCheckbox id="reanalysis-option-waveform" v-model="selection.waveform">
             {{ t('tracks.reanalysisOptionWaveform') }}
           </singleCheckbox>
           <singleCheckbox id="reanalysis-option-energy" v-model="selection.energy">
             {{ t('tracks.reanalysisOptionEnergy') }}
           </singleCheckbox>
-          <singleCheckbox id="reanalysis-option-structure" v-model="selection.structure">
-            {{ t('tracks.reanalysisOptionStructure') }}
-          </singleCheckbox>
+          <bubbleBoxTrigger
+            tag="div"
+            class="track-reanalysis-dialog__option-tip"
+            :title="structureOptionHint"
+          >
+            <singleCheckbox id="reanalysis-option-structure" v-model="selection.structure">
+              {{ t('tracks.reanalysisOptionStructure') }}
+            </singleCheckbox>
+          </bubbleBoxTrigger>
         </div>
 
         <div
+          v-if="statusHint"
           class="track-reanalysis-dialog__hint"
-          :class="{ 'track-reanalysis-dialog__hint--warning': warnGridWithoutStructure }"
+          :class="{ 'track-reanalysis-dialog__hint--warning': statusHint.warning }"
         >
-          {{ dependencyHintText }}
+          {{ statusHint.text }}
         </div>
       </div>
 
@@ -267,7 +300,7 @@ onUnmounted(() => {
         >
           {{ startButtonText }} (E)
         </bubbleBoxTrigger>
-        <div v-else class="button track-reanalysis-dialog__button" @click="confirm">
+        <div v-else class="button button--primary track-reanalysis-dialog__button" @click="confirm">
           {{ startButtonText }} (E)
         </div>
         <div class="button track-reanalysis-dialog__button" @click="cancel">
@@ -280,7 +313,7 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 .track-reanalysis-dialog {
-  width: 500px;
+  width: 440px;
   height: auto;
   display: flex;
   flex-direction: column;
@@ -289,15 +322,16 @@ onUnmounted(() => {
 .track-reanalysis-dialog__content {
   display: flex;
   flex-direction: column;
-  padding: 22px 28px 16px;
+  padding: 20px 28px 18px;
   color: var(--text);
 }
 
 .track-reanalysis-dialog__summary {
-  min-height: 3.2em;
   margin-bottom: 18px;
   text-align: center;
+  font-size: 13px;
   line-height: 1.6;
+  color: var(--text-secondary, #8c8c8c);
 }
 
 .track-reanalysis-dialog__options {
@@ -307,75 +341,72 @@ onUnmounted(() => {
   gap: 12px;
 }
 
-.track-reanalysis-dialog__grid-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  height: 30px;
-  width: 100%;
-  box-sizing: border-box;
+.track-reanalysis-dialog__option-tip {
+  display: inline-flex;
+  align-self: flex-start;
 }
 
-.track-reanalysis-dialog__grid-option {
+.track-reanalysis-dialog__grid-group {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* 0fr → 1fr 让折叠高度可动画，收起时占位真正为 0 */
+.track-reanalysis-dialog__grid-settings {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 0.18s ease,
+    opacity 0.14s ease;
+}
+
+.track-reanalysis-dialog__grid-settings.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+/* 缩进到复选框文字对齐的位置：参数挂在「网格 / BPM」下面，不额外套卡片 */
+.track-reanalysis-dialog__grid-settings-inner {
+  overflow: hidden;
+  min-height: 0;
+  padding: 10px 0 2px 26px;
+}
+
+.track-reanalysis-dialog__grid-settings-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.track-reanalysis-dialog__spread {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.track-reanalysis-dialog__field-label {
+  color: var(--text-secondary, #8c8c8c);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.track-reanalysis-dialog__field-control {
   display: inline-flex;
   flex-shrink: 0;
 }
 
-.track-reanalysis-dialog__bpm {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  height: 30px;
-  min-width: 0;
-  color: var(--text-secondary, #8c8c8c);
-  font-size: 13px;
-  box-sizing: border-box;
-}
-
-.track-reanalysis-dialog__bpm.is-hidden {
-  visibility: hidden;
-  pointer-events: none;
-}
-
-.track-reanalysis-dialog__grid-mode {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  height: 30px;
-  color: var(--text-secondary, #8c8c8c);
-  font-size: 13px;
-}
-
-.track-reanalysis-dialog__grid-mode.is-hidden {
-  visibility: hidden;
-  pointer-events: none;
-}
-
-.track-reanalysis-dialog__mode-select {
-  display: inline-flex;
-}
-
-.track-reanalysis-dialog__mode-hint {
-  color: var(--text-secondary, #8c8c8c);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.track-reanalysis-dialog__mode-hint.is-hidden {
-  visibility: hidden;
-  pointer-events: none;
-}
-
 .track-reanalysis-dialog__hint {
-  margin-top: 18px;
-  height: 4.8em;
+  margin-top: 14px;
   color: var(--text-secondary, #8c8c8c);
   font-size: 12px;
   line-height: 1.6;
 }
 
 .track-reanalysis-dialog__hint--warning {
-  color: var(--warning, #b67500);
+  color: var(--warning-text, #ffb74d);
 }
 
 .track-reanalysis-dialog__button {
