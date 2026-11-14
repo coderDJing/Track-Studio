@@ -368,61 +368,65 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-
-      - name: Restore Intel FFmpeg static libs cache
-        uses: actions/cache@v5
-        with:
-          path: dist/ffmpeg-x64-dev
-          key: ffmpeg-dev-macos-x64-v1-${{ hashFiles('rust_package/Cargo.toml', 'rust_package/Cargo.lock', 'rust_package/native/ffmpeg/frkb_ffmpeg_decode_wrapper.*') }}
-
-      - name: Prepare Intel FFmpeg static libs
+      # Intel macOS has no Homebrew bottle for `ffmpeg`, so `brew install ffmpeg`
+      # compiles FFmpeg and its dependency tree from source on every run: 1-2
+      # hours for an ~8 MB output. The previous Actions cache could never hide
+      # that cost, because release.yml only runs on tag pushes and a tag run may
+      # only restore caches written by its own ref or the default branch, so
+      # every RC paid the full source build again.
+      #
+      # Instead we publish the libraries once as a pinned release asset and fetch
+      # them here, which takes seconds and is byte-for-byte reproducible.
+      - name: Fetch prebuilt Intel FFmpeg static libs
+        env:
+          FFMPEG_DEV_ASSET_URL: https://github.com/coderDJing/Track-Studio/releases/download/ffmpeg-dev-assets/ffmpeg-macos-x64-dev.tar.gz
+          FFMPEG_DEV_ASSET_SHA256: 70dbca4a5a5797cecc8b2dd5e815b78ab8af627b7a00058579a4fab878231fbd
         run: |
           set -euo pipefail
-          if [ -f dist/ffmpeg-x64-dev/lib/libavcodec.a ] && \
-             [ -f dist/ffmpeg-x64-dev/lib/libavformat.a ] && \
-             [ -f dist/ffmpeg-x64-dev/lib/libavutil.a ] && \
-             [ -f dist/ffmpeg-x64-dev/lib/libswresample.a ] && \
-             [ -f dist/ffmpeg-x64-dev/include/libavcodec/avcodec.h ] && \
-             lipo -archs dist/ffmpeg-x64-dev/lib/libavcodec.a | grep -q 'x86_64'; then
-            echo "Using cached Intel FFmpeg static libraries."
-            exit 0
+          archive="${RUNNER_TEMP}/ffmpeg-macos-x64-dev.tar.gz"
+          curl --fail --location --silent --show-error \
+            --retry 3 --retry-delay 5 --retry-connrefused \
+            --output "$archive" "$FFMPEG_DEV_ASSET_URL"
+
+          actual_sha="$(shasum -a 256 "$archive" | awk '{print $1}')"
+          if [ "$actual_sha" != "$FFMPEG_DEV_ASSET_SHA256" ]; then
+            echo "::error::FFmpeg dev asset checksum mismatch (expected ${FFMPEG_DEV_ASSET_SHA256}, got ${actual_sha})."
+            exit 1
           fi
 
-          # The hosted Intel runner ships an unrelated HashiCorp tap with a
-          # broken vagrant formula, which makes `brew update` emit an error.
-          if brew tap | grep -Fxq 'hashicorp/tap'; then
-            # The runner may have packer installed from this tap; force only
-            # removes the tap metadata and leaves unrelated formulae intact.
-            brew untap --force hashicorp/tap
-          fi
-          brew update
-          # The Intel runner links OpenSSL 1.1 into /usr/local. Unlink it
-          # before FFmpeg upgrades OpenSSL 3, so bin/openssl does not conflict.
-          if brew list --formula | grep -Fxq 'openssl@1.1'; then
-            brew unlink openssl@1.1
-          fi
-          # Runner-created links can remain after `brew unlink` reports zero
-          # removals. Remove only an openssl executable link owned by 1.1.
-          brew_prefix="$(brew --prefix)"
-          openssl_bin="${brew_prefix}/bin/openssl"
-          if [ -L "$openssl_bin" ]; then
-            case "$(readlink "$openssl_bin")" in
-              "${brew_prefix}/opt/openssl@1.1/bin/openssl"|../opt/openssl@1.1/bin/openssl|\
-              "${brew_prefix}/Cellar/openssl@1.1/"*/bin/openssl|../Cellar/openssl@1.1/*/bin/openssl)
-                rm -- "$openssl_bin"
-                ;;
-            esac
-          fi
-          brew install ffmpeg
-          mkdir -p dist/ffmpeg-x64-dev/lib dist/ffmpeg-x64-dev/include
+          mkdir -p dist/ffmpeg-x64-dev
+          tar -xzf "$archive" -C dist/ffmpeg-x64-dev
+          echo "Extracted FFmpeg dev asset:"
+          ls -lh dist/ffmpeg-x64-dev/lib
+          ls dist/ffmpeg-x64-dev/include
+
+      - name: Verify Intel FFmpeg static libs
+        run: |
+          set -euo pipefail
+          dev_dir=dist/ffmpeg-x64-dev
+
           for lib in libavcodec libavformat libavutil libswresample; do
-            cp -L "$(brew --prefix)/lib/${lib}.a" dist/ffmpeg-x64-dev/lib/
-            cp -RL "$(brew --prefix)/include/${lib}" dist/ffmpeg-x64-dev/include/
+            if [ ! -f "$dev_dir/lib/${lib}.a" ]; then
+              echo "::error::Missing ${lib}.a in the FFmpeg dev asset."
+              exit 1
+            fi
+            # build_mac links these archives into the x86_64 Rust target, so a
+            # fat or arm64 archive would fail there instead of here.
+            archs="$(lipo -archs "$dev_dir/lib/${lib}.a")"
+            if [ "$archs" != "x86_64" ]; then
+              echo "::error::${lib}.a must be a thin x86_64 archive, got: ${archs}"
+              exit 1
+            fi
           done
+
+          for header in libavcodec/avcodec.h libavformat/avformat.h libavutil/avutil.h libswresample/swresample.h; do
+            if [ ! -f "$dev_dir/include/${header}" ]; then
+              echo "::error::Missing FFmpeg header ${header} in the dev asset."
+              exit 1
+            fi
+          done
+
+          du -sh "$dev_dir"
 
       - name: Upload Intel FFmpeg dev artifact
         uses: actions/upload-artifact@v7
