@@ -1,0 +1,116 @@
+name: Refresh macOS x86_64 FFmpeg dev assets
+
+# release.yml 的 build_ffmpeg_mac_x64 不再自行编译 FFmpeg，而是下载
+# releases/download/<release_tag>/ffmpeg-macos-x64-dev.tar.gz 这个固定产物。
+#
+# 需要升级 FFmpeg 时才手动跑一次本流程：它会在 Intel runner 上重新编译一次
+# （macos-15-intel 没有 ffmpeg 的 Homebrew bottle，耗时约 1~2 小时），
+# 覆盖上传到同一个 release，并在 summary 里打印新的 sha256。
+# 跑完后把新的 sha256 更新到 release.yml 的 FFMPEG_DEV_ASSET_SHA256 即可。
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release that hosts the ffmpeg dev asset
+        required: false
+        default: ffmpeg-dev-assets
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: macos-15-intel
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build Intel FFmpeg static libs
+        run: |
+          set -euo pipefail
+
+          # The hosted Intel runner ships an unrelated HashiCorp tap with a
+          # broken vagrant formula, which makes `brew update` emit an error.
+          if brew tap | grep -Fxq 'hashicorp/tap'; then
+            # The runner may have packer installed from this tap; force only
+            # removes the tap metadata and leaves unrelated formulae intact.
+            brew untap --force hashicorp/tap
+          fi
+          brew update
+
+          # The Intel runner links OpenSSL 1.1 into /usr/local. Unlink it
+          # before FFmpeg upgrades OpenSSL 3, so bin/openssl does not conflict.
+          if brew list --formula | grep -Fxq 'openssl@1.1'; then
+            brew unlink openssl@1.1
+          fi
+          # Runner-created links can remain after `brew unlink` reports zero
+          # removals. Remove only an openssl executable link owned by 1.1.
+          brew_prefix="$(brew --prefix)"
+          openssl_bin="${brew_prefix}/bin/openssl"
+          if [ -L "$openssl_bin" ]; then
+            case "$(readlink "$openssl_bin")" in
+              "${brew_prefix}/opt/openssl@1.1/bin/openssl"|../opt/openssl@1.1/bin/openssl|\
+              "${brew_prefix}/Cellar/openssl@1.1/"*/bin/openssl|../Cellar/openssl@1.1/*/bin/openssl)
+                rm -- "$openssl_bin"
+                ;;
+            esac
+          fi
+
+          brew install ffmpeg
+
+          mkdir -p dist/ffmpeg-x64-dev/lib dist/ffmpeg-x64-dev/include
+          for lib in libavcodec libavformat libavutil libswresample; do
+            cp -L "${brew_prefix}/lib/${lib}.a" dist/ffmpeg-x64-dev/lib/
+            cp -RL "${brew_prefix}/include/${lib}" dist/ffmpeg-x64-dev/include/
+          done
+
+      - name: Validate and package
+        id: package
+        run: |
+          set -euo pipefail
+          dev_dir=dist/ffmpeg-x64-dev
+
+          for lib in libavcodec libavformat libavutil libswresample; do
+            archs="$(lipo -archs "$dev_dir/lib/${lib}.a")"
+            if [ "$archs" != "x86_64" ]; then
+              echo "::error::${lib}.a must be a thin x86_64 archive, got: ${archs}"
+              exit 1
+            fi
+          done
+          for header in libavcodec/avcodec.h libavformat/avformat.h libavutil/avutil.h libswresample/swresample.h; do
+            test -f "$dev_dir/include/${header}"
+          done
+
+          tar -czf ffmpeg-macos-x64-dev.tar.gz -C "$dev_dir" lib include
+          sha="$(shasum -a 256 ffmpeg-macos-x64-dev.tar.gz | awk '{print $1}')"
+          echo "sha256=${sha}" >> "$GITHUB_OUTPUT"
+          # 记录编译进产物的 FFmpeg 版本，方便事后追溯。
+          ffmpeg_version="$(grep -rh 'FFMPEG_VERSION' "$dev_dir/include/" | head -n 1)"
+          echo "ffmpeg_version=${ffmpeg_version}" >> "$GITHUB_OUTPUT"
+          ls -lh ffmpeg-macos-x64-dev.tar.gz
+
+      - name: Upload asset to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" ffmpeg-macos-x64-dev.tar.gz --clobber
+
+      - name: Summary
+        env:
+          SHA256: ${{ steps.package.outputs.sha256 }}
+          FFMPEG_VERSION: ${{ steps.package.outputs.ffmpeg_version }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Refreshed \`${RELEASE_TAG}\`"
+            echo
+            echo "- ${FFMPEG_VERSION}"
+            echo "- sha256 \`${SHA256}\`"
+            echo
+            echo "Update \`FFMPEG_DEV_ASSET_SHA256\` in \`.github/workflows/release.yml\` to the value above."
+          } >> "$GITHUB_STEP_SUMMARY"

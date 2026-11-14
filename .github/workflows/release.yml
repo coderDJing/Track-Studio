@@ -377,6 +377,8 @@ jobs:
       #
       # Instead we publish the libraries once as a pinned release asset and fetch
       # them here, which takes seconds and is byte-for-byte reproducible.
+      # To upgrade FFmpeg, run the "Refresh macOS x86_64 FFmpeg dev assets"
+      # workflow and bump FFMPEG_DEV_ASSET_SHA256 to the sha256 it prints.
       - name: Fetch prebuilt Intel FFmpeg static libs
         env:
           FFMPEG_DEV_ASSET_URL: https://github.com/coderDJing/Track-Studio/releases/download/ffmpeg-dev-assets/ffmpeg-macos-x64-dev.tar.gz
