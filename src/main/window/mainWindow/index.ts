@@ -14,6 +14,7 @@ import fs = require('fs-extra')
 import store from '../../store'
 import { log } from '../../log'
 import updateWindow from '../updateWindow'
+import appUpdateService from '../../services/appUpdateService'
 import { registerAudioDecodeHandlers } from './audioDecodeHandlers'
 import { registerFingerprintHandlers } from './fingerprintHandlers'
 import { registerImportHandlers } from './importHandlers'
@@ -464,6 +465,13 @@ function createWindow() {
   }
   startLibraryTreeWatcher(mainWindow)
 
+  // 统一下载卡片的更新状态只推主窗口，避免再为更新单开窗口。
+  appUpdateService.setUpdateEventSender((channel, payload) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(channel, payload)
+    }
+  })
+
   mainWindow.on('ready-to-show', () => {
     if (store.layoutConfig.isMaxMainWin) {
       mainWindow?.maximize()
@@ -650,6 +658,11 @@ function createWindow() {
   )
 
   ipcMain.on('checkForUpdates', () => {
+    // Windows：检查结果进右下角下载卡片，不再打开独立更新窗口。
+    if (process.platform === 'win32') {
+      void appUpdateService.checkForUpdates()
+      return
+    }
     if (updateWindow.instance === null) {
       updateWindow.createWindow()
     } else {
@@ -662,6 +675,7 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     stopLibraryTreeWatcher()
+    appUpdateService.setUpdateEventSender(null)
     ipcMain.removeAllListeners('toggle-maximize')
     ipcMain.removeAllListeners('toggle-minimize')
     ipcMain.removeAllListeners('toggle-close')

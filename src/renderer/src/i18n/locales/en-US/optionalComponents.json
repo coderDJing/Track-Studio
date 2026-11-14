@@ -1,8 +1,5 @@
 {
   "optionalComponents": {
-    "panelTitle": "Optional downloads",
-    "collapse": "Collapse",
-    "expand": "Expand",
     "retrying": "Retrying…",
     "statusDownloading": "Downloading {percent}%",
     "statusInstalling": "Installing…",

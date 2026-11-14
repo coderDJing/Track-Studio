@@ -1,0 +1,30 @@
+{
+  "downloadTasks": {
+    "panelTitle": "Downloads",
+    "minimize": "Minimize",
+    "expand": "Expand downloads",
+    "statusDownloading": "Downloading {percent}%",
+    "statusInstalling": "Installing…",
+    "statusExtracting": "Extracting…",
+    "statusVerifying": "Verifying…",
+    "statusReady": "Done",
+    "statusFailed": "Download failed",
+    "retry": "Retry",
+    "analysisRuntime": "Analysis runtime",
+    "ultraModel": "Ultra-quality model",
+    "appUpdate": "App update",
+    "updateChecking": "Checking for updates…",
+    "updateAvailable": "Version {version} available",
+    "updateDownloading": "Downloading {percent}%",
+    "updateLatest": "Already up to date ({version})",
+    "dismiss": "Got it",
+    "updateDownloaded": "Downloaded, restarts to finish",
+    "updateFailed": "Update failed",
+    "updateNetworkFailed": "Update failed: network error",
+    "download": "Download",
+    "later": "Later",
+    "installNow": "Restart to install",
+    "viewReleaseNotes": "Release notes",
+    "manualDownload": "Manual download"
+  }
+}

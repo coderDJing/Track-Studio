@@ -1,12 +1,8 @@
 import type { AnalysisRuntimeFeature } from '@shared/analysisRuntimeFeatures'
-import { computed } from 'vue'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import {
   formatAnalysisRuntimeBytes,
-  isAnalysisRuntimeDownloadActiveStatus,
-  resolveAnalysisRuntimeDownloadPercent,
-  resolveAnalysisRuntimeDownloadText,
-  resolveAnalysisRuntimeDownloadTitle
+  isAnalysisRuntimeDownloadActiveStatus
 } from '@renderer/utils/analysisRuntimeDownloadUi'
 
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string
@@ -174,17 +170,11 @@ export const useAnalysisRuntimeDownload = (options: {
   }
 
   const applyAnalysisRuntimeStatus = (params: { preferred?: unknown; state?: unknown }) => {
-    const prevStatus = options.runtime.analysisRuntime.state.status
     const preferred = normalizeAnalysisRuntimePreferredInfo(params.preferred)
     const state = normalizeAnalysisRuntimeDownloadState(params.state)
     options.runtime.analysisRuntime.preferred = preferred
     options.runtime.analysisRuntime.state = state
     options.runtime.analysisRuntime.available = preferred.alreadyAvailable
-    const nextActive = isAnalysisRuntimeDownloadActiveStatus(state.status)
-    const prevActive = isAnalysisRuntimeDownloadActiveStatus(prevStatus)
-    if ((nextActive && !prevActive) || !nextActive) {
-      options.runtime.setAnalysisRuntimeDownloadOverlayMinimized(false)
-    }
     if (
       !options.runtime.analysisRuntime.available &&
       options.runtime.mainWindowBrowseMode !== 'browser'
@@ -213,23 +203,6 @@ export const useAnalysisRuntimeDownload = (options: {
     }
   }
 
-  const analysisRuntimeDownloadVisible = computed(() => {
-    const status = options.runtime.analysisRuntime.state.status
-    return isAnalysisRuntimeDownloadActiveStatus(status)
-  })
-
-  const analysisRuntimeDownloadPercent = computed(() =>
-    resolveAnalysisRuntimeDownloadPercent(options.runtime.analysisRuntime.state)
-  )
-
-  const analysisRuntimeDownloadTitle = computed(() =>
-    resolveAnalysisRuntimeDownloadTitle(options.t, options.runtime.analysisRuntime.state)
-  )
-
-  const analysisRuntimeDownloadText = computed(() =>
-    resolveAnalysisRuntimeDownloadText(options.t, options.runtime.analysisRuntime.state)
-  )
-
   const resolvePromptResultFromCurrentState = (): AnalysisRuntimePromptResult => {
     if (options.runtime.analysisRuntime.available) return 'ready'
     const status = options.runtime.analysisRuntime.state.status
@@ -251,7 +224,6 @@ export const useAnalysisRuntimeDownload = (options: {
           : 'blocked'
         : resolvePromptResultFromCurrentState()
       if (currentResult === 'started' && source !== 'startup') {
-        options.runtime.setAnalysisRuntimeDownloadOverlayMinimized(false)
         await showAnalysisRuntimeDownloadInProgressHint()
       }
       return currentResult
@@ -272,7 +244,6 @@ export const useAnalysisRuntimeDownload = (options: {
       if (preferred.alreadyAvailable) return 'ready'
       if (isAnalysisRuntimeDownloadActiveStatus(state.status)) {
         if (source !== 'startup') {
-          options.runtime.setAnalysisRuntimeDownloadOverlayMinimized(false)
           await showAnalysisRuntimeDownloadInProgressHint()
         }
         return 'started'
@@ -467,10 +438,6 @@ export const useAnalysisRuntimeDownload = (options: {
   }
 
   return {
-    analysisRuntimeDownloadVisible,
-    analysisRuntimeDownloadPercent,
-    analysisRuntimeDownloadTitle,
-    analysisRuntimeDownloadText,
     refreshAnalysisRuntimeStatus,
     promptAnalysisRuntimeDownload,
     ensureAnalysisRuntimeForHorizontalMode,

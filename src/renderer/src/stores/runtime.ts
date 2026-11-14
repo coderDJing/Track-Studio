@@ -187,7 +187,6 @@ interface Runtime {
   isProgressing: boolean
   analysisRuntime: {
     available: boolean
-    downloadOverlayMinimized: boolean
     preferred: AnalysisRuntimePreferredInfo
     state: AnalysisRuntimeDownloadState
   }
@@ -319,7 +318,6 @@ export const useRuntimeStore = defineStore('runtime', {
       bottomInfoTaskProgress: { ...HIDDEN_MINI_PLAYER_TASK_PROGRESS },
       analysisRuntime: {
         available: false,
-        downloadOverlayMinimized: false,
         preferred: {
           supported: false,
           downloadable: false,
@@ -494,9 +492,6 @@ export const useRuntimeStore = defineStore('runtime', {
     }
   },
   actions: {
-    setAnalysisRuntimeDownloadOverlayMinimized(minimized: boolean) {
-      this.analysisRuntime.downloadOverlayMinimized = minimized
-    },
     setCloudSyncMinimized(minimized: boolean) {
       this.cloudSync.minimized = minimized
     },

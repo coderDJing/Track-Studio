@@ -32,8 +32,7 @@ import {
 import { createClickThroughGuard } from '@renderer/utils/clickThroughGuard'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 import HorizontalBrowseModeShell from '@renderer/components/HorizontalBrowseModeShell.vue'
-import AnalysisRuntimeDownloadOverlay from '@renderer/components/AnalysisRuntimeDownloadOverlay.vue'
-import OptionalComponentDownloadsOverlay from '@renderer/components/OptionalComponentDownloadsOverlay.vue'
+import DownloadTasksOverlay from '@renderer/components/DownloadTasksOverlay.vue'
 import { ensureOptionalComponentStatesLoaded } from '@renderer/composables/useOptionalComponentDownloads'
 import LibraryMergeDialog from '@renderer/components/LibraryMergeDialog.vue'
 import { startLibraryRelocateFromMenu } from '@renderer/utils/libraryRelocateActions'
@@ -179,10 +178,6 @@ const currentMainWindowBrowseModeLabel = computed(() => {
   return t(currentMode.labelKey)
 })
 const {
-  analysisRuntimeDownloadVisible,
-  analysisRuntimeDownloadPercent,
-  analysisRuntimeDownloadTitle,
-  analysisRuntimeDownloadText,
   refreshAnalysisRuntimeStatus,
   promptAnalysisRuntimeDownload,
   ensureAnalysisRuntimeForHorizontalMode,
@@ -1071,14 +1066,7 @@ onBeforeUnmount(() => {
     @next="goNextUserGuideBeat"
     @skip="dismissUserGuideStep"
   />
-  <AnalysisRuntimeDownloadOverlay
-    :visible="analysisRuntimeDownloadVisible"
-    :title="analysisRuntimeDownloadTitle"
-    :text="analysisRuntimeDownloadText"
-    :percent="analysisRuntimeDownloadPercent"
-    :hint="t('analysisRuntime.downloadBlockingHint')"
-  />
-  <OptionalComponentDownloadsOverlay />
+  <DownloadTasksOverlay />
   <LibraryMergeDialog v-if="libraryMergeDialogVisible" @close="libraryMergeDialogVisible = false" />
   <LibraryMergeDialog
     v-if="curatedLibraryMergeDialogVisible"

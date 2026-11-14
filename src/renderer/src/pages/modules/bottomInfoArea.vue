@@ -17,9 +17,7 @@ import {
 initializeBpmFix()
 import {
   isAnalysisRuntimeDownloadActiveStatus,
-  resolveAnalysisRuntimeDownloadPercent,
-  resolveAnalysisRuntimeDownloadText,
-  resolveAnalysisRuntimeDownloadTitle
+  resolveAnalysisRuntimeDownloadPercent
 } from '@renderer/utils/analysisRuntimeDownloadUi'
 import { useBottomInfoVisibleAnalysisProgress } from './bottomInfoAreaVisibleAnalysis'
 import { useBottomInfoTaskProgressMirror } from './useBottomInfoTaskProgressMirror'
@@ -114,20 +112,12 @@ const libraryStemTaskText = computed(() => {
     : text
 })
 
+// 分析运行时下载进度已迁到右下角统一下载卡片，这里只保留 mini player 的进度镜像输入。
 const analysisRuntimeTaskVisible = computed(() =>
   isAnalysisRuntimeDownloadActiveStatus(runtime.analysisRuntime.state.status)
 )
-const analysisRuntimeTaskTitle = computed(() =>
-  resolveAnalysisRuntimeDownloadTitle(t, runtime.analysisRuntime.state)
-)
-const analysisRuntimeTaskText = computed(() =>
-  resolveAnalysisRuntimeDownloadText(t, runtime.analysisRuntime.state)
-)
 const analysisRuntimeTaskPercent = computed(() =>
   resolveAnalysisRuntimeDownloadPercent(runtime.analysisRuntime.state)
-)
-const analysisRuntimeOverlayMinimized = computed(
-  () => runtime.analysisRuntime.downloadOverlayMinimized
 )
 // 云同步最小化后在底部展示的进度行（仅标题 + 百分比，不可恢复）
 const cloudSyncTaskVisible = computed(
@@ -137,11 +127,7 @@ const cloudSyncTaskPercent = computed(() =>
   Math.max(0, Math.min(100, Math.round(runtime.cloudSync.percent || 0)))
 )
 const hasAnyVisibleTask = computed(
-  () =>
-    analysisRuntimeTaskVisible.value ||
-    cloudSyncTaskVisible.value ||
-    libraryStemTaskVisible.value ||
-    tasks.value.length > 0
+  () => cloudSyncTaskVisible.value || libraryStemTaskVisible.value || tasks.value.length > 0
 )
 useBottomInfoTaskProgressMirror({
   runtime,
@@ -443,10 +429,6 @@ const handleAfterLeave = () => {
   if (!hasAnyVisibleTask.value) {
     showTotalRow.value = true
   }
-}
-
-const restoreAnalysisRuntimeOverlay = () => {
-  runtime.setAnalysisRuntimeDownloadOverlayMinimized(false)
 }
 
 const cancelTask = async (task: Task) => {
@@ -822,31 +804,6 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <div class="bottom-info-area" :class="{ empty: !hasAnyVisibleTask }">
-    <div v-if="analysisRuntimeTaskVisible" class="task-row task-row--analysis-runtime">
-      <div class="spinner">
-        <div class="loading">
-          <div></div>
-          <div></div>
-          <div></div>
-          <div></div>
-          <div></div>
-        </div>
-      </div>
-      <div class="label label--stacked">
-        <span class="label__title">{{ analysisRuntimeTaskTitle }}</span>
-        <span class="label__detail">{{ analysisRuntimeTaskText }}</span>
-      </div>
-      <div class="container">
-        <div class="progress">
-          <div class="progress-bar" :style="{ width: `${analysisRuntimeTaskPercent}%` }" />
-        </div>
-      </div>
-      <div v-if="analysisRuntimeOverlayMinimized" class="actions">
-        <button class="task-btn" type="button" @click="restoreAnalysisRuntimeOverlay">
-          {{ t('analysisRuntime.restoreOverlay') }}
-        </button>
-      </div>
-    </div>
     <div v-if="cloudSyncTaskVisible" class="task-row task-row--cloud-sync">
       <div class="spinner">
         <div class="loading">

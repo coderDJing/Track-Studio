@@ -96,9 +96,6 @@ const isReady = computed(
   () => info.value?.alreadyAvailable === true || info.value?.state.status === 'ready'
 )
 const archiveSize = computed(() => Math.max(0, info.value?.archiveSize || 0))
-const downloadPercent = computed(() =>
-  Math.max(0, Math.min(100, Math.round(info.value?.state.percent || 0)))
-)
 const showProgress = computed(
   () =>
     starting.value || isDownloading.value || isReady.value || info.value?.state.status === 'failed'
@@ -110,7 +107,7 @@ const downloadStatusText = computed(() => {
     return t('stemSeparation.modelDownloadingProgress', {
       downloaded: formatAnalysisRuntimeBytes(state.downloadedBytes),
       total: formatAnalysisRuntimeBytes(state.totalBytes || state.archiveSize),
-      percent: downloadPercent.value
+      percent: Math.round(Number(state.percent) || 0)
     })
   }
   if (state.status === 'extracting') return t('stemSeparation.modelExtracting')
@@ -153,14 +150,23 @@ const startDownload = async () => {
   try {
     await window.electron.ipcRenderer.invoke('demucs-model:download-ultra')
     await refreshInfo()
-    if (isReady.value) emit('ready')
+    if (isReady.value) {
+      emit('ready')
+      closeWithAnimation(() => emit('close'))
+      return
+    }
+    // 下载进度统一进右下角下载卡片，弹窗只负责确认与状态说明。
+    closeWithAnimation(() => emit('close'))
+  } catch {
+    await refreshInfo()
   } finally {
     starting.value = false
   }
 }
 
 const closeDialog = () => {
-  if (isDownloading.value || starting.value) return
+  // 下载进度已经交给右下角卡片，弹窗随时可以关。
+  if (starting.value) return
   closeWithAnimation(() => emit('close'))
 }
 
@@ -220,21 +226,6 @@ onUnmounted(() => {
         >
           <div class="demucs-ultra-download-dialog__progress-head">
             <span>{{ downloadStatusText }}</span>
-            <span v-if="info?.state.status === 'downloading'">{{ downloadPercent }}%</span>
-          </div>
-          <div class="demucs-ultra-download-dialog__progress-track">
-            <div
-              class="demucs-ultra-download-dialog__progress-fill"
-              :class="{ 'is-indeterminate': info?.state.status === 'extracting' }"
-              :style="{
-                width:
-                  info?.state.status === 'downloading'
-                    ? `${downloadPercent}%`
-                    : isReady
-                      ? '100%'
-                      : undefined
-              }"
-            />
           </div>
         </section>
       </div>
@@ -247,7 +238,7 @@ onUnmounted(() => {
         >
           {{ primaryLabel }}
         </div>
-        <div class="button" :class="{ disabled: isDownloading || starting }" @click="closeDialog">
+        <div class="button" :class="{ disabled: starting }" @click="closeDialog">
           {{ t('common.close') }} (Esc)
         </div>
       </div>
@@ -320,31 +311,6 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.demucs-ultra-download-dialog__progress-track {
-  height: 5px;
-  margin-top: 7px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--bg-elev);
-}
-
-.demucs-ultra-download-dialog__progress-fill {
-  width: 0;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--accent);
-  transition: width 120ms linear;
-}
-
-.demucs-ultra-download-dialog__progress.is-ready .demucs-ultra-download-dialog__progress-fill {
-  background: var(--success, #107c10);
-}
-
-.demucs-ultra-download-dialog__progress-fill.is-indeterminate {
-  width: 36%;
-  animation: demucs-ultra-download-dialog-loading 1.45s ease-in-out infinite;
-}
-
 .button.disabled {
   opacity: 0.46;
   pointer-events: none;
@@ -352,26 +318,6 @@ onUnmounted(() => {
 
 .demucs-ultra-download-dialog__footer {
   flex-shrink: 0;
-}
-
-@keyframes demucs-ultra-download-dialog-loading {
-  from {
-    transform: translateX(-100%);
-  }
-
-  to {
-    transform: translateX(280%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .demucs-ultra-download-dialog__progress-fill {
-    transition: none;
-  }
-
-  .demucs-ultra-download-dialog__progress-fill.is-indeterminate {
-    animation: none;
-  }
 }
 
 @media (max-width: 520px) {

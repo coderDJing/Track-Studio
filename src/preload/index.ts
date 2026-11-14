@@ -160,6 +160,7 @@ const exactListenChannels = new Set([
   'audio:bpm-fix:files-changed',
   'addSongFingerprintFinished',
   'analysis-runtime-download-state',
+  'app-update:state',
   'demucs-model-download-state',
   'audio:convert:done',
   'cloudSync/error',
@@ -244,6 +245,7 @@ const exactListenChannels = new Set([
 const invokePrefixes = [
   'acoustid:',
   'analysis-runtime:',
+  'app-update:',
   'audio:convert:',
   'audio:metadata:',
   'clipboard:',

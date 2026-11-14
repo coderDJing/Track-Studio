@@ -1,0 +1,30 @@
+{
+  "downloadTasks": {
+    "panelTitle": "下载任务",
+    "minimize": "最小化",
+    "expand": "展开下载任务",
+    "statusDownloading": "下载中 {percent}%",
+    "statusInstalling": "安装中…",
+    "statusExtracting": "解压中…",
+    "statusVerifying": "校验中…",
+    "statusReady": "已完成",
+    "statusFailed": "下载失败",
+    "retry": "重试",
+    "analysisRuntime": "分析运行时",
+    "ultraModel": "超高质量模型",
+    "appUpdate": "应用更新",
+    "updateChecking": "正在检查更新…",
+    "updateAvailable": "发现新版本 {version}",
+    "updateDownloading": "下载中 {percent}%",
+    "updateLatest": "已是最新版本 {version}",
+    "dismiss": "知道了",
+    "updateDownloaded": "已下载，重启后完成升级",
+    "updateFailed": "更新失败",
+    "updateNetworkFailed": "更新失败 · 网络异常",
+    "download": "下载",
+    "later": "稍后",
+    "installNow": "重启安装",
+    "viewReleaseNotes": "更新说明",
+    "manualDownload": "手动下载"
+  }
+}

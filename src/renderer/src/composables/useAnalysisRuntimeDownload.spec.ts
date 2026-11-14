@@ -7,8 +7,7 @@ import type confirmDialog from '@renderer/components/confirmDialog'
 const runtime = () => ({
   analysisRuntime: { available: true, state: { status: 'ready' }, preferred: {} },
   setting: {},
-  mainWindowBrowseMode: 'browser',
-  setAnalysisRuntimeDownloadOverlayMinimized: vi.fn()
+  mainWindowBrowseMode: 'browser'
 })
 const preferred = {
   supported: true,

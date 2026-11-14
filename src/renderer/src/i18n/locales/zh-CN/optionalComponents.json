@@ -1,8 +1,5 @@
 {
   "optionalComponents": {
-    "panelTitle": "可选组件下载",
-    "collapse": "收起",
-    "expand": "展开",
     "retrying": "重试中…",
     "statusDownloading": "下载中 {percent}%",
     "statusInstalling": "安装中…",
