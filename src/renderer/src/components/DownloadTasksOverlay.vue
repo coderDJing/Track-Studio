@@ -7,7 +7,7 @@ import {
   type DownloadTaskView
 } from '@renderer/composables/useDownloadTasks'
 
-const { tasks, hasTasks, activeCount, collapsed, minimize, expand, isRetrying, runAction } =
+const { tasks, hasTasks, activeCount, isBusy, collapsed, minimize, expand, isRetrying, runAction } =
   useDownloadTasks()
 
 const barStyle = (task: DownloadTaskView) => ({
@@ -34,7 +34,8 @@ const actionDisabled = (task: DownloadTaskView, action: DownloadTaskAction) =>
       :aria-label="t('downloadTasks.expand')"
       @click="expand"
     >
-      <span v-if="activeCount > 0" class="download-tasks__spinner" aria-hidden="true"></span>
+      <span v-if="isBusy" class="download-tasks__spinner" aria-hidden="true"></span>
+      <span v-else class="download-tasks__dot" aria-hidden="true"></span>
       <span class="download-tasks__pill-text">{{ t('downloadTasks.panelTitle') }}</span>
       <span v-if="activeCount > 0" class="download-tasks__badge">{{ activeCount }}</span>
     </button>
@@ -282,6 +283,15 @@ const actionDisabled = (task: DownloadTaskView, action: DownloadTaskAction) =>
   border: 1.5px solid color-mix(in srgb, var(--accent) 34%, transparent);
   border-top-color: var(--accent);
   animation: download-tasks-spin 0.9s linear infinite;
+}
+
+/* 没有字节在动（下载完成待安装 / 失败待重试）时只留一个静态点，别一直转圈。 */
+.download-tasks__dot {
+  width: 6px;
+  height: 6px;
+  margin: 0 2px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 @keyframes download-tasks-indeterminate {

@@ -4,6 +4,8 @@ import { EMPTY_APP_UPDATE_STATE, type AppUpdateState } from '@shared/appUpdate'
 import type { OptionalComponentDownloadState } from '@shared/optionalComponentDownloads'
 import {
   composeDownloadTasks,
+  shouldAutoExpandOnTaskChange,
+  type DownloadTaskSnapshotEntry,
   type ModelDownloadState,
   type RuntimeDownloadStateLike
 } from './useDownloadTasks'
@@ -168,5 +170,49 @@ describe('下载任务卡片聚合', () => {
       componentStates: [buildComponent({ percent: 9 })]
     })
     expect(tasks.map((task) => task.kind)).toEqual(['update', 'runtime', 'model', 'component'])
+  })
+})
+
+const snapshotOf = (params: Parameters<typeof compose>[0]): DownloadTaskSnapshotEntry[] =>
+  compose(params).map((task) => ({ id: task.id, status: task.status }))
+
+const snapshotMap = (entries: DownloadTaskSnapshotEntry[]) =>
+  new Map(entries.map((entry) => [entry.id, entry.status] as const))
+
+describe('下载卡片自动展开时机', () => {
+  it('应用更新最小化后下载完成时自动展开，好让用户点“立即安装”', () => {
+    const previous = snapshotMap(snapshotOf({ appUpdate: { status: 'downloading', percent: 40 } }))
+    const next = snapshotOf({ appUpdate: { status: 'downloaded', version: '1.2.9', percent: 100 } })
+    expect(shouldAutoExpandOnTaskChange(previous, next)).toBe(true)
+  })
+
+  it('下载进度刷新不会反复弹开卡片', () => {
+    const previous = snapshotMap(snapshotOf({ appUpdate: { status: 'downloading', percent: 40 } }))
+    const next = snapshotOf({ appUpdate: { status: 'downloading', percent: 41 } })
+    expect(shouldAutoExpandOnTaskChange(previous, next)).toBe(false)
+  })
+
+  it('下载失败同样展开，方便直接点重试', () => {
+    const previous = snapshotMap(snapshotOf({ appUpdate: { status: 'downloading', percent: 40 } }))
+    const next = snapshotOf({ appUpdate: { status: 'error', error: 'network unreachable' } })
+    expect(shouldAutoExpandOnTaskChange(previous, next)).toBe(true)
+  })
+
+  it('首次出现的任务（新版本、组件下载）会展开一次', () => {
+    const previous = snapshotMap([])
+    expect(
+      shouldAutoExpandOnTaskChange(
+        previous,
+        snapshotOf({ appUpdate: { status: 'available', version: '1.2.9' } })
+      )
+    ).toBe(true)
+  })
+
+  it('组件下载完成这类无需操作的终态不打断用户', () => {
+    const previous = snapshotMap(snapshotOf({ componentStates: [buildComponent({ percent: 60 })] }))
+    const next = snapshotOf({
+      componentStates: [buildComponent({ status: 'ready', percent: 100 })]
+    })
+    expect(shouldAutoExpandOnTaskChange(previous, next)).toBe(false)
   })
 })

@@ -55,6 +55,30 @@ export type DownloadTaskView = {
   actions: DownloadTaskAction[]
 }
 
+/** 任务进入这些状态后需要用户点一下（立即安装 / 重试），值得把卡片弹出来。 */
+const ATTENTION_REQUIRED_STATUSES: ReadonlySet<DownloadTaskStatus> = new Set([
+  'downloaded',
+  'failed'
+])
+
+export type DownloadTaskSnapshotEntry = { id: string; status: DownloadTaskStatus }
+
+/**
+ * 任务快照变化是否该自动展开卡片（纯函数，便于单测）：
+ * 1) 出现新任务（例如重启后才发现新版本）；
+ * 2) 已有任务从进行中进入需要用户操作的状态——应用更新下载完成待安装、下载失败待重试。
+ * 单纯的百分比刷新不算，用户手动最小化后不会被进度反复弹开。
+ */
+export const shouldAutoExpandOnTaskChange = (
+  previous: ReadonlyMap<string, DownloadTaskStatus>,
+  next: readonly DownloadTaskSnapshotEntry[]
+): boolean =>
+  next.some((entry) => {
+    const previousStatus = previous.get(entry.id)
+    if (previousStatus === undefined) return true
+    return previousStatus !== entry.status && ATTENTION_REQUIRED_STATUSES.has(entry.status)
+  })
+
 export type ModelDownloadState = {
   status: 'idle' | 'downloading' | 'extracting' | 'ready' | 'failed'
   percent: number
@@ -521,20 +545,22 @@ export function useDownloadTasks() {
     })
   )
 
-  // 新任务出现时自动展开一次；用户主动最小化后，后续同类进度不再强行弹开。
-  const seenTaskIds = new Set<string>()
-  let seenInitialized = false
+  // 新任务出现、或任务进入“下载完成待安装 / 下载失败待重试”时自动展开一次；
+  // 只刷进度不会弹开，用户手动最小化后不会被进度反复打扰。
+  const statusSnapshot = new Map<string, DownloadTaskStatus>()
+  let snapshotInitialized = false
   watch(
-    () => tasks.value.map((task) => task.id),
-    (ids) => {
-      if (!seenInitialized) {
-        ids.forEach((id) => seenTaskIds.add(id))
-        seenInitialized = true
+    () => tasks.value.map((task) => ({ id: task.id, status: task.status })),
+    (entries) => {
+      if (!snapshotInitialized) {
+        entries.forEach((entry) => statusSnapshot.set(entry.id, entry.status))
+        snapshotInitialized = true
         return
       }
-      const hasNewTask = ids.some((id) => !seenTaskIds.has(id))
-      ids.forEach((id) => seenTaskIds.add(id))
-      if (hasNewTask && collapsed.value) expand()
+      const shouldExpand = shouldAutoExpandOnTaskChange(statusSnapshot, entries)
+      statusSnapshot.clear()
+      entries.forEach((entry) => statusSnapshot.set(entry.id, entry.status))
+      if (shouldExpand && collapsed.value) expand()
     }
   )
 
@@ -542,6 +568,13 @@ export function useDownloadTasks() {
     () => tasks.value.filter((task) => task.status !== 'ready' && task.status !== 'latest').length
   )
   const hasTasks = computed(() => tasks.value.length > 0)
+  /** 真的有字节在动时才转圈；下载完成等待安装、失败等待重试都算静止。 */
+  const isBusy = computed(() =>
+    tasks.value.some(
+      (task) =>
+        task.status === 'downloading' || task.status === 'installing' || task.status === 'checking'
+    )
+  )
 
   const minimize = () => {
     collapsed.value = true
@@ -594,6 +627,7 @@ export function useDownloadTasks() {
     tasks,
     hasTasks,
     activeCount,
+    isBusy,
     collapsed,
     minimize,
     expand,
