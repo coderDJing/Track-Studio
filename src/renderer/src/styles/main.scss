@@ -231,13 +231,21 @@ body:has(.dialog.dialog-visible) .window-controls .rightIcon:not(:hover)::after 
   background-color: var(--bg);
 }
 
+/* 视觉定义而非尺寸定义：同时供 <div class="button"> 与真正的 <button> 使用。
+   <button> 自带 UA 的 1px 边框、3D 外观与不继承的 color（深色主题下是黑字），
+   这里必须显式抹平，否则同一个类在两种元素上会长得完全不一样。 */
 .button {
   height: 25px;
   line-height: 25px;
   padding: 0 10px;
+  appearance: none;
+  border: none;
   border-radius: 5px;
   background-color: var(--hover);
+  color: inherit;
+  font-family: inherit;
   font-size: 14px;
+  cursor: pointer;
 
   &:hover {
     color: #ffffff;
