@@ -13,7 +13,10 @@ import {
 } from '@renderer/utils/libraryTransfer'
 import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 import { RendererFilePathMap, RendererFilePathSet } from '@renderer/utils/filePathComparison'
-import { appendNeteaseSongsToSet } from '@renderer/utils/neteaseActions'
+import {
+  appendNeteaseSongsToSet,
+  mapNeteaseSongsToLocalFiles
+} from '@renderer/utils/neteaseActions'
 import { NETEASE_DOWNLOADED_UUID, isNeteasePlaylistUuid } from '@shared/netease'
 
 export type MoveSongsLibraryName =
@@ -238,6 +241,8 @@ export function useSelectAndMoveSongs(params: UseSelectAndMoveSongsParams) {
       } catch {}
       return
     }
+    const isNeteaseSource =
+      isNeteasePlaylistUuid(sourceSongListUUID) || sourceSongListUUID === NETEASE_DOWNLOADED_UUID
     const isMixtapeTarget =
       targetNode?.type === 'mixtapeList' || targetLibraryName.value === 'MixtapeLibrary'
     if (isMixtapeTarget) {
@@ -250,6 +255,46 @@ export function useSelectAndMoveSongs(params: UseSelectAndMoveSongsParams) {
         return
       }
       const originPathSnapshot = libraryUtils.buildDisplayPathByUuid(sourceSongListUUID)
+      // 网易云歌单里的行只有试听流地址，混音库只认绝对路径：
+      // 先落成 `.store/` 真实文件，再按普通曲目追加（BPM 由 mixtape:append 自己补）。
+      if (isNeteaseSource) {
+        const sourceSongs = resolveSelectedSongsByRowKey(
+          normalizeUniqueStrings(songsAreaState.selectedSongFilePath),
+          sourceNode.type
+        )
+        const localSongs = await mapNeteaseSongsToLocalFiles(sourceSongs)
+        if (localSongs.length === 0) return
+        const items = localSongs.map((song) => ({
+          filePath: song.filePath,
+          originPlaylistUuid: sourceSongListUUID,
+          originPathSnapshot,
+          info: buildSongSnapshot(song.filePath, song)
+        }))
+        const result = (await window.electron.ipcRenderer.invoke(
+          'mixtape:append',
+          toIpcCloneablePayload({ playlistId: targetSongListUUID, items })
+        )) as MixtapeAppendResult | null
+        const inserted = Math.max(0, Number(result?.inserted || 0))
+        const skippedNoBpm = Math.max(0, Number(result?.skippedNoBpm || 0))
+        if (inserted <= 0) {
+          emitNoBpmMixtapeHint(skippedNoBpm)
+          return
+        }
+        songsAreaState.selectedSongFilePath.length = 0
+        try {
+          emitter.emit('playlistContentChanged', { uuids: [targetSongListUUID] })
+          emitter.emit('songsArea/clipboardHint', {
+            message:
+              skippedNoBpm > 0
+                ? t('mixtape.addedToMixtapeWithNoBpmSkipped', {
+                    count: inserted,
+                    skipped: skippedNoBpm
+                  })
+                : t('mixtape.addedToMixtape', { count: inserted })
+          })
+        } catch {}
+        return
+      }
       const selectedSourceSongs = resolveSelectedSongsByRowKey(
         normalizeUniqueStrings(selectedPaths),
         sourceNode.type
@@ -342,13 +387,20 @@ export function useSelectAndMoveSongs(params: UseSelectAndMoveSongsParams) {
     }
 
     if (sourceActionMode === 'copy') {
-      const selectedSourceItems = resolveSelectedSongsByRowKey(
+      let selectedSourceItems = resolveSelectedSongsByRowKey(
         normalizeUniqueStrings(selectedPaths),
         sourceNode?.type
       ).map((song) => ({
         filePath: song.filePath,
         song
       }))
+      // 网易云来源只复制不移动；复制前先落成本地文件，不能把试听地址交给文件系统。
+      if (isNeteaseSource) {
+        const localSongs = await mapNeteaseSongsToLocalFiles(
+          selectedSourceItems.map((item) => item.song)
+        )
+        selectedSourceItems = localSongs.map((song) => ({ filePath: song.filePath, song }))
+      }
       if (!selectedSourceItems.length) return
 
       const targetDirPath = libraryUtils.findDirPathByUuid(targetSongListUUID)

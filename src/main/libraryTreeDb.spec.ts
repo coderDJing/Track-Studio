@@ -3,7 +3,11 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { closeLibraryDb } from './libraryDb'
-import { loadLibraryNodes, syncLibraryTreeFromDisk } from './libraryTreeDb'
+import {
+  ensureLibraryTreeBaseline,
+  loadLibraryNodes,
+  syncLibraryTreeFromDisk
+} from './libraryTreeDb'
 
 const temporaryDirectories: string[] = []
 
@@ -53,5 +57,41 @@ describe('library tree disk sync', () => {
     const movedChild = nodes.find((node) => node.uuid === existingChild?.uuid)
     expect(newParent).toBeTruthy()
     expect(movedChild?.parentUuid).toBe(newParent?.uuid)
+  })
+})
+
+describe('library tree core baseline', () => {
+  it('adds a missing NeteaseLibrary node to an existing tree and keeps it after disk sync', async () => {
+    const dbRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'frkb-library-tree-'))
+    temporaryDirectories.push(dbRoot)
+    const libraryRoot = path.join(dbRoot, 'library')
+    for (const name of Object.values(coreDirNames)) {
+      await fs.mkdir(path.join(libraryRoot, name), { recursive: true })
+    }
+
+    await syncLibraryTreeFromDisk(dbRoot, { coreDirNames })
+    expect((loadLibraryNodes(dbRoot) || []).some((node) => node.dirName === 'NeteaseLibrary')).toBe(
+      false
+    )
+
+    await fs.mkdir(path.join(libraryRoot, 'NeteaseLibrary'), { recursive: true })
+    const withNetease = { ...coreDirNames, NeteaseLibrary: 'NeteaseLibrary' }
+    await ensureLibraryTreeBaseline(dbRoot, { coreDirNames: withNetease })
+    const inserted = (loadLibraryNodes(dbRoot) || []).filter(
+      (node) => node.dirName === 'NeteaseLibrary'
+    )
+    expect(inserted).toHaveLength(1)
+    expect(inserted[0].nodeType).toBe('library')
+
+    await expect(
+      syncLibraryTreeFromDisk(dbRoot, { coreDirNames: withNetease })
+    ).resolves.toMatchObject({
+      removed: 0
+    })
+    const kept = (loadLibraryNodes(dbRoot) || []).filter(
+      (node) => node.dirName === 'NeteaseLibrary'
+    )
+    expect(kept).toHaveLength(1)
+    expect(kept[0].uuid).toBe(inserted[0].uuid)
   })
 })

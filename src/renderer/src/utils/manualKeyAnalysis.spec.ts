@@ -294,4 +294,17 @@ describe('manual key analysis completeness', () => {
       )
     ).toEqual(['missing-bpm', 'missing-first-beat', 'missing-downbeat-beat-offset'])
   })
+
+  it('does not treat NetEase preview or pending paths as pending analysis', () => {
+    expect(
+      collectMissingAnalysisFilesFromSongs(
+        [
+          { filePath: 'frkb-preview://?netease=1', key: undefined },
+          { filePath: 'netease-pending:2', key: undefined },
+          { filePath: 'D:/music/local.wav', key: undefined }
+        ],
+        true
+      )
+    ).toEqual(['D:/music/local.wav'])
+  })
 })

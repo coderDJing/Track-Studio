@@ -176,18 +176,19 @@ export async function getLibrary(options: { skipSync?: boolean; skipPreparation?
   if (!options.skipPreparation) {
     // 先确保核心库英文化（若失败则回退中文），同时建立英文->FS 名的映射
     await ensureEnglishCoreLibraries(rootDir)
-    await ensureLibraryTreeBaseline(rootDir, {
-      coreDirNames: {
-        FilterLibrary: getCoreFsDirName('FilterLibrary'),
-        CuratedLibrary: getCoreFsDirName('CuratedLibrary'),
-        SetLibrary: getCoreFsDirName('SetLibrary'),
-        MixtapeLibrary: getCoreFsDirName('MixtapeLibrary'),
-        RecordingLibrary: getCoreFsDirName('RecordingLibrary'),
-        RecycleBin: getCoreFsDirName('RecycleBin'),
-        NeteaseLibrary: getCoreFsDirName('NeteaseLibrary')
-      }
-    })
   }
+  // 已有曲库不会走空库初始化，这里仍要补上后来新增的核心库（如网易云），否则树里没有入口
+  await ensureLibraryTreeBaseline(rootDir, {
+    coreDirNames: {
+      FilterLibrary: getCoreFsDirName('FilterLibrary'),
+      CuratedLibrary: getCoreFsDirName('CuratedLibrary'),
+      SetLibrary: getCoreFsDirName('SetLibrary'),
+      MixtapeLibrary: getCoreFsDirName('MixtapeLibrary'),
+      RecordingLibrary: getCoreFsDirName('RecordingLibrary'),
+      RecycleBin: getCoreFsDirName('RecycleBin'),
+      NeteaseLibrary: getCoreFsDirName('NeteaseLibrary')
+    }
+  })
   if (!options.skipSync) {
     await syncLibraryTreeFromDisk(rootDir, {
       coreDirNames: {

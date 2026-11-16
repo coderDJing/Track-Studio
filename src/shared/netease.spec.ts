@@ -19,3 +19,13 @@ describe('netease pending path', () => {
     expect(parseNeteasePendingSongId('')).toBeNull()
   })
 })
+
+describe('netease preview url', () => {
+  it('new URLs include a host, and old host-less URLs still parse', () => {
+    expect(isNeteasePreviewUrl('frkb-preview://netease/?netease=1901371647')).toBe(true)
+    expect(isNeteasePreviewUrl('frkb-preview://?netease=1901371647')).toBe(true)
+    expect(parseNeteaseSongId('frkb-preview://netease/?netease=1901371647')).toBe('1901371647')
+    expect(parseNeteaseSongId('frkb-preview://?netease=1901371647')).toBe('1901371647')
+    expect(isNeteasePreviewUrl('frkb-preview://local/?path=D%3A%2Fmusic%2Fa.wav')).toBe(false)
+  })
+})

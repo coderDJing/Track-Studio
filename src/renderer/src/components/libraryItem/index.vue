@@ -35,6 +35,7 @@ import {
 } from '@renderer/utils/libraryTreeSort'
 import { showNearMouseTip } from '@renderer/utils/nearMouseTip'
 import type { IDir } from '../../../../types/globals'
+import { isNeteaseVirtualUuid } from '@shared/netease'
 const listIcon = listIconAsset
 const listIconMaskStyle = {
   '--icon-mask': `url("${listIcon}")`
@@ -238,19 +239,23 @@ const dirHandleClick = async (event: MouseEvent) => {
     // 普通单击歌单: 选中当前歌单
     runtime.selectedPlaylistIds = [props.uuid]
   }
-  const songListPath = libraryUtils.findDirPathByUuid(props.uuid)
-  const isSongListPathExist = await window.electron.ipcRenderer.invoke(
-    'dirPathExists',
-    songListPath
-  )
-  if (!isSongListPathExist) {
-    await confirm({
-      title: t('common.error'),
-      content: [t('library.notExistOnDisk')],
-      confirmShow: false
-    })
-    await deleteDir()
-    return
+  // 网易云分组/歌单是虚拟节点，没有磁盘目录。不能走本地库那套
+  // dirPathExists + 失败就从树里删掉，否则一点「创建的歌单」就会误删。
+  if (!isNeteaseVirtualUuid(props.uuid)) {
+    const songListPath = libraryUtils.findDirPathByUuid(props.uuid)
+    const isSongListPathExist = await window.electron.ipcRenderer.invoke(
+      'dirPathExists',
+      songListPath
+    )
+    if (!isSongListPathExist) {
+      await confirm({
+        title: t('common.error'),
+        content: [t('library.notExistOnDisk')],
+        confirmShow: false
+      })
+      await deleteDir()
+      return
+    }
   }
   if (isPlaylist.value) {
     if (runtime.songsAreaPanels.splitEnabled) {

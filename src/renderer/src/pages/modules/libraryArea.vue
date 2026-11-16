@@ -21,7 +21,10 @@ import {
 } from '@renderer/composables/mixtape/stemMode'
 import { isLibraryTreeManualSort } from '@renderer/utils/libraryTreeSort'
 import { NETEASE_LIBRARY_NAME } from '@shared/netease'
-import { handleNeteaseLibraryContextMenu } from '@renderer/utils/neteaseActions'
+import {
+  handleNeteaseLibraryContextMenu,
+  neteaseCatalogSyncing
+} from '@renderer/utils/neteaseActions'
 import {
   SEARCH_FOCUS_PRIORITY,
   SEARCH_FOCUS_WINDOW_SCOPE,
@@ -46,6 +49,9 @@ const libraryData = computed(() => {
 
 const libraryName = computed(() => libraryData.value.dirName)
 const isRecycleBin = computed(() => runtime.libraryAreaSelected === 'RecycleBin')
+const isNeteaseSyncing = computed(
+  () => libraryName.value === NETEASE_LIBRARY_NAME && neteaseCatalogSyncing.value
+)
 const {
   isManualSort,
   showSortButton,
@@ -74,7 +80,10 @@ const showHint = computed(() => {
 const emptyHintText = computed(() => {
   if (runtime.libraryAreaSelected === 'RecycleBin') return t('recycleBin.noDeletionRecords')
   // 网易云歌单只能从服务器同步下来，右键建不出来
-  if (libraryData.value.dirName === NETEASE_LIBRARY_NAME) return t('netease.emptyLibraryHint')
+  if (libraryData.value.dirName === NETEASE_LIBRARY_NAME) {
+    if (neteaseCatalogSyncing.value) return t('netease.syncingLibraryHint')
+    return t('netease.emptyLibraryHint')
+  }
   return t('library.rightClickToCreate')
 })
 
@@ -584,6 +593,11 @@ const handleContentClick = () => {
               v-show="showHint && runtime.layoutConfig.libraryAreaWidth !== 0"
               class="libraryStatusText"
             >
+              <span
+                v-if="isNeteaseSyncing"
+                class="trackCountSortLoadingSpinner"
+                aria-hidden="true"
+              ></span>
               {{ emptyHintText }}
             </span>
           </div>
@@ -644,6 +658,10 @@ const handleContentClick = () => {
   line-height: 1.4;
   text-align: center;
   padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .libraryArea {

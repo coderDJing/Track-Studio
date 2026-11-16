@@ -1,4 +1,5 @@
 import { getLibraryDb } from '../libraryDb'
+import { log } from '../log'
 import { getNeteaseRootDir } from './paths'
 import { getLoggedInUserId } from './session'
 import {
@@ -100,7 +101,10 @@ export function getPlaylistIdFromUuid(uuid: string): string {
 export function attachNeteaseSubtree(root: TreeNode | null): void {
   if (!root) return
   const libraryNode = findLibraryNode(root)
-  if (!libraryNode) return
+  if (!libraryNode) {
+    log.warn('[netease] 库树里没有网易云节点，跳过挂载歌单')
+    return
+  }
 
   const groups = getNeteaseGroupsFromDb()
   const children: TreeNode[] = []

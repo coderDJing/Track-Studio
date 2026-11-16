@@ -4,6 +4,7 @@ import libraryUtils from '@renderer/utils/libraryUtils'
 import confirm from '@renderer/components/confirmDialog'
 import { t } from '@renderer/utils/translate'
 import dropIntoDialog from '../components/dropIntoDialog'
+import { isNeteaseVirtualUuid } from '@shared/netease'
 
 export interface DragState {
   dragApproach: 'top' | 'center' | 'bottom' | ''
@@ -15,45 +16,47 @@ export const handleDragStart = async (event: DragEvent, uuid: string): Promise<b
     const runtime = useRuntimeStore()
     const songListPath = libraryUtils.findDirPathByUuid(uuid)
 
-    // 验证目录存在性 临时注释
-    const exists = await window.electron.ipcRenderer.invoke('dirPathExists', songListPath)
-    if (!exists) {
-      event.preventDefault()
-      await confirm({
-        title: t('common.error'),
-        content: [t('library.notExistOnDisk')],
-        confirmShow: false
-      })
+    // 网易云虚拟节点没有磁盘目录，不能按本地歌单去做存在性校验，更不能从树里删掉。
+    if (!isNeteaseVirtualUuid(uuid)) {
+      const exists = await window.electron.ipcRenderer.invoke('dirPathExists', songListPath)
+      if (!exists) {
+        event.preventDefault()
+        await confirm({
+          title: t('common.error'),
+          content: [t('library.notExistOnDisk')],
+          confirmShow: false
+        })
 
-      // 从列表中删除该项
-      const itemToDelete = libraryUtils.getLibraryTreeByUUID(uuid)
-      if (itemToDelete) {
-        const fatherDir = libraryUtils.getFatherLibraryTreeByUUID(uuid)
-        if (fatherDir && fatherDir.children) {
-          // 更新播放状态
-          libraryUtils.updatePlayingState(itemToDelete)
+        // 从列表中删除该项
+        const itemToDelete = libraryUtils.getLibraryTreeByUUID(uuid)
+        if (itemToDelete) {
+          const fatherDir = libraryUtils.getFatherLibraryTreeByUUID(uuid)
+          if (fatherDir && fatherDir.children) {
+            // 更新播放状态
+            libraryUtils.updatePlayingState(itemToDelete)
 
-          // 从父目录中移除该项
-          const itemIndex = fatherDir.children.findIndex((item) => item.uuid === uuid)
-          if (itemIndex !== -1) {
-            fatherDir.children.splice(itemIndex, 1)
+            // 从父目录中移除该项
+            const itemIndex = fatherDir.children.findIndex((item) => item.uuid === uuid)
+            if (itemIndex !== -1) {
+              fatherDir.children.splice(itemIndex, 1)
 
-            // 重新排序剩余项
-            for (let i = 0; i < fatherDir.children.length; i++) {
-              const child = fatherDir.children[i]
-              if (child?.order !== undefined) {
-                child.order = i + 1
+              // 重新排序剩余项
+              for (let i = 0; i < fatherDir.children.length; i++) {
+                const child = fatherDir.children[i]
+                if (child?.order !== undefined) {
+                  child.order = i + 1
+                }
               }
-            }
 
-            // 更新排序
-            libraryUtils.reOrderChildren(fatherDir.children)
+              // 更新排序
+              libraryUtils.reOrderChildren(fatherDir.children)
+            }
           }
         }
-      }
-      await libraryUtils.diffLibraryTreeExecuteFileOperation()
+        await libraryUtils.diffLibraryTreeExecuteFileOperation()
 
-      return true // 告知调用者已从列表中删除
+        return true // 告知调用者已从列表中删除
+      }
     }
 
     // 存储被拖拽的项目数据

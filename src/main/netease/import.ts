@@ -342,54 +342,6 @@ function resolvePendingTracks(options: NeteaseImportOptions): PendingTrack[] {
 }
 
 /**
- * 按当前音质重新下载。
- *
- * `downloadTrack` 默认会复用已有文件，所以换音质必须走 `force`。
- * 新文件先下到 `.store` 里的临时位，校验并写完标签后，再原子替换旧文件；
- * 失败时旧文件和 `netease_file` 都还在。扩展名变了（`.flac` → `.mp3`）时，
- * 替换函数会先改 SET 引用再回收旧文件，避免留下孤儿或打断 SET。
- */
-export async function redownloadTracks(
-  songIds: string[],
-  level: NeteaseLevel,
-  progressId?: string,
-  sendProgress?: (payload: NeteaseProgressPayload) => void
-): Promise<{
-  items: Array<{ songId: string; filePath: string; title: string; artist: string }>
-  failed: Array<{ songId: string; error: string }>
-}> {
-  const id = progressId || `netease_redownload_${Date.now()}`
-  const progress = sendProgress || (() => {})
-  const items: Array<{ songId: string; filePath: string; title: string; artist: string }> = []
-  const failed: Array<{ songId: string; error: string }> = []
-
-  progress({ id, titleKey: 'netease.downloadingTracks', now: 0, total: songIds.length })
-  for (let index = 0; index < songIds.length; index += 1) {
-    const songId = songIds[index]
-    try {
-      const outcome = await downloadTrack(songId, level, { force: true })
-      const meta = getTrackMeta(songId)
-      items.push({
-        songId,
-        filePath: outcome.filePath,
-        title: meta?.title || '',
-        artist: meta?.artist || ''
-      })
-    } catch (error) {
-      failed.push({ songId, error: error instanceof Error ? error.message : String(error) })
-    }
-    progress({
-      id,
-      titleKey: 'netease.downloadingTracks',
-      now: index + 1,
-      total: songIds.length
-    })
-  }
-  progress({ id, dismiss: true })
-  return { items, failed }
-}
-
-/**
  * 只做「确保已下载」，不复制。
  *
  * SET 库与混音库各自有自己的保管方式（SET 走 custody 复制、混音走 vault 复制），

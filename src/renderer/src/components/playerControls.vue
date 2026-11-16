@@ -19,11 +19,7 @@ import { analyzeFingerprintsForPaths } from '@renderer/utils/fingerprintActions'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
 import { isEditablePioneerUsbSong } from '@renderer/utils/pioneerUsbEditing'
 import { isNeteaseStreamSong, parseNeteaseSongId } from '@renderer/utils/neteaseSongs'
-import {
-  deleteNeteaseLocalFiles,
-  downloadNeteaseTracks,
-  redownloadNeteaseTracks
-} from '@renderer/utils/neteaseActions'
+import { deleteNeteaseLocalFiles, downloadNeteaseTracks } from '@renderer/utils/neteaseActions'
 import type { LibraryTransferActionMode } from '@renderer/utils/libraryTransfer'
 import {
   getMusicSearchOpenFailedMessageKey,
@@ -225,12 +221,13 @@ const showInFileExplorer = () => {
 }
 
 /**
- * 网易云流媒体的三个本地动作（下载 / 按音质重下 / 删除本地文件）。
+ * 网易云流媒体的本地动作（下载 / 删除本地文件）。
  *
  * 下载成功后把当前播放行的「已下载」标记跟着改掉，纯粹是为了让菜单立刻变对——
  * 列表里的徽标走的是另一条重载路径，管不到播放器手上这份快照。
+ * 换音质不另开入口：删掉已下载的，再按当前设置重新下载。
  */
-const handleStreamOnlyLocalAction = async (action: 'download' | 'redownload' | 'delete') => {
+const handleStreamOnlyLocalAction = async (action: 'download' | 'delete') => {
   const songId = streamOnlySongId.value
   if (!songId) return
   closeMoreMenu()
@@ -238,9 +235,7 @@ const handleStreamOnlyLocalAction = async (action: 'download' | 'redownload' | '
     const changed =
       action === 'delete'
         ? await deleteNeteaseLocalFiles([songId])
-        : action === 'redownload'
-          ? await redownloadNeteaseTracks([songId])
-          : await downloadNeteaseTracks([songId])
+        : await downloadNeteaseTracks([songId])
     if (!changed || !runtime.playingData.playingSong) return
     runtime.playingData.playingSong.neteaseDownloaded = action !== 'delete'
   } catch {
@@ -832,15 +827,12 @@ onUnmounted(() => {
           v-if="isStreamOnlySong"
           style="padding: 5px 5px; border-bottom: 1px solid var(--border)"
         >
-          <div class="menuButton" @click="handleStreamOnlyLocalAction('download')">
-            <span>{{ t('netease.downloadToLocal') }}</span>
-          </div>
           <div
-            v-if="streamOnlyDownloaded"
+            v-if="!streamOnlyDownloaded"
             class="menuButton"
-            @click="handleStreamOnlyLocalAction('redownload')"
+            @click="handleStreamOnlyLocalAction('download')"
           >
-            <span>{{ t('netease.redownload') }}</span>
+            <span>{{ t('netease.downloadToLocal') }}</span>
           </div>
           <div
             v-if="streamOnlyDownloaded"
@@ -1041,7 +1033,7 @@ onUnmounted(() => {
           <div class="menuButton" @click="handleClearTrackCache()">
             <span>{{ t('tracks.clearTrackCache') }}</span>
           </div>
-          <div class="menuButton" @click="handleStemSeparation()">
+          <div v-if="!isStreamOnlySong" class="menuButton" @click="handleStemSeparation()">
             <span>{{ t('stemSeparation.menu') }}</span>
           </div>
         </div>

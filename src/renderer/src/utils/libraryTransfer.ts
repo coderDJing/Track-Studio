@@ -1,7 +1,7 @@
 import type { ISongInfo } from '../../../types/globals'
 import libraryUtils from '@renderer/utils/libraryUtils'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
-import { NETEASE_DOWNLOADED_UUID } from '@shared/netease'
+import { NETEASE_DOWNLOADED_UUID, isNeteasePlaylistUuid } from '@shared/netease'
 
 export type LibraryTransferActionMode = 'move' | 'copy'
 export type LibraryTransferTarget =
@@ -15,6 +15,8 @@ export const resolveLibraryTransferActionModeForSongList = (
   songListUUID: string
 ): LibraryTransferActionMode => {
   if (isNeteaseStoreCopyOnlySource(songListUUID)) return 'copy'
+  // 网易云歌单是虚拟节点：只复制、不移动，否则会把试听流地址当成磁盘来源搬走。
+  if (isNeteasePlaylistUuid(songListUUID)) return 'copy'
   const node = libraryUtils.getLibraryTreeByUUID(songListUUID)
   if (node?.type === 'mixtapeList' || node?.type === 'setList') return 'copy'
   return 'move'

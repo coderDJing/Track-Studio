@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, ref, watch } from 'vue'
 import type { SongsAreaPaneKey } from '@renderer/stores/runtime'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { canPlayHtmlAudio } from '@renderer/pages/modules/songPlayer/webAudioPlayer'
+import { isNeteasePreviewUrl } from '@shared/netease'
 import emitter from '@renderer/utils/mitt'
 import {
   resumeTransportAfterWaveformPreview,
@@ -394,6 +395,11 @@ export function useWaveformPreviewPlayer() {
 
   const tryFallbackToPcmPreview = (filePath: string, startPercent: number, token: number) => {
     if (!filePath) {
+      stopWaveformPreview('error')
+      return
+    }
+    // 网易云试听不是磁盘文件，PCM 解码会立刻失败，表现为进度条和停止按钮一闪而过。
+    if (isNeteasePreviewUrl(filePath)) {
       stopWaveformPreview('error')
       return
     }

@@ -21,6 +21,7 @@ import confirm from '@renderer/components/confirmDialog'
 import { t } from '@renderer/utils/translate'
 import emitter from '../../utils/mitt'
 import { DEFAULT_MIXTAPE_STEM_PROFILE } from '@shared/mixtapeStemProfiles'
+import { isNeteaseVirtualUuid } from '@shared/netease'
 import {
   handleDragStart,
   handleDragOver,
@@ -285,16 +286,21 @@ const deleteDir = async () => {
   await libraryUtils.diffLibraryTreeExecuteFileOperation()
 }
 const contextmenuEvent = async (event: MouseEvent) => {
-  let songListPath = libraryUtils.findDirPathByUuid(props.uuid)
-  let isSongListPathExist = await window.electron.ipcRenderer.invoke('dirPathExists', songListPath)
-  if (!isSongListPathExist) {
-    await confirm({
-      title: t('common.error'),
-      content: [t('library.notExistOnDisk')],
-      confirmShow: false
-    })
-    deleteDir()
-    return
+  if (!isNeteaseVirtualUuid(props.uuid)) {
+    let songListPath = libraryUtils.findDirPathByUuid(props.uuid)
+    let isSongListPathExist = await window.electron.ipcRenderer.invoke(
+      'dirPathExists',
+      songListPath
+    )
+    if (!isSongListPathExist) {
+      await confirm({
+        title: t('common.error'),
+        content: [t('library.notExistOnDisk')],
+        confirmShow: false
+      })
+      deleteDir()
+      return
+    }
   }
   rightClickMenuShow.value = true
   let result = await rightClickMenu({ menuArr: menuArr.value, clickEvent: event })
@@ -358,16 +364,21 @@ const dirChildShow = ref(false)
 const dirChildRendered = ref(false)
 const dirHandleClick = async () => {
   runtime.activeMenuUUID = ''
-  let songListPath = libraryUtils.findDirPathByUuid(props.uuid)
-  let isSongListPathExist = await window.electron.ipcRenderer.invoke('dirPathExists', songListPath)
-  if (!isSongListPathExist) {
-    await confirm({
-      title: t('common.error'),
-      content: [t('library.notExistOnDisk')],
-      confirmShow: false
-    })
-    deleteDir()
-    return
+  if (!isNeteaseVirtualUuid(props.uuid)) {
+    let songListPath = libraryUtils.findDirPathByUuid(props.uuid)
+    let isSongListPathExist = await window.electron.ipcRenderer.invoke(
+      'dirPathExists',
+      songListPath
+    )
+    if (!isSongListPathExist) {
+      await confirm({
+        title: t('common.error'),
+        content: [t('library.notExistOnDisk')],
+        confirmShow: false
+      })
+      deleteDir()
+      return
+    }
   }
   if (isDialogListType(dirData)) {
     runtime.dialogSelectedSongListUUID = props.uuid

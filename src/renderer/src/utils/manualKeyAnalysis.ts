@@ -1,4 +1,5 @@
 import libraryUtils from '@renderer/utils/libraryUtils'
+import { isNeteaseVirtualUuid } from '@shared/netease'
 import confirm from '@renderer/components/confirmDialog'
 import {
   collectMissingAnalysisFilesFromSongs,
@@ -50,6 +51,8 @@ export const scanSongListsForMissingAnalysisFiles = async (
   const files: string[] = []
   const seen = new Set<string>()
   for (const uuid of uuids) {
+    // 网易云歌单没有磁盘目录，scanSongList 会扫到一个不存在的路径。
+    if (isNeteaseVirtualUuid(uuid)) continue
     const dirPath = libraryUtils.findDirPathByUuid(uuid)
     try {
       const scan = (await window.electron.ipcRenderer.invoke(

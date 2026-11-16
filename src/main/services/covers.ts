@@ -11,6 +11,7 @@ import {
 } from './coverExtractionWorker'
 import { runPlaybackAwareBackgroundFileIo, type FileIoPriority } from './playbackForegroundActivity'
 import { isPackagedRcBuild } from './rcDiagnostics'
+import { isNeteaseRemoteCoverPath, tryLoadNeteaseCover } from '../netease/covers'
 
 const DISPLAY_CACHE_MARKER = '.display-v1'
 const COVER_THUMB_MAX_CONCURRENCY = 3
@@ -187,17 +188,29 @@ export type CoverThumbResult = {
   legacyExt?: string
 }
 
+const toBasicCover = (
+  image: { format: string; data: Buffer } | null
+): { format: string; data: Buffer } | null =>
+  image ? { format: image.format, data: image.data } : null
+
 export async function getSongCover(
   filePath: string
 ): Promise<{ format: string; data: Buffer } | null> {
   try {
-    return await runPlaybackAwareBackgroundFileIo(
+    if (isNeteaseRemoteCoverPath(filePath)) {
+      return toBasicCover(await tryLoadNeteaseCover(filePath))
+    }
+    const embedded = await runPlaybackAwareBackgroundFileIo(
       'cover:extract-full',
       { filePath },
       () => extractCoverOffMainThread(filePath, undefined, true),
       { priority: 'visible' }
     )
+    if (embedded) return embedded
+    return toBasicCover(await tryLoadNeteaseCover(filePath))
   } catch {
+    const remote = await tryLoadNeteaseCover(filePath)
+    if (remote) return toBasicCover(remote)
     return null
   }
 }
@@ -288,6 +301,18 @@ async function loadSongCoverThumb(
 ): Promise<CoverThumbResult | null> {
   try {
     if (context?.shouldAbort?.()) return null
+    if (isNeteaseRemoteCoverPath(filePath)) {
+      const remote = await tryLoadNeteaseCover(filePath)
+      if (!remote) return null
+      return {
+        format: remote.format,
+        data: remote.data,
+        cacheStatus: remote.cacheStatus,
+        sourceBytes: remote.data.length,
+        outputBytes: remote.data.length,
+        resized: false
+      }
+    }
     const crypto = await import('crypto')
 
     // 解析 listRootDir 为绝对路径（允许 library 相对路径）
@@ -383,7 +408,19 @@ async function loadSongCoverThumb(
       () => extractCoverOffMainThread(filePath, context?.shouldAbort),
       { priority }
     )
-    if (context?.shouldAbort?.() || !cover) return null
+    if (context?.shouldAbort?.()) return null
+    if (!cover) {
+      const remote = await tryLoadNeteaseCover(filePath)
+      if (!remote) return null
+      return {
+        format: remote.format,
+        data: remote.data,
+        cacheStatus: remote.cacheStatus,
+        sourceBytes: remote.data.length,
+        outputBytes: remote.data.length,
+        resized: false
+      }
+    }
     const format = cover.format
     const data = cover.data
     if (!data || data.length === 0) return null
@@ -408,7 +445,16 @@ async function loadSongCoverThumb(
       legacyExt: useDiskCache && dbEntry ? dbEntry.ext : undefined
     }
   } catch {
-    return null
+    const remote = await tryLoadNeteaseCover(filePath)
+    if (!remote) return null
+    return {
+      format: remote.format,
+      data: remote.data,
+      cacheStatus: remote.cacheStatus,
+      sourceBytes: remote.data.length,
+      outputBytes: remote.data.length,
+      resized: false
+    }
   }
 }
 

@@ -25,6 +25,7 @@ import { requestUserGuideStep } from '@renderer/composables/userGuideBridge'
 import { waitForUserGuideHole } from '@renderer/composables/userGuideTargets'
 import { activateSongsAreaPane } from '@renderer/utils/songsAreaSplit'
 import { queueMainPlayerPlayingAnalysis } from '@renderer/utils/playlistAnalysisGate'
+import { isNeteasePendingPath, isNeteasePreviewUrl } from '@shared/netease'
 import type { MoveSongsLibraryName } from '@renderer/pages/modules/songsArea/composables/useSelectAndMoveSongs'
 import { usePlaylistAnalysisPrompt } from '@renderer/pages/modules/songsArea/composables/usePlaylistAnalysisPrompt'
 import { useSongsAreaEmptyState } from '@renderer/pages/modules/songsArea/composables/useSongsAreaEmptyState'
@@ -683,15 +684,11 @@ const handleSongContextMenuEvent = async (event: MouseEvent, song: ISongInfo) =>
 }
 
 const requestImmediateAnalysis = async (song: ISongInfo) => {
-  let filePath = song?.filePath
+  const filePath = song?.filePath
   if (!filePath) return
   if (runtime.mainWindowBrowseMode !== 'browser') return
-  if (filePath.startsWith('frkb-preview://') || filePath.startsWith('netease-pending:')) {
-    const { ensureNeteaseLocalFilePaths } = await import('@renderer/utils/neteaseActions')
-    const resolved = await ensureNeteaseLocalFilePaths([filePath])
-    filePath = resolved[0] || ''
-    if (!filePath) return
-  }
+  // 浏览器模式双击只试听。下载额度珍贵，不能为了分析去下正式文件。
+  if (isNeteasePreviewUrl(filePath) || isNeteasePendingPath(filePath)) return
   queueMainPlayerPlayingAnalysis(runtime, filePath)
 }
 

@@ -9,9 +9,10 @@ import { getCoreFsDirName } from '../coreLibraries'
  *   <databaseDir>/library/NeteaseLibrary/          ← 库根（本模块的 list_root）
  *     .store/1234567.flac                          ← 下载的音频，按 songId 平铺
  *     .preview-cache/1234567.lossless.flac         ← 试听缓存（LRU，可随时清）
+ *     .cover-cache/1234567.jpg                     ← 列表/播放器封面（按 songId 缓存）
  *     .netease-session                             ← 登录态（safeStorage 加密）
  *
- * 注意 `.store/`、`.preview-cache/` 与 `.netease-session` 都是点开头，
+ * 注意 `.store/`、`.preview-cache/`、`.cover-cache` 与 `.netease-session` 都是点开头，
  * 不会被库树扫描当成曲目或歌单。
  *
  * `.store` 与 `.preview-cache` 刻意分开：前者是"已下载"（用户资产，出现在「查看已下载」里），
@@ -29,6 +30,10 @@ export function getNeteaseStoreDir(): string {
 
 export function getNeteasePreviewCacheDir(): string {
   return path.join(getNeteaseRootDir(), '.preview-cache')
+}
+
+export function getNeteaseCoverCacheDir(): string {
+  return path.join(getNeteaseRootDir(), '.cover-cache')
 }
 
 export function getNeteaseSessionFile(): string {
@@ -86,6 +91,7 @@ export function fromRelativeStorePath(relativePath: string): string {
 export async function ensureNeteaseDirs(): Promise<void> {
   await fs.ensureDir(getNeteaseStoreDir())
   await fs.ensureDir(getNeteasePreviewCacheDir())
+  await fs.ensureDir(getNeteaseCoverCacheDir())
 }
 
 /** 下载落盘的文件名：<songId>.<ext>，扩展名取自响应头或默认 flac */

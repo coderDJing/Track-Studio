@@ -4,6 +4,7 @@ import { IDir } from 'src/types/globals'
 import { calculateFileSystemOperations } from './diffLibraryTree'
 import { toLibraryDisplayName, t } from './translate'
 import { localizeNeteaseTreeTitles } from './neteaseSongs'
+import { isNeteaseVirtualUuid } from '@shared/netease'
 import { usePlaylistViewSettingsStore } from '@renderer/stores/playlistViewSettings'
 
 const MIXTAPE_WINDOW_OPEN_ERROR_CODE = 'MIXTAPE_WINDOW_OPEN'
@@ -160,6 +161,8 @@ export const getLibraryTreeByUUID = (uuid: string, libraryTree?: IDir): IDir | n
 
 //根据UUID寻找LibraryTree中对应的对象的路径
 export const findDirPathByUuid = (targetUuid: string, path: string = '', data?: IDir): string => {
+  // 网易云分组/歌单和「查看已下载」没有磁盘目录，不能拼出 library/NeteaseLibrary/... 这种假路径。
+  if (isNeteaseVirtualUuid(targetUuid)) return ''
   if (data === undefined) {
     const runtime = useRuntimeStore()
     data = runtime.libraryTree

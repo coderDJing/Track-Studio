@@ -7,6 +7,7 @@ import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { waitForImportSummaries } from '@renderer/utils/importSummaryGate'
 import { RECORDING_LIBRARY_UUID } from '@shared/recordingLibrary'
+import { isNeteaseVirtualUuid } from '@shared/netease'
 import type { ISongInfo } from '../../../../../../types/globals'
 import {
   isCurrentRendererWindowsPathPlatform,
@@ -116,7 +117,9 @@ export function usePlaylistAnalysisPrompt({
     songListUUID === RECYCLE_BIN_UUID ||
     songListUUID === RECORDING_LIBRARY_UUID ||
     runtime.libraryAreaSelected === 'RecordingLibrary' ||
-    isMixtapeListView.value
+    isMixtapeListView.value ||
+    // 网易云歌单是试听视图：未下载曲目不能分析，打开时也不该把整单送进本地分析队列。
+    isNeteaseVirtualUuid(songListUUID)
 
   const clearDismissedSongList = (songListUUID: string) => {
     runtime.playlistAnalysisPromptDismissedSongListUUIDs =

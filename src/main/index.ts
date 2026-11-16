@@ -591,7 +591,7 @@ app.whenReady().then(async () => {
               return value
             }
           }
-          // 网易云试听：frkb-preview://?netease=<songId>[&level=<档位>]
+          // 网易云试听：frkb-preview://netease/?netease=<songId>[&level=<档位>]
           // 已下载读本地文件，未下载透传上游 CDN，Range 都支持。
           const neteaseMatch = String(request.url || '').match(/[?&]netease=([^&]+)/i)
           if (neteaseMatch) {

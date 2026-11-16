@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { t } from '@renderer/utils/translate'
 import confirm from '@renderer/components/confirmDialog'
 import rightClickMenu from '@renderer/components/rightClickMenu'
@@ -9,6 +10,8 @@ import {
   NETEASE_DOWNLOADED_UUID,
   NETEASE_PLAYLIST_PREFIX,
   applyNeteaseGroupsToTree,
+  findNeteaseLibraryNode,
+  localizeNeteaseTreeTitles,
   getNeteasePlaylistId,
   isNeteasePendingPath,
   isNeteasePlaylistUuid,
@@ -36,14 +39,69 @@ type NeteaseStatus = {
   account?: { userId: string; nickname: string; avatarUrl: string; vipType: number } | null
 }
 
+type NeteaseGroupPayload = {
+  id: string
+  title: string
+  items: Array<{ playlistId: string; title: string; trackCount: number; coverUrl: string }>
+}
+
 type NeteaseSyncResult = {
-  groups?: Array<{
-    id: string
-    title: string
-    items: Array<{ playlistId: string; title: string; trackCount: number; coverUrl: string }>
-  }>
+  groups?: NeteaseGroupPayload[]
   playlistCount?: number
   trackCount?: number
+}
+
+/** 正在同步目录：只在歌单树还是空的时候显示 loading */
+export const neteaseCatalogSyncing = ref(false)
+
+/** 最近一次问到的登录态。null 表示还没问过，启动时会预取，避免第一次点图标才卡住。 */
+export const neteaseLoggedIn = ref<boolean | null>(null)
+
+let statusInFlight: Promise<NeteaseStatus> | null = null
+
+const catalogGroupsFromPayload = (payload: unknown): NeteaseGroupPayload[] => {
+  if (!payload || typeof payload !== 'object') return []
+  const groups = (payload as NeteaseSyncResult).groups
+  return Array.isArray(groups) ? groups : []
+}
+
+const neteaseTreeIsEmpty = (tree: unknown): boolean => {
+  const node = findNeteaseLibraryNode(tree as never)
+  return !node?.children?.length
+}
+
+const applyCatalogGroupsToTree = async (groups: NeteaseGroupPayload[]): Promise<boolean> => {
+  if (!groups.length) return false
+  const runtime = useRuntimeStore()
+  if (applyNeteaseGroupsToTree(runtime.libraryTree, groups)) {
+    neteaseCatalogSyncing.value = false
+    return true
+  }
+  try {
+    // skipSync：不要为了补一个库节点去扫整库；skipPreparation:false 会把 NeteaseLibrary 建进树
+    const tree = await invoke<typeof runtime.libraryTree>('netease:ensure-library-tree')
+    if (!tree) return false
+    localizeNeteaseTreeTitles(tree)
+    runtime.libraryTree = tree
+    runtime.oldLibraryTree = JSON.parse(JSON.stringify(tree))
+    const applied = applyNeteaseGroupsToTree(runtime.libraryTree, groups)
+    if (applied) neteaseCatalogSyncing.value = false
+    return applied
+  } catch (error) {
+    console.warn('[netease] 歌单已同步，但树节点还不在，无法挂上', error)
+    return false
+  }
+}
+
+const handleNeteaseCatalogUpdated = (_event: unknown, payload: unknown) => {
+  void applyCatalogGroupsToTree(catalogGroupsFromPayload(payload))
+}
+
+let catalogListenerBound = false
+export const bindNeteaseCatalogUpdates = (): void => {
+  if (catalogListenerBound) return
+  catalogListenerBound = true
+  window.electron.ipcRenderer.on('netease:catalog-updated', handleNeteaseCatalogUpdated)
 }
 
 export type NeteaseImportTarget =
@@ -53,11 +111,25 @@ const invoke = <T>(channel: string, payload?: unknown): Promise<T> =>
   window.electron.ipcRenderer.invoke(channel, payload) as Promise<T>
 
 export const getNeteaseStatus = async (): Promise<NeteaseStatus> => {
-  try {
-    return await invoke<NeteaseStatus>('netease:status')
-  } catch {
-    return { loggedIn: false, account: null }
-  }
+  if (statusInFlight) return statusInFlight
+  statusInFlight = (async () => {
+    try {
+      const status = await invoke<NeteaseStatus>('netease:status')
+      neteaseLoggedIn.value = Boolean(status.loggedIn)
+      return status
+    } catch {
+      neteaseLoggedIn.value = false
+      return { loggedIn: false, account: null }
+    } finally {
+      statusInFlight = null
+    }
+  })()
+  return statusInFlight
+}
+
+/** 启动时先问一次登录态，后面点图标就能立刻切库，不必再等这一下。 */
+export const prefetchNeteaseStatus = (): void => {
+  void getNeteaseStatus()
 }
 
 /**
@@ -69,7 +141,9 @@ export const getNeteaseStatus = async (): Promise<NeteaseStatus> => {
 export const ensureNeteaseLoggedIn = async (): Promise<boolean> => {
   const status = await getNeteaseStatus()
   if (status.loggedIn) return true
-  return await openNeteaseLoginDialog()
+  const ok = await openNeteaseLoginDialog()
+  neteaseLoggedIn.value = ok
+  return ok
 }
 
 /**
@@ -79,14 +153,17 @@ export const ensureNeteaseLoggedIn = async (): Promise<boolean> => {
  * 展开状态和滚动位置都会丢。
  */
 export const syncNeteaseLibrary = async (
-  options: { silent?: boolean } = {}
+  options: { silent?: boolean; background?: boolean } = {}
 ): Promise<NeteaseSyncResult | null> => {
   const runtime = useRuntimeStore()
   if (!(await ensureNeteaseLoggedIn())) return null
-  runtime.isProgressing = true
+  bindNeteaseCatalogUpdates()
+  // 点击图标切入时不能用整窗进度挡住库树，否则会像没点进去一样。
+  if (!options.background) runtime.isProgressing = true
+  if (neteaseTreeIsEmpty(runtime.libraryTree)) neteaseCatalogSyncing.value = true
   try {
     const result = await invoke<NeteaseSyncResult>('netease:sync')
-    const groups = Array.isArray(result?.groups) ? result.groups : []
+    const groups = catalogGroupsFromPayload(result)
     if (groups.length === 0) {
       if (!options.silent) {
         await confirm({
@@ -97,14 +174,15 @@ export const syncNeteaseLibrary = async (
       }
       return result
     }
-    applyNeteaseGroupsToTree(runtime.libraryTree, groups)
+    await applyCatalogGroupsToTree(groups)
     return result
   } catch (error) {
     const message = error instanceof Error ? error.message : t('common.unknownError')
     await confirm({ title: t('netease.syncFailed'), content: [message], confirmShow: false })
     return null
   } finally {
-    runtime.isProgressing = false
+    neteaseCatalogSyncing.value = false
+    if (!options.background) runtime.isProgressing = false
   }
 }
 
@@ -116,6 +194,7 @@ export const logoutNetease = async (): Promise<void> => {
   })
   if (!answer) return
   await invoke('netease:logout')
+  neteaseLoggedIn.value = false
   const runtime = useRuntimeStore()
   applyNeteaseGroupsToTree(runtime.libraryTree, [])
   emitter.emit('netease/statusChanged')
@@ -306,32 +385,6 @@ export const downloadNeteaseTracks = async (songIds: string[]): Promise<boolean>
     const result = await invoke<NeteaseDownloadOutcome>('netease:ensure-downloaded', {
       songIds: ids
     })
-    refreshNeteaseViews()
-    return isFullyDownloaded(result)
-  } finally {
-    runtime.isProgressing = false
-  }
-}
-
-/**
- * 按当前音质重下。
- *
- * 普通下载会复用已有的文件（不然每次导入都要重下一遍），所以改完音质想让新规格生效，
- * 必须显式走这条路：按当前音质重新下载，新文件就绪后再替换旧文件。
- */
-export const redownloadNeteaseTracks = async (songIds: string[]): Promise<boolean> => {
-  const ids = songIds.map((id) => String(id)).filter(Boolean)
-  if (ids.length === 0) return false
-  const answer = await confirm({
-    title: t('netease.redownload'),
-    content: [t('netease.redownloadConfirm', { count: ids.length })],
-    confirmShow: true
-  })
-  if (!answer) return false
-  const runtime = useRuntimeStore()
-  runtime.isProgressing = true
-  try {
-    const result = await invoke<NeteaseDownloadOutcome>('netease:redownload', { songIds: ids })
     refreshNeteaseViews()
     return isFullyDownloaded(result)
   } finally {

@@ -275,60 +275,90 @@ export async function archiveLegacyDescriptionFilesByRoot(
   }
 }
 
+type CoreDirNameMap = {
+  FilterLibrary: string
+  CuratedLibrary: string
+  SetLibrary: string
+  MixtapeLibrary: string
+  RecordingLibrary: string
+  RecycleBin: string
+  /** 网易云库的目录名：只用于在树里出现一个入口，歌单子节点是运行时注入的 */
+  NeteaseLibrary?: string
+}
+
+function resolveCoreDirNames(coreDirNames?: CoreDirNameMap): Required<CoreDirNameMap> {
+  return {
+    FilterLibrary: 'FilterLibrary',
+    CuratedLibrary: 'CuratedLibrary',
+    SetLibrary: 'SetLibrary',
+    MixtapeLibrary: 'MixtapeLibrary',
+    RecordingLibrary: 'RecordingLibrary',
+    RecycleBin: 'RecycleBin',
+    NeteaseLibrary: 'NeteaseLibrary',
+    ...(coreDirNames || {})
+  }
+}
+
+function listCoreLibraries(
+  coreNames: Required<CoreDirNameMap>
+): Array<{ dirName: string; sortOrder: number }> {
+  return [
+    { dirName: coreNames.FilterLibrary, sortOrder: 1 },
+    { dirName: coreNames.CuratedLibrary, sortOrder: 2 },
+    { dirName: coreNames.SetLibrary, sortOrder: 3 },
+    { dirName: coreNames.MixtapeLibrary, sortOrder: 4 },
+    { dirName: coreNames.RecordingLibrary, sortOrder: 5 },
+    { dirName: coreNames.RecycleBin, sortOrder: 6 },
+    { dirName: coreNames.NeteaseLibrary, sortOrder: 7 }
+  ].filter((item) => Boolean(item.dirName && String(item.dirName).trim().length > 0))
+}
+
+function ensureMissingCoreLibraryNodes(
+  db: SqliteDatabase,
+  root: LibraryNodeRow,
+  coreNames: Required<CoreDirNameMap>
+): number {
+  const existing = db
+    .prepare("SELECT dir_name FROM library_nodes WHERE parent_uuid = ? AND node_type = 'library'")
+    .all(root.uuid) as Array<{ dir_name: string }>
+  const have = new Set(existing.map((row) => row.dir_name))
+  const missing = listCoreLibraries(coreNames).filter((item) => !have.has(item.dirName))
+  if (missing.length === 0) return 0
+  const insert = db.prepare(
+    'INSERT INTO library_nodes (uuid, parent_uuid, dir_name, node_type, sort_order) VALUES (?, ?, ?, ?, ?)'
+  )
+  const run = db.transaction(() => {
+    for (const item of missing) {
+      insert.run(uuidV4(), root.uuid, item.dirName, 'library', item.sortOrder)
+    }
+  })
+  run()
+  invalidateLibraryNodeCache()
+  return missing.length
+}
+
 export async function ensureLibraryTreeBaseline(
   dbRoot: string,
   options: {
-    coreDirNames?: {
-      FilterLibrary: string
-      CuratedLibrary: string
-      SetLibrary: string
-      MixtapeLibrary: string
-      RecordingLibrary: string
-      RecycleBin: string
-      /** 网易云库的目录名：只用于在树里出现一个入口，歌单子节点是运行时注入的 */
-      NeteaseLibrary?: string
-    }
+    coreDirNames?: CoreDirNameMap
   } = {}
 ): Promise<void> {
   if (!dbRoot) return
   const db = getDb(dbRoot)
   if (!db) return
   try {
-    if (countLibraryNodes(db) > 0) return
-    const legacyRoot = path.join(dbRoot, 'library', '.description.json')
-    if (await fs.pathExists(legacyRoot)) return
+    const wasEmpty = countLibraryNodes(db) === 0
+    if (wasEmpty) {
+      const legacyRoot = path.join(dbRoot, 'library', '.description.json')
+      if (await fs.pathExists(legacyRoot)) return
+    }
     const root = ensureRootNode(db)
     if (!root) return
-    const coreNames = options.coreDirNames || {
-      FilterLibrary: 'FilterLibrary',
-      CuratedLibrary: 'CuratedLibrary',
-      SetLibrary: 'SetLibrary',
-      MixtapeLibrary: 'MixtapeLibrary',
-      RecordingLibrary: 'RecordingLibrary',
-      RecycleBin: 'RecycleBin',
-      NeteaseLibrary: 'NeteaseLibrary'
+    const added = ensureMissingCoreLibraryNodes(db, root, resolveCoreDirNames(options.coreDirNames))
+    if (wasEmpty && added > 0) {
+      setLibraryTreeMigrationDone(db, true)
+      setLibraryTreeMigrationInProgress(db, false)
     }
-    const filterUuid = uuidV4()
-    const curatedUuid = uuidV4()
-    const setUuid = uuidV4()
-    const mixtapeUuid = uuidV4()
-    const recordingUuid = uuidV4()
-    const recycleUuid = uuidV4()
-    const insert = db.prepare(
-      'INSERT INTO library_nodes (uuid, parent_uuid, dir_name, node_type, sort_order) VALUES (?, ?, ?, ?, ?)'
-    )
-    const run = db.transaction(() => {
-      insert.run(filterUuid, root.uuid, coreNames.FilterLibrary, 'library', 1)
-      insert.run(curatedUuid, root.uuid, coreNames.CuratedLibrary, 'library', 2)
-      insert.run(setUuid, root.uuid, coreNames.SetLibrary, 'library', 3)
-      insert.run(mixtapeUuid, root.uuid, coreNames.MixtapeLibrary, 'library', 4)
-      insert.run(recordingUuid, root.uuid, coreNames.RecordingLibrary, 'library', 5)
-      insert.run(recycleUuid, root.uuid, coreNames.RecycleBin, 'library', 6)
-    })
-    run()
-    invalidateLibraryNodeCache()
-    setLibraryTreeMigrationDone(db, true)
-    setLibraryTreeMigrationInProgress(db, false)
   } catch (error) {
     log.error('[sqlite] library tree baseline failed', error)
   }
@@ -413,33 +443,12 @@ export async function syncLibraryTreeFromDisk(
     }
   }
 
-  const coreNames = options.coreDirNames || {
-    FilterLibrary: 'FilterLibrary',
-    CuratedLibrary: 'CuratedLibrary',
-    SetLibrary: 'SetLibrary',
-    MixtapeLibrary: 'MixtapeLibrary',
-    RecordingLibrary: 'RecordingLibrary',
-    RecycleBin: 'RecycleBin',
-    NeteaseLibrary: 'NeteaseLibrary'
-  }
-  const coreOrderMap = new Map<string, number>([
-    [coreNames.FilterLibrary, 1],
-    [coreNames.CuratedLibrary, 2],
-    [coreNames.SetLibrary, 3],
-    [coreNames.MixtapeLibrary, 4],
-    [coreNames.RecordingLibrary, 5],
-    [coreNames.RecycleBin, 6]
-  ])
-  const coreNameList = Array.from(
-    new Set([
-      coreNames.FilterLibrary,
-      coreNames.CuratedLibrary,
-      coreNames.SetLibrary,
-      coreNames.MixtapeLibrary,
-      coreNames.RecordingLibrary,
-      coreNames.RecycleBin
-    ])
-  ).filter((name) => name && String(name).trim().length > 0)
+  const coreNames = resolveCoreDirNames(options.coreDirNames)
+  const coreLibraries = listCoreLibraries(coreNames)
+  const coreOrderMap = new Map<string, number>(
+    coreLibraries.map((item) => [item.dirName, item.sortOrder])
+  )
+  const coreNameList = Array.from(new Set(coreLibraries.map((item) => item.dirName)))
 
   const rootDirName = rootNode.dirName
   const libraryRoot = path.join(dbRoot, rootDirName)

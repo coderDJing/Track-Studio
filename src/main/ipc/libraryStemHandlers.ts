@@ -8,6 +8,7 @@ import {
   type LibraryStemStatusSnapshot
 } from '../services/libraryStemSeparationService'
 import { readLibraryStemPreviewWaveform } from '../services/libraryStemPreviewWaveform'
+import { getStoreTrackDisplayName } from '../netease/library'
 
 type StemId = 'vocal' | 'inst' | 'bass' | 'drums'
 
@@ -125,7 +126,11 @@ export function registerLibraryStemHandlers() {
         return { canceled: true, exportedPaths: [] as string[] }
       }
 
-      const sourceName = toSafeFileName(path.parse(snapshot.filePath).name)
+      // `.store` 里是 `<songId>.<ext>`，直接拿去命名只会得到一串数字；
+      // 网易云曲目优先用「艺人 - 标题」，其他来源仍用原文件名。
+      const sourceName = toSafeFileName(
+        getStoreTrackDisplayName(snapshot.filePath) || path.parse(snapshot.filePath).name
+      )
       const destinationRoot = selection.filePaths[0]
       const outputDir =
         selectedIds.length === STEM_IDS.length

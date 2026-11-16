@@ -11,6 +11,7 @@ import {
   isNeteasePlaylistUuid,
   isNeteasePendingPath,
   isNeteasePreviewUrl,
+  isNeteaseVirtualUuid,
   parseNeteasePendingSongId,
   parseNeteaseSongId
 } from '@shared/netease'
@@ -39,6 +40,7 @@ export {
   isNeteasePlaylistUuid,
   isNeteasePendingPath,
   isNeteasePreviewUrl,
+  isNeteaseVirtualUuid,
   parseNeteasePendingSongId,
   parseNeteaseSongId
 }

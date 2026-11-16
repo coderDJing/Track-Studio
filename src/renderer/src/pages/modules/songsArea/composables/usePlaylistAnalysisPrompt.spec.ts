@@ -153,4 +153,19 @@ describe('playlist entry analysis prompt', () => {
     await Promise.all([firstRequest, secondRequest])
     expect(mocks.prompt).toHaveBeenCalledTimes(2)
   })
+
+  it('does not prompt analysis when opening a NetEase playlist or downloaded view', async () => {
+    const previewSong = { ...noBpmSong(1), key: undefined, filePath: 'frkb-preview://?netease=123' }
+    const playlist = mountPrompt([previewSong], [], 'netease:pl:123')
+    await playlist.handleUserOpenedSongList('netease:pl:123')
+    expect(mocks.prompt).not.toHaveBeenCalled()
+
+    const downloaded = mountPrompt(
+      [{ ...noBpmSong(1), key: undefined }],
+      [],
+      '__netease_downloaded__'
+    )
+    await downloaded.handleUserOpenedSongList('__netease_downloaded__')
+    expect(mocks.prompt).not.toHaveBeenCalled()
+  })
 })

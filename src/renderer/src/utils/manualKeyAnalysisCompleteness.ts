@@ -9,6 +9,7 @@ import {
   isCurrentRendererWindowsPathPlatform,
   normalizeFilePathForComparison
 } from '../../../shared/filePathComparison'
+import { isNeteasePendingPath, isNeteasePreviewUrl } from '../../../shared/netease'
 
 export type AnalysisCandidate = {
   filePath?: unknown
@@ -95,6 +96,8 @@ export const collectMissingAnalysisFilesFromSongs = (
     const filePath = String(song.filePath || '').trim()
     const key = normalizeFilePathKey(filePath)
     if (!filePath || seen.has(key)) continue
+    // 试听地址和 SET 占位路径不是本地文件，不能算进「待分析」或自动入队。
+    if (isNeteasePreviewUrl(filePath) || isNeteasePendingPath(filePath)) continue
     if (hasRequiredAnalysis(song, requiresRuntimeAnalysis, resolvedOptions)) continue
     seen.add(key)
     files.push(filePath)

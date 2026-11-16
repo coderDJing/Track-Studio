@@ -1,15 +1,12 @@
 import { sameRendererFilePath, RendererFilePathSet } from '@renderer/utils/filePathComparison'
 
-import { nextTick, Ref, ref } from 'vue'
+import { Ref, ref } from 'vue'
 import { type ISongsAreaPaneRuntimeState, useRuntimeStore } from '@renderer/stores/runtime'
 import { ISongInfo, IMenu, type IMetadataAutoFillSummary } from '../../../../../../types/globals' // Corrected path
 import { t } from '@renderer/utils/translate'
 import rightClickMenu from '@renderer/components/rightClickMenu' // Assuming it's a default export or easily callable
 import confirm from '@renderer/components/confirmDialog'
-import {
-  showDeleteSummaryIfNeeded,
-  showRestoreSummaryIfNeeded
-} from './songItemContextMenuSummaries'
+import { showRestoreSummaryIfNeeded } from './songItemContextMenuSummaries'
 import exportDialog from '@renderer/components/exportDialog'
 import { openRekordboxDesktopPlaylistForSelectedTracks } from '@renderer/utils/rekordboxDesktopPlaylist'
 import { openExternalLibraryPlaylistForSelectedTracks } from '@renderer/utils/externalLibraryPlaylist'
@@ -34,8 +31,7 @@ import {
 import {
   deleteNeteaseLocalFiles,
   downloadNeteaseTracks,
-  mapNeteaseSongsToLocalFiles,
-  redownloadNeteaseTracks
+  mapNeteaseSongsToLocalFiles
 } from '@renderer/utils/neteaseActions'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { RECORDING_LIBRARY_UUID } from '@shared/recordingLibrary'
@@ -44,7 +40,6 @@ import {
   openMusicSearch,
   resolveMusicSearchMenuAction
 } from '@renderer/utils/musicSearch'
-import { delSongsViaSend, permanentlyDelSongsViaSend } from '@renderer/utils/recycleBinActions'
 import {
   buildSongItemMenuArr,
   createDefaultMenuArr,
@@ -57,9 +52,12 @@ import {
   withoutRecordingAnalysisMenus
 } from './songItemContextMenuMenus'
 import { isNeteaseStreamSong } from '@renderer/utils/neteaseSongs'
-import { detectSongsAreaScrollCarrier } from './scrollCarrier'
 import type { LibraryTransferActionMode } from '@renderer/utils/libraryTransfer'
 import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
+import {
+  SONG_DELETE_MENU_NAMES,
+  handleSongDeleteMenuAction
+} from './songItemContextMenuDeleteActions'
 
 // Type for the return value when a dialog needs to be opened by the parent
 interface OpenDialogAction {
@@ -86,21 +84,9 @@ interface MetadataBatchUpdatedAction {
   updates: Array<{ song: ISongInfo; oldFilePath?: string }>
 }
 
-type DeleteSummary = {
-  total?: number
-  success?: number
-  failed?: number
-  removedPaths?: string[]
-}
-
 type ExportSongsToDirSummary = {
   removedPaths?: string[]
   removedSetItemIds?: string[]
-}
-
-type OptimisticRestoreItem = {
-  song: ISongInfo
-  index: number
 }
 
 export function useSongItemContextMenu(
@@ -259,6 +245,21 @@ export function useSongItemContextMenu(
 
     const selectedSongsForSetDuration = resolveSelectedSongs()
     const setHasNeteaseStream = isSetView() && selectedSongsForSetDuration.some(isNeteaseStreamSong)
+    /**
+     * 网易云歌单里的行只有 `frkb-preview://` 流地址。
+     * 需要真实文件的操作（分析、改名、转码、写 DVS 播放列表）先落成 `.store/` 文件再继续；
+     * 下载失败的一首不往下传，避免把 URL 当磁盘路径送进文件系统。
+     */
+    const resolveLocalSongsForAction = async (): Promise<ISongInfo[] | null> => {
+      if (!isNeteaseStreamView) return resolveSelectedSongs()
+      const mapped = await mapNeteaseSongsToLocalFiles(resolveSelectedSongs())
+      return mapped.length > 0 ? mapped : null
+    }
+    const resolveLocalFilePathsForAction = async (): Promise<string[] | null> => {
+      const songs = await resolveLocalSongsForAction()
+      if (!songs) return null
+      return songs.map((item) => item.filePath).filter((filePath) => Boolean(filePath))
+    }
     const baseMenuArr = isMixtapeView()
       ? createMixtapeMenuArr()
       : isRecycleBinView
@@ -295,15 +296,6 @@ export function useSongItemContextMenu(
       if (songId) await downloadNeteaseTracks([songId])
       return null
     }
-    if (result.menuName === 'netease.redownload') {
-      const ids = resolveSelectedSongs()
-        .filter((item) => item.neteaseDownloaded === true)
-        .map((item) => String(item.neteaseSongId || ''))
-        .filter((id) => id.length > 0)
-      const fallback = String(song.neteaseSongId || '')
-      await redownloadNeteaseTracks(ids.length > 0 ? ids : fallback ? [fallback] : [])
-      return null
-    }
     if (result.menuName === 'netease.removeLocalFile') {
       const ids = resolveSelectedSongs()
         .map((item) => String(item.neteaseSongId || ''))
@@ -337,61 +329,23 @@ export function useSongItemContextMenu(
       return null
     }
 
-    const buildDelSongsPayload = (paths: string[]) => {
-      if (isExternalView) {
-        return { filePaths: paths, sourceType: 'external' }
-      }
-      const songListPath = libraryUtils.findDirPathByUuid(songsAreaState.songListUUID)
-      if (songListPath) {
-        return { filePaths: paths, songListPath }
-      }
-      return paths
-    }
-    const requestDeleteSongs = async (paths: string[]) => {
-      return await delSongsViaSend(buildDelSongsPayload(paths))
-    }
-
-    const resetSongsAreaScrollCarrierToTop = () => {
-      const scrollElements = songsAreaHostElementRef.value?.osInstance()?.elements()
-      const explicitViewport = scrollElements?.viewport as HTMLElement | undefined
-      const explicitHost = scrollElements?.host as HTMLElement | undefined
-      const info = detectSongsAreaScrollCarrier(
-        explicitViewport || explicitHost || null,
-        explicitHost || null
-      )
-      const targets = [info.carrier, info.viewport, info.content, info.host].filter(
-        (element, index, list): element is HTMLElement =>
-          element instanceof HTMLElement && list.indexOf(element) === index
-      )
-      for (const target of targets) {
-        if (target.scrollTop !== 0) {
-          target.scrollTop = 0
-        }
-      }
-    }
-
-    const scrollSongsAreaToTop = () => {
-      songsAreaState.scrollTop = 0
-      resetSongsAreaScrollCarrierToTop()
-      syncSongsAreaScrollMetrics?.()
-      void nextTick().then(() => {
-        resetSongsAreaScrollCarrierToTop()
-        syncSongsAreaScrollMetrics?.()
+    if (SONG_DELETE_MENU_NAMES.has(result.menuName)) {
+      return await handleSongDeleteMenuAction(result.menuName, song, {
+        songsAreaState,
+        runtime,
+        songsAreaHostElementRef,
+        syncSongsAreaScrollMetrics,
+        isMixtapeView,
+        isSetView,
+        isRecycleBinView,
+        isExternalView,
+        normalizePath,
+        getRowKey,
+        resolveSelectedKeys,
+        resolveSelectedFilePaths,
+        resolveSelectedItemIds,
+        resolveSelectedSetItemIds
       })
-    }
-
-    const clearPlayingStateIfTouched = (normalizedPathSet: Set<string>) => {
-      const touchesCurrentPlaying =
-        runtime.playingData.playingSongListUUID === songsAreaState.songListUUID &&
-        normalizedPathSet.has(normalizePath(runtime.playingData.playingSong?.filePath))
-      if (!touchesCurrentPlaying) return false
-      try {
-        emitter.emit('waveform-preview:stop', { reason: 'switch' })
-      } catch {}
-      runtime.playingData.playingSongListUUID = ''
-      runtime.playingData.playingSongListData = []
-      runtime.playingData.playingSong = null
-      return true
     }
 
     switch (result.menuName) {
@@ -509,26 +463,40 @@ export function useSongItemContextMenu(
         return null
       }
       case 'bpmFix.menu': {
-        if (isNeteaseStreamSong(song) || selectedSongsForSetDuration.some(isNeteaseStreamSong)) {
+        if (
+          !isNeteaseStreamView &&
+          (isNeteaseStreamSong(song) || selectedSongsForSetDuration.some(isNeteaseStreamSong))
+        ) {
           return null
         }
+        const files = await resolveLocalFilePathsForAction()
+        if (!files || files.length === 0) return null
         const { startBpmFix } = await import('@renderer/utils/bpmFixActions')
         await startBpmFix({
-          filePaths: resolveSelectedFilePaths(),
+          filePaths: files,
           songListUUID: songsAreaState.songListUUID,
           songListPath: libraryUtils.findDirPathByUuid(songsAreaState.songListUUID) || ''
         })
         return null
       }
       case 'stemSeparation.menu': {
-        if (isNeteaseStreamSong(song) || selectedSongsForSetDuration.some(isNeteaseStreamSong)) {
+        if (
+          !isNeteaseStreamView &&
+          (isNeteaseStreamSong(song) || selectedSongsForSetDuration.some(isNeteaseStreamSong))
+        ) {
           return null
+        }
+        let targetSong = song
+        if (isNeteaseStreamView) {
+          const mapped = await mapNeteaseSongsToLocalFiles([song])
+          if (!mapped.length) return null
+          targetSong = mapped[0]
         }
         const { default: openLibraryStemSeparationDialog } =
           await import('@renderer/components/libraryStemSeparationDialog')
         await openLibraryStemSeparationDialog({
-          filePath: song.filePath,
-          songTitle: song.title
+          filePath: targetSong.filePath,
+          songTitle: targetSong.title
         })
         return null
       }
@@ -540,269 +508,6 @@ export function useSongItemContextMenu(
         await openBatchSimilarTracksDialog(seeds)
         return null
       }
-      case 'tracks.deleteAllAbove': {
-        const sourceSongListUUID = songsAreaState.songListUUID
-        // 1. 基于当前状态和右键的歌曲，确定要删除的歌曲信息和路径 (delPaths)
-        const initialSongInfoArrSnapshot = [...songsAreaState.songInfoArr]
-        const songIndex = initialSongInfoArrSnapshot.findIndex(
-          (item) => getRowKey(item) === getRowKey(song)
-        )
-
-        if (songIndex === -1) {
-          return null
-        }
-        if (songIndex === 0) {
-          return null // 没有曲目在当前曲目之上
-        }
-
-        const songsToRemoveInfoBasedOnSnapshot = initialSongInfoArrSnapshot.slice(0, songIndex)
-        if (isSetView()) {
-          const itemIds = songsToRemoveInfoBasedOnSnapshot
-            .map((item) => item.setItemId)
-            .filter((id): id is string => typeof id === 'string' && id.length > 0)
-          if (!itemIds.length) return null
-          await window.electron.ipcRenderer.invoke('setList:remove-items', itemIds)
-          songsAreaState.selectedSongFilePath.length = 0
-          if (
-            runtime.playingData.playingSongListUUID === sourceSongListUUID &&
-            runtime.playingData.playingSong?.setItemId &&
-            itemIds.includes(runtime.playingData.playingSong.setItemId)
-          ) {
-            runtime.playingData.playingSongListUUID = ''
-            runtime.playingData.playingSongListData = []
-            runtime.playingData.playingSong = null
-          }
-          emitter.emit('playlistContentChanged', { uuids: [sourceSongListUUID] })
-          emitter.emit('songsRemoved', {
-            listUUID: sourceSongListUUID,
-            itemIds
-          })
-          scrollSongsAreaToTop()
-          return { action: 'songsRemoved', itemIds }
-        }
-        const delPaths = songsToRemoveInfoBasedOnSnapshot.map((s) => s.filePath)
-
-        if (delPaths.length === 0) {
-          return null
-        }
-
-        // 2. 用户确认 (如果需要)
-        if (isRecycleBinView) {
-          const res = await confirm({
-            title: t('common.delete'),
-            content: [t('tracks.confirmDeleteAllAbove'), t('tracks.deleteHint')]
-          })
-          if (res !== 'confirm') {
-            return null
-          }
-        }
-
-        // 列表不再使用封面 URL，无需回收
-
-        let removedPathsForEvent = [...delPaths]
-        const removedPathSet = new Set(delPaths.map((item) => normalizePath(item)))
-        const optimisticRestoreItems: OptimisticRestoreItem[] =
-          songsToRemoveInfoBasedOnSnapshot.map((item, index) => ({
-            song: { ...item },
-            index
-          }))
-        const canOptimisticallyUpdate = true
-        clearPlayingStateIfTouched(removedPathSet)
-        emitter.emit('songsArea/optimistic-remove', {
-          listUUID: sourceSongListUUID,
-          paths: delPaths
-        })
-        scrollSongsAreaToTop()
-
-        // 4. IPC 调用执行文件删除
-        try {
-          let deleteSummary: DeleteSummary
-          if (isRecycleBinView) {
-            deleteSummary = await permanentlyDelSongsViaSend([...delPaths])
-          } else {
-            deleteSummary = await requestDeleteSongs([...delPaths])
-          }
-          removedPathsForEvent = deleteSummary.removedPaths || []
-          const removedNormalizedSet = new Set(
-            removedPathsForEvent.map((item) => normalizePath(item))
-          )
-          const failedRestoreItems =
-            canOptimisticallyUpdate && Number(deleteSummary.failed || 0) > 0
-              ? optimisticRestoreItems.filter(
-                  (item) => !removedNormalizedSet.has(normalizePath(item.song.filePath))
-                )
-              : []
-          if (failedRestoreItems.length > 0) {
-            emitter.emit('songsArea/optimistic-restore', {
-              listUUID: sourceSongListUUID,
-              items: failedRestoreItems
-            })
-          }
-          if (isRecycleBinView || Number(deleteSummary.failed || 0) > 0) {
-            await showDeleteSummaryIfNeeded(deleteSummary, {
-              restoredFailed: failedRestoreItems.length > 0
-            })
-          }
-        } catch {
-          if (canOptimisticallyUpdate && optimisticRestoreItems.length > 0) {
-            emitter.emit('songsArea/optimistic-restore', {
-              listUUID: sourceSongListUUID,
-              items: optimisticRestoreItems
-            })
-          }
-          await showDeleteSummaryIfNeeded(
-            {
-              total: delPaths.length,
-              success: 0,
-              failed: delPaths.length
-            },
-            { restoredFailed: canOptimisticallyUpdate && optimisticRestoreItems.length > 0 }
-          )
-          return null
-        }
-
-        if (!canOptimisticallyUpdate && removedPathsForEvent.length > 0) {
-          scrollSongsAreaToTop()
-        }
-        // 通知全局，保证其他视图也能同步（包含当前 songsArea 监听的统一删除处理）
-        if (removedPathsForEvent.length > 0) {
-          emitter.emit('songsRemoved', {
-            listUUID: sourceSongListUUID,
-            paths: removedPathsForEvent
-          })
-          emitter.emit('playlistContentChanged', { uuids: [sourceSongListUUID] })
-        }
-        return { action: 'songsRemoved', paths: removedPathsForEvent }
-      }
-      case 'tracks.deleteTracks':
-      case 'library.removeFromSet':
-      case 'recycleBin.permanentlyDeleteTracks':
-        {
-          const currentSelectedKeys = [...resolveSelectedKeys()]
-
-          if (!currentSelectedKeys.length) return null
-
-          if (isMixtapeView()) {
-            const itemIds = resolveSelectedItemIds(currentSelectedKeys)
-            if (!itemIds.length) return null
-            await window.electron.ipcRenderer.invoke('mixtape:remove', {
-              playlistId: songsAreaState.songListUUID,
-              itemIds: [...itemIds]
-            })
-            songsAreaState.selectedSongFilePath.length = 0
-            emitter.emit('playlistContentChanged', { uuids: [songsAreaState.songListUUID] })
-            emitter.emit('songsRemoved', {
-              listUUID: songsAreaState.songListUUID,
-              itemIds: [...itemIds]
-            })
-            return { action: 'songsRemoved', itemIds: [...itemIds] }
-          }
-          if (isSetView()) {
-            const itemIds = resolveSelectedSetItemIds(currentSelectedKeys)
-            if (!itemIds.length) return null
-            await window.electron.ipcRenderer.invoke('setList:remove-items', itemIds)
-            songsAreaState.selectedSongFilePath.length = 0
-            if (
-              runtime.playingData.playingSongListUUID === songsAreaState.songListUUID &&
-              runtime.playingData.playingSong?.setItemId &&
-              itemIds.includes(runtime.playingData.playingSong.setItemId)
-            ) {
-              runtime.playingData.playingSongListUUID = ''
-              runtime.playingData.playingSongListData = []
-              runtime.playingData.playingSong = null
-            }
-            emitter.emit('playlistContentChanged', { uuids: [songsAreaState.songListUUID] })
-            emitter.emit('songsRemoved', {
-              listUUID: songsAreaState.songListUUID,
-              itemIds: [...itemIds]
-            })
-            return { action: 'songsRemoved', itemIds: [...itemIds] }
-          }
-
-          let shouldDelete = true
-          if (isRecycleBinView) {
-            const res = await confirm({
-              title: t('common.delete'),
-              content: [t('tracks.confirmDeleteSelected'), t('tracks.deleteHint')]
-            })
-            shouldDelete = res === 'confirm'
-          }
-
-          if (shouldDelete) {
-            const selectedSnapshot = [...songsAreaState.songInfoArr]
-            const resolvedSelectedPaths = resolveSelectedFilePaths(currentSelectedKeys)
-            let removedPathsForEvent = [...resolvedSelectedPaths]
-            const selectedPathSet = new Set(
-              resolvedSelectedPaths.map((item) => normalizePath(item))
-            )
-            const optimisticRestoreItems: OptimisticRestoreItem[] = selectedSnapshot
-              .map((item, index) => ({ song: { ...item }, index }))
-              .filter((item) => selectedPathSet.has(normalizePath(item.song.filePath)))
-
-            clearPlayingStateIfTouched(selectedPathSet)
-            emitter.emit('songsArea/optimistic-remove', {
-              listUUID: songsAreaState.songListUUID,
-              paths: resolvedSelectedPaths
-            })
-
-            try {
-              let deleteSummary: DeleteSummary
-              if (isRecycleBinView) {
-                deleteSummary = await permanentlyDelSongsViaSend([...resolvedSelectedPaths])
-              } else {
-                deleteSummary = await requestDeleteSongs([...resolvedSelectedPaths])
-              }
-              removedPathsForEvent = deleteSummary.removedPaths || []
-              const removedNormalizedSet = new Set(
-                removedPathsForEvent.map((item) => normalizePath(item))
-              )
-              const failedRestoreItems =
-                Number(deleteSummary.failed || 0) > 0
-                  ? optimisticRestoreItems.filter(
-                      (item) => !removedNormalizedSet.has(normalizePath(item.song.filePath))
-                    )
-                  : []
-              if (failedRestoreItems.length > 0) {
-                emitter.emit('songsArea/optimistic-restore', {
-                  listUUID: songsAreaState.songListUUID,
-                  items: failedRestoreItems
-                })
-              }
-              if (isRecycleBinView || Number(deleteSummary.failed || 0) > 0) {
-                await showDeleteSummaryIfNeeded(deleteSummary, {
-                  restoredFailed: failedRestoreItems.length > 0
-                })
-              }
-            } catch {
-              if (optimisticRestoreItems.length > 0) {
-                emitter.emit('songsArea/optimistic-restore', {
-                  listUUID: songsAreaState.songListUUID,
-                  items: optimisticRestoreItems
-                })
-              }
-              await showDeleteSummaryIfNeeded(
-                {
-                  total: resolvedSelectedPaths.length,
-                  success: 0,
-                  failed: resolvedSelectedPaths.length
-                },
-                { restoredFailed: optimisticRestoreItems.length > 0 }
-              )
-              return null
-            }
-
-            songsAreaState.selectedSongFilePath.length = 0
-            if (removedPathsForEvent.length > 0) {
-              emitter.emit('songsRemoved', {
-                listUUID: songsAreaState.songListUUID,
-                paths: removedPathsForEvent
-              })
-              emitter.emit('playlistContentChanged', { uuids: [songsAreaState.songListUUID] })
-            }
-            return { action: 'songsRemoved', paths: removedPathsForEvent }
-          }
-        }
-        break
       case 'fingerprints.analyzeAndAdd': {
         if (isNeteaseStreamSong(song) || selectedSongsForSetDuration.some(isNeteaseStreamSong)) {
           return null
@@ -1071,8 +776,8 @@ export function useSongItemContextMenu(
           await confirmTaskBusy()
           return null
         }
-        const selectedSongs = resolveSelectedSongs()
-        if (!selectedSongs.length) {
+        const selectedSongs = await resolveLocalSongsForAction()
+        if (!selectedSongs || !selectedSongs.length) {
           await confirm({
             title: t('rekordboxDesktop.failureTitle'),
             content: [t('rekordboxDesktop.noTracksToImport')],
@@ -1082,6 +787,12 @@ export function useSongItemContextMenu(
         }
         runtime.isProgressing = true
         try {
+          // 网易云来源是 `.store` 下载缓存：删掉源文件会让「查看已下载」变成幽灵行，
+          // 所以不展示“源曲目如何处理”，默认保留。
+          const keepSourceTracks =
+            isNeteaseStreamView ||
+            isNeteaseDownloadedView ||
+            selectedSongs.some((item) => Boolean(item.neteaseSongId))
           const summary =
             result.menuName === 'library.writeToSeratoPlaylist' ||
             result.menuName === 'library.writeToTraktorPlaylist'
@@ -1092,6 +803,7 @@ export function useSongItemContextMenu(
               : await openRekordboxDesktopPlaylistForSelectedTracks({
                   tracks: selectedSongs,
                   songListUUID: songsAreaState.songListUUID,
+                  forceKeepSourceTracks: keepSourceTracks,
                   deletePayload: {
                     songListPath: isExternalView
                       ? undefined
@@ -1154,11 +866,18 @@ export function useSongItemContextMenu(
         window.electron.ipcRenderer.send('show-item-in-folder', song.filePath)
         break
       case 'tracks.clearTrackCache': {
-        if (isNeteaseStreamSong(song) || selectedSongsForSetDuration.some(isNeteaseStreamSong)) {
+        if (
+          !isNeteaseStreamView &&
+          (isNeteaseStreamSong(song) || selectedSongsForSetDuration.some(isNeteaseStreamSong))
+        ) {
           return null
         }
-        const files = resolveSelectedFilePaths()
-        await promptAndStartTrackReanalysis(files, resolveSelectedSongs())
+        const localSongs = await resolveLocalSongsForAction()
+        if (!localSongs || localSongs.length === 0) return null
+        await promptAndStartTrackReanalysis(
+          localSongs.map((item) => item.filePath),
+          localSongs
+        )
         break
       }
     }

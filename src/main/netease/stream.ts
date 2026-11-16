@@ -13,7 +13,7 @@ import { log } from '../log'
 /**
  * 试听/播放的网易云分支，挂在既有 frkb-preview 流协议上：
  *
- *   frkb-preview://?netease=<songId>
+ *   frkb-preview://netease/?netease=<songId>
  *
  * 播放器不需要改动——它本来就消费 frkb-preview://，对渲染层而言这就是一个音频源。
  *

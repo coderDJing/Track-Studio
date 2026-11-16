@@ -25,7 +25,11 @@ import { appendExternalPlaylistFromPaths } from '@renderer/utils/externalPlaylis
 import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { RECORDING_LIBRARY_UUID } from '@shared/recordingLibrary'
-import { NETEASE_DOWNLOADED_UUID, isNeteasePlaylistUuid } from '@shared/netease'
+import {
+  NETEASE_DOWNLOADED_UUID,
+  isNeteasePlaylistUuid,
+  isNeteaseVirtualUuid
+} from '@shared/netease'
 import {
   cleanupNeteaseOrphans,
   formatNeteaseDownloadedSummary,
@@ -709,6 +713,11 @@ const drop = async (e: DragEvent) => {
   const filePaths = []
   for (let item of Array.from(e.dataTransfer.files)) {
     filePaths.push(window.api.showFilesPath(item))
+  }
+
+  // 网易云歌单没有磁盘目录，不能把本地文件当普通导入丢进去，更不能因此把虚拟节点删掉。
+  if (isNeteaseVirtualUuid(runtime.songsArea.songListUUID)) {
+    return
   }
 
   let songListPath = libraryUtils.findDirPathByUuid(runtime.songsArea.songListUUID)

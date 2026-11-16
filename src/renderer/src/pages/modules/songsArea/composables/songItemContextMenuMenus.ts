@@ -128,19 +128,37 @@ export const withoutRecordingAnalysisMenus = (groups: IMenu[][]): IMenu[][] =>
 /**
  * 网易云歌单里的一行。
  *
- * 这一行的 filePath 是 `frkb-preview://` 流地址，磁盘上**没有**这个文件，
- * 所以默认菜单里写 U 盘、复制到库、改名、转码这类项不能出现——点了只会把流地址送进文件系统。
- * 导出可以出现：点了会先下载到 `.store/` 再继续。另外只留加入 SET、下载到本地或删缓存。
+ * 这一行的 filePath 是 `frkb-preview://` 流地址，磁盘上**没有**这个文件。
+ * 菜单主体与普通曲目一致，但落地前会先把流地址换成 `.store/` 里的真实文件。
+ * 去掉的项：
+ *   - 在文件夹中显示：没有文件可显示；
+ *   - 删除曲目 / 删除上方全部：删的是网易云歌单结构，不是本地缓存；
+ *   - Rekordbox XML 导出：它只认筛选/精选/SET 这几个核心库，且带移动语义；
+ *   - 元数据编辑 / 自动补全 / 指纹 / 转码：元数据权威在网易云 API，`.store` 不是曲库歌曲；
+ *   - 修 BPM：要求真实曲库节点，网易云是虚拟节点。
+ * 传输动作一律是**复制**：网易云来源只复制不移动（草案 9.6）。
+ * 「下载到本地 / 删除本地文件」代替默认菜单里的删除项。
  */
 export const createNeteaseStreamMenuArr = (downloaded: boolean): IMenu[][] => {
   const localActions: IMenu[] = downloaded
-    ? [{ menuName: 'netease.redownload' }, { menuName: 'netease.removeLocalFile' }]
+    ? [{ menuName: 'netease.removeLocalFile' }]
     : [{ menuName: 'netease.downloadToLocal' }]
   return [
     [{ menuName: 'tracks.exportTracks' }],
+    [
+      { menuName: 'rekordboxDesktop.menuCreatePlaylistFromSelectedTracks' },
+      { menuName: 'library.writeToSeratoPlaylist' },
+      { menuName: 'library.writeToTraktorPlaylist' }
+    ],
+    [
+      ...createFilterCuratedTransferMenus('copy'),
+      { menuName: 'library.addToSet' },
+      { menuName: 'library.addToMixtape' }
+    ],
     localActions,
-    [{ menuName: 'library.addToSet' }],
-    createMusicSearchMenuItems()
+    createMusicSearchMenuItems(),
+    [{ menuName: 'similarTracks.menu' }],
+    [{ menuName: 'stemSeparation.menu' }]
   ]
 }
 
@@ -173,11 +191,31 @@ const COPY_ONLY_MENU_REWRITE: Record<string, string> = {
   'library.moveToCurated': 'library.copyToCurated'
 }
 
+/**
+ * 网易云不提供元数据编辑：元数据权威在网易云 API，本地改 `.store` 标签既不会显示，
+ * 导入命名也读的是 `netease_track`，还允许把 `<songId>.ext` 改名而破坏下载索引。
+ */
+const NETEASE_HIDDEN_MENU_NAMES = new Set([
+  'tracks.deleteAllAbove',
+  // Rekordbox XML 导出只认筛选/精选/SET 这几个核心库，网易云是虚拟节点。
+  'rekordboxXmlExport.menuExportSelectedTracks',
+  // 直接暴露 `.store` 会让用户绕过索引改名或删文件。
+  'tracks.showInFileExplorer',
+  'metadata.autoFillMenu',
+  'tracks.editMetadata',
+  'tracks.convertFormat',
+  'fingerprints.analyzeAndAdd',
+  // 网易云行不展示分析结果，清缓存没有意义，还会顺带删掉分轨。
+  'tracks.clearTrackCache',
+  // 修 BPM 要求真实的曲库节点（uuid + 路径 + nodeType），网易云下载视图是虚拟节点。
+  'bpmFix.menu'
+])
+
 export const createNeteaseDownloadedMenuArr = (songListUUID: string): IMenu[][] => {
   const groups = createDefaultMenuArr(songListUUID)
     .map((group) =>
       group
-        .filter((item) => item.menuName !== 'tracks.deleteAllAbove')
+        .filter((item) => !NETEASE_HIDDEN_MENU_NAMES.has(item.menuName))
         .map((item) => {
           if (item.menuName === 'tracks.deleteTracks') {
             return { ...item, menuName: 'netease.removeLocalFile' }
@@ -187,12 +225,5 @@ export const createNeteaseDownloadedMenuArr = (songListUUID: string): IMenu[][] 
         })
     )
     .filter((group) => group.length > 0)
-  // 「重新下载」放在删除旁边：这两件事用户是连着想的（删了重下、或换了音质重下）
-  const removeIndex = groups.findIndex((group) =>
-    group.some((item) => item.menuName === 'netease.removeLocalFile')
-  )
-  groups.splice(removeIndex >= 0 ? removeIndex + 1 : groups.length, 0, [
-    { menuName: 'netease.redownload' }
-  ])
   return groups
 }

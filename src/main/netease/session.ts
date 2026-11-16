@@ -82,14 +82,18 @@ export async function loadSession(): Promise<SessionPayload | null> {
   try {
     const file = getNeteaseSessionFile()
     if (!(await fs.pathExists(file))) {
+      // 刚登录时文件可能还在写，不能把内存里已经有的会话清掉
+      if (currentSession) return currentSession
       currentSession = null
       return null
     }
     const parsed = parseSessionPayload(safeStorage.decryptString(await fs.readFile(file)))
+    if (!parsed && currentSession) return currentSession
     currentSession = parsed
     return parsed
   } catch (error) {
     log.warn('[netease] 读取登录态失败，按未登录处理', error)
+    if (currentSession) return currentSession
     currentSession = null
     return null
   }

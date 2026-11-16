@@ -32,6 +32,8 @@ import libraryUtils from '@renderer/utils/libraryUtils'
 import {
   ensureNeteaseLoggedIn,
   getNeteaseStatus,
+  neteaseCatalogSyncing,
+  neteaseLoggedIn,
   syncNeteaseLibrary
 } from '@renderer/utils/neteaseActions'
 import { findNeteaseLibraryNode, isNeteasePlaylistUuid } from '@renderer/utils/neteaseSongs'
@@ -251,19 +253,41 @@ const selectLibraryIcon = (item: Icon) => {
  * 拖拽经过图标时不要走这条（会弹窗），见 iconDragEnter。
  */
 let activatingNetease = false
+const hasNeteasePlaylistInTree = (): boolean =>
+  Boolean(findFirstNeteasePlaylist(runtime.libraryTree))
+
+/** 已经确认登录，或树上已经有歌单：点击时可以立刻切库，不必再等 IPC。 */
+const canEnterNeteaseImmediately = (): boolean =>
+  neteaseLoggedIn.value === true || hasNeteasePlaylistInTree()
+
+const enterNeteaseLibrary = () => {
+  runtime.libraryAreaSelected = 'NeteaseLibrary'
+  // 只有树上还是空的才亮 loading；歌单已经出来后不要再插一条「正在同步」。
+  if (!hasNeteasePlaylistInTree()) neteaseCatalogSyncing.value = true
+  // 先让这一帧把蓝条和 loading 画出来，再发同步，避免第一次点击像卡住。
+  window.setTimeout(() => {
+    void syncNeteaseLibrary({ silent: true, background: true })
+  }, 0)
+}
+
 const activateNeteaseLibrary = async () => {
   if (activatingNetease) return
   activatingNetease = true
   try {
+    if (canEnterNeteaseImmediately()) {
+      enterNeteaseLibrary()
+      return
+    }
+    // 启动预取可能还在路上：跟那一次共用，不要再另起一次才切库。
+    if (neteaseLoggedIn.value !== false) {
+      const status = await getNeteaseStatus()
+      if (status.loggedIn) {
+        enterNeteaseLibrary()
+        return
+      }
+    }
     if (!(await ensureNeteaseLoggedIn())) return
-    runtime.libraryAreaSelected = 'NeteaseLibrary'
-    await syncNeteaseLibrary({ silent: true })
-    // 同步是异步的：用户可能在它回来之前已经点去别的库了，这时不能抢走右侧列表
-    if (runtime.libraryAreaSelected !== 'NeteaseLibrary') return
-    const current = runtime.songsArea.songListUUID
-    if (isNeteasePlaylistUuid(current)) return
-    const first = findFirstNeteasePlaylist(runtime.libraryTree)
-    if (first) runtime.songsArea.songListUUID = first
+    enterNeteaseLibrary()
   } finally {
     activatingNetease = false
   }

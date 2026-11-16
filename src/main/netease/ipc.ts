@@ -15,12 +15,7 @@ import {
   reconcileStoreFromDisk,
   syncCatalog
 } from './library'
-import {
-  ensureTracksDownloaded,
-  estimatePlaylistImportSize,
-  importNeteasePlaylist,
-  redownloadTracks
-} from './import'
+import { ensureTracksDownloaded, estimatePlaylistImportSize, importNeteasePlaylist } from './import'
 import {
   appendNeteaseTracksToSet,
   fulfillPendingSetSong,
@@ -28,6 +23,8 @@ import {
 } from './setPending'
 import { clearPreviewCache, enforcePreviewCacheLimit, getPreviewCacheUsage } from './cache'
 import { isSafeSongId } from './paths'
+import { getLibrary } from '../utils'
+import { clearTrackCache } from '../services/cacheMaintenance'
 
 /**
  * 网易云相关的 IPC。
@@ -113,8 +110,18 @@ export function registerNeteaseHandlers(getWindow: () => BrowserWindow | null): 
     return { ok: true }
   })
 
-  ipcMain.handle('netease:sync', async () => {
-    return await syncCatalog()
+  ipcMain.handle('netease:sync', async (event) => {
+    return await syncCatalog({
+      onGroupsReady: (groups) => {
+        if (event.sender.isDestroyed()) return
+        event.sender.send('netease:catalog-updated', { groups })
+      }
+    })
+  })
+
+  // 补齐 NeteaseLibrary 节点，但不做全盘扫描。同步后渲染树还没有这个库时走这里。
+  ipcMain.handle('netease:ensure-library-tree', async () => {
+    return await getLibrary({ skipSync: true, skipPreparation: false })
   })
 
   ipcMain.handle('netease:playlist-tracks', async (_event, payload: { playlistId?: string }) => {
@@ -180,26 +187,6 @@ export function registerNeteaseHandlers(getWindow: () => BrowserWindow | null): 
       sendProgress
     })
   })
-
-  /**
-   * 按当前音质重下：新文件先下到临时位，成功后再替换旧文件。
-   * 换音质后想要新规格只能走这里——普通下载会复用已有的文件。
-   */
-  ipcMain.handle(
-    'netease:redownload',
-    async (_event, payload: { songIds?: string[]; level?: string }) => {
-      const window = getWindow()
-      const sendProgress = createProgressSender(() => window)
-      const songIds = sanitizeSongIds(payload?.songIds)
-      if (songIds.length === 0) return { items: [], failed: [] }
-      return await redownloadTracks(
-        songIds,
-        normalizeLevel(payload?.level ?? store.settingConfig?.neteaseLevel),
-        undefined,
-        sendProgress
-      )
-    }
-  )
 
   /**
    * 只下载、不复制。SET 库与混音库各自有自己的保管方式，
@@ -303,6 +290,10 @@ export function registerNeteaseHandlers(getWindow: () => BrowserWindow | null): 
     for (const songId of songIds) {
       const result = await deleteLocalFile(songId)
       if (result.removed) removed += 1
+    }
+    // 分轨资产按源文件路径登记；缓存文件删掉后不清会留下孤儿。
+    for (const filePath of paths) {
+      await clearTrackCache(filePath)
     }
     return { removed, requested: songIds.length }
   })

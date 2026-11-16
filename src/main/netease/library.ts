@@ -22,6 +22,7 @@ import {
   getNeteaseRootDir,
   getNeteaseStoreDir,
   getStoreFilePath,
+  isSafeSongId,
   toRelativeStorePath
 } from './paths'
 import { parseAudioHeader } from './audioHeader'
@@ -88,11 +89,16 @@ export type CatalogSyncResult = {
   syncedAtMs: number
 }
 
+export type CatalogSyncOptions = {
+  /** 歌单列表一到就回调，不用等曲目 id / 曲目详情全部拉完 */
+  onGroupsReady?: (groups: NeteaseTreeGroup[]) => void
+}
+
 /**
  * 拉一次完整目录并落库。
  * 歌单的曲目 id 顺序按 trackIds 原样保存——这是"只按原始顺序显示"的依据。
  */
-export async function syncCatalog(): Promise<CatalogSyncResult> {
+export async function syncCatalog(options: CatalogSyncOptions = {}): Promise<CatalogSyncResult> {
   const account = await neteaseClient.fetchAccount()
   if (!account) throw new Error('登录态无效，请重新扫码登录')
 
@@ -152,6 +158,34 @@ export async function syncCatalog(): Promise<CatalogSyncResult> {
        (list_root, user_id, nickname, avatar_url, vip_type, last_sync_at_ms)
      VALUES (?, ?, ?, ?, ?, ?)`
   )
+
+  // 先把歌单标题写进库并通知渲染层画树。
+  // 曲目关系仍等全部拉完再一次性落库，避免半截写入触发孤儿清理。
+  const serverCounts = new Map(all.map((item) => [item.playlistId, item.trackCount]))
+  db.transaction(() => {
+    insertAccount.run(
+      listRoot,
+      userId,
+      account.nickname,
+      account.avatarUrl,
+      account.vipType,
+      Date.now()
+    )
+    for (let index = 0; index < all.length; index += 1) {
+      const item = all[index]
+      insertPlaylist.run(
+        listRoot,
+        userId,
+        item.playlistId,
+        item.kind,
+        item.title,
+        item.coverUrl,
+        item.trackCount,
+        index
+      )
+    }
+  })()
+  options.onGroupsReady?.(buildGroups(all, serverCounts))
 
   // 先把所有歌单的曲目 id 拉全再落库。
   //
@@ -240,11 +274,13 @@ export async function syncCatalog(): Promise<CatalogSyncResult> {
     }
   })()
 
+  const groups = buildGroups(all, resolvedCounts)
+  options.onGroupsReady?.(groups)
   await upsertSongDetails(db, listRoot, Array.from(pendingSongIds))
 
   return {
     account,
-    groups: buildGroups(all, resolvedCounts),
+    groups,
     playlistCount: all.length,
     trackCount,
     syncedAtMs: Date.now()
@@ -463,6 +499,21 @@ export function getTrackMeta(
     album: String(row.album || ''),
     coverUrl: String(row.cover_url || '')
   }
+}
+
+/**
+ * `.store/<songId>.<ext>` → 「艺人 - 标题」。
+ * 供分轨导出等需要人类可读文件名的场景使用；无法识别时返回空串。
+ */
+export function getStoreTrackDisplayName(absPath: string): string {
+  const songId = path.parse(String(absPath || '')).name.trim()
+  if (!isSafeSongId(songId)) return ''
+  const meta = getTrackMeta(songId)
+  if (!meta) return ''
+  const title = String(meta.title || '').trim()
+  if (!title) return ''
+  const artist = String(meta.artist || '').trim()
+  return artist ? `${artist} - ${title}` : title
 }
 
 export type DownloadedTrackRow = {

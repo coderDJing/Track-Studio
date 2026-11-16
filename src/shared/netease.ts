@@ -16,8 +16,8 @@ export const NETEASE_GROUP_PREFIX = 'netease:group:'
 /** 「查看已下载」虚拟列表：不在树里，只作为 songsArea 的一个列表 uuid 存在 */
 export const NETEASE_DOWNLOADED_UUID = '__netease_downloaded__'
 
-/** 试听地址前缀；播放器把它当普通音频 URL，主进程负责流式或读本地文件 */
-export const NETEASE_PREVIEW_PREFIX = 'frkb-preview://?netease='
+/** 试听地址前缀；必须带 host，Chromium 把标准 scheme 当成 http 风格 URL，没有 host 的 frkb-preview://?netease= 播不出来 */
+export const NETEASE_PREVIEW_PREFIX = 'frkb-preview://netease/?netease='
 
 export function isNeteasePlaylistUuid(uuid: string | undefined | null): boolean {
   return typeof uuid === 'string' && uuid.startsWith(NETEASE_PLAYLIST_PREFIX)
@@ -32,6 +32,11 @@ export function isNeteaseNodeUuid(uuid: string | undefined | null): boolean {
   return isNeteasePlaylistUuid(uuid) || isNeteaseGroupUuid(uuid)
 }
 
+/** 没有对应磁盘目录的网易云 uuid：树上的分组/歌单，以及「查看已下载」虚拟列表 */
+export function isNeteaseVirtualUuid(uuid: string | undefined | null): boolean {
+  return isNeteaseNodeUuid(uuid) || uuid === NETEASE_DOWNLOADED_UUID
+}
+
 export function getNeteasePlaylistId(uuid: string): string {
   return String(uuid || '').slice(NETEASE_PLAYLIST_PREFIX.length)
 }
@@ -41,7 +46,10 @@ export function buildNeteasePreviewUrl(songId: string): string {
 }
 
 export function isNeteasePreviewUrl(filePath: string | undefined | null): boolean {
-  return typeof filePath === 'string' && filePath.startsWith(NETEASE_PREVIEW_PREFIX)
+  if (typeof filePath !== 'string' || !filePath.startsWith('frkb-preview:')) return false
+  if (filePath.startsWith(NETEASE_PREVIEW_PREFIX)) return true
+  // 兼容旧地址 frkb-preview://?netease=<id>（没有 host，部分环境下播不出来）
+  return /[?&]netease=/i.test(filePath)
 }
 
 /** 从 frkb-preview URL 里取回 songId；不是网易云地址返回 null */

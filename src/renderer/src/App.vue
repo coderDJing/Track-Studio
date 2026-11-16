@@ -70,6 +70,7 @@ import {
 } from '@renderer/utils/globalSongSearchEvents'
 import { createLayoutConfigReadHandler } from '@renderer/utils/appRuntimeStateGuards'
 import { useMainWindowLibraryEvents } from '@renderer/composables/useMainWindowLibraryEvents'
+import { bindNeteaseCatalogUpdates, prefetchNeteaseStatus } from '@renderer/utils/neteaseActions'
 import { stopWindowAudio } from '@renderer/utils/windowAudioCleanup'
 
 const LIBRARY_SETUP_ALLOWED_DIALOGS = new Set([
@@ -640,6 +641,9 @@ const handleBeforeUnload = () => {
 }
 
 const { handleLibraryTreeUpdated, handleExternalOpenImported } = useMainWindowLibraryEvents(runtime)
+
+bindNeteaseCatalogUpdates()
+prefetchNeteaseStatus()
 
 // IPC 监听器处理函数
 const handleOpenDialogFromTray = async (_e: unknown, key: string) => {
