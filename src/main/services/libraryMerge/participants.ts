@@ -9,12 +9,7 @@ import {
 type SqliteDatabase = InstanceType<typeof import('better-sqlite3')>
 
 export type LibraryMergeTableStrategy =
-  | 'metadata'
-  | 'union'
-  | 'node-tree'
-  | 'analysis-remap'
-  | 'row-transform'
-  | 'discardable'
+  'metadata' | 'union' | 'node-tree' | 'analysis-remap' | 'row-transform' | 'discardable'
 
 type LibraryMergeMetadataParticipant = {
   key: string
@@ -132,6 +127,15 @@ export const LIBRARY_MERGE_TABLE_PARTICIPANTS: readonly LibraryMergeTablePartici
   { table: 'mixtape_stem_assets', strategy: 'discardable' },
   { table: 'mixtape_stem_waveform_cache', strategy: 'discardable' },
   { table: 'library_stem_assets', strategy: 'discardable' },
+  // 网易云音乐库的五个表全部是**本机缓存**，不是用户资产：
+  //   - account / playlist / playlist_item / track 是服务器目录的镜像，点一下同步就回来；
+  //   - file 是「已下载」的索引，行里的 list_root 指向源库的绝对路径，合并后必然失效。
+  // 因此一律丢弃，由下次同步与 .store 目录重建（reconcileStoreFromDisk）。
+  { table: 'netease_account', strategy: 'discardable' },
+  { table: 'netease_playlist', strategy: 'discardable' },
+  { table: 'netease_playlist_item', strategy: 'discardable' },
+  { table: 'netease_track', strategy: 'discardable' },
+  { table: 'netease_file', strategy: 'discardable' },
   { table: 'external_analysis_devices', strategy: 'discardable' },
   { table: 'external_analysis_cache', strategy: 'discardable' }
 ]
@@ -165,8 +169,7 @@ const hasTable = (db: SqliteDatabase, tableName: string): boolean => {
 
 const readMetaValue = (db: SqliteDatabase, key: string): string | null => {
   const row = db.prepare('SELECT value FROM meta WHERE key = ? LIMIT 1').get(key) as
-    | Record<string, unknown>
-    | undefined
+    Record<string, unknown> | undefined
   return typeof row?.value === 'string' ? row.value : null
 }
 

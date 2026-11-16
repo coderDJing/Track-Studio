@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject } from 'vue'
+import { computed, inject, onMounted, ref } from 'vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import bubbleBox from '@renderer/components/bubbleBox.vue'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
@@ -295,6 +295,107 @@ const seratoTrackStorageDirText = computed(
 const traktorTrackStorageDirText = computed(
   () => runtime.setting.traktorTrackStorageDir || t('settings.traktorTrackStorageDir.notConfigured')
 )
+
+// ── 网易云音乐 ────────────────────────────────────────────────────────────────
+const NETEASE_CACHE_PRESETS: Array<{ label: string; value: number }> = [
+  { label: '2 GB', value: 2 * 1024 ** 3 },
+  { label: '5 GB', value: 5 * 1024 ** 3 },
+  { label: '10 GB', value: 10 * 1024 ** 3 },
+  { label: '20 GB', value: 20 * 1024 ** 3 }
+]
+
+const neteaseQualityOptions = computed(() => [
+  { label: t('netease.settings.qualityLossless'), value: 'lossless' },
+  { label: t('netease.settings.qualityJymaster'), value: 'jymaster' },
+  { label: t('netease.settings.qualityExhigh'), value: 'exhigh' },
+  { label: t('netease.settings.qualityStandard'), value: 'standard' }
+])
+
+const neteaseLevelModel = computed({
+  get: () => runtime.setting.neteaseLevel || 'lossless',
+  set: (value: string) => {
+    runtime.setting.neteaseLevel = value as 'jymaster' | 'lossless' | 'exhigh' | 'standard'
+  }
+})
+
+const formatCacheLimitLabel = (bytes: number): string => {
+  if (bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let size = bytes
+  let unit = 0
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024
+    unit += 1
+  }
+  return `${size >= 10 || unit === 0 ? Math.round(size) : size.toFixed(1)} ${units[unit]}`
+}
+
+// 当前值不在预设里时，下拉要显示真实上限，不能悄悄跳回 10 GB。
+const neteaseCacheOptions = computed(() => {
+  const presets = NETEASE_CACHE_PRESETS.map((item) => ({ ...item }))
+  const value = Number(runtime.setting.neteasePreviewCacheBytes || 0)
+  if (value > 0 && !presets.some((item) => item.value === value)) {
+    presets.push({
+      label: t('netease.settings.cacheCustom', { size: formatCacheLimitLabel(value) }),
+      value
+    })
+  }
+  return presets
+})
+
+const neteaseCacheModel = computed({
+  get: () => {
+    const value = Number(runtime.setting.neteasePreviewCacheBytes || 0)
+    return value > 0 ? value : 10 * 1024 ** 3
+  },
+  set: (value: number) => {
+    runtime.setting.neteasePreviewCacheBytes = Number(value) || 10 * 1024 ** 3
+  }
+})
+
+const neteaseCacheUsage = ref<{ count: number; bytes: number } | null>(null)
+const neteaseCacheUsageText = computed(() => {
+  const bytes = neteaseCacheUsage.value?.bytes || 0
+  if (bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let size = bytes
+  let unit = 0
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024
+    unit += 1
+  }
+  return `${size >= 10 || unit === 0 ? Math.round(size) : size.toFixed(1)} ${units[unit]}`
+})
+
+const refreshNeteaseCacheUsage = async () => {
+  try {
+    neteaseCacheUsage.value = (await window.electron.ipcRenderer.invoke(
+      'netease:preview-cache-usage'
+    )) as { count: number; bytes: number }
+  } catch {
+    neteaseCacheUsage.value = null
+  }
+}
+
+const handleNeteaseCacheLimitChange = async () => {
+  await setSetting()
+  // 改小了上限要立刻生效，否则要等到下次试听才会清理
+  try {
+    await window.electron.ipcRenderer.invoke('netease:enforce-preview-cache')
+  } catch {}
+  await refreshNeteaseCacheUsage()
+}
+
+const clearNeteasePreviewCache = async () => {
+  try {
+    await window.electron.ipcRenderer.invoke('netease:clear-preview-cache')
+  } catch {}
+  await refreshNeteaseCacheUsage()
+}
+
+onMounted(() => {
+  void refreshNeteaseCacheUsage()
+})
 </script>
 
 <template>
@@ -1015,6 +1116,42 @@ const traktorTrackStorageDirText = computed(
                 @change="setSetting()"
               />
               <div class="setting-hint">{{ t('userGuide.settingHint') }}</div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="section-title">{{ t('settings.layout.sectionNeteaseTitle') }}</div>
+
+            <div class="setting-block">{{ tLabel('netease.settings.quality') }}</div>
+            <div class="setting-control">
+              <BaseSelect
+                v-model="neteaseLevelModel"
+                :options="neteaseQualityOptions"
+                :width="260"
+                @change="setSetting()"
+              />
+              <div class="setting-hint">{{ t('netease.settings.qualityHint') }}</div>
+            </div>
+
+            <div class="setting-block">{{ tLabel('netease.settings.cache') }}</div>
+            <div class="setting-control">
+              <BaseSelect
+                v-model="neteaseCacheModel"
+                :options="neteaseCacheOptions"
+                :width="260"
+                @change="handleNeteaseCacheLimitChange()"
+              />
+              <div class="setting-hint">
+                {{ t('netease.settings.cacheHint') }}
+                <template v-if="neteaseCacheUsage">
+                  {{ t('netease.settings.cacheUsage', { size: neteaseCacheUsageText }) }}
+                </template>
+              </div>
+              <div class="buttonRow">
+                <div class="button settings-inline-button" @click="clearNeteasePreviewCache()">
+                  {{ t('netease.settings.clearCache') }}
+                </div>
+              </div>
             </div>
           </div>
 

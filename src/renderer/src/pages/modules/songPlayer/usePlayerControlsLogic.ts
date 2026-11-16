@@ -16,6 +16,18 @@ import { toIpcCloneablePayload } from '@renderer/utils/ipcCloneablePayload'
 import { appendExternalSongsToSet } from '@renderer/utils/setCustody'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
+import { isNeteaseStreamSong, parseNeteaseSongId } from '@renderer/utils/neteaseSongs'
+import {
+  appendNeteaseSongsToSet,
+  fulfillNeteasePendingSetSong,
+  isNeteasePendingSetSong,
+  resolveNeteaseLocalPath
+} from '@renderer/utils/neteaseActions'
+import {
+  NETEASE_DOWNLOADED_UUID,
+  isNeteasePlaylistUuid,
+  isNeteasePreviewUrl
+} from '@shared/netease'
 import { isEditablePioneerUsbSong, deletePioneerUsbSong } from '@renderer/utils/pioneerUsbEditing'
 import { usePioneerUsbPlaybackDeletion } from '@renderer/composables/rekordboxDesktop/usePioneerUsbPlaybackDeletion'
 import {
@@ -98,6 +110,34 @@ export function usePlayerControlsLogic({
       runtime.playingData.playingSongListUUID,
       runtime.playingData.playingSong
     )
+  /**
+   * 网易云歌单里的曲目：filePath 是 frkb-preview 流地址，盘上没有文件。
+   *
+   * 播放器菜单已经把这类操作藏起来了，但快捷键（Q/E/F）和小窗命令绕得过去，
+   * 所以逻辑层再兜一道——否则会把一个 URL 当路径送进文件系统，最后只收获一个失败弹窗。
+   */
+  /**
+   * 网易云歌单里的曲目没有本地文件。导出 / 移动这类"必须有个真实文件"的操作，
+   * 先把它下到 `.store`，然后用真实路径继续——草案 9.1 的体验就是
+   * "在歌单里选中就能导出"，而不是要求用户先切到「查看已下载」。
+   */
+  const withResolvedNeteasePath = async (song: ISongInfo): Promise<ISongInfo | null> => {
+    if (isNeteasePendingSetSong(song)) {
+      return await fulfillNeteasePendingSetSong(song)
+    }
+    const songId = String(song.neteaseSongId || parseNeteaseSongId(song.filePath) || '')
+    const localPath = await resolveNeteaseLocalPath(songId)
+    if (!localPath) return null
+    const fileName = localPath.split(/[/\\]/).pop() || song.fileName
+    const ext = fileName.split('.').pop() || ''
+    return {
+      ...song,
+      filePath: localPath,
+      fileName,
+      fileFormat: ext ? ext.toUpperCase() : song.fileFormat,
+      neteaseDownloaded: true
+    }
+  }
   const isNoBpmSong = (song?: ISongInfo | null) => song?.beatGridStatus === 'no-bpm'
   const buildSongAnalysisSnapshot = (song: ISongInfo) => ({
     key: song.key,
@@ -405,6 +445,15 @@ export function usePlayerControlsLogic({
       }
       return
     }
+    if (isNeteaseStreamSong(runtime.playingData.playingSong)) {
+      // 歌单是服务器上的数据，删它没有意义；要删的是本地缓存，走「删除本地文件」
+      await confirm({
+        title: t('dialog.hint'),
+        content: [t('netease.streamOnlyNoFile')],
+        confirmShow: false
+      })
+      return
+    }
     if (isReadOnlyPlaybackSource()) {
       await confirm({
         title: t('dialog.hint'),
@@ -651,7 +700,8 @@ export function usePlayerControlsLogic({
     if (!moveContext) {
       return
     }
-    const songToMove = toIpcCloneablePayload(moveContext.song)
+    let sourceSong = moveContext.song
+    let songToMove = toIpcCloneablePayload(sourceSong)
 
     const sourceActionMode = moveContext.actionMode
     const sourceListUuid = moveContext.sourceListUuid
@@ -662,6 +712,30 @@ export function usePlayerControlsLogic({
     const isSetTarget =
       targetNode?.type === 'setList' || selectSongListDialogLibraryName.value === 'SetLibrary'
     const isMixtapeTarget = targetNode?.type === 'mixtapeList'
+    if (
+      isSetTarget &&
+      targetNode?.type === 'setList' &&
+      (isNeteaseStreamSong(sourceSong) ||
+        isNeteasePlaylistUuid(sourceListUuid) ||
+        sourceListUuid === NETEASE_DOWNLOADED_UUID ||
+        isNeteasePreviewUrl(sourceSong.filePath))
+    ) {
+      await appendNeteaseSongsToSet({
+        playlistUuid: targetListUuid,
+        songs: [sourceSong],
+        originPlaylistUuid: sourceListUuid,
+        originPathSnapshot: '网易云音乐'
+      })
+      selectSongListDialogShow.value = false
+      songToMoveRef.value = null
+      return
+    }
+    if (isNeteaseStreamSong(sourceSong)) {
+      const resolved = await withResolvedNeteasePath(sourceSong)
+      if (!resolved) return
+      sourceSong = resolved
+      songToMove = toIpcCloneablePayload(sourceSong)
+    }
 
     if (isMixtapeTarget && isNoBpmSong(songToMove)) {
       selectSongListDialogShow.value = false
@@ -983,11 +1057,19 @@ export function usePlayerControlsLogic({
       console.error('无法导出，没有歌曲正在播放。')
       return
     }
+    let sourceSong: ISongInfo = runtime.playingData.playingSong
+    // 网易云的曲目先落地再导出；源歌单在服务器上，导出后也不可能"删掉"它
+    const streamOnlySource = isNeteaseStreamSong(sourceSong)
+    if (streamOnlySource) {
+      const resolved = await withResolvedNeteasePath(sourceSong)
+      if (!resolved) return
+      sourceSong = resolved
+    }
 
     // 弹出导出对话框
     let result = await exportDialog({
       title: 'tracks.title',
-      forceCopyOnly: isReadOnlyPlaybackSource()
+      forceCopyOnly: isReadOnlyPlaybackSource() || streamOnlySource
     })
     if (result !== 'cancel') {
       let folderPathVal = result.folderPathVal
@@ -996,7 +1078,7 @@ export function usePlayerControlsLogic({
         : result.deleteSongsAfterExport
 
       // 深拷贝当前播放歌曲信息，避免后续操作影响原始数据
-      const songToExport = JSON.parse(JSON.stringify(runtime.playingData.playingSong))
+      const songToExport = JSON.parse(JSON.stringify(sourceSong))
       const filePath = songToExport.filePath
       const currentList = runtime.playingData.playingSongListData
       const rowKey = songToExport.setItemId || songToExport.mixtapeItemId || filePath

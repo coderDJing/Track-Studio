@@ -19,7 +19,7 @@ import {
 } from '@shared/playbackRange'
 import { WebAudioPlayer } from './webAudioPlayer'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
-import { queueMainPlayerPlayingAnalysis } from '@renderer/utils/playlistAnalysisGate'
+import { queueNeteaseAwarePlayingAnalysis } from '@renderer/utils/neteaseActions'
 
 type PlaybackRangeControllerOptions = {
   runtime: ReturnType<typeof useRuntimeStore>
@@ -256,7 +256,7 @@ export function usePlaybackRangeController(options: PlaybackRangeControllerOptio
     const filePath = song?.filePath
     if (!filePath || sameRendererFilePath(queuedSectionAnalysisFilePath.value, filePath)) return
     queuedSectionAnalysisFilePath.value = filePath
-    queueMainPlayerPlayingAnalysis(runtime, filePath)
+    queueNeteaseAwarePlayingAnalysis(runtime, filePath)
   }
 
   const handleLateSectionRangeReady = () => {

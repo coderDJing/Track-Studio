@@ -1,3 +1,5 @@
+import { isNeteasePendingPath, isNeteasePreviewUrl } from '@shared/netease'
+
 type PlaylistAnalysisGateRuntime = {
   mainWindowBrowseMode?: string
   playingData?: {
@@ -29,6 +31,8 @@ export const buildMainPlayerPlayingAnalysisPayload = (
 ): MainPlayerPlayingAnalysisPayload | null => {
   const trimmed = String(filePath || '').trim()
   if (!trimmed) return null
+  // 预览地址和 SET 占位路径不是磁盘文件，不能送进分析队列
+  if (isNeteasePreviewUrl(trimmed) || isNeteasePendingPath(trimmed)) return null
   const intent = resolveBrowserMainPlayerAnalysisIntent(runtime)
   return {
     analysisAuthority: 'frkb',

@@ -15,6 +15,8 @@ import {
   createMixtapeDragSessionToken
 } from '@renderer/utils/mixtapeDragSession'
 import type { ISongInfo } from '../../../../../../types/globals'
+import { isNeteasePendingPath, isNeteasePreviewUrl } from '@shared/netease'
+import { isNeteaseStoreCopyOnlySource } from '@renderer/utils/libraryTransfer'
 
 type StartDragSongsOptions = {
   songFilePaths?: string[]
@@ -214,7 +216,8 @@ export const useSongsAreaDragAndDrop = (options: UseSongsAreaDragAndDropOptions)
         mode === 'external'
           ? 'copy'
           : mode === 'internal'
-            ? isSetListDropTarget.value
+            ? isSetListDropTarget.value ||
+              isNeteaseStoreCopyOnlySource(runtime.dragSourceSongListUUID)
               ? 'copy'
               : 'move'
             : 'none'
@@ -367,6 +370,8 @@ export const useSongsAreaDragAndDrop = (options: UseSongsAreaDragAndDropOptions)
 
   const handleSongDragStart = (event: DragEvent, song: ISongInfo) => {
     if (!options.songsAreaState.songListUUID) return
+    // 网易云歌单里的曲目在盘上没有文件。内部拖到 SET 会先入单再后台下载；
+    // 拖到筛选库 / 精选库 / 混音库，或按修饰键往外拖，仍然先拦住并提示。
     const rowKey = options.getRowKey(song)
     const isSelected = options.songsAreaState.selectedSongFilePath.includes(rowKey)
 
@@ -378,6 +383,12 @@ export const useSongsAreaDragAndDrop = (options: UseSongsAreaDragAndDropOptions)
       ? [...options.songsAreaState.selectedSongFilePath]
       : [rowKey]
     const songFilePaths = options.resolveSelectedFilePaths(selectedKeysSnapshot)
+    const isStreamOnlyDrag =
+      isNeteasePreviewUrl(song.filePath) ||
+      isNeteasePendingPath(song.filePath) ||
+      songFilePaths.some(
+        (filePath) => isNeteasePreviewUrl(filePath) || isNeteasePendingPath(filePath)
+      )
 
     const hasExternalModifier = isMacPlatform.value
       ? event.altKey ||
@@ -388,6 +399,11 @@ export const useSongsAreaDragAndDrop = (options: UseSongsAreaDragAndDropOptions)
         (typeof event.getModifierState === 'function' && event.getModifierState('Control'))
 
     if (hasExternalModifier) {
+      if (isStreamOnlyDrag) {
+        event.preventDefault()
+        showClipboardHint(t('netease.streamOnlyDragHint'))
+        return
+      }
       cancelActiveMixtapeDragSession()
       options.startDragSongs(
         song,
@@ -499,7 +515,11 @@ export const useSongsAreaDragAndDrop = (options: UseSongsAreaDragAndDropOptions)
     showDragHint('internal')
     options.startDragSongs(song, runtime.libraryAreaSelected, options.songsAreaState.songListUUID)
     if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'copyMove'
+      event.dataTransfer.effectAllowed = isNeteaseStoreCopyOnlySource(
+        options.songsAreaState.songListUUID
+      )
+        ? 'copy'
+        : 'copyMove'
       event.dataTransfer.setData(
         'application/x-song-drag',
         JSON.stringify({

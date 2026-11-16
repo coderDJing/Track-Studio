@@ -20,6 +20,7 @@ import {
   setPendingMixtapeProjectMode
 } from '@renderer/composables/mixtape/stemMode'
 import { isLibraryTreeManualSort } from '@renderer/utils/libraryTreeSort'
+import { NETEASE_LIBRARY_NAME } from '@shared/netease'
 import {
   SEARCH_FOCUS_PRIORITY,
   SEARCH_FOCUS_WINDOW_SCOPE,
@@ -66,6 +67,14 @@ const showHint = computed(() => {
     ['filterLibrarySonglistDemo1', 'curatedLibrarySonglistDemo1'].includes(child.uuid)
   )
   return !children?.length || (children?.length === 1 && hasSpecialChild)
+})
+
+/** 空库时的那行提示：各库建歌单的方式不同，不能一律说"右键新建" */
+const emptyHintText = computed(() => {
+  if (runtime.libraryAreaSelected === 'RecycleBin') return t('recycleBin.noDeletionRecords')
+  // 网易云歌单只能从服务器同步下来，右键建不出来
+  if (libraryData.value.dirName === NETEASE_LIBRARY_NAME) return t('netease.emptyLibraryHint')
+  return t('library.rightClickToCreate')
 })
 
 // 将核心库名称映射为 i18n key，仅用于显示
@@ -408,6 +417,12 @@ const drop = async (e: DragEvent) => {
     runtime.dragItemData = null
     return
   }
+  // 网易云歌单是服务器数据：往这个空白区拖歌单会顺手在 NeteaseLibrary 目录下建真目录，
+  // 而那份目录下次同步就被虚拟子树顶掉了，只剩一堆没人认领的垃圾。直接不收。
+  if (libraryData.value.dirName === NETEASE_LIBRARY_NAME) {
+    runtime.dragItemData = null
+    return
+  }
   if (!isLibraryTreeManualSort(libraryName.value)) {
     runtime.dragItemData = null
     return
@@ -564,11 +579,7 @@ const handleContentClick = () => {
               v-show="showHint && runtime.layoutConfig.libraryAreaWidth !== 0"
               class="libraryStatusText"
             >
-              {{
-                runtime.libraryAreaSelected === 'RecycleBin'
-                  ? t('recycleBin.noDeletionRecords')
-                  : t('library.rightClickToCreate')
-              }}
+              {{ emptyHintText }}
             </span>
           </div>
         </div>

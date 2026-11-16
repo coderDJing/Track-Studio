@@ -15,6 +15,7 @@ vi.mock('./log', () => ({ log: { error: vi.fn() } }))
 import {
   beginLibraryTreeWatcherBulkOperation,
   bindLibraryTreeContentChangeListener,
+  isIgnoredWatchPath,
   notifyLibraryFsChanged,
   stopLibraryTreeWatcher
 } from './libraryTreeWatcher'
@@ -50,5 +51,20 @@ describe('libraryTreeWatcher bulk content changes', () => {
 
     expect(listener).toHaveBeenCalledTimes(1)
     expect(listener.mock.calls[0][0]).toHaveLength(2)
+  })
+})
+
+describe('isIgnoredWatchPath', () => {
+  it('ignores any path that has a dot-prefixed segment', () => {
+    expect(isIgnoredWatchPath('NeteaseLibrary/.store/123.flac')).toBe(true)
+    expect(isIgnoredWatchPath('NeteaseLibrary/.preview-cache/a.mp3')).toBe(true)
+    expect(isIgnoredWatchPath('.netease-session')).toBe(true)
+    expect(isIgnoredWatchPath('FilterLibrary/playlist/.part-tmp/a.mp3')).toBe(true)
+  })
+
+  it('does not ignore ordinary library files', () => {
+    expect(isIgnoredWatchPath('FilterLibrary/playlist/song.mp3')).toBe(false)
+    expect(isIgnoredWatchPath('NeteaseLibrary')).toBe(false)
+    expect(isIgnoredWatchPath('')).toBe(false)
   })
 })

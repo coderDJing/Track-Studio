@@ -4,6 +4,7 @@ import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
 import { PropType, computed, onUnmounted, ref as vRef, toRef } from 'vue'
 import type { ISongInfo, ISongsAreaColumn } from '../../../../../types/globals'
 import type { SongsAreaPaneKey } from '@renderer/stores/runtime'
+import { t } from '@renderer/utils/translate'
 import bubbleBox from '@renderer/components/bubbleBox.vue'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { useVirtualRows } from './SongListRows/useVirtualRows'
@@ -828,6 +829,28 @@ onUnmounted(() => {
                     :value="getCellValue(item.song, col.key)"
                     :query="props.searchQuery"
                   />
+                  <!-- 网易云歌单里，已下到本地的曲目挂一个小标记。数据源是 netease_file，
+                       不会因为别的库的变动而变旧，所以只在这一处显示。
+                       标记本身就是文案，不再挂原生 title 悬停提示（项目规则：悬停提示一律走气泡框）。 -->
+                  <span
+                    v-if="col.key === 'title' && item.song.neteaseDownloaded"
+                    class="netease-downloaded-badge"
+                    >{{ t('netease.downloadedBadge') }}</span
+                  >
+                  <span
+                    v-if="
+                      col.key === 'title' &&
+                      item.song.neteasePendingDownload &&
+                      item.song.neteasePendingStatus !== 'failed'
+                    "
+                    class="netease-pending-badge"
+                    >{{ t('netease.setPendingBadge') }}</span
+                  >
+                  <span
+                    v-if="col.key === 'title' && item.song.neteasePendingStatus === 'failed'"
+                    class="netease-pending-badge netease-pending-badge--failed"
+                    >{{ t('netease.setPendingFailedBadge') }}</span
+                  >
                   <bubbleBox
                     v-if="
                       hoveredCellKey === getCellKey(item.song, col.key) &&

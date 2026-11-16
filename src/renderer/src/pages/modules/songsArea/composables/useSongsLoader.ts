@@ -6,8 +6,18 @@ import type { ISongInfo } from '../../../../../../types/globals'
 import type { ISongsAreaPaneRuntimeState, useRuntimeStore } from '@renderer/stores/runtime'
 import emitter from '@renderer/utils/mitt'
 import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
+import { NETEASE_DOWNLOADED_UUID } from '@shared/netease'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { RECORDING_LIBRARY_UUID } from '@shared/recordingLibrary'
+import {
+  getNeteasePlaylistId,
+  isNeteaseNodeUuid,
+  isNeteasePlaylistUuid,
+  mapNeteaseDownloadedRowToSongInfo,
+  mapNeteaseTrackToSongInfo,
+  type NeteaseDownloadedRowPayload,
+  type NeteaseTrackPayload
+} from '@renderer/utils/neteaseSongs'
 import { t } from '@renderer/utils/translate'
 import { createSongListItemComparator } from '@shared/songListItemCompare'
 import { isWindowsPathPlatform } from '@shared/filePathComparison'
@@ -649,7 +659,9 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
     if (
       songListUUID === EXTERNAL_PLAYLIST_UUID ||
       songListUUID === RECYCLE_BIN_UUID ||
-      songListUUID === RECORDING_LIBRARY_UUID
+      songListUUID === RECORDING_LIBRARY_UUID ||
+      songListUUID === NETEASE_DOWNLOADED_UUID ||
+      isNeteaseNodeUuid(songListUUID)
     ) {
       return false
     }
@@ -836,6 +848,47 @@ export function useSongsLoader(params: UseSongsLoaderParams) {
       })
     }
     try {
+      if (isNeteasePlaylistUuid(requestUUID)) {
+        // 网易云歌单：结构来自网络/本地表，没有磁盘扫描，也不做波形与文件校验。
+        // 曲目的 filePath 是 frkb-preview 流地址，点击即播由主进程决定走本地还是流式。
+        songsAreaState.missingWaveformFilePaths = []
+        const result = (await window.electron.ipcRenderer.invoke('netease:playlist-tracks', {
+          playlistId: getNeteasePlaylistId(requestUUID)
+        })) as { tracks?: NeteaseTrackPayload[] }
+        if (!loadGenerationGuard.isCurrent(ticket)) return
+        const tracks = Array.isArray(result?.tracks) ? result.tracks : []
+        const songs = tracks.map(mapNeteaseTrackToSongInfo)
+        originalSongInfoArr.value = markRaw(songs)
+        // 歌单视图只按网易云原始顺序展示，不套用当前列表的搜索/排序（草案 15.3）。
+        songsAreaState.songInfoArr = songs
+        syncSelectedKeysAfterReload(songs, requestUUID)
+        syncPlayingStateAfterReload(songs, requestUUID)
+        markSongListApplied(requestUUID)
+        return
+      }
+      if (requestUUID === NETEASE_DOWNLOADED_UUID) {
+        // 「查看已下载」：只有本地文件，没有网络请求。filePath 是真实路径，
+        // 所以播放/导出/复制到别的库都按普通本地文件走，不需要特殊处理。
+        songsAreaState.missingWaveformFilePaths = []
+        const result = (await window.electron.ipcRenderer.invoke('netease:downloaded')) as {
+          tracks?: NeteaseDownloadedRowPayload[]
+        }
+        if (!loadGenerationGuard.isCurrent(ticket)) return
+        const rows = Array.isArray(result?.tracks) ? result.tracks : []
+        // 已不在任何歌单的行排到最后，形成一段连续区：既能一眼看出是"孤儿"，
+        // 也能选中一段一起清掉。组内仍按下载时间倒序（SQL 已排好）。
+        const ordered = [
+          ...rows.filter((row) => row.inPlaylist),
+          ...rows.filter((row) => !row.inPlaylist)
+        ]
+        const songs = ordered.map(mapNeteaseDownloadedRowToSongInfo)
+        originalSongInfoArr.value = markRaw(songs)
+        applyFiltersAndSorting()
+        syncSelectedKeysAfterReload(songs, requestUUID)
+        syncPlayingStateAfterReload(songs, requestUUID)
+        markSongListApplied(requestUUID)
+        return
+      }
       if (requestUUID === RECYCLE_BIN_UUID) {
         songsAreaState.missingWaveformFilePaths = []
         const { scanData, songListUUID } =

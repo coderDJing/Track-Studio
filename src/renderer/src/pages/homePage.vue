@@ -25,6 +25,13 @@ import { appendExternalPlaylistFromPaths } from '@renderer/utils/externalPlaylis
 import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { RECORDING_LIBRARY_UUID } from '@shared/recordingLibrary'
+import { NETEASE_DOWNLOADED_UUID, isNeteasePlaylistUuid } from '@shared/netease'
+import {
+  cleanupNeteaseOrphans,
+  formatNeteaseDownloadedSummary,
+  loadNeteaseDownloadedSummary,
+  type NeteaseDownloadedSummary
+} from '@renderer/utils/neteaseActions'
 import { emptyRecycleBinWithOptimisticUpdate } from '@renderer/utils/recycleBinActions'
 import emitter from '@renderer/utils/mitt'
 import {
@@ -194,11 +201,15 @@ const isPlaylistUnderLibrary = (uuid: string, libraryName: CoreLibraryName): boo
   const prefix = `library/${libraryName}`
   return normalized === prefix || normalized.startsWith(`${prefix}/`)
 }
-const resolveLibrarySelectionBySongListUUID = (uuid: string): LibrarySelection | '' => {
+/** 只用于面板标题的"来源库"标识；后两个是网易云的虚拟列表，不参与 libraryAreaSelected */
+type PaneSourceLabel = LibrarySelection | 'NeteaseDownloaded' | 'NeteasePlaylist'
+const resolveLibrarySelectionBySongListUUID = (uuid: string): PaneSourceLabel | '' => {
   if (!uuid) return ''
   if (uuid === EXTERNAL_PLAYLIST_UUID) return 'ExternalPlaylist'
   if (uuid === RECYCLE_BIN_UUID) return 'RecycleBin'
   if (uuid === RECORDING_LIBRARY_UUID) return 'RecordingLibrary'
+  if (uuid === NETEASE_DOWNLOADED_UUID) return 'NeteaseDownloaded'
+  if (isNeteasePlaylistUuid(uuid)) return 'NeteasePlaylist'
   const dirPath = normalizeLibraryPath(libraryUtils.findDirPathByUuid(uuid))
   if (dirPath === 'library/FilterLibrary' || dirPath.startsWith('library/FilterLibrary/')) {
     return 'FilterLibrary'
@@ -214,7 +225,7 @@ const resolveLibrarySelectionBySongListUUID = (uuid: string): LibrarySelection |
   }
   return ''
 }
-const resolveLibraryLabel = (libraryName: LibrarySelection | '') => {
+const resolveLibraryLabel = (libraryName: PaneSourceLabel | '') => {
   switch (libraryName) {
     case 'FilterLibrary':
       return t('library.filter')
@@ -230,6 +241,10 @@ const resolveLibraryLabel = (libraryName: LibrarySelection | '') => {
       return t('recycleBin.recycleBin')
     case 'RecordingLibrary':
       return t('library.recordingLibrary')
+    case 'NeteaseDownloaded':
+      return t('netease.downloaded')
+    case 'NeteasePlaylist':
+      return t('library.neteaseLibrary')
     default:
       return ''
   }
@@ -290,7 +305,9 @@ watch(
       !uuid ||
       uuid === EXTERNAL_PLAYLIST_UUID ||
       uuid === RECYCLE_BIN_UUID ||
-      uuid === RECORDING_LIBRARY_UUID
+      uuid === RECORDING_LIBRARY_UUID ||
+      uuid === NETEASE_DOWNLOADED_UUID ||
+      isNeteasePlaylistUuid(uuid)
     ) {
       return
     }
@@ -406,6 +423,60 @@ const showSingleSongsAreaHeader = computed(
     !singlePaneHeaderRevealPending.value &&
     Boolean(runtime.songsAreaPanels.panes.single.songListUUID)
 )
+
+// ── 网易云「查看已下载」的合计 ────────────────────────────────────────────────
+// 只在打开这个视图时查一次主进程的聚合，不把整张表拉过来算。
+const neteaseDownloadedSummary = ref<NeteaseDownloadedSummary>({
+  count: 0,
+  totalBytes: 0,
+  orphanCount: 0,
+  orphanSongIds: []
+})
+const neteaseSummaryText = computed(() =>
+  formatNeteaseDownloadedSummary(neteaseDownloadedSummary.value)
+)
+const refreshNeteaseSummary = async () => {
+  if (runtime.songsArea.songListUUID !== NETEASE_DOWNLOADED_UUID) return
+  neteaseDownloadedSummary.value = await loadNeteaseDownloadedSummary()
+}
+watch(
+  () => runtime.songsArea.songListUUID,
+  (uuid) => {
+    if (uuid !== NETEASE_DOWNLOADED_UUID) return
+    void refreshNeteaseSummary()
+  },
+  { immediate: true }
+)
+const handleNeteaseDownloadedChanged = () => {
+  void refreshNeteaseSummary()
+}
+emitter.on('netease/downloadedChanged', handleNeteaseDownloadedChanged)
+const resolveSetPendingText = (pane: 'single' | 'left' | 'right') => {
+  const paneState = runtime.songsAreaPanels.panes[pane]
+  const node = libraryUtils.getLibraryTreeByUUID(paneState.songListUUID)
+  if (node?.type !== 'setList') return ''
+  const count = (paneState.songInfoArr || []).filter((song) => song.neteasePendingDownload).length
+  return count > 0 ? t('netease.setPendingCount', { count }) : ''
+}
+const handleNeteaseSetPendingUpdated = (
+  _event: unknown,
+  payload?: { playlistUuids?: string[] }
+) => {
+  const uuids = Array.isArray(payload?.playlistUuids) ? payload.playlistUuids : []
+  if (uuids.length > 0) {
+    emitter.emit('setList/itemsChanged', { uuids })
+    emitter.emit('playlistContentChanged', { uuids })
+  }
+  emitter.emit('netease/downloadedChanged')
+}
+window.electron.ipcRenderer.on('netease:set-pending-updated', handleNeteaseSetPendingUpdated)
+onUnmounted(() => {
+  emitter.off('netease/downloadedChanged', handleNeteaseDownloadedChanged)
+  window.electron.ipcRenderer.removeListener(
+    'netease:set-pending-updated',
+    handleNeteaseSetPendingUpdated
+  )
+})
 
 const {
   splitSongsAreaRef,
@@ -790,7 +861,18 @@ const drop = async (e: DragEvent) => {
                 v-model:compatible-key-only="runtime.songsAreaPanels.panes[pane].compatibleKeyOnly"
                 :title="resolveSongsPaneTitle(pane)"
                 :show-empty-recycle-bin-button="showEmptyRecycleBinButton"
+                :netease-summary-text="
+                  runtime.songsAreaPanels.panes[pane].songListUUID === NETEASE_DOWNLOADED_UUID
+                    ? neteaseSummaryText.total
+                    : resolveSetPendingText(pane)
+                "
+                :netease-orphan-count="
+                  runtime.songsAreaPanels.panes[pane].songListUUID === NETEASE_DOWNLOADED_UUID
+                    ? neteaseDownloadedSummary.orphanCount
+                    : 0
+                "
                 @empty-recycle-bin="emptyRecycleBinWithOptimisticUpdate(runtime)"
+                @cleanup-netease-orphans="cleanupNeteaseOrphans(neteaseDownloadedSummary)"
                 @close="pane === 'single' ? handleSinglePaneClose() : handleSplitPaneClose(pane)"
               />
               <pioneerSongsArea

@@ -13,6 +13,8 @@ import {
 } from '@renderer/utils/libraryTransfer'
 import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 import { RendererFilePathMap, RendererFilePathSet } from '@renderer/utils/filePathComparison'
+import { appendNeteaseSongsToSet } from '@renderer/utils/neteaseActions'
+import { NETEASE_DOWNLOADED_UUID, isNeteasePlaylistUuid } from '@shared/netease'
 
 export type MoveSongsLibraryName =
   'CuratedLibrary' | 'FilterLibrary' | 'SetLibrary' | 'MixtapeLibrary'
@@ -183,6 +185,25 @@ export function useSelectAndMoveSongs(params: UseSelectAndMoveSongsParams) {
       return
     }
     if (isSetTarget) {
+      if (
+        isNeteasePlaylistUuid(sourceSongListUUID) ||
+        sourceSongListUUID === NETEASE_DOWNLOADED_UUID
+      ) {
+        if (targetNode?.type !== 'setList') return
+        const selectedKeys = normalizeUniqueStrings(songsAreaState.selectedSongFilePath)
+        const songs = resolveSelectedSongsByRowKey(selectedKeys, sourceNode?.type)
+        if (songs.length === 0) return
+        await appendNeteaseSongsToSet({
+          playlistUuid: targetSongListUUID,
+          songs,
+          originPlaylistUuid: sourceSongListUUID,
+          originPathSnapshot: sourceNode
+            ? libraryUtils.buildDisplayPathByUuid(sourceSongListUUID)
+            : '网易云音乐'
+        })
+        songsAreaState.selectedSongFilePath.length = 0
+        return
+      }
       if (
         targetNode?.type !== 'setList' ||
         (sourceNode &&

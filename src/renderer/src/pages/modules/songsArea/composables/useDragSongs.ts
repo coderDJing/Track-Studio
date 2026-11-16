@@ -14,9 +14,12 @@ import { buildMixtapeDragSessionItem } from '@renderer/utils/mixtapeDragSession'
 import { toIpcCloneablePayload } from '@renderer/utils/ipcCloneablePayload'
 import { appendExternalSongsToSet } from '@renderer/utils/setCustody'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
-import { t } from '@renderer/utils/translate'
 import { type MoveSongsToDirSummary, useSongMoveTransaction } from './useSongMoveTransaction'
 import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
+import { isNeteaseStoreCopyOnlySource } from '@renderer/utils/libraryTransfer'
+import { appendNeteaseSongsToSet } from '@renderer/utils/neteaseActions'
+import { NETEASE_DOWNLOADED_UUID, isNeteasePlaylistUuid } from '@shared/netease'
+import { t } from '@renderer/utils/translate'
 
 interface DragSongData {
   songFilePaths: string[]
@@ -256,6 +259,26 @@ export function useDragSongs(params: UseDragSongsParams = {}) {
       const isMixtapeTarget = targetNode?.type === 'mixtapeList'
 
       if (isSetTarget) {
+        if (
+          isNeteasePlaylistUuid(sourceSongListUUID) ||
+          sourceSongListUUID === NETEASE_DOWNLOADED_UUID
+        ) {
+          const songMap = new RendererFilePathMap(
+            sourceSongsAreaState.songInfoArr.map((song) => [song.filePath, song] as const)
+          )
+          const songs = orderedSongFilePaths
+            .map((filePath) => songMap.get(filePath))
+            .filter((song): song is ISongInfo => !!song)
+          if (songs.length === 0) return []
+          await appendNeteaseSongsToSet({
+            playlistUuid: targetSongListUUID,
+            songs,
+            originPlaylistUuid: sourceSongListUUID,
+            originPathSnapshot:
+              libraryUtils.buildDisplayPathByUuid(sourceSongListUUID) || '网易云音乐'
+          })
+          return []
+        }
         if (isRekordboxExternalPlaybackSource(sourceSongListUUID, null)) {
           const songMap = new RendererFilePathMap(
             runtime.playingData.playingSongListData.map((song) => [song.filePath, song] as const)
@@ -294,6 +317,13 @@ export function useDragSongs(params: UseDragSongsParams = {}) {
         try {
           emitter.emit('playlistContentChanged', { uuids: [targetSongListUUID] })
           emitter.emit('setList/itemsChanged', { uuids: [targetSongListUUID] })
+        } catch {}
+        return []
+      }
+
+      if (isNeteasePlaylistUuid(sourceSongListUUID) && !isSetTarget) {
+        try {
+          emitter.emit('songsArea/clipboardHint', { message: t('netease.streamOnlyDragHint') })
         } catch {}
         return []
       }
@@ -399,6 +429,37 @@ export function useDragSongs(params: UseDragSongsParams = {}) {
       const targetDirPath = libraryUtils.findDirPathByUuid(targetSongListUUID)
 
       if (!targetDirPath) {
+        return []
+      }
+
+      if (isNeteaseStoreCopyOnlySource(sourceSongListUUID)) {
+        const copiedPaths = (await window.electron.ipcRenderer.invoke(
+          'moveSongsToDir',
+          orderedSongFilePaths,
+          targetDirPath,
+          {
+            mode: 'copy',
+            curatedArtistNames: orderedSongFilePaths.map((filePath) => {
+              const song = sourceSongsAreaState.songInfoArr.find((item) =>
+                sameRendererFilePath(item.filePath, filePath)
+              )
+              return song?.artist || ''
+            })
+          }
+        )) as string[]
+        const sourceSongMap = new RendererFilePathMap(
+          sourceSongsAreaState.songInfoArr.map((song) => [song.filePath, song] as const)
+        )
+        await copySongCueDefinitionsToTargets(
+          copiedPaths.map((targetFilePath, index) => ({
+            targetFilePath,
+            sourceSong: sourceSongMap.get(orderedSongFilePaths[index] || '')
+          }))
+        )
+        try {
+          emitter.emit('playlistContentChanged', { uuids: [targetSongListUUID] })
+          emitter.emit('songsArea/clipboardHint', { action: 'copy' })
+        } catch {}
         return []
       }
 

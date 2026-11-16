@@ -18,10 +18,8 @@ import type { IPioneerPreviewWaveformData } from 'src/types/globals'
 import type { WaveformGlobalOverviewData } from '@shared/waveformSurfaceCache'
 import { resolvePlayerWaveformTraceElapsedMs, sendPlayerWaveformTrace } from './playerWaveformTrace'
 import { normalizePlaybackHandoffSeconds } from '@renderer/utils/mainWindowPlaybackHandoff'
-import {
-  queueMainPlayerPlayingAnalysis,
-  resolveBrowserMainPlayerAnalysisIntent
-} from '@renderer/utils/playlistAnalysisGate'
+import { resolveBrowserMainPlayerAnalysisIntent } from '@renderer/utils/playlistAnalysisGate'
+import { queueNeteaseAwarePlayingAnalysis } from '@renderer/utils/neteaseActions'
 import { resolveInitialPlaybackRangeStartSec } from '@shared/playbackRange'
 import { projectSongBeatGridMapV2ToFixedGrid } from '@shared/songBeatGridMapV2'
 import { loadRekordboxPlaybackRuntime } from '@renderer/utils/loadRekordboxPlaybackRuntime'
@@ -495,7 +493,7 @@ export function useSongLoader(params: {
             if (requestId !== currentLoadRequestId.value) return
             if (!sameRendererFilePath(runtime.playingData.playingSong?.filePath, filePath)) return
             tracePlayerWaveform('loader', 'formal-cache:queue-generation', filePath)
-            queueMainPlayerPlayingAnalysis(runtime, filePath)
+            queueNeteaseAwarePlayingAnalysis(runtime, filePath)
           })()
         }
       } else {

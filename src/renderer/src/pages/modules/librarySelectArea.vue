@@ -2,6 +2,7 @@
 import listIconAsset from '@renderer/assets/list.svg?asset'
 import likeIconAsset from '@renderer/assets/like.svg?asset'
 import trashIconAsset from '@renderer/assets/trash.svg?asset'
+import neteaseIconAsset from '@renderer/assets/netease.svg?asset'
 import mixtapeIconAsset from '@renderer/assets/mixtape.svg?asset'
 import setListIconAsset from '@renderer/assets/setList.svg?asset'
 import recordIconAsset from '@renderer/assets/record.svg?asset'
@@ -28,6 +29,8 @@ import type { Icon, IDir } from '../../../../types/globals'
 import tempListIconAsset from '@renderer/assets/tempList.svg?asset'
 import emitter from '@renderer/utils/mitt'
 import libraryUtils from '@renderer/utils/libraryUtils'
+import { syncNeteaseLibrary } from '@renderer/utils/neteaseActions'
+import { findNeteaseLibraryNode, isNeteasePlaylistUuid } from '@renderer/utils/neteaseSongs'
 import { requestUserGuideStep } from '@renderer/composables/userGuideBridge'
 import {
   requestLibraryUserGuide,
@@ -120,6 +123,14 @@ const baseIcons: Icon[] = [
     src: trashIconAsset,
     showAlt: false,
     i18nKey: 'recycleBin.recycleBin'
+  },
+  {
+    name: 'NeteaseLibrary',
+    grey: neteaseIconAsset,
+    white: neteaseIconAsset,
+    src: neteaseIconAsset,
+    showAlt: false,
+    i18nKey: 'library.neteaseLibrary'
   }
 ]
 
@@ -129,7 +140,8 @@ const coreIconNameSet = new Set([
   'CuratedLibrary',
   'SetLibrary',
   'MixtapeLibrary',
-  'RecycleBin'
+  'RecycleBin',
+  'NeteaseLibrary'
 ])
 const coreIconArr = computed(() => iconArr.value.filter((item) => coreIconNameSet.has(item.name)))
 const dynamicIconArr = computed(() =>
@@ -230,12 +242,38 @@ const clickIcon = (item: Icon) => {
   if (item.name === 'RecycleBin') {
     scheduleRecycleBinTrackCountRefresh()
   }
+  if (item.name === 'NeteaseLibrary') {
+    // 点库图标即登录入口（未登录时弹二维码），登录后立刻同步一次目录。
+    // 同步完再把面板切到第一张歌单：否则会出现"左侧选中网易云、右侧还是别的库的歌单"。
+    void syncNeteaseLibrary({ silent: true }).then(() => {
+      // 同步是异步的：用户可能在它回来之前已经点去别的库了，这时不能抢走右侧列表
+      if (runtime.libraryAreaSelected !== 'NeteaseLibrary') return
+      const current = runtime.songsArea.songListUUID
+      if (isNeteasePlaylistUuid(current)) return
+      const first = findFirstNeteasePlaylist(runtime.libraryTree)
+      if (first) runtime.songsArea.songListUUID = first
+    })
+  }
   if (item.name == selectedIcon.value.name) {
     runtime.libraryAreaSelected = item.name
     return
   }
   runtime.libraryAreaSelected = item.name
 }
+
+/** 树里第一张网易云歌单（深度优先，与树上的显示顺序一致） */
+const findFirstNeteasePlaylist = (root: IDir | null | undefined): string => {
+  const libraryNode = findNeteaseLibraryNode(root)
+  if (!libraryNode) return ''
+  const queue: IDir[] = [...(libraryNode.children || [])]
+  while (queue.length) {
+    const node = queue.shift() as IDir
+    if (isNeteasePlaylistUuid(node.uuid)) return node.uuid
+    for (const child of node.children || []) queue.push(child)
+  }
+  return ''
+}
+
 const iconRefMap = reactive<Record<string, HTMLElement | null>>({})
 const scrollItemRefMap = reactive<Record<string, HTMLElement | null>>({})
 const resolveRefDom = (el: Element | ComponentPublicInstance | null) => {

@@ -181,6 +181,8 @@ const isPlaylistNode = (node?: IDir | null) =>
 export const getLibraryTreeNodeTrackCount = (node?: IDir | null): number => {
   if (!node) return 0
   if (isPlaylistNode(node)) {
+    // 虚拟节点（网易云歌单）自带数量，优先于缓存：缓存里可能是上一轮盘上扫描留下的 0
+    if (typeof node.trackCount === 'number') return node.trackCount
     const cached = libraryTreeTrackCountMap[node.uuid]
     return typeof cached === 'number' ? cached : 0
   }
@@ -245,7 +247,9 @@ export const hasCompleteLibraryTreeTrackCounts = (root?: IDir | null): boolean =
   if (!nodes.length) return true
   return nodes.every(
     (node) =>
-      !String(node.dirName || '').trim() || typeof libraryTreeTrackCountMap[node.uuid] === 'number'
+      !String(node.dirName || '').trim() ||
+      typeof node.trackCount === 'number' ||
+      typeof libraryTreeTrackCountMap[node.uuid] === 'number'
   )
 }
 
@@ -308,6 +312,12 @@ const runPrefetchLibraryTreeTrackCounts = async (rootKey: string, root?: IDir | 
     }
     if (node.type === 'setList') {
       setListUuids.push(node.uuid)
+      continue
+    }
+    // 虚拟节点自带数量（网易云歌单），直接落地；
+    // 它的 dirName 不是磁盘目录名，送进统计只会去扫一个不存在的路径。
+    if (typeof node.trackCount === 'number') {
+      setLibraryTreeTrackCount(node.uuid, node.trackCount)
       continue
     }
     // 新建歌单尚未命名时，路径解析会指向父目录；绝不能把它送进递归统计。

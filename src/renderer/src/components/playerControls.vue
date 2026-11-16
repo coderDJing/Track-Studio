@@ -18,6 +18,12 @@ import confirm from '@renderer/components/confirmDialog'
 import { analyzeFingerprintsForPaths } from '@renderer/utils/fingerprintActions'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
 import { isEditablePioneerUsbSong } from '@renderer/utils/pioneerUsbEditing'
+import { isNeteaseStreamSong, parseNeteaseSongId } from '@renderer/utils/neteaseSongs'
+import {
+  deleteNeteaseLocalFiles,
+  downloadNeteaseTracks,
+  redownloadNeteaseTracks
+} from '@renderer/utils/neteaseActions'
 import type { LibraryTransferActionMode } from '@renderer/utils/libraryTransfer'
 import {
   getMusicSearchOpenFailedMessageKey,
@@ -69,6 +75,20 @@ const isReadOnlyPlaybackSource = computed(() =>
     runtime.playingData.playingSongListUUID,
     runtime.playingData.playingSong
   )
+)
+/**
+ * 网易云歌单里正在播的这一首：盘上没有文件，只有一个试听流地址。
+ *
+ * 这类行不能走导出/移动/复制/删除那套按路径干活的逻辑，菜单里换成网易云自己的
+ * 三个动作（下载、按音质重下、删除本地文件），语义和曲目行右键保持一致。
+ */
+const isStreamOnlySong = computed(() => isNeteaseStreamSong(runtime.playingData.playingSong))
+const streamOnlySongId = computed(() => {
+  const filePath = String(runtime.playingData.playingSong?.filePath || '')
+  return isStreamOnlySong.value ? parseNeteaseSongId(filePath) : null
+})
+const streamOnlyDownloaded = computed(
+  () => runtime.playingData.playingSong?.neteaseDownloaded === true
 )
 const isPlaying = computed(() => props.playing === true)
 watch(
@@ -202,6 +222,30 @@ const exportTrack = () => {
 const showInFileExplorer = () => {
   window.electron.ipcRenderer.send('show-item-in-folder', runtime.playingData.playingSong?.filePath)
   closeMoreMenu()
+}
+
+/**
+ * 网易云流媒体的三个本地动作（下载 / 按音质重下 / 删除本地文件）。
+ *
+ * 下载成功后把当前播放行的「已下载」标记跟着改掉，纯粹是为了让菜单立刻变对——
+ * 列表里的徽标走的是另一条重载路径，管不到播放器手上这份快照。
+ */
+const handleStreamOnlyLocalAction = async (action: 'download' | 'redownload' | 'delete') => {
+  const songId = streamOnlySongId.value
+  if (!songId) return
+  closeMoreMenu()
+  try {
+    const changed =
+      action === 'delete'
+        ? await deleteNeteaseLocalFiles([songId])
+        : action === 'redownload'
+          ? await redownloadNeteaseTracks([songId])
+          : await downloadNeteaseTracks([songId])
+    if (!changed || !runtime.playingData.playingSong) return
+    runtime.playingData.playingSong.neteaseDownloaded = action !== 'delete'
+  } catch {
+    // 失败由 neteaseActions 内部弹窗说明，这里只保持菜单状态不变
+  }
 }
 
 const closeMoreMenu = () => {
@@ -783,12 +827,49 @@ onUnmounted(() => {
     </div>
     <transition name="fade">
       <div v-if="moreMenuShow && !props.hidePlaybackControls" class="moreMenu unselectable">
-        <div style="padding: 5px 5px; border-bottom: 1px solid var(--border)">
+        <!-- 网易云歌单里的这一首：盘上没有文件，只给「下载」相关的动作 -->
+        <div
+          v-if="isStreamOnlySong"
+          style="padding: 5px 5px; border-bottom: 1px solid var(--border)"
+        >
+          <div class="menuButton" @click="handleStreamOnlyLocalAction('download')">
+            <span>{{ t('netease.downloadToLocal') }}</span>
+          </div>
+          <div
+            v-if="streamOnlyDownloaded"
+            class="menuButton"
+            @click="handleStreamOnlyLocalAction('redownload')"
+          >
+            <span>{{ t('netease.redownload') }}</span>
+          </div>
+          <div
+            v-if="streamOnlyDownloaded"
+            class="menuButton"
+            @click="handleStreamOnlyLocalAction('delete')"
+          >
+            <span>{{ t('netease.removeLocalFile') }}</span>
+          </div>
+        </div>
+        <div v-else style="padding: 5px 5px; border-bottom: 1px solid var(--border)">
           <div class="menuButton" @click="exportTrack()">
             <span>{{ exportTrackLabel }}</span>
           </div>
         </div>
-        <div style="padding: 5px 5px; border-bottom: 1px solid var(--border)">
+        <div
+          v-if="isStreamOnlySong"
+          style="padding: 5px 5px; border-bottom: 1px solid var(--border)"
+        >
+          <div class="menuButton" @click="exportTrack()">
+            <span>{{ t('tracks.exportTracksCopyOnly') }}</span>
+          </div>
+          <div class="menuButton" @click="moveToSetLibrary()">
+            <span>{{ t('library.addToSet') }}</span>
+          </div>
+        </div>
+        <div
+          v-if="!isStreamOnlySong"
+          style="padding: 5px 5px; border-bottom: 1px solid var(--border)"
+        >
           <div class="menuButton" @click="handleRekordboxDesktopPlaylist()">
             <span>{{ t('rekordboxDesktop.menuCreatePlaylistFromSelectedTracks') }}</span>
           </div>
@@ -806,7 +887,10 @@ onUnmounted(() => {
             <span>{{ t('rekordboxXmlExport.menuExportSelectedTracks') }}</span>
           </div>
         </div>
-        <div style="padding: 5px 5px; border-bottom: 1px solid var(--border)">
+        <div
+          v-if="!isStreamOnlySong"
+          style="padding: 5px 5px; border-bottom: 1px solid var(--border)"
+        >
           <div v-if="!isReadOnlyPlaybackSource" class="menuButton" @click="moveToListLibrary()">
             <div>
               <span>{{ t('library.moveToFilter') }}</span>
@@ -856,7 +940,8 @@ onUnmounted(() => {
         </div>
         <div
           v-if="
-            !isReadOnlyPlaybackSource || isEditablePioneerUsbSong(runtime.playingData.playingSong)
+            !isStreamOnlySong &&
+            (!isReadOnlyPlaybackSource || isEditablePioneerUsbSong(runtime.playingData.playingSong))
           "
           style="padding: 5px 5px; border-bottom: 1px solid var(--border)"
         >
@@ -872,7 +957,10 @@ onUnmounted(() => {
             <span>{{ t('tracks.deleteAllAbove') }}</span>
           </div>
         </div>
-        <div style="padding: 5px 5px; border-bottom: 1px solid var(--border)">
+        <div
+          v-if="!isStreamOnlySong"
+          style="padding: 5px 5px; border-bottom: 1px solid var(--border)"
+        >
           <div class="menuButton" @click="showInFileExplorer()">
             <span>{{ t('tracks.showInFileExplorer') }}</span>
           </div>

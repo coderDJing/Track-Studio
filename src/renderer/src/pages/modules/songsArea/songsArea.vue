@@ -682,10 +682,16 @@ const handleSongContextMenuEvent = async (event: MouseEvent, song: ISongInfo) =>
   }
 }
 
-const requestImmediateAnalysis = (song: ISongInfo) => {
-  const filePath = song?.filePath
+const requestImmediateAnalysis = async (song: ISongInfo) => {
+  let filePath = song?.filePath
   if (!filePath) return
   if (runtime.mainWindowBrowseMode !== 'browser') return
+  if (filePath.startsWith('frkb-preview://') || filePath.startsWith('netease-pending:')) {
+    const { ensureNeteaseLocalFilePaths } = await import('@renderer/utils/neteaseActions')
+    const resolved = await ensureNeteaseLocalFilePaths([filePath])
+    filePath = resolved[0] || ''
+    if (!filePath) return
+  }
   queueMainPlayerPlayingAnalysis(runtime, filePath)
 }
 
@@ -699,7 +705,16 @@ const songDblClick = async (song: ISongInfo, event?: MouseEvent) => {
   runtime.activeMenuUUID = ''
   songsAreaState.selectedSongFilePath = []
 
-  const normalizedSong = { ...song }
+  let normalizedSong = { ...song }
+  if (
+    normalizedSong.neteasePendingDownload ||
+    (normalizedSong.filePath || '').startsWith('netease-pending:')
+  ) {
+    const { fulfillNeteasePendingSetSong } = await import('@renderer/utils/neteaseActions')
+    const ready = await fulfillNeteasePendingSetSong(normalizedSong)
+    if (!ready) return
+    normalizedSong = ready
+  }
   requestImmediateAnalysis(normalizedSong)
   if (runtime.mainWindowBrowseMode !== 'browser') {
     const deck =

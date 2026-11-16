@@ -28,6 +28,9 @@ export function useLibraryTrackCount({ runtime, dirDataRef, props }: UseLibraryT
   const trackCount = computed<number | null>({
     get: () => {
       if (!dirDataRef.value?.dirName) return null
+      // 虚拟节点（网易云歌单）自带数量：盘上没有它的目录，只能信它自己
+      const nodeCount = dirDataRef.value.trackCount
+      if (typeof nodeCount === 'number') return nodeCount
       const shared = libraryTreeTrackCountMap[props.uuid]
       return typeof shared === 'number' ? shared : null
     },
@@ -53,6 +56,11 @@ export function useLibraryTrackCount({ runtime, dirDataRef, props }: UseLibraryT
       if (dirData.type === 'setList') {
         const count = await window.electron.ipcRenderer.invoke('setList:count', props.uuid)
         trackCount.value = typeof count === 'number' ? count : 0
+        return
+      }
+      // 虚拟节点（网易云歌单）自己带着数量，别拿它的显示名去盘上找目录
+      if (typeof dirData.trackCount === 'number') {
+        trackCount.value = dirData.trackCount
         return
       }
       const songListPath = libraryUtils.findDirPathByUuid(props.uuid)

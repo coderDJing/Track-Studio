@@ -295,7 +295,8 @@
     "demucs:runtime:package:mac-x64": "node scripts/package-demucs-runtime-assets.mjs --platform darwin-x64 --output-root dist/demucs-runtime-assets-darwin-x64",
     "demucs:runtime:merge": "node scripts/merge-demucs-runtime-manifests.mjs",
     "lint-staged": "lint-staged",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:netease": "vitest run src/main/netease"
   },
   "dependencies": {
     "@ainsej/rubberband-wasm": "4.0.1",

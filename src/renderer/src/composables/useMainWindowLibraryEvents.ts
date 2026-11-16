@@ -6,6 +6,7 @@ import { pruneLibraryTreeTrackCounts } from '@renderer/utils/libraryTreeSort'
 import { usePlaylistViewSettingsStore } from '@renderer/stores/playlistViewSettings'
 import { isRuntimeLibraryTree } from '@renderer/utils/appRuntimeStateGuards'
 import { markGlobalSongSearchDirty } from '@renderer/utils/globalSongSearchEvents'
+import { localizeNeteaseTreeTitles } from '@renderer/utils/neteaseSongs'
 import emitter from '@renderer/utils/mitt'
 
 // 协调主窗口的音乐库读取、树变更及外部曲目导入；IPC 监听生命周期仍由 App 管理。
@@ -36,6 +37,7 @@ export const useMainWindowLibraryEvents = (runtime: ReturnType<typeof useRuntime
       runtime.libraryTree = await window.electron.ipcRenderer.invoke(
         options?.useCachedSnapshot ? 'getLibrary:cached' : 'getLibrary'
       )
+      localizeNeteaseTreeTitles(runtime.libraryTree)
       runtime.oldLibraryTree = JSON.parse(JSON.stringify(runtime.libraryTree))
       pruneLibraryTreeTrackCounts(runtime.libraryTree)
       usePlaylistViewSettingsStore().pruneDeletedPlaylists(
@@ -75,6 +77,7 @@ export const useMainWindowLibraryEvents = (runtime: ReturnType<typeof useRuntime
   const handleLibraryTreeUpdated = async (_e: unknown, tree: unknown) => {
     try {
       if (isRuntimeLibraryTree(tree)) {
+        localizeNeteaseTreeTitles(tree)
         runtime.libraryTree = tree
         runtime.oldLibraryTree = JSON.parse(JSON.stringify(tree))
         pruneLibraryTreeTrackCounts(tree)

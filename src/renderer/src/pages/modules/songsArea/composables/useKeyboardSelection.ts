@@ -8,6 +8,14 @@ import emitter from '@renderer/utils/mitt'
 import type { ISongsAreaPaneRuntimeState, useRuntimeStore } from '@renderer/stores/runtime'
 import libraryUtils from '@renderer/utils/libraryUtils'
 import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
+import {
+  NETEASE_DOWNLOADED_UUID,
+  isNeteasePendingPath,
+  isNeteasePlaylistUuid,
+  isNeteasePreviewUrl
+} from '@shared/netease'
+import { deleteNeteaseLocalFiles } from '@renderer/utils/neteaseActions'
+import { isNeteaseStoreCopyOnlySource } from '@renderer/utils/libraryTransfer'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { createRepeatSingleClickDeselect } from './repeatSingleClickDeselect'
 import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
@@ -330,6 +338,31 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
       return false
     }
 
+    // 网易云的两个视图走的不是"删文件 → 进回收站"这条路：
+    //   - 歌单视图里的行大多没有本地文件，Delete 只对**已下载**的那些有意义；
+    //   - 已下载视图删的是下载缓存，歌单本身不受影响，所以走专门的 IPC。
+    if (
+      isNeteasePlaylistUuid(activeSongsAreaState.songListUUID) ||
+      activeSongsAreaState.songListUUID === NETEASE_DOWNLOADED_UUID
+    ) {
+      const ids = activeSongsAreaState.songInfoArr
+        .filter((song) => selectedKeys.includes(song.filePath))
+        // 未下载的行没有本地文件可删：不能让它弹出"确定删除 N 首"然后什么也没发生
+        .filter((song) => song.neteaseDownloaded === true)
+        .map((song) => String(song.neteaseSongId || ''))
+        .filter((id) => id.length > 0)
+      if (ids.length === 0) {
+        await confirm({
+          title: t('dialog.hint'),
+          content: [t('netease.nothingDownloadedToDelete')],
+          confirmShow: false
+        })
+        return false
+      }
+      await deleteNeteaseLocalFiles(ids)
+      return false
+    }
+
     const buildDelSongsPayload = (paths: string[]) => {
       if (isExternalView) {
         return { filePaths: paths, sourceType: 'external' }
@@ -615,6 +648,16 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
         if (selectedKeys.length === 0) return true
         const selectedPaths = resolveSelectedFilePathsForState(songsAreaState, selectedKeys)
         if (selectedPaths.length === 0) return true
+        if (
+          selectedPaths.some(
+            (filePath) => isNeteasePreviewUrl(filePath) || isNeteasePendingPath(filePath)
+          )
+        ) {
+          try {
+            emitter.emit('songsArea/clipboardHint', { message: t('netease.streamOnlyDragHint') })
+          } catch {}
+          return false
+        }
         void writeFilesToClipboard('copy', selectedPaths)
         return false
       })
@@ -625,7 +668,22 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
         if (selectedKeys.length === 0) return true
         const selectedPaths = resolveSelectedFilePathsForState(songsAreaState, selectedKeys)
         if (selectedPaths.length === 0) return true
-        void writeFilesToClipboard('cut', selectedPaths)
+        if (
+          selectedPaths.some(
+            (filePath) => isNeteasePreviewUrl(filePath) || isNeteasePendingPath(filePath)
+          )
+        ) {
+          try {
+            emitter.emit('songsArea/clipboardHint', { message: t('netease.streamOnlyDragHint') })
+          } catch {}
+          return false
+        }
+        const clipboardOp: ClipboardOperation = isNeteaseStoreCopyOnlySource(
+          songsAreaState.songListUUID
+        )
+          ? 'copy'
+          : 'cut'
+        void writeFilesToClipboard(clipboardOp, selectedPaths)
         return false
       })
     }

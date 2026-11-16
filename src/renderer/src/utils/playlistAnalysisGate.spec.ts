@@ -43,4 +43,13 @@ describe('browser main player analysis gate', () => {
   it('ignores empty playback paths', () => {
     expect(buildMainPlayerPlayingAnalysisPayload('', createRuntime('browser'))).toBeNull()
   })
+
+  it('does not enqueue NetEase preview or pending placeholder paths', () => {
+    expect(
+      buildMainPlayerPlayingAnalysisPayload('frkb-preview://?netease=123456', createRuntime('edit'))
+    ).toBeNull()
+    expect(
+      buildMainPlayerPlayingAnalysisPayload('netease-pending:123456', createRuntime('horizontal'))
+    ).toBeNull()
+  })
 })

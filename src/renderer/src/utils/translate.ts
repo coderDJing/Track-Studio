@@ -7,7 +7,8 @@ const LIBRARY_NAME_TO_I18N_KEY: Record<string, string> = {
   SetLibrary: 'library.setLibrary',
   RecordingLibrary: 'library.recordingLibrary',
   MixtapeLibrary: 'library.mixtapeLibrary',
-  RecycleBin: 'recycleBin.recycleBin'
+  RecycleBin: 'recycleBin.recycleBin',
+  NeteaseLibrary: 'library.neteaseLibrary'
 }
 type RuntimeI18nGlobal = {
   locale: string | { value: string }

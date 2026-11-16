@@ -21,6 +21,7 @@ import {
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { t } from '@renderer/utils/translate'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
+import { isNeteaseStreamSong } from '@renderer/utils/neteaseSongs'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import {
   MINI_PLAYER_CHANNELS,
@@ -90,6 +91,11 @@ const isReadOnlyPlaybackSource = computed(() =>
     runtime.playingData.playingSong
   )
 )
+/**
+ * 网易云歌单里的曲目：盘上没有文件，只有 frkb-preview 流地址。
+ * 小窗菜单是按文件路径干活的，这类行点下去只会失败，所以统一挡在这里。
+ */
+const isStreamOnlySong = computed(() => isNeteaseStreamSong(song.value))
 const { coverBlobUrl, setCoverByIPC } = useCover(runtime)
 const formatTime = (seconds: number) => {
   const safe = Math.max(0, Number(seconds) || 0)
@@ -465,7 +471,7 @@ const handleExport = async () => {
   closeLocalMenus()
   const result = await showOverlay('export', {
     title: 'tracks.title',
-    forceCopyOnly: isReadOnlyPlaybackSource.value
+    forceCopyOnly: isReadOnlyPlaybackSource.value || isStreamOnlySong.value
   })
   if (result.type !== 'export') return
   sendCommand({
@@ -477,6 +483,10 @@ const handleExport = async () => {
 
 const handleDelete = async () => {
   closeLocalMenus()
+  if (isStreamOnlySong.value) {
+    await showHint([t('netease.streamOnlyNoFile')])
+    return
+  }
   if (isReadOnlyPlaybackSource.value) {
     await showHint([t('tracks.readOnlySourceDeleteNotAllowed')])
     return
@@ -553,6 +563,10 @@ const handleMenuAction = (action: MiniPlayerOverlayMenuAction) => {
   }
   if (action === 'deleteAllAbove') {
     void handleDeleteAllAbove()
+    return
+  }
+  if (isStreamOnlySong.value) {
+    void showHint([t('netease.streamOnlyNoFile')])
     return
   }
   window.electron.ipcRenderer.send('show-item-in-folder', song.value?.filePath)

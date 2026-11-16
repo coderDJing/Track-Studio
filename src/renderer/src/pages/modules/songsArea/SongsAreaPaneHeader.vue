@@ -17,6 +17,10 @@ const props = defineProps<{
   title: string
   showEmptyRecycleBinButton: boolean
   pane: SongsAreaPaneKey
+  /** 「查看已下载」的合计文案（共 N 首 · 12.3GB）；空串表示不显示 */
+  neteaseSummaryText?: string
+  /** 已不在任何歌单的缓存数量；0 表示没有可清理的 */
+  neteaseOrphanCount?: number
 }>()
 const searchQuery = defineModel<string>('searchQuery', { required: true })
 const compatibleKeyOnly = defineModel<boolean>('compatibleKeyOnly', { required: true })
@@ -56,6 +60,7 @@ const hasHarmonicReference = computed(() =>
 const emit = defineEmits<{
   (event: 'close'): void
   (event: 'empty-recycle-bin'): void
+  (event: 'cleanup-netease-orphans'): void
 }>()
 const searchInput = useTemplateRef<HTMLInputElement>('searchInput')
 const clearSearch = () => {
@@ -67,6 +72,19 @@ const clearSearch = () => {
 <template>
   <div class="songs-pane-header">
     <div class="songs-pane-header__title">{{ title }}</div>
+    <span v-if="props.neteaseSummaryText" class="songs-pane-header__netease-summary">{{
+      props.neteaseSummaryText
+    }}</span>
+    <bubbleBoxTrigger
+      v-if="(props.neteaseOrphanCount || 0) > 0"
+      tag="button"
+      class="songs-pane-header__button songs-pane-header__button--text"
+      type="button"
+      :title="t('netease.orphanHint')"
+      @click.stop="emit('cleanup-netease-orphans')"
+    >
+      {{ t('netease.orphanGroup') }} ({{ props.neteaseOrphanCount }})
+    </bubbleBoxTrigger>
     <bubbleBoxTrigger
       v-if="showEmptyRecycleBinButton"
       tag="button"
@@ -211,6 +229,28 @@ const clearSearch = () => {
 
   &:hover {
     background: color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+}
+
+/* 「查看已下载」的合计：跟标题同一行，弱化处理，不抢标题 */
+.songs-pane-header__netease-summary {
+  font-size: 12px;
+  color: var(--text-weak);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 孤儿清理是文字按钮，宽度按内容走，不能沿用 24px 的图标尺寸 */
+.songs-pane-header__button--text {
+  width: auto;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--text-weak);
+  border: 1px solid var(--border);
+
+  &:hover {
+    color: var(--text);
+    border-color: var(--accent);
   }
 }
 

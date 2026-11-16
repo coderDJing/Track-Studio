@@ -172,6 +172,31 @@ describe('libraryTreeSort track counts', () => {
     expect(mod.libraryTreeTrackCountMap.pending).toBeUndefined()
   })
 
+  it('takes the count a virtual node carries instead of scanning a directory it does not have', async () => {
+    installGlobals()
+    const mod = await loadModule()
+    // 网易云歌单这类节点：dirName 只是显示名，盘上没有对应目录
+    const virtual = {
+      uuid: 'netease:pl:1',
+      dirName: '我喜欢的音乐',
+      type: 'songList',
+      children: [],
+      trackCount: 12
+    } as IDir
+    const root = library([virtual, playlist('a', 'Alpha')])
+    invoke.mockResolvedValue({ a: 2 })
+
+    await mod.prefetchLibraryTreeTrackCounts(root)
+
+    // 只有真实目录的歌单进统计，虚拟节点绝不送去扫盘
+    expect(invoke).toHaveBeenCalledWith('playlist:batchTrackCount', {
+      songLists: [{ uuid: 'a', songListPath: 'library/a' }]
+    })
+    expect(mod.libraryTreeTrackCountMap['netease:pl:1']).toBe(12)
+    expect(mod.getLibraryTreeNodeTrackCount(virtual)).toBe(12)
+    expect(mod.hasCompleteLibraryTreeTrackCounts(root)).toBe(true)
+  })
+
   it('builds the shared sort menu with a check mark on the current rule', async () => {
     installGlobals()
     const mod = await loadModule()

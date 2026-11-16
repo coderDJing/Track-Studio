@@ -149,6 +149,7 @@
       "sectionLibraryTitle": "Music Library & Lists",
       "sectionLibraryDesc": "Everything that affects list display, curated artist matching, and library actions.",
       "sectionUserGuideTitle": "User Guide",
+      "sectionNeteaseTitle": "NetEase Cloud Music",
       "sectionSafetyTitle": "Maintenance & Dangerous Actions",
       "sectionSafetyDesc": "High-risk actions are kept separate at the end to avoid accidental clicks.",
       "statusConfigured": "Configured",

@@ -46,7 +46,11 @@ import {
   unregisterTitleAudioVisualizerSource,
   type TitleAudioVisualizerSource
 } from '@renderer/composables/titleAudioVisualizerBridge'
-import { queueMainPlayerPlayingAnalysis } from '@renderer/utils/playlistAnalysisGate'
+import {
+  fulfillNeteasePendingSetSong,
+  isNeteasePendingSetSong,
+  queueNeteaseAwarePlayingAnalysis
+} from '@renderer/utils/neteaseActions'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
 import { sendPlayerWaveformTrace } from './playerWaveformTrace'
 import { usePlaybackRangeController } from './usePlaybackRangeController'
@@ -691,8 +695,11 @@ watch(
   (newSong, oldSong) => {
     if (newSong?.filePath && !sameRendererFilePath(newSong.filePath, oldSong?.filePath)) {
       keyboardPercentSeek.clear('song-change')
-      if (!isRekordboxExternalPlaybackSource(runtime.playingData.playingSongListUUID, newSong)) {
-        queueMainPlayerPlayingAnalysis(runtime, newSong.filePath)
+      if (
+        !isRekordboxExternalPlaybackSource(runtime.playingData.playingSongListUUID, newSong) &&
+        !isNeteasePendingSetSong(newSong)
+      ) {
+        queueNeteaseAwarePlayingAnalysis(runtime, newSong.filePath)
       }
     }
     if (isInternalSongChange.value) {
@@ -710,6 +717,17 @@ watch(
       bpm.value = ''
     } else if (!sameRendererFilePath(newSong?.filePath, oldSong?.filePath)) {
       if (newSong?.fileMissing) return
+      if (isNeteasePendingSetSong(newSong)) {
+        void (async () => {
+          const ready = await fulfillNeteasePendingSetSong(newSong)
+          if (!ready) return
+          if (runtime.playingData.playingSong?.setItemId && newSong.setItemId) {
+            if (runtime.playingData.playingSong.setItemId !== newSong.setItemId) return
+          }
+          runtime.playingData.playingSong = ready
+        })()
+        return
+      }
       const newPath = newSong.filePath
       setCoverByIPC(newPath)
       requestLoadSong(newPath)

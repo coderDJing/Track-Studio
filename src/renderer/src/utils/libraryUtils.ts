@@ -3,6 +3,7 @@ import confirm from '@renderer/components/confirmDialog'
 import { IDir } from 'src/types/globals'
 import { calculateFileSystemOperations } from './diffLibraryTree'
 import { toLibraryDisplayName, t } from './translate'
+import { localizeNeteaseTreeTitles } from './neteaseSongs'
 import { usePlaylistViewSettingsStore } from '@renderer/stores/playlistViewSettings'
 
 const MIXTAPE_WINDOW_OPEN_ERROR_CODE = 'MIXTAPE_WINDOW_OPEN'
@@ -82,6 +83,7 @@ export const diffLibraryTreeExecuteFileOperation = async () => {
     try {
       const latestTree = await window.electron.ipcRenderer.invoke('getLibrary')
       if (latestTree) {
+        localizeNeteaseTreeTitles(latestTree)
         runtime.libraryTree = latestTree
         runtime.oldLibraryTree = JSON.parse(JSON.stringify(latestTree))
         usePlaylistViewSettingsStore().pruneDeletedPlaylists(

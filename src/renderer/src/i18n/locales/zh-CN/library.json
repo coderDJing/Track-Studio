@@ -181,6 +181,7 @@
     "ejectUsbDriveProgress": "正在弹出 U 盘...",
     "ejectUsbDriveFailed": "U 盘弹出失败。",
     "ejectUsbDriveFailedHint": "请关闭正在占用该 U 盘的文件、播放或后台任务后重试。",
-    "ejectUsbDriveInvalidPath": "未找到可弹出的 U 盘路径。"
+    "ejectUsbDriveInvalidPath": "未找到可弹出的 U 盘路径。",
+    "neteaseLibrary": "网易云音乐"
   }
 }

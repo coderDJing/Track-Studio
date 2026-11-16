@@ -198,6 +198,73 @@ const filterExistingPioneerTracks = async (tracks: IPioneerPlaylistTrack[]) => {
   return candidates.filter((track) => Boolean(existsMap[String(track.filePath || '').trim()]))
 }
 
+/**
+ * 把一批本地文件加进混音。
+ *
+ * 先复制进混音自己的 vault，再追加。
+ *
+ * 复制失败的那首**不进混音**——这一点和 `copyPioneerTracksToMixtape` 一致，也和"混音不能
+ * 依赖别人的缓存目录"这条原则一致：源是网易云的 `.store`，用户随时可能在设置里清缓存，
+ * 一旦清掉，混音里就会出现一批断掉的引用。宁可少加几首并明确告知，也不要留下暗雷。
+ */
+export const appendDownloadedFilesToMixtape = async ({
+  playlistId,
+  entries
+}: {
+  playlistId: string
+  entries: Array<{ filePath: string; song?: SongSnapshotInput | null }>
+}) => {
+  const sourcePaths = entries
+    .map((entry) => String(entry.filePath || '').trim())
+    .filter((filePath) => filePath.length > 0)
+  if (!playlistId || sourcePaths.length === 0) {
+    await confirm({
+      title: t('dialog.hint'),
+      content: [t('mixtape.noTracksToAdd')],
+      confirmShow: false
+    })
+    return
+  }
+
+  const copiedMap = new Map<string, string>()
+  try {
+    const copied = (await window.electron.ipcRenderer.invoke('mixtape:copy-files-to-vault', {
+      filePaths: sourcePaths
+    })) as Array<{ sourcePath: string; targetPath: string }>
+    for (const item of Array.isArray(copied) ? copied : []) {
+      if (item?.sourcePath && item?.targetPath) {
+        copiedMap.set(normalizePathKey(item.sourcePath), item.targetPath)
+      }
+    }
+  } catch {}
+
+  const rawItems = entries
+    .map((entry): MixtapeAppendItem | null => {
+      const sourcePath = String(entry.filePath || '').trim()
+      if (!sourcePath) return null
+      const targetPath = copiedMap.get(normalizePathKey(sourcePath))
+      if (!targetPath) return null
+      return {
+        filePath: targetPath,
+        originPlaylistUuid: null,
+        originPathSnapshot: '网易云音乐',
+        info: buildSongSnapshot(targetPath, entry.song)
+      }
+    })
+    .filter((item): item is MixtapeAppendItem => item !== null)
+
+  if (!rawItems.length) {
+    await confirm({
+      title: t('dialog.hint'),
+      content: [t('netease.mixtapeVaultCopyFailed')],
+      confirmShow: false
+    })
+    return
+  }
+
+  await appendItemsToMixtape(playlistId, rawItems)
+}
+
 export const copyPioneerTracksToMixtape = async ({
   tracks,
   originPathSnapshot

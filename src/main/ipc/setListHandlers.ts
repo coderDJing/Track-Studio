@@ -37,6 +37,7 @@ import {
 import type { ISongInfo } from '../../types/globals'
 import { normalizeAddedAtMs } from '../../shared/songAddedAt'
 import { normalizeFilePathForComparison } from '../../shared/filePathComparison'
+import { isNeteasePendingPath, parseNeteasePendingSongId } from '../../shared/netease'
 import { buildSetAnalysisSnapshot } from '../services/setAnalysisSnapshot'
 import { mergeSetSongGridAnalysis } from '../services/setSongGridAnalysis'
 import {
@@ -149,6 +150,50 @@ function mergeSetAnalysisFields(target: ISongInfo, source: Partial<ISongInfo> | 
     }
   }
   return next
+}
+
+function formatPendingDuration(value: unknown): string {
+  if (typeof value === 'string' && value.trim()) return value
+  const ms = Number(value)
+  if (!Number.isFinite(ms) || ms <= 0) return ''
+  const totalSeconds = Math.max(0, Math.round(ms / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+  }
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
+function createPendingSetSong(item: SetItemRecord): ISongInfo {
+  const meta = (parseSetItemAnalysisJson(item.analysisJson) || {}) as Partial<ISongInfo> & {
+    durationMs?: number
+  }
+  const songId = parseNeteasePendingSongId(item.filePath) || String(meta.neteaseSongId || '')
+  const status = meta.neteasePendingStatus === 'failed' ? 'failed' : 'pending'
+  const title = typeof meta.title === 'string' && meta.title.trim() ? meta.title : undefined
+  return {
+    setItemId: item.id,
+    filePath: item.filePath,
+    fileName: title || (songId ? `netease-${songId}` : item.filePath),
+    fileFormat: '',
+    cover: null,
+    title,
+    artist: typeof meta.artist === 'string' ? meta.artist : undefined,
+    album: typeof meta.album === 'string' ? meta.album : undefined,
+    duration: formatPendingDuration(meta.duration || meta.durationMs),
+    genre: undefined,
+    label: undefined,
+    bitrate: undefined,
+    container: undefined,
+    playlistTrackNumber: item.sortOrder,
+    addedAtMs: normalizeAddedAtMs(item.createdAtMs),
+    neteaseSongId: songId || undefined,
+    neteasePendingDownload: true,
+    neteasePendingStatus: status,
+    neteasePendingError: meta.neteasePendingError
+  }
 }
 
 function createMissingSetSong(item: SetItemRecord): ISongInfo {
@@ -699,13 +744,19 @@ export async function loadSetPlaylistSongs(
     if (items.length === 0) return { scanData: [], songListUUID: playlistUuid }
 
     const audioExts = store.settingConfig?.audioExt || []
-    const located = items.map((item) => ({
-      item,
-      absPath: resolveSetItemAbsPath(item.filePath)
-    }))
+    const pendingIndices = new Set<number>()
+    const located = items.map((item, index) => {
+      if (isNeteasePendingPath(item.filePath)) {
+        pendingIndices.add(index)
+        return { item, absPath: '' }
+      }
+      return { item, absPath: resolveSetItemAbsPath(item.filePath) }
+    })
     // 文件是否还在只看 stat。缓存对得上的曲目不再读标签；只有没命中的才扫描。
+    // 待下载占位路径不是磁盘文件，不能去 stat，否则会被当成丢失变成红线。
     const statResults = await runWithConcurrency(
-      located.map((entry) => async () => {
+      located.map((entry, index) => async () => {
+        if (pendingIndices.has(index)) return null
         try {
           const stats = await fs.stat(entry.absPath)
           if (!stats.isFile()) return null
@@ -788,6 +839,10 @@ export async function loadSetPlaylistSongs(
     const ordered: ISongInfo[] = []
     for (let index = 0; index < items.length; index += 1) {
       const item = items[index]
+      if (pendingIndices.has(index)) {
+        ordered.push(createPendingSetSong(item))
+        continue
+      }
       if (missingIndices.has(index)) {
         ordered.push(createMissingSetSong(item))
         continue

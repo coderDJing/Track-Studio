@@ -21,6 +21,11 @@ interface IDir {
   stemProfile?: 'quality' | 'ultra'
   order?: number
   children?: IDir[]
+  /**
+   * 虚拟节点自带的曲目数（如网易云歌单：没有磁盘目录，盘上扫不出来）。
+   * 有值时曲目数统计一律以它为准，不再走磁盘扫描。
+   */
+  trackCount?: number
 }
 
 type md5 = {
@@ -99,6 +104,14 @@ interface ISongInfo {
   originalPlaylistPath?: string | null
   recycleBinSourceType?: string | null
   fileMissing?: boolean
+  /** 网易云曲目 id；只有来自网易云库的行才有，用于下载/删除缓存等反向操作 */
+  neteaseSongId?: string
+  /** 这首在网易云歌单里是否有本地文件（`.store` 命中） */
+  neteaseDownloaded?: boolean
+  /** SET 里尚未下完 / 下载失败的网易云条目；有这个标记时 filePath 是占位路径，不能拿去播 */
+  neteasePendingDownload?: boolean
+  neteasePendingStatus?: 'pending' | 'failed'
+  neteasePendingError?: string
 }
 
 export interface ISongHotCue {
@@ -672,6 +685,10 @@ interface ISettingConfig {
   accentColor?: string
   audioExt: string[]
   databaseUrl: string
+  // 网易云音乐库：取音频的目标档位。jymaster 可能是 24bit/96k，也可能是 16/44.1 的回退
+  neteaseLevel?: 'jymaster' | 'lossless' | 'exhigh' | 'standard'
+  // 网易云试听缓存上限（字节），默认 10GB
+  neteasePreviewCacheBytes?: number
   globalCallShortcut: string
   enableWindowScreenshotShortcut?: boolean
   playerGlobalShortcuts: IPlayerGlobalShortcuts
@@ -863,6 +880,7 @@ type Icon = {
     | 'MixtapeLibrary'
     | 'RecycleBin'
     | 'ExternalPlaylist'
+    | 'NeteaseLibrary'
   grey: string
   white: string
   src: string

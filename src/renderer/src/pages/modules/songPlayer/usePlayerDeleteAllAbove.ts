@@ -7,9 +7,11 @@ import { t } from '@renderer/utils/translate'
 import emitter from '@renderer/utils/mitt'
 import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
+import { NETEASE_DOWNLOADED_UUID, isNeteasePlaylistUuid } from '@shared/netease'
 import { resolvePlaybackDeleteAllAboveTarget } from '@shared/playbackDeleteAllAbove'
 import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 import { showDeleteSummaryIfNeeded } from '@renderer/pages/modules/songsArea/composables/songItemContextMenuSummaries'
+import { deleteNeteaseLocalFiles } from '@renderer/utils/neteaseActions'
 
 type DeleteSummary = {
   total?: number
@@ -188,6 +190,33 @@ export const createDelAllAbove = (params: {
       .map((item) => item.filePath)
       .filter((item): item is string => typeof item === 'string' && item.length > 0)
     if (delPaths.length === 0) return
+
+    // 网易云歌单里的「曲目」是服务器数据，本地只有 .store 缓存。
+    // 不能走 delSongsAwaitable：那条路按 songListPath 找歌单、也不清 .store 索引。
+    // 走 netease:delete-local 才是对的入口——先做 SET 引用保护，再删缓存并刷新视图。
+    if (
+      isNeteasePlaylistUuid(currentSongListUUID) ||
+      currentSongListUUID === NETEASE_DOWNLOADED_UUID
+    ) {
+      // 「查看已下载」视图的行确实是本地文件，但删除要同时清掉 netease_file 索引，
+      // 否则「已下载」列表会留下一条指不到文件的记录。
+      // 只删已下载的那些：歌单视图里未下载的行没有本地文件，
+      // 把它们算进"删除 N 首"的确认框里只会让用户以为删掉了。
+      const neteaseSongIds = target.songs
+        .filter((item) => item.neteaseDownloaded === true)
+        .map((item) => item.neteaseSongId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      if (neteaseSongIds.length > 0) {
+        await deleteNeteaseLocalFiles(neteaseSongIds)
+      } else {
+        await confirm({
+          title: t('dialog.hint'),
+          content: [t('netease.nothingDownloadedToDelete')],
+          confirmShow: false
+        })
+      }
+      return
+    }
 
     const isInRecycleBin = currentSongListUUID === RECYCLE_BIN_UUID
     if (!options?.confirmed) {

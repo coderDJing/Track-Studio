@@ -249,3 +249,22 @@
   -ms-user-select: none;
   user-select: none;
 }
+
+/* 网易云歌单里"已下载到本地"的小标记：贴着标题显示，不占列宽 */
+.netease-downloaded-badge,
+.netease-pending-badge {
+  margin-left: 6px;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 14px;
+  border-radius: 3px;
+  color: var(--text-weak);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.netease-pending-badge--failed {
+  color: var(--danger, #c44848);
+  border-color: var(--danger, #c44848);
+}

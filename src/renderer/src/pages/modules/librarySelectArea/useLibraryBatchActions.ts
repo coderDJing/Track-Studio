@@ -22,6 +22,7 @@ import { emptyRecycleBinWithOptimisticUpdate } from '@renderer/utils/recycleBinA
 import { collectSongsForSimilarBatch } from '@renderer/components/libraryItem/libraryContextMenuHelpers'
 import { importSetPackageIntoLibrary } from '@renderer/components/libraryItem/setPackageTransfer'
 import { openBatchSimilarTracksDialogForSeeds } from '@renderer/utils/similarTracksActions'
+import { handleNeteaseLibraryIconContextMenu } from '@renderer/utils/neteaseActions'
 import type { Icon, IDir, IMetadataAutoFillSummary } from '../../../../../types/globals'
 
 type RuntimeStore = ReturnType<typeof import('@renderer/stores/runtime').useRuntimeStore>
@@ -291,6 +292,13 @@ export function useLibraryBatchActions(options: {
   }
 
   const handleIconContextmenu = async (event: MouseEvent, item: Icon) => {
+    // 网易云库的菜单与本地库完全不同：它没有可扫描的目录、没有可转换的格式，
+    // 只有「查看已下载 / 同步 / 登录」这三件事。
+    if (item.name === 'NeteaseLibrary') {
+      event.preventDefault()
+      await handleNeteaseLibraryIconContextMenu(event)
+      return
+    }
     if (
       !['FilterLibrary', 'CuratedLibrary', 'SetLibrary', 'MixtapeLibrary', 'RecycleBin'].includes(
         item.name as string

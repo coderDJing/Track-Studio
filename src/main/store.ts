@@ -84,7 +84,10 @@ let settingConfig: ISettingConfig = {
   lastSeenWhatsNewVersion: '',
   pendingWhatsNewForVersion: '',
   lastRunAppVersion: '',
-  userGuideDismissedSteps: []
+  userGuideDismissedSteps: [],
+  // 网易云：默认无损；试听缓存默认 10GB（只是一次性缓冲，随时可清）
+  neteaseLevel: 'lossless' as const,
+  neteasePreviewCacheBytes: 10 * 1024 * 1024 * 1024
 } //设置config
 export default {
   songFingerprintList,

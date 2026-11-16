@@ -285,6 +285,8 @@ export async function ensureLibraryTreeBaseline(
       MixtapeLibrary: string
       RecordingLibrary: string
       RecycleBin: string
+      /** 网易云库的目录名：只用于在树里出现一个入口，歌单子节点是运行时注入的 */
+      NeteaseLibrary?: string
     }
   } = {}
 ): Promise<void> {
@@ -303,7 +305,8 @@ export async function ensureLibraryTreeBaseline(
       SetLibrary: 'SetLibrary',
       MixtapeLibrary: 'MixtapeLibrary',
       RecordingLibrary: 'RecordingLibrary',
-      RecycleBin: 'RecycleBin'
+      RecycleBin: 'RecycleBin',
+      NeteaseLibrary: 'NeteaseLibrary'
     }
     const filterUuid = uuidV4()
     const curatedUuid = uuidV4()
@@ -360,6 +363,8 @@ export async function syncLibraryTreeFromDisk(
       MixtapeLibrary: string
       RecordingLibrary: string
       RecycleBin: string
+      /** 网易云库的目录名：只用于在树里出现一个入口，歌单子节点是运行时注入的 */
+      NeteaseLibrary?: string
     }
     audioExtensions?: string[]
   } = {}
@@ -414,7 +419,8 @@ export async function syncLibraryTreeFromDisk(
     SetLibrary: 'SetLibrary',
     MixtapeLibrary: 'MixtapeLibrary',
     RecordingLibrary: 'RecordingLibrary',
-    RecycleBin: 'RecycleBin'
+    RecycleBin: 'RecycleBin',
+    NeteaseLibrary: 'NeteaseLibrary'
   }
   const coreOrderMap = new Map<string, number>([
     [coreNames.FilterLibrary, 1],

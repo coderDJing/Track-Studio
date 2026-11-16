@@ -25,6 +25,18 @@ import { promptAndStartTrackReanalysis } from '@renderer/utils/trackReanalysis'
 import choiceDialog from '@renderer/components/choiceDialog'
 import { normalizeArtistName, splitArtistNames } from '@shared/artistNames'
 import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
+import {
+  NETEASE_DOWNLOADED_UUID,
+  isNeteasePendingPath,
+  isNeteasePlaylistUuid,
+  isNeteasePreviewUrl
+} from '@shared/netease'
+import {
+  deleteNeteaseLocalFiles,
+  downloadNeteaseTracks,
+  mapNeteaseSongsToLocalFiles,
+  redownloadNeteaseTracks
+} from '@renderer/utils/neteaseActions'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { RECORDING_LIBRARY_UUID } from '@shared/recordingLibrary'
 import {
@@ -37,10 +49,14 @@ import {
   buildSongItemMenuArr,
   createDefaultMenuArr,
   createMixtapeMenuArr,
+  createNeteaseDownloadedMenuArr,
+  createNeteaseSetStreamMenuArr,
+  createNeteaseStreamMenuArr,
   createRecycleMenuArr,
   createSetMenuArr,
   withoutRecordingAnalysisMenus
 } from './songItemContextMenuMenus'
+import { isNeteaseStreamSong } from '@renderer/utils/neteaseSongs'
 import { detectSongsAreaScrollCarrier } from './scrollCarrier'
 import type { LibraryTransferActionMode } from '@renderer/utils/libraryTransfer'
 import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
@@ -233,20 +249,29 @@ export function useSongItemContextMenu(
     const isRecycleBinView = songsAreaState.songListUUID === RECYCLE_BIN_UUID
     const isRecordingLibraryView = songsAreaState.songListUUID === RECORDING_LIBRARY_UUID
     const isExternalView = songsAreaState.songListUUID === EXTERNAL_PLAYLIST_UUID
+    const isNeteaseStreamView = isNeteasePlaylistUuid(songsAreaState.songListUUID)
+    const isNeteaseDownloadedView = songsAreaState.songListUUID === NETEASE_DOWNLOADED_UUID
     const matchedCuratedArtists = resolveCuratedArtistMatches(song)
     const matchedCuratedArtist = matchedCuratedArtists[0] || ''
     if (songsAreaState.selectedSongFilePath.indexOf(getRowKey(song)) === -1) {
       songsAreaState.selectedSongFilePath = [getRowKey(song)]
     }
 
+    const selectedSongsForSetDuration = resolveSelectedSongs()
+    const setHasNeteaseStream = isSetView() && selectedSongsForSetDuration.some(isNeteaseStreamSong)
     const baseMenuArr = isMixtapeView()
       ? createMixtapeMenuArr()
       : isRecycleBinView
         ? createRecycleMenuArr()
-        : isSetView()
-          ? createSetMenuArr(songsAreaState.songListUUID)
-          : createDefaultMenuArr(songsAreaState.songListUUID)
-    const selectedSongsForSetDuration = resolveSelectedSongs()
+        : isNeteaseStreamView
+          ? createNeteaseStreamMenuArr(song.neteaseDownloaded === true)
+          : isNeteaseDownloadedView
+            ? createNeteaseDownloadedMenuArr(songsAreaState.songListUUID)
+            : isSetView()
+              ? setHasNeteaseStream
+                ? createNeteaseSetStreamMenuArr()
+                : createSetMenuArr(songsAreaState.songListUUID)
+              : createDefaultMenuArr(songsAreaState.songListUUID)
     const menuWithSourceLabel = isRecordingLibraryView
       ? withoutRecordingAnalysisMenus(baseMenuArr)
       : baseMenuArr
@@ -264,6 +289,29 @@ export function useSongItemContextMenu(
     })
 
     if (result === 'cancel') return null
+
+    if (result.menuName === 'netease.downloadToLocal') {
+      const songId = song.neteaseSongId || ''
+      if (songId) await downloadNeteaseTracks([songId])
+      return null
+    }
+    if (result.menuName === 'netease.redownload') {
+      const ids = resolveSelectedSongs()
+        .filter((item) => item.neteaseDownloaded === true)
+        .map((item) => String(item.neteaseSongId || ''))
+        .filter((id) => id.length > 0)
+      const fallback = String(song.neteaseSongId || '')
+      await redownloadNeteaseTracks(ids.length > 0 ? ids : fallback ? [fallback] : [])
+      return null
+    }
+    if (result.menuName === 'netease.removeLocalFile') {
+      const ids = resolveSelectedSongs()
+        .map((item) => String(item.neteaseSongId || ''))
+        .filter((id) => id.length > 0)
+      const fallback = String(song.neteaseSongId || '')
+      await deleteNeteaseLocalFiles(ids.length > 0 ? ids : fallback ? [fallback] : [])
+      return null
+    }
 
     if (result.menuName === 'playlist.calculateSetDuration') {
       const { default: openSetDurationDialog } =
@@ -445,6 +493,9 @@ export function useSongItemContextMenu(
         return null
       }
       case 'tracks.convertFormat': {
+        if (isNeteaseStreamSong(song) || selectedSongsForSetDuration.some(isNeteaseStreamSong)) {
+          return null
+        }
         const files = resolveSelectedFilePaths()
         try {
           await startAudioConvertFromFiles({
@@ -458,6 +509,9 @@ export function useSongItemContextMenu(
         return null
       }
       case 'bpmFix.menu': {
+        if (isNeteaseStreamSong(song) || selectedSongsForSetDuration.some(isNeteaseStreamSong)) {
+          return null
+        }
         const { startBpmFix } = await import('@renderer/utils/bpmFixActions')
         await startBpmFix({
           filePaths: resolveSelectedFilePaths(),
@@ -467,6 +521,9 @@ export function useSongItemContextMenu(
         return null
       }
       case 'stemSeparation.menu': {
+        if (isNeteaseStreamSong(song) || selectedSongsForSetDuration.some(isNeteaseStreamSong)) {
+          return null
+        }
         const { default: openLibraryStemSeparationDialog } =
           await import('@renderer/components/libraryStemSeparationDialog')
         await openLibraryStemSeparationDialog({
@@ -747,6 +804,9 @@ export function useSongItemContextMenu(
         }
         break
       case 'fingerprints.analyzeAndAdd': {
+        if (isNeteaseStreamSong(song) || selectedSongsForSetDuration.some(isNeteaseStreamSong)) {
+          return null
+        }
         const files = resolveSelectedFilePaths()
         await analyzeFingerprintsForPaths(files, { origin: 'selection' })
         return null
@@ -828,29 +888,41 @@ export function useSongItemContextMenu(
           await confirmTaskBusy()
           return null
         }
-        const exportResult = await exportDialog({ title: 'tracks.title' })
+        const currentSelectedKeys = [...resolveSelectedKeys()]
+        const songsToExportFilePaths = resolveSelectedFilePaths(currentSelectedKeys)
+        const selectedKeySet = new Set(currentSelectedKeys)
+        const songsToExportObjects =
+          isMixtapeView() || isSetView()
+            ? songsAreaState.songInfoArr.filter((item) => selectedKeySet.has(getRowKey(item)))
+            : songsAreaState.songInfoArr.filter((item) =>
+                songsToExportFilePaths.some((filePath) =>
+                  sameRendererFilePath(filePath, item.filePath)
+                )
+              )
+        if (songsToExportObjects.length === 0) return null
+
+        const streamOnlyExport = songsToExportObjects.some(
+          (item) =>
+            isNeteasePreviewUrl(item.filePath) ||
+            isNeteasePendingPath(item.filePath) ||
+            Boolean(item.neteasePendingDownload)
+        )
+        const exportResult = await exportDialog({
+          title: 'tracks.title',
+          forceCopyOnly: streamOnlyExport
+        })
         if (exportResult !== 'cancel') {
           const { folderPathVal, deleteSongsAfterExport } = exportResult
-          const currentSelectedKeys = [...resolveSelectedKeys()]
-          const songsToExportFilePaths = resolveSelectedFilePaths(currentSelectedKeys)
-
-          const selectedKeySet = new Set(currentSelectedKeys)
-          const songsToExportObjects =
-            isMixtapeView() || isSetView()
-              ? songsAreaState.songInfoArr.filter((item) => selectedKeySet.has(getRowKey(item)))
-              : songsAreaState.songInfoArr.filter((item) =>
-                  songsToExportFilePaths.some((filePath) =>
-                    sameRendererFilePath(filePath, item.filePath)
-                  )
-                )
-
-          if (songsToExportObjects.length === 0) return null
+          const resolvedSongs = streamOnlyExport
+            ? await mapNeteaseSongsToLocalFiles(songsToExportObjects)
+            : songsToExportObjects
+          if (resolvedSongs.length === 0) return null
 
           const exportSummary = (await window.electron.ipcRenderer.invoke(
             'exportSongsToDir',
             folderPathVal,
-            deleteSongsAfterExport,
-            JSON.parse(JSON.stringify(songsToExportObjects))
+            streamOnlyExport ? false : deleteSongsAfterExport,
+            JSON.parse(JSON.stringify(resolvedSongs))
           )) as ExportSongsToDirSummary | undefined
           if (deleteSongsAfterExport && songsToExportFilePaths.length > 0) {
             const removedPaths =
@@ -1078,9 +1150,13 @@ export function useSongItemContextMenu(
         break
       }
       case 'tracks.showInFileExplorer':
+        if (isNeteaseStreamSong(song)) return null
         window.electron.ipcRenderer.send('show-item-in-folder', song.filePath)
         break
       case 'tracks.clearTrackCache': {
+        if (isNeteaseStreamSong(song) || selectedSongsForSetDuration.some(isNeteaseStreamSong)) {
+          return null
+        }
         const files = resolveSelectedFilePaths()
         await promptAndStartTrackReanalysis(files, resolveSelectedSongs())
         break

@@ -249,6 +249,19 @@ export function notifyLibraryFsChanged(absPath?: string): void {
   scheduleReconcile(watchWindow)
 }
 
+/**
+ * 路径里只要有任何一段以 `.` 开头，就不是库内容。
+ *
+ * 库里以点开头的目录（`NeteaseLibrary/.store`、`.preview-cache`、`.netease-session`）
+ * 存的是缓存、半截下载文件、登录态，扫描器本来就会跳过它们（见 libraryTreeDb），
+ * 所以它们的变化不可能改变库树。监听器如果照样触发对账，一次 40MB 下载或一段流式
+ * 试听就会变成每 400ms 一次全库目录核对。
+ */
+export const isIgnoredWatchPath = (relativePath: string): boolean => {
+  const segments = String(relativePath || '').split(/[\\/]+/)
+  return segments.some((segment) => segment.startsWith('.'))
+}
+
 export function startLibraryTreeWatcher(window: BrowserWindow | null): void {
   watchWindow = window
   if (watcher) return
@@ -260,8 +273,9 @@ export function startLibraryTreeWatcher(window: BrowserWindow | null): void {
   if (!fs.pathExistsSync(libraryRoot)) return
   try {
     watcher = fs.watch(libraryRoot, { recursive: true }, (_event, filename) => {
-      if (isCuratedLibraryWatchPath(filename)) pendingCuratedContentChange = true
       const relative = String(filename || '')
+      if (relative && isIgnoredWatchPath(relative)) return
+      if (isCuratedLibraryWatchPath(filename)) pendingCuratedContentChange = true
       if (relative) queueContentChangePath(path.join(libraryRoot, relative))
       scheduleReconcile(window)
     })

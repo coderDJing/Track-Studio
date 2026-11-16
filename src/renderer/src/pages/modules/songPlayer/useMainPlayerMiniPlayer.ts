@@ -4,6 +4,8 @@ import { useMiniPlayerHost } from '@renderer/composables/miniPlayer/useMiniPlaye
 import type { useRuntimeStore } from '@renderer/stores/runtime'
 import type { WebAudioPlayer } from './webAudioPlayer'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
+import { isNeteaseStreamSong } from '@renderer/utils/neteaseSongs'
+import { resolveNeteaseLocalPath } from '@renderer/utils/neteaseActions'
 import { normalizeMiniPlayerSeekRatio } from '@shared/miniPlayerWindow'
 import emitter from '@renderer/utils/mitt'
 import { toIpcCloneablePayload } from '@renderer/utils/ipcCloneablePayload'
@@ -57,8 +59,15 @@ export function useMainPlayerMiniPlayer(params: {
   }
 
   const exportTrackWithFolder = async (folderPath: string, deleteAfter: boolean) => {
-    const song = params.runtime.playingData.playingSong
+    let song = params.runtime.playingData.playingSong
     if (!song?.filePath || !folderPath) return
+    // 小窗菜单走的是命令通道，绕开了主播放器菜单的显隐：
+    // 网易云的流媒体行没有文件，先落地再用真实路径导出。
+    if (isNeteaseStreamSong(song)) {
+      const localPath = await resolveNeteaseLocalPath(song.neteaseSongId || '')
+      if (!localPath) return
+      song = { ...song, filePath: localPath, neteaseDownloaded: true }
+    }
     const shouldDelete =
       deleteAfter &&
       !isRekordboxExternalPlaybackSource(params.runtime.playingData.playingSongListUUID, song)

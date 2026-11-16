@@ -13,6 +13,7 @@ import {
 import { pruneOrphanedSongListCaches } from './services/cacheMaintenance'
 import { getMixtapeProjectStemConfig } from './mixtapeDb'
 import { CORE_KEYS, ensureEnglishCoreLibraries, getCoreFsDirName } from './coreLibraries'
+import { attachNeteaseSubtree } from './netease/tree'
 import { isENOSPCError } from './nodeErrorUtils'
 
 export { ensureEnglishCoreLibraries, getCoreFsDirName } from './coreLibraries'
@@ -182,7 +183,8 @@ export async function getLibrary(options: { skipSync?: boolean; skipPreparation?
         SetLibrary: getCoreFsDirName('SetLibrary'),
         MixtapeLibrary: getCoreFsDirName('MixtapeLibrary'),
         RecordingLibrary: getCoreFsDirName('RecordingLibrary'),
-        RecycleBin: getCoreFsDirName('RecycleBin')
+        RecycleBin: getCoreFsDirName('RecycleBin'),
+        NeteaseLibrary: getCoreFsDirName('NeteaseLibrary')
       }
     })
   }
@@ -194,7 +196,8 @@ export async function getLibrary(options: { skipSync?: boolean; skipPreparation?
         SetLibrary: getCoreFsDirName('SetLibrary'),
         MixtapeLibrary: getCoreFsDirName('MixtapeLibrary'),
         RecordingLibrary: getCoreFsDirName('RecordingLibrary'),
-        RecycleBin: getCoreFsDirName('RecycleBin')
+        RecycleBin: getCoreFsDirName('RecycleBin'),
+        NeteaseLibrary: getCoreFsDirName('NeteaseLibrary')
       },
       audioExtensions: store.settingConfig?.audioExt
     })
@@ -212,7 +215,8 @@ export async function getLibrary(options: { skipSync?: boolean; skipPreparation?
     [getCoreFsDirName('SetLibrary'), 'SetLibrary'],
     [getCoreFsDirName('RecycleBin'), 'RecycleBin'],
     [getCoreFsDirName('RecordingLibrary'), 'RecordingLibrary'],
-    [getCoreFsDirName('MixtapeLibrary'), 'MixtapeLibrary']
+    [getCoreFsDirName('MixtapeLibrary'), 'MixtapeLibrary'],
+    [getCoreFsDirName('NeteaseLibrary'), 'NeteaseLibrary']
   ])
 
   const nodeMap = new Map<string, IDir>()
@@ -283,6 +287,9 @@ export async function getLibrary(options: { skipSync?: boolean; skipPreparation?
   }
 
   if (!resolvedRoot.children) resolvedRoot.children = []
+  // 网易云音乐库是虚拟结构：歌单没有磁盘目录，写进 library_nodes 会被后台对账清掉，
+  // 所以在返回前注入。未登录时子节点为空，节点本身照常显示。
+  attachNeteaseSubtree(resolvedRoot as unknown as Parameters<typeof attachNeteaseSubtree>[0])
   return resolvedRoot
 }
 

@@ -88,6 +88,8 @@ import { markGlobalSongSearchDirty } from './services/globalSongSearch'
 import { registerPioneerDeviceLibraryHandlers } from './ipc/pioneerDeviceLibraryHandlers'
 import { registerRekordboxDesktopLibraryHandlers } from './ipc/rekordboxDesktopLibraryHandlers'
 import { registerExternalLibraryHandlers } from './ipc/externalLibraryHandlers'
+import { registerNeteaseHandlers } from './netease/ipc'
+import { handleNeteasePreview } from './netease/stream'
 import { registerRekordboxXmlExportHandlers } from './ipc/rekordboxXmlExportHandlers'
 import { registerHorizontalBrowseTransportHandlers } from './ipc/horizontalBrowseTransportHandlers'
 import { stopHorizontalBrowseTransportSnapshotBroadcaster } from './ipc/horizontalBrowseTransportSnapshotBroadcaster'
@@ -379,6 +381,7 @@ registerPioneerDeviceLibraryHandlers()
 registerRekordboxDesktopLibraryHandlers()
 registerExternalLibraryHandlers()
 registerRekordboxXmlExportHandlers()
+registerNeteaseHandlers(() => mainWindow.instance)
 registerHorizontalBrowseTransportHandlers()
 registerHotCueHandlers()
 registerMemoryCueHandlers()
@@ -587,6 +590,18 @@ app.whenReady().then(async () => {
             } catch {
               return value
             }
+          }
+          // 网易云试听：frkb-preview://?netease=<songId>[&level=<档位>]
+          // 已下载读本地文件，未下载透传上游 CDN，Range 都支持。
+          const neteaseMatch = String(request.url || '').match(/[?&]netease=([^&]+)/i)
+          if (neteaseMatch) {
+            const songId = safeDecode(neteaseMatch[1] || '')
+            const rangeHeader =
+              (request.headers?.range as string | undefined) ||
+              (request.headers?.Range as string | undefined)
+            const result = await handleNeteasePreview(songId, rangeHeader)
+            callback(result as never)
+            return
           }
           let decodedPath = ''
           try {

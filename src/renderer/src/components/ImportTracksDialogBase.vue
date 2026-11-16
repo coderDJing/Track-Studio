@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onUnmounted, onMounted, useTemplateRef, reactive } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
+import type { PropType } from 'vue'
+import type { LibraryTransferActionMode } from '@renderer/utils/libraryTransfer'
 import singleCheckbox from './singleCheckbox.vue'
 import singleRadioGroup from '@renderer/components/singleRadioGroup.vue'
 import { useRuntimeStore } from '@renderer/stores/runtime'
@@ -13,10 +15,15 @@ import hotkeys from 'hotkeys-js'
 import { v4 as uuidV4 } from 'uuid'
 import utils from '../utils/utils'
 import { t, tLabel, toLibraryDisplayName } from '@renderer/utils/translate'
+import {
+  formatNeteaseImportEstimate,
+  loadNeteaseImportEstimate,
+  type NeteaseImportEstimate
+} from '@renderer/utils/neteaseActions'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
 const hintIcon = hintIconAsset
 
-type Mode = 'scan' | 'drop'
+type Mode = 'scan' | 'drop' | 'netease'
 
 const uuid = uuidV4()
 const props = defineProps({
@@ -24,6 +31,10 @@ const props = defineProps({
   libraryName: { type: String, default: 'FilterLibrary' },
   songListUuid: { type: String },
   openSongListAfterImport: { type: Boolean, default: false },
+  /** netease 模式：源歌单 id；文件来自网易云，没有可选路径 */
+  neteasePlaylistId: { type: String, default: '' },
+  /** 只影响歌单选择框上那个确认按钮的措辞：网易云导入一律是复制 */
+  actionMode: { type: String as PropType<LibraryTransferActionMode>, default: 'move' },
   confirmCallback: { type: Function, required: true },
   cancelCallback: { type: Function, required: true }
 })
@@ -179,6 +190,22 @@ const confirm = () => {
     return
   }
 
+  if (props.mode === 'netease') {
+    // 网易云导入：不移动、不删除源文件（源是 .store 缓存），也没有 selectedPaths。
+    // 具体搬运在主进程做，这里只把选项交出去。
+    localStorage.setItem('scanNewSongDialog', JSON.stringify(settingData.value))
+    closeWithAnimation(() => {
+      ;(props.confirmCallback as Function)({
+        songListUuid: importingSongListUUID,
+        songListPath: songListSelectedPath,
+        isPushSongFingerprintLibrary: settingData.value.isPushSongFingerprintLibrary,
+        deduplicateMode: settingData.value.deduplicateMode,
+        neteasePlaylistId: props.neteasePlaylistId
+      })
+    })
+    return
+  }
+
   if (props.mode === 'scan') {
     if (props.openSongListAfterImport) {
       runtime.openSongListAfterImportUUID = importingSongListUUID
@@ -235,6 +262,10 @@ const bindDedupOptionHintRef =
   (value: string) => (el: Element | ComponentPublicInstance | null) => {
     setDedupOptionHintRef(value, el instanceof HTMLImageElement ? el : null)
   }
+const neteaseEstimate = ref<NeteaseImportEstimate | null>(null)
+const neteaseEstimateText = computed(() =>
+  neteaseEstimate.value ? formatNeteaseImportEstimate(neteaseEstimate.value) : ''
+)
 const fileSelectRef = useTemplateRef<HTMLDivElement>('fileSelectRef')
 const songListSelectRef = useTemplateRef<HTMLDivElement>('songListSelectRef')
 onMounted(() => {
@@ -245,6 +276,11 @@ onMounted(() => {
     cancel()
   })
   utils.setHotkeysScpoe(uuid)
+  if (props.mode === 'netease' && props.neteasePlaylistId) {
+    void loadNeteaseImportEstimate(props.neteasePlaylistId).then((estimate) => {
+      neteaseEstimate.value = estimate
+    })
+  }
 })
 
 onUnmounted(() => {
@@ -259,11 +295,40 @@ onUnmounted(() => {
       class="inner"
     >
       <div class="dialog-title dialog-header">
-        <span>{{
+        <span v-if="props.mode === 'netease'">
+          {{ t('netease.importTitle') }}
+          ·
+          {{ toLibraryDisplayName(props.libraryName) }}
+        </span>
+        <span v-else>{{
           t('library.importNewTracks', { libraryType: toLibraryDisplayName(props.libraryName) })
         }}</span>
       </div>
       <div style="padding: 20px; font-size: 14px; flex: 1; overflow-y: auto">
+        <template v-if="props.mode === 'netease'">
+          <div
+            style="
+              font-size: 12px;
+              line-height: 1.7;
+              color: var(--text-weak);
+              padding: 10px;
+              border-radius: 4px;
+              background-color: var(--bg-elev);
+              border: 1px solid var(--border);
+            "
+          >
+            <div
+              v-if="neteaseEstimateText"
+              style="font-size: 13px; color: var(--text); margin-bottom: 6px"
+            >
+              {{ neteaseEstimateText }}
+            </div>
+            {{ t('netease.importHint') }}
+            <div v-if="neteaseEstimateText" style="margin-top: 6px">
+              {{ t('netease.importEstimateCopyNote') }}
+            </div>
+          </div>
+        </template>
         <template v-if="props.mode === 'scan'">
           <div>{{ tLabel('library.selectFilesAndFolders') }}</div>
           <div style="margin-top: 10px">
@@ -300,12 +365,12 @@ onUnmounted(() => {
           />
         </div>
 
-        <div style="margin-top: 20px">
+        <div v-if="props.mode !== 'netease'" style="margin-top: 20px">
           <label for="import-checkbox-deleteAfterImport" style="user-select: none">{{
             tLabel('library.deleteAfterImport')
           }}</label>
         </div>
-        <div style="margin-top: 10px">
+        <div v-if="props.mode !== 'netease'" style="margin-top: 10px">
           <singleCheckbox
             id="import-checkbox-deleteAfterImport"
             v-model="settingData.isDeleteSourceFile"
@@ -386,6 +451,7 @@ onUnmounted(() => {
   <selectSongListDialog
     v-if="selectSongListDialogShow"
     :library-name="props.libraryName"
+    :action-mode="props.actionMode"
     @confirm="selectSongListDialogConfirm"
     @cancel="
       () => {

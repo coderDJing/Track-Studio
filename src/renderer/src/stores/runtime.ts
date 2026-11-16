@@ -35,6 +35,8 @@ export type LibrarySelection =
   | 'RecycleBin'
   | 'ExternalPlaylist'
   | 'PioneerDeviceLibrary'
+  /** 网易云音乐：有库图标，但没有磁盘目录，歌单子节点是运行时注入的 */
+  | 'NeteaseLibrary'
 
 export type SongsAreaPaneKey = 'single' | 'left' | 'right'
 export type SplitSongsAreaPaneKey = 'left' | 'right'

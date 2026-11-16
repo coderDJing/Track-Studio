@@ -9,6 +9,8 @@ import {
 } from '../../utils/dragUtils'
 import libraryUtils from '@renderer/utils/libraryUtils'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
+import { isNeteaseStoreCopyOnlySource } from '@renderer/utils/libraryTransfer'
+import { isNeteaseNodeUuid } from '@shared/netease'
 import { isLibraryTreeManualSort } from '@renderer/utils/libraryTreeSort'
 import type { useRuntimeStore } from '@renderer/stores/runtime'
 import type { IDir } from '../../../../types/globals'
@@ -85,6 +87,15 @@ export function useLibraryDragAndDrop({
     )
   }
 
+  const isBlockedNeteaseNodeDropOnSet = () => {
+    const dirData = getDirData()
+    return Boolean(
+      runtime.dragItemData &&
+      isNeteaseNodeUuid(runtime.dragItemData.uuid) &&
+      dirData?.type === 'setList'
+    )
+  }
+
   const suppressNextLibraryClick = (delayMs: number = 450) => {
     runtime.songDragSuppressClickUntilMs = Date.now() + delayMs
   }
@@ -149,6 +160,11 @@ export function useLibraryDragAndDrop({
       }
       return
     }
+    if (isBlockedNeteaseNodeDropOnSet()) {
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'none'
+      dragState.dragApproach = ''
+      return
+    }
     const isInternalDrag = isInternalSongDrag(e)
     if (
       isInternalDrag &&
@@ -175,7 +191,11 @@ export function useLibraryDragAndDrop({
       e.preventDefault()
       if (e.dataTransfer) {
         e.dataTransfer.dropEffect =
-          dirData.type === 'mixtapeList' || dirData.type === 'setList' ? 'copy' : 'move'
+          dirData.type === 'mixtapeList' ||
+          dirData.type === 'setList' ||
+          isNeteaseStoreCopyOnlySource(runtime.dragSourceSongListUUID)
+            ? 'copy'
+            : 'move'
       }
       dragState.dragApproach = 'center'
       return
@@ -193,6 +213,11 @@ export function useLibraryDragAndDrop({
     const dirData = getDirData()
     if (!dirData) return
     if (handleSongDragGuard(e)) {
+      return
+    }
+    if (isBlockedNeteaseNodeDropOnSet()) {
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'none'
+      dragState.dragApproach = ''
       return
     }
     const isInternalDrag = isInternalSongDrag(e)
@@ -254,6 +279,16 @@ export function useLibraryDragAndDrop({
           preservePlaybackForRemovedPaths: true
         })
       }
+      return
+    }
+    if (
+      runtime.dragItemData &&
+      isNeteaseNodeUuid(runtime.dragItemData.uuid) &&
+      dirData.type === 'setList'
+    ) {
+      // 草案 9.6：把整个网易云歌单节点拖进 SET 不触发批量导入
+      dragState.dragApproach = ''
+      runtime.dragItemData = null
       return
     }
     if (runtime.dragItemData && !isTreeReorderAllowed()) {

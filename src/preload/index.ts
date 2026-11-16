@@ -270,6 +270,7 @@ const invokePrefixes = [
   'mixtape-stem-waveform-cache:',
   'mixtape-waveform-raw:',
   'musicbrainz:',
+  'netease:',
   'playlist:batchRename:',
   'recordingLibrary:',
   'recycleBin:',
@@ -308,6 +309,7 @@ const isAllowedIpcChannel = (method: IpcMethod, channel: string): boolean => {
   return (
     exactListenChannels.has(channel) ||
     channel.startsWith('mini-player:') ||
+    channel.startsWith('netease:') ||
     sourceChannelPrefixes.some(
       (prefix) =>
         channel === `${prefix}preview-waveform-item` || channel === `${prefix}preview-waveform-done`

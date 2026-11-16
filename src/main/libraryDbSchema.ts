@@ -1,4 +1,5 @@
 import { applyCuratedLibrarySyncSchema } from './curatedLibrarySync/schema'
+import { applyNeteaseSchema } from './netease/schema'
 import type { SqliteDatabase } from './libraryDb'
 
 /**
@@ -887,4 +888,6 @@ export function applyLibraryDbSchema(instance: SqliteDatabase, userVersion: numb
     )
   }
   applyCuratedLibrarySyncSchema(instance)
+  // 网易云音乐库：独立表族，幂等 DDL，不升 user_version（旧版本忽略这几张表即可）
+  applyNeteaseSchema(instance)
 }

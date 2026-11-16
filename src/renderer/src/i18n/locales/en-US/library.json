@@ -181,6 +181,7 @@
     "ejectUsbDriveProgress": "Ejecting USB drive...",
     "ejectUsbDriveFailed": "Failed to eject the USB drive.",
     "ejectUsbDriveFailedHint": "Close files, playback, or background tasks that may still be using this drive, then try again.",
-    "ejectUsbDriveInvalidPath": "No ejectable USB drive path was found."
+    "ejectUsbDriveInvalidPath": "No ejectable USB drive path was found.",
+    "neteaseLibrary": "NetEase Cloud Music"
   }
 }

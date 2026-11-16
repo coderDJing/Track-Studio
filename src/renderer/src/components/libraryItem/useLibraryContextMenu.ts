@@ -46,6 +46,11 @@ import { handleRekordboxXmlPlaylistExport } from './handleRekordboxXmlPlaylistEx
 import { exportSetPackageForPlaylist, importSetPackageIntoLibrary } from './setPackageTransfer'
 import type { IDir, IMenu, IMetadataAutoFillSummary } from '../../../../types/globals'
 import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
+import { isNeteaseNodeUuid, isNeteasePlaylistUuid } from '@shared/netease'
+import {
+  handleNeteasePlaylistContextMenu,
+  syncNeteaseLibrary
+} from '@renderer/utils/neteaseActions'
 
 type ExportSongsToDirSummary = {
   removedPaths?: string[]
@@ -248,6 +253,18 @@ export function useLibraryContextMenu({
   const contextmenuEvent = async (event: MouseEvent) => {
     const dirData = getDirData()
     if (!dirData) return
+    // 网易云节点没有磁盘目录：既过不了 dirPathExists，默认菜单里的重命名/删除/导入新曲目
+    // 也全都会写到一个不存在的路径上。所以整条默认链路在这里分流。
+    if (isNeteaseNodeUuid(props.uuid)) {
+      event.preventDefault()
+      event.stopPropagation()
+      if (isNeteasePlaylistUuid(props.uuid)) {
+        await handleNeteasePlaylistContextMenu(event, props.uuid)
+      } else {
+        await syncNeteaseLibrary()
+      }
+      return
+    }
     const shouldSkipPathCheck =
       dirData.dirName === '' || runtime.creatingSongListUUID === props.uuid
     if (!shouldSkipPathCheck) {
