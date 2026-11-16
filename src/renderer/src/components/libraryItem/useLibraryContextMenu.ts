@@ -48,8 +48,8 @@ import type { IDir, IMenu, IMetadataAutoFillSummary } from '../../../../types/gl
 import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 import { isNeteaseNodeUuid, isNeteasePlaylistUuid } from '@shared/netease'
 import {
-  handleNeteasePlaylistContextMenu,
-  syncNeteaseLibrary
+  handleNeteaseLibraryContextMenu,
+  handleNeteasePlaylistContextMenu
 } from '@renderer/utils/neteaseActions'
 
 type ExportSongsToDirSummary = {
@@ -261,7 +261,7 @@ export function useLibraryContextMenu({
       if (isNeteasePlaylistUuid(props.uuid)) {
         await handleNeteasePlaylistContextMenu(event, props.uuid)
       } else {
-        await syncNeteaseLibrary()
+        await handleNeteaseLibraryContextMenu(event)
       }
       return
     }

@@ -21,6 +21,7 @@ import {
 } from '@renderer/composables/mixtape/stemMode'
 import { isLibraryTreeManualSort } from '@renderer/utils/libraryTreeSort'
 import { NETEASE_LIBRARY_NAME } from '@shared/netease'
+import { handleNeteaseLibraryContextMenu } from '@renderer/utils/neteaseActions'
 import {
   SEARCH_FOCUS_PRIORITY,
   SEARCH_FOCUS_WINDOW_SCOPE,
@@ -277,6 +278,10 @@ const revealLibraryRootInExplorer = () => {
   window.electron.ipcRenderer.send('openFileExplorer', libraryPath)
 }
 const contextmenuEvent = async (event: MouseEvent) => {
+  if (libraryData.value.dirName === NETEASE_LIBRARY_NAME) {
+    await handleNeteaseLibraryContextMenu(event)
+    return
+  }
   let baseMenuArr: IMenu[][]
   if (runtime.libraryAreaSelected === 'RecycleBin') {
     baseMenuArr = [[{ menuName: 'recycleBin.emptyRecycleBin' }]]

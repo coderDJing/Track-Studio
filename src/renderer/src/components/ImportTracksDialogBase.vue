@@ -266,6 +266,11 @@ const neteaseEstimate = ref<NeteaseImportEstimate | null>(null)
 const neteaseEstimateText = computed(() =>
   neteaseEstimate.value ? formatNeteaseImportEstimate(neteaseEstimate.value) : ''
 )
+const innerStyle = computed(() =>
+  props.mode === 'netease'
+    ? 'width: 500px; height: auto; display: flex; flex-direction: column'
+    : 'width: 500px; height: 530px; display: flex; flex-direction: column'
+)
 const fileSelectRef = useTemplateRef<HTMLDivElement>('fileSelectRef')
 const songListSelectRef = useTemplateRef<HTMLDivElement>('songListSelectRef')
 onMounted(() => {
@@ -289,11 +294,7 @@ onUnmounted(() => {
 </script>
 <template>
   <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
-    <div
-      v-dialog-drag="'.dialog-title'"
-      style="width: 500px; height: 530px; display: flex; flex-direction: column"
-      class="inner"
-    >
+    <div v-dialog-drag="'.dialog-title'" class="inner" :style="innerStyle">
       <div class="dialog-title dialog-header">
         <span v-if="props.mode === 'netease'">
           {{ t('netease.importTitle') }}
@@ -306,25 +307,12 @@ onUnmounted(() => {
       </div>
       <div style="padding: 20px; font-size: 14px; flex: 1; overflow-y: auto">
         <template v-if="props.mode === 'netease'">
-          <div
-            style="
-              font-size: 12px;
-              line-height: 1.7;
-              color: var(--text-weak);
-              padding: 10px;
-              border-radius: 4px;
-              background-color: var(--bg-elev);
-              border: 1px solid var(--border);
-            "
-          >
-            <div
-              v-if="neteaseEstimateText"
-              style="font-size: 13px; color: var(--text); margin-bottom: 6px"
-            >
+          <div class="netease-import-estimate">
+            <div v-if="neteaseEstimateText" class="netease-import-estimate__summary">
               {{ neteaseEstimateText }}
             </div>
             {{ t('netease.importHint') }}
-            <div v-if="neteaseEstimateText" style="margin-top: 6px">
+            <div v-if="neteaseEstimateText" class="netease-import-estimate__note">
               {{ t('netease.importEstimateCopyNote') }}
             </div>
           </div>
@@ -440,7 +428,7 @@ onUnmounted(() => {
 
       <div class="dialog-footer">
         <div class="button" style="width: 90px; text-align: center" @click="confirm()">
-          {{ t('common.confirm') }} (E)
+          {{ props.mode === 'netease' ? t('netease.importConfirm') : t('common.confirm') }} (E)
         </div>
         <div class="button" style="width: 90px; text-align: center" @click="cancel()">
           {{ t('common.cancel') }} (Esc)
@@ -539,5 +527,25 @@ onUnmounted(() => {
   height: 20px;
   vertical-align: middle;
   overflow: hidden; /* 避免内容撑开表格，配合子元素省略号 */
+}
+
+.netease-import-estimate {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-weak);
+  padding: 10px;
+  border-radius: 4px;
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.netease-import-estimate__summary {
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.netease-import-estimate__note {
+  margin-top: 6px;
 }
 </style>

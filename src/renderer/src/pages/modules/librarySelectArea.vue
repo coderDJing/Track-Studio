@@ -29,7 +29,11 @@ import type { Icon, IDir } from '../../../../types/globals'
 import tempListIconAsset from '@renderer/assets/tempList.svg?asset'
 import emitter from '@renderer/utils/mitt'
 import libraryUtils from '@renderer/utils/libraryUtils'
-import { syncNeteaseLibrary } from '@renderer/utils/neteaseActions'
+import {
+  ensureNeteaseLoggedIn,
+  getNeteaseStatus,
+  syncNeteaseLibrary
+} from '@renderer/utils/neteaseActions'
 import { findNeteaseLibraryNode, isNeteasePlaylistUuid } from '@renderer/utils/neteaseSongs'
 import { requestUserGuideStep } from '@renderer/composables/userGuideBridge'
 import {
@@ -238,27 +242,42 @@ const updateSelectedIcon = (item: HoverableIcon | undefined) => {
   selectedIcon.value.src = selectedIcon.value.white
 }
 
+const selectLibraryIcon = (item: Icon) => {
+  runtime.libraryAreaSelected = item.name
+}
+
+/**
+ * 未登录时先扫码，成功后再切库。关掉登录窗必须停在原来的库，不能先把蓝条切过去。
+ * 拖拽经过图标时不要走这条（会弹窗），见 iconDragEnter。
+ */
+let activatingNetease = false
+const activateNeteaseLibrary = async () => {
+  if (activatingNetease) return
+  activatingNetease = true
+  try {
+    if (!(await ensureNeteaseLoggedIn())) return
+    runtime.libraryAreaSelected = 'NeteaseLibrary'
+    await syncNeteaseLibrary({ silent: true })
+    // 同步是异步的：用户可能在它回来之前已经点去别的库了，这时不能抢走右侧列表
+    if (runtime.libraryAreaSelected !== 'NeteaseLibrary') return
+    const current = runtime.songsArea.songListUUID
+    if (isNeteasePlaylistUuid(current)) return
+    const first = findFirstNeteasePlaylist(runtime.libraryTree)
+    if (first) runtime.songsArea.songListUUID = first
+  } finally {
+    activatingNetease = false
+  }
+}
+
 const clickIcon = (item: Icon) => {
   if (item.name === 'RecycleBin') {
     scheduleRecycleBinTrackCountRefresh()
   }
   if (item.name === 'NeteaseLibrary') {
-    // 点库图标即登录入口（未登录时弹二维码），登录后立刻同步一次目录。
-    // 同步完再把面板切到第一张歌单：否则会出现"左侧选中网易云、右侧还是别的库的歌单"。
-    void syncNeteaseLibrary({ silent: true }).then(() => {
-      // 同步是异步的：用户可能在它回来之前已经点去别的库了，这时不能抢走右侧列表
-      if (runtime.libraryAreaSelected !== 'NeteaseLibrary') return
-      const current = runtime.songsArea.songListUUID
-      if (isNeteasePlaylistUuid(current)) return
-      const first = findFirstNeteasePlaylist(runtime.libraryTree)
-      if (first) runtime.songsArea.songListUUID = first
-    })
-  }
-  if (item.name == selectedIcon.value.name) {
-    runtime.libraryAreaSelected = item.name
+    void activateNeteaseLibrary()
     return
   }
-  runtime.libraryAreaSelected = item.name
+  selectLibraryIcon(item)
 }
 
 /** 树里第一张网易云歌单（深度优先，与树上的显示顺序一致） */
@@ -440,7 +459,11 @@ onUnmounted(() => {
   dynamicScrollViewportEl = null
 })
 
-const libraryHandleClick = (item: Icon) => emit('librarySelectedChange', item)
+const libraryHandleClick = (item: Icon) => {
+  // 网易云未登录时不能先切面板；选中由 activateNeteaseLibrary 在登录成功后写入。
+  if (item.name === 'NeteaseLibrary') return
+  emit('librarySelectedChange', item)
+}
 
 const isMixtapeSourceSongDrag = () => {
   if (
@@ -461,7 +484,15 @@ const iconDragEnter = (event: DragEvent, item: Icon) => {
   if (!isSongDrag || item.name === selectedIcon.value.name) return
   // Mixtape 自动录制歌单来源仅允许在 Mixtape 自动录制库内投放，不应悬浮切换到其他库
   if (isMixtapeSourceSongDrag() && item.name !== 'MixtapeLibrary') return
-  // 当拖拽歌曲时，自动切换到对应的库
+  // 当拖拽歌曲时，自动切换到对应的库。
+  // 网易云未登录不要弹扫码窗，也先不切过去。
+  if (item.name === 'NeteaseLibrary') {
+    void getNeteaseStatus().then((status) => {
+      if (!status.loggedIn) return
+      selectLibraryIcon(item)
+    })
+    return
+  }
   clickIcon(item)
   // 同时触发库切换事件，通知父组件更新
   libraryHandleClick(item)

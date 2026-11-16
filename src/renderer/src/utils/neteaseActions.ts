@@ -27,7 +27,7 @@ import type { ISongInfo } from '../../../types/globals'
 /**
  * 网易云相关的渲染层动作。
  *
- * 集中放在这里的原因：入口有三个（库图标菜单、歌单节点菜单、曲目行菜单），
+ * 集中放在这里的原因：入口有多处（库图标、树空白处、分组节点、歌单节点、曲目行），
  * 它们都要触发同一批流程——登录、同步、导入、清理缓存。分散写会互相打架。
  */
 
@@ -752,14 +752,16 @@ export const formatNeteaseImportEstimate = (estimate: NeteaseImportEstimate): st
   })
 }
 
-/** 库图标右键：网易云音乐专属的三项 */
-export const handleNeteaseLibraryIconContextMenu = async (event: MouseEvent): Promise<void> => {
+/** 库级右键：查看已下载 / 同步 / 登录或退出。图标、树空白处、分组节点共用。 */
+export const handleNeteaseLibraryContextMenu = async (event: MouseEvent): Promise<void> => {
   const status = await getNeteaseStatus()
   const menuArr = [
     [{ menuName: 'netease.viewDownloaded' }],
     [
       ...(status.loggedIn ? [{ menuName: 'netease.sync' }] : []),
-      ...(status.loggedIn ? [{ menuName: 'netease.logout' }] : [{ menuName: 'netease.login' }])
+      ...(status.loggedIn
+        ? [{ menuName: 'netease.relogin' }, { menuName: 'netease.logout' }]
+        : [{ menuName: 'netease.login' }])
     ]
   ]
   const result = await rightClickMenu({ menuArr, clickEvent: event })
@@ -772,6 +774,7 @@ export const handleNeteaseLibraryIconContextMenu = async (event: MouseEvent): Pr
       await syncNeteaseLibrary()
       break
     case 'netease.login':
+    case 'netease.relogin':
       if (await openNeteaseLoginDialog()) await syncNeteaseLibrary()
       break
     case 'netease.logout':
@@ -779,6 +782,8 @@ export const handleNeteaseLibraryIconContextMenu = async (event: MouseEvent): Pr
       break
   }
 }
+
+export const handleNeteaseLibraryIconContextMenu = handleNeteaseLibraryContextMenu
 
 /** 歌单节点右键：四项导入 + 同步 */
 export const handleNeteasePlaylistContextMenu = async (

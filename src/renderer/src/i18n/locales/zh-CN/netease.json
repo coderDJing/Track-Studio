@@ -44,6 +44,7 @@
     "orphanGroup": "已不在歌单",
     "orphanHint": "这些歌已经不在任何歌单里了，但是本地文件还在。可以按需清理。",
     "logout": "退出登录",
+    "relogin": "重新扫码登录",
     "nothingDownloadedToDelete": "选中的曲目本地都还没有文件，没有可删除的缓存。先「下载到本地」再删。",
     "downloadFailedTitle": "下载失败",
     "deleteLocalConfirm": "确定删除 {count} 首本地文件吗？文件会进回收站，歌单本身不受影响，随时可以重新下载。",

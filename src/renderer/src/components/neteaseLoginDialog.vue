@@ -1,6 +1,10 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
+import hotkeys from 'hotkeys-js'
+import { v4 as uuidV4 } from 'uuid'
+import utils from '../utils/utils'
 import { t } from '@renderer/utils/translate'
+import { useDialogTransition } from '@renderer/composables/useDialogTransition'
 
 /**
  * 网易云扫码登录。
@@ -15,6 +19,9 @@ const props = defineProps<{
   onCancel: () => void
 }>()
 
+const uuid = uuidV4()
+const { dialogVisible, closeWithAnimation } = useDialogTransition()
+
 const qrDataUrl = ref('')
 const status = ref<'loading' | 'ready' | 'scanned' | 'expired' | 'failed'>('loading')
 const message = ref('')
@@ -26,6 +33,21 @@ const clearTimer = () => {
     clearInterval(timer)
     timer = null
   }
+}
+
+const close = (ok: boolean) => {
+  closeWithAnimation(() => {
+    if (ok) props.onSuccess()
+    else props.onCancel()
+  })
+}
+
+const cancel = () => {
+  close(false)
+}
+
+const succeed = () => {
+  close(true)
 }
 
 const startPolling = () => {
@@ -45,7 +67,7 @@ const startPolling = () => {
       if (result?.code === 803) {
         status.value = 'ready'
         clearTimer()
-        props.onSuccess()
+        succeed()
       }
     } catch (error) {
       status.value = 'failed'
@@ -75,48 +97,124 @@ const requestQr = async () => {
 }
 
 onMounted(() => {
+  hotkeys('Esc', uuid, () => {
+    cancel()
+  })
+  utils.setHotkeysScpoe(uuid)
   void requestQr()
 })
 
-onBeforeUnmount(() => {
+onUnmounted(() => {
   clearTimer()
+  utils.delHotkeysScope(uuid)
 })
 </script>
 
 <template>
-  <div class="dialog unselectable dialog-visible">
-    <div class="inner" style="width: 360px; padding: 20px; display: flex; flex-direction: column">
+  <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
+    <div v-dialog-drag="'.dialog-title'" class="inner login-inner">
       <div class="dialog-title dialog-header">
         <span>{{ t('netease.login') }}</span>
       </div>
-      <div style="margin-top: 16px; font-size: 13px; line-height: 1.6; opacity: 0.85">
-        {{ t('netease.loginTip') }}
-      </div>
-      <div style="margin-top: 14px; display: flex; justify-content: center; min-height: 260px">
-        <img
-          v-if="qrDataUrl && status !== 'expired'"
-          :src="qrDataUrl"
-          alt="NetEase login QR"
-          style="width: 260px; height: 260px; image-rendering: pixelated"
-        />
-        <div v-else style="align-self: center; font-size: 13px; opacity: 0.7">
-          {{
-            status === 'expired'
-              ? t('netease.loginExpired')
-              : status === 'failed'
-                ? t('netease.loginFailed')
-                : t('netease.loginLoading')
-          }}
+      <div class="login-body">
+        <div class="login-tip">{{ t('netease.loginTip') }}</div>
+        <div class="login-qr">
+          <div class="login-qr-frame">
+            <img
+              v-if="qrDataUrl && status !== 'expired'"
+              :src="qrDataUrl"
+              alt=""
+              class="login-qr-image"
+            />
+            <div v-else class="login-qr-placeholder">
+              {{
+                status === 'expired'
+                  ? t('netease.loginExpired')
+                  : status === 'failed'
+                    ? t('netease.loginFailed')
+                    : t('netease.loginLoading')
+              }}
+            </div>
+          </div>
+        </div>
+        <div class="login-status">
+          <span v-if="status === 'scanned'">{{ t('netease.loginScanned') }}</span>
+          <span v-else-if="message">{{ message }}</span>
         </div>
       </div>
-      <div style="margin-top: 10px; min-height: 20px; font-size: 12px; opacity: 0.75">
-        <span v-if="status === 'scanned'">{{ t('netease.loginScanned') }}</span>
-        <span v-else-if="message">{{ message }}</span>
-      </div>
-      <div style="margin-top: 18px; display: flex; flex-direction: column; gap: 10px">
-        <div class="button" @click="requestQr">{{ t('netease.loginRefresh') }}</div>
-        <div class="button" @click="props.onCancel()">{{ t('netease.loginClose') }}</div>
+      <div class="dialog-footer">
+        <div class="button login-footer-button" @click="requestQr">
+          {{ t('netease.loginRefresh') }}
+        </div>
+        <div class="button login-footer-button" @click="cancel">
+          {{ t('netease.loginClose') }} (Esc)
+        </div>
       </div>
     </div>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.login-inner {
+  width: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+.login-body {
+  padding: 16px 20px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.login-tip {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-weak);
+}
+
+.login-qr {
+  display: flex;
+  justify-content: center;
+}
+
+.login-qr-frame {
+  width: 240px;
+  height: 240px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+}
+
+.login-qr-image {
+  width: 240px;
+  height: 240px;
+  image-rendering: pixelated;
+  display: block;
+}
+
+.login-qr-placeholder {
+  font-size: 14px;
+  color: var(--text-weak);
+  text-align: center;
+  padding: 0 16px;
+}
+
+.login-status {
+  min-height: 20px;
+  font-size: 13px;
+  color: var(--text-weak);
+  text-align: center;
+}
+
+.login-footer-button {
+  min-width: 90px;
+  text-align: center;
+  box-sizing: border-box;
+}
+</style>

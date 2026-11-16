@@ -44,6 +44,7 @@
     "orphanGroup": "No longer in any playlist",
     "orphanHint": "These tracks are no longer in any playlist, but their local files remain. Clean them up when convenient.",
     "logout": "Sign out",
+    "relogin": "Sign in with a new QR code",
     "nothingDownloadedToDelete": "None of the selected tracks has a local file yet, so there is nothing to delete. Download them first.",
     "downloadFailedTitle": "Download failed",
     "deleteLocalConfirm": "Delete {count} local files? They go to the recycle bin, playlists are untouched, and you can download them again anytime.",
