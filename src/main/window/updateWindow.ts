@@ -20,6 +20,7 @@ import {
 } from '../services/updateError'
 import { GITHUB_RELEASES_URL } from '@shared/productBrand'
 import { isLibraryMergeActive } from '../services/libraryMerge'
+import { resolveMacUpdateStrategy } from '../services/macInPlaceUpdate'
 import { installResumableAutoUpdaterDownload } from '../services/resumableAutoUpdaterDownload'
 import { updateDownloadDiagnosticLogger } from '../services/updateDownloadDiagnostic'
 import { installPublishedReleaseUpdateProvider } from '../services/publishedReleaseUpdateProvider'
@@ -141,6 +142,8 @@ const resolveUpdateFiles = (updateInfo: UpdateInfo): ResolvedUpdateFileInfo[] =>
 
 const rememberMacManualUpdateAsset = (updateInfo: UpdateInfo) => {
   if (process.platform !== 'darwin') return
+  // 能原地更新时不需要手动安装包，也不必去解析它。
+  if (resolveMacUpdateStrategy() !== 'manual') return
   latestMacManualUpdateResult = null
   latestMacManualUpdateAsset = pickManualMacUpdateAsset(updateInfo, resolveUpdateFiles(updateInfo))
   if (!latestMacManualUpdateAsset) {
@@ -267,7 +270,9 @@ const registerAutoUpdaterListeners = () => {
 }
 
 const handleStartDownload = () => {
-  if (process.platform === 'darwin') {
+  // macOS 优先走 electron-updater 原地替换；只有在当前环境没法原地替换时
+  // （例如从 DMG 直接运行、或者当前还是未签名的旧版本），才退回下载压缩包手动安装。
+  if (process.platform === 'darwin' && resolveMacUpdateStrategy() === 'manual') {
     if (!latestMacManualUpdateAsset) {
       const payload: UpdateErrorPayload = {
         kind: 'unknown',
@@ -420,7 +425,8 @@ const handleQuitApp = () => {
 }
 
 const handleRestartAppForUpdate = () => {
-  if (process.platform !== 'win32') return
+  // Windows 用 NSIS 安装器、macOS 用 Squirrel.Mac 原地替换，两边都由 electron-updater 收尾。
+  if (process.platform !== 'win32' && process.platform !== 'darwin') return
   // 合并进行中不能退出，避免中断写库。
   if (isLibraryMergeActive()) return
   autoUpdater.quitAndInstall()

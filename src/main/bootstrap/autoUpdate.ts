@@ -47,7 +47,9 @@ export function setupAutoUpdate() {
     return
   }
 
-  // macOS 保留既有链路：发现新版本窗口 -> 更新窗口（手动 dmg 流程）。
+  // macOS 保留既有链路：发现新版本窗口 -> 更新窗口。
+  // 更新窗口内部再判断能不能原地替换：能就交给 electron-updater 走 Squirrel.Mac，
+  // 不能（例如从 DMG 直接运行、当前还是未签名旧版本）才退回下载压缩包手动安装。
   if (shouldCheck) {
     void autoUpdater.checkForUpdates().catch((error) => {
       logIfUnexpectedUpdateError('[autoUpdate] initial check failed', error)

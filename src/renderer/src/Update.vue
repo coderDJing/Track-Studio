@@ -224,8 +224,12 @@ const canCheckNewVersion = computed(() => errorInfo.value.kind === 'gone')
 const isManualMacUpdate = computed(
   () => runtime.setting.platform === 'darwin' && downloadedInfo.value.mode === 'manual'
 )
+// Windows 与 macOS 都由 electron-updater 原地替换，重启即完成升级；
+// 只有 macOS 走手动安装包时才是 manual 模式。
 const canRestartFrkbForUpdate = computed(
-  () => runtime.setting.platform === 'win32' && downloadedInfo.value.mode === 'auto'
+  () =>
+    (runtime.setting.platform === 'win32' || runtime.setting.platform === 'darwin') &&
+    downloadedInfo.value.mode === 'auto'
 )
 const startUpdateText = computed(() =>
   runtime.setting.platform === 'darwin' ? t('update.downloadUpdate') : t('update.startUpdate')
