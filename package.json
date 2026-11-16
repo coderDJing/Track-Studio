@@ -99,7 +99,7 @@
     ],
     "appId": "com.electron.frkb",
     "productName": "Track Studio",
-    "afterSign": "build/afterSign.cjs",
+    "afterPack": "build/afterPack.cjs",
     "artifactName": "Track-Studio-${version}-${os}-${arch}.${ext}",
     "files": [
       "**/*",
@@ -182,7 +182,11 @@
     },
     "mac": {
       "executableName": "FRKB",
-      "hardenedRuntime": false,
+      "hardenedRuntime": true,
+      "identity": "Developer ID Application",
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "notarize": true,
       "mergeASARs": false,
       "extraResources": [
         {

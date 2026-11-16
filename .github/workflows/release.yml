@@ -582,6 +582,52 @@ jobs:
           FRKB_LASTFM_API_KEY: ${{ secrets.FRKB_LASTFM_API_KEY }}
         run: pnpm build
 
+      - name: Prepare macOS signing credentials
+        id: mac_signing
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+
+          # 证书与公证凭据都是可选的：没配置时构建照常进行，只是不签名、不公证。
+          # 一旦配置了证书却缺少对应密码/公证凭据，必须直接失败，不能悄悄降级成未签名产物。
+          if [ -n "${MACOS_CERTIFICATE_P12_BASE64}" ]; then
+            if [ -z "${MACOS_CERTIFICATE_PASSWORD}" ]; then
+              echo "::error::配置了 MACOS_CERTIFICATE_P12_BASE64，但缺少 MACOS_CERTIFICATE_PASSWORD。"
+              exit 1
+            fi
+            {
+              echo "CSC_LINK<<FRKB_CSC_EOF"
+              echo "data:application/x-pkcs12;base64,${MACOS_CERTIFICATE_P12_BASE64}"
+              echo "FRKB_CSC_EOF"
+              echo "CSC_KEY_PASSWORD=${MACOS_CERTIFICATE_PASSWORD}"
+            } >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "已启用 Developer ID 签名。"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::未配置 MACOS_CERTIFICATE_P12_BASE64，本次 macOS 产物不做签名与公证。"
+          fi
+
+          if [ -n "${APPLE_API_KEY_P8}" ] && [ -n "${APPLE_API_KEY_ID}" ] && [ -n "${APPLE_API_ISSUER}" ]; then
+            printf '%s' "${APPLE_API_KEY_P8}" > "$RUNNER_TEMP/AuthKey.p8"
+            chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+            {
+              echo "APPLE_API_KEY=$RUNNER_TEMP/AuthKey.p8"
+              echo "APPLE_API_KEY_ID=${APPLE_API_KEY_ID}"
+              echo "APPLE_API_ISSUER=${APPLE_API_ISSUER}"
+            } >> "$GITHUB_ENV"
+            echo "notarized=true" >> "$GITHUB_OUTPUT"
+            echo "已启用 Apple 公证。"
+          else
+            echo "notarized=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::App Store Connect API Key 未配置完整，本次只签名不做公证。"
+          fi
+
       - name: Package macOS (universal, no publish)
         env:
           DEBUG: electron-builder
@@ -589,7 +635,10 @@ jobs:
           sed -i.bak '/^electron_mirror=/d' .npmrc && rm -f .npmrc.bak
           npx electron-builder --mac --universal --publish never
 
-      - name: Verify macOS RC signing mode
+      - name: Verify macOS signing and notarization
+        env:
+          EXPECT_SIGNED: ${{ steps.mac_signing.outputs.signed }}
+          EXPECT_NOTARIZED: ${{ steps.mac_signing.outputs.notarized }}
         run: |
           set -euo pipefail
           APP_DIR="$(find dist/mac-universal -maxdepth 1 -name '*.app' -type d | head -n 1 || true)"
@@ -597,16 +646,47 @@ jobs:
             echo "macOS app bundle not found under dist/mac-universal"
             exit 1
           fi
-          for binary_path in \
-            "$APP_DIR/Contents/MacOS/FRKB" \
-            "$APP_DIR/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework"; do
-            signature_info="$(codesign -dvvv "$binary_path" 2>&1)"
-            if grep -q 'flags=.*runtime' <<<"$signature_info"; then
-              echo "Unexpected Hardened Runtime signature: $binary_path"
+
+          MAIN_BINARY="$APP_DIR/Contents/MacOS/FRKB"
+          FRAMEWORK_BINARY="$APP_DIR/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework"
+
+          if [ "$EXPECT_SIGNED" = "true" ]; then
+            for binary_path in "$MAIN_BINARY" "$FRAMEWORK_BINARY"; do
+              signature_info="$(codesign -dvvv "$binary_path" 2>&1)"
               echo "$signature_info"
+              if ! grep -q 'Authority=Developer ID Application' <<<"$signature_info"; then
+                echo "::error::$binary_path 不是用 Developer ID Application 证书签名的。"
+                exit 1
+              fi
+              if ! grep -q 'flags=.*runtime' <<<"$signature_info"; then
+                echo "::error::$binary_path 缺少 Hardened Runtime 标记。"
+                exit 1
+              fi
+            done
+
+            if ! codesign --verify --deep --strict --verbose=2 "$APP_DIR"; then
+              echo "::error::codesign --verify --deep --strict 未通过。"
               exit 1
             fi
-          done
+
+            if [ "$EXPECT_NOTARIZED" = "true" ]; then
+              if ! xcrun stapler validate "$APP_DIR"; then
+                echo "::error::公证票据未 stapling 到应用包。"
+                exit 1
+              fi
+              if ! spctl --assess --type execute --verbose=4 "$APP_DIR"; then
+                echo "::error::Gatekeeper 未接受已公证的应用。"
+                exit 1
+              fi
+            fi
+          else
+            signature_info="$(codesign -dvvv "$MAIN_BINARY" 2>&1 || true)"
+            if grep -q 'Authority=Developer ID Application' <<<"$signature_info"; then
+              echo "::error::未配置签名证书，产物却带 Developer ID 签名。"
+              exit 1
+            fi
+            echo "本次产物未签名（未配置 Developer ID 证书）。"
+          fi
 
       - name: Verify packaged Demucs resources (macOS)
         run: |

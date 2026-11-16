@@ -121,6 +121,11 @@ nsis:
   include: build/installer.nsh
 mac:
   executableName: FRKB
+  hardenedRuntime: true
+  identity: Developer ID Application
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  notarize: true
   target:
     - dmg
     - zip
@@ -129,13 +134,11 @@ mac:
       to: demucs/bootstrap
     - from: vendor/r3-stretch/darwin-universal
       to: r3-stretch/darwin-universal
-  entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
-  notarize: false
 dmg:
   artifactName: Track-Studio-${version}-mac-${arch}.${ext}
   title: Track Studio ${version}
