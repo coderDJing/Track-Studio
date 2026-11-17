@@ -132,13 +132,16 @@ export const withoutRecordingAnalysisMenus = (groups: IMenu[][]): IMenu[][] =>
  * 菜单主体与普通曲目一致，但落地前会先把流地址换成 `.store/` 里的真实文件。
  * 去掉的项：
  *   - 在文件夹中显示：仅已下载曲目显示，定位 `.store` 里的具体文件，不为了显示去下载；
- *   - 删除曲目 / 删除上方全部：删的是网易云歌单结构，不是本地缓存；
+ *   - 删除曲目 / 删除上方全部：不绑 Delete；自建歌单和「我喜欢的音乐」另有「从歌单中移除」；
  *   - 元数据编辑 / 自动补全 / 指纹：元数据权威在网易云 API，导入本地库会走正式导入流程。
  * 转码、修 BPM、Rekordbox XML：先让用户确认存放位置，取消则不下载体；生成的是新文件，不覆盖 `.store`。
  * 传输动作一律是**复制**：网易云来源只复制不移动（草案 9.6）。
  * 「下载到本地 / 删除本地文件」代替默认菜单里的删除项。
  */
-export const createNeteaseStreamMenuArr = (downloaded: boolean): IMenu[][] => {
+export const createNeteaseStreamMenuArr = (
+  downloaded: boolean,
+  options?: { canRemoveFromPlaylist?: boolean }
+): IMenu[][] => {
   const localActions: IMenu[] = downloaded
     ? [{ menuName: 'netease.removeLocalFile' }]
     : [{ menuName: 'netease.downloadToLocal' }]
@@ -156,6 +159,7 @@ export const createNeteaseStreamMenuArr = (downloaded: boolean): IMenu[][] => {
       { menuName: 'library.addToMixtape' }
     ],
     localActions,
+    ...(options?.canRemoveFromPlaylist ? [[{ menuName: 'netease.removeFromPlaylist' }]] : []),
     ...(downloaded ? [[{ menuName: 'tracks.showInFileExplorer' }]] : []),
     createMusicSearchMenuItems(),
     [{ menuName: 'similarTracks.menu' }],

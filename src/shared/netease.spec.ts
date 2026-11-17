@@ -5,7 +5,8 @@ import {
   isNeteasePendingPath,
   parseNeteasePendingSongId,
   parseNeteaseSongId,
-  isNeteasePreviewUrl
+  isNeteasePreviewUrl,
+  canEditNeteasePlaylistTracks
 } from './netease'
 
 describe('netease pending path', () => {
@@ -27,5 +28,16 @@ describe('netease preview url', () => {
     expect(parseNeteaseSongId('frkb-preview://netease/?netease=1901371647')).toBe('1901371647')
     expect(parseNeteaseSongId('frkb-preview://?netease=1901371647')).toBe('1901371647')
     expect(isNeteasePreviewUrl('frkb-preview://local/?path=D%3A%2Fmusic%2Fa.wav')).toBe(false)
+  })
+})
+
+describe('canEditNeteasePlaylistTracks', () => {
+  it('only allows liked and created playlists', () => {
+    expect(canEditNeteasePlaylistTracks('liked')).toBe(true)
+    expect(canEditNeteasePlaylistTracks('created')).toBe(true)
+    expect(canEditNeteasePlaylistTracks('subscribed')).toBe(false)
+    expect(canEditNeteasePlaylistTracks('album')).toBe(false)
+    expect(canEditNeteasePlaylistTracks('')).toBe(false)
+    expect(canEditNeteasePlaylistTracks(undefined)).toBe(false)
   })
 })

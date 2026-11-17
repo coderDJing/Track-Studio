@@ -27,6 +27,12 @@ import {
 } from './paths'
 import { parseAudioHeader } from './audioHeader'
 import { replaceStoreFileAtomically } from './storeReplace'
+import { getLoggedInUserId, restoreSessionIntoClient } from './session'
+import {
+  applyRemovedPlaylistTracks,
+  assertPlaylistTracksEditable,
+  findPlaylistRecord
+} from './playlistEdit'
 
 /**
  * 目录同步与本地查询。
@@ -394,6 +400,64 @@ export function getPlaylistTracks(playlistId: string): NeteaseTrackRow[] {
     coverUrl: String(row.cover_url || ''),
     position: Number(row.position) || 0
   }))
+}
+
+export function getPlaylistInfo(playlistId: string): {
+  playlistId: string
+  kind: string
+  title: string
+  trackCount: number
+  userId: string
+} | null {
+  const id = String(playlistId || '').trim()
+  if (!isSafeSongId(id)) return null
+  const record = findPlaylistRecord(requireDb(), getListRoot(), id, getLoggedInUserId())
+  if (!record) return null
+  return { playlistId: id, ...record }
+}
+
+/**
+ * 从云端歌单移出曲目，成功后再改本地索引。
+ * 不会删除 `.store` 里的文件或 `netease_track` 元数据。
+ */
+export async function removeTracksFromPlaylist(
+  playlistId: string,
+  songIds: string[]
+): Promise<{ removedIds: string[]; trackCount: number; title: string; kind: string }> {
+  const id = String(playlistId || '').trim()
+  if (!isSafeSongId(id)) throw new Error('缺少歌单')
+  const db = requireDb()
+  const listRoot = getListRoot()
+  const playlist = findPlaylistRecord(db, listRoot, id, getLoggedInUserId())
+  if (!playlist) throw new Error('找不到这张歌单')
+  assertPlaylistTracksEditable(playlist.kind)
+
+  const existing = new Set(getPlaylistTracks(id).map((track) => track.songId))
+  const ids = [
+    ...new Set(
+      songIds
+        .map((item) => String(item || '').trim())
+        .filter((item) => isSafeSongId(item) && existing.has(item))
+    )
+  ]
+  if (ids.length === 0) {
+    return {
+      removedIds: [],
+      trackCount: playlist.trackCount,
+      title: playlist.title,
+      kind: playlist.kind
+    }
+  }
+
+  if (!neteaseClient.isLoggedIn) {
+    const restored = await restoreSessionIntoClient()
+    if (!restored && !neteaseClient.isLoggedIn) {
+      throw new Error('需要先登录网易云音乐')
+    }
+  }
+  await neteaseClient.removePlaylistTracks(id, ids)
+  const applied = applyRemovedPlaylistTracks(db, listRoot, id, ids)
+  return { ...applied, title: playlist.title, kind: playlist.kind }
 }
 
 /**

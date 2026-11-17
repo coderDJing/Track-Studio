@@ -85,3 +85,8 @@ export function parseNeteasePendingSongId(filePath: string): string | null {
   const id = filePath.slice(NETEASE_PENDING_PATH_PREFIX.length).trim()
   return id || null
 }
+
+/** 自己创建的歌单和「我喜欢的音乐」可以增删曲目；收藏的歌单和专辑不行。 */
+export function canEditNeteasePlaylistTracks(kind: string | null | undefined): boolean {
+  return kind === 'liked' || kind === 'created'
+}

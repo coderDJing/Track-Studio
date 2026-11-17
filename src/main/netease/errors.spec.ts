@@ -24,11 +24,13 @@ describe('NeteaseApiError', () => {
     expect(new NeteaseApiError('x', 403, 0).definitive).toBe(true)
   })
 
-  it('把 -460 / -462 视为不应重试的致命业务码', () => {
+  it('把 -460 / -462 / 521 视为不应重试的致命业务码', () => {
     expect(isFatalCode(-460)).toBe(true)
     expect(isFatalCode(-462)).toBe(true)
+    expect(isFatalCode(521)).toBe(true)
     expect(isFatalCode(400)).toBe(false)
     expect(new NeteaseApiError('x', 200, -460).definitive).toBe(true)
+    expect(new NeteaseApiError('x', 200, 521).definitive).toBe(true)
   })
 
   it('普通失败不是 definitive，调用方可以重试', () => {

@@ -14,7 +14,8 @@ import {
   getPlaylistTracks,
   listDownloaded,
   reconcileStoreFromDisk,
-  syncCatalog
+  syncCatalog,
+  removeTracksFromPlaylist
 } from './library'
 import { ensureTracksDownloaded, estimatePlaylistImportSize, importNeteasePlaylist } from './import'
 import {
@@ -26,6 +27,8 @@ import { clearPreviewCache, enforcePreviewCacheLimit, getPreviewCacheUsage } fro
 import { isSafeSongId } from './paths'
 import { getLibrary } from '../utils'
 import { clearTrackCache } from '../services/cacheMaintenance'
+import { getNeteaseGroupsFromDb } from './tree'
+import { NeteaseApiError } from './errors'
 
 /**
  * 网易云相关的 IPC。
@@ -308,6 +311,29 @@ export function registerNeteaseHandlers(getWindow: () => BrowserWindow | null): 
     }
     return { removed, requested: songIds.length }
   })
+
+  ipcMain.handle(
+    'netease:remove-playlist-tracks',
+    async (_event, payload: { playlistId?: string; songIds?: unknown }) => {
+      const playlistId = String(payload?.playlistId || '').trim()
+      if (!isSafeSongId(playlistId)) throw new Error('缺少歌单')
+      const songIds = sanitizeSongIds(payload?.songIds)
+      if (songIds.length === 0) throw new Error('没有可移除的曲目')
+      try {
+        const result = await removeTracksFromPlaylist(playlistId, songIds)
+        const window = getWindow()
+        if (window && !window.isDestroyed()) {
+          window.webContents.send('netease:catalog-updated', { groups: getNeteaseGroupsFromDb() })
+        }
+        return result
+      } catch (error) {
+        if (error instanceof NeteaseApiError && error.loginExpired) {
+          throw new Error('登录态已失效，请重新扫码后再试')
+        }
+        throw error
+      }
+    }
+  )
 
   // 启动时恢复登录态（不阻塞，失败就当未登录）
   void loadSession().then((session) => {

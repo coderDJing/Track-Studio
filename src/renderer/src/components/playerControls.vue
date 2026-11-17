@@ -22,7 +22,8 @@ import { isNeteaseStreamSong, parseNeteaseSongId } from '@renderer/utils/netease
 import {
   deleteNeteaseLocalFiles,
   downloadNeteaseTracks,
-  mapNeteaseSongsToLocalFiles
+  mapNeteaseSongsToLocalFiles,
+  removeNeteasePlaylistTracks
 } from '@renderer/utils/neteaseActions'
 import {
   exportNeteaseTracksToRekordboxXml,
@@ -55,6 +56,11 @@ import {
   type IMetadataAutoFillSummary,
   type IMetadataAutoFillItemResult
 } from '../../../types/globals'
+import {
+  canRemoveTracksFromNeteasePlaylist,
+  findNeteasePlaylistContext
+} from '@renderer/utils/neteasePlaylistContext'
+import { getNeteasePlaylistId } from '@shared/netease'
 const previousSong = previousSongAsset
 const fastBackward = fastBackwardAsset
 const play = playAsset
@@ -87,7 +93,7 @@ const isReadOnlyPlaybackSource = computed(() =>
  * 网易云歌单里正在播的这一首：列表行仍是试听流地址，本地文件要另外解析。
  *
  * 菜单和歌单右键同一套：能落地再做的动作先下载再执行；转码 / 修 BPM / XML 先选存放位置；
- * 在文件夹中显示只对已下载开放；指纹和改元数据藏掉；不提供删除、删除上方全部、移动。
+ * 在文件夹中显示只对已下载开放；指纹和改元数据藏掉；不提供删除上方全部、移动；自建歌单可从歌单中移除。
  */
 const isStreamOnlySong = computed(() => isNeteaseStreamSong(runtime.playingData.playingSong))
 const streamOnlySongId = computed(() => {
@@ -96,6 +102,9 @@ const streamOnlySongId = computed(() => {
 })
 const streamOnlyDownloaded = computed(
   () => runtime.playingData.playingSong?.neteaseDownloaded === true
+)
+const streamOnlyCanRemoveFromPlaylist = computed(() =>
+  canRemoveTracksFromNeteasePlaylist(runtime.libraryTree, runtime.playingData.playingSongListUUID)
 )
 const markPlayingSongDownloaded = () => {
   if (runtime.playingData.playingSong) {
@@ -259,6 +268,26 @@ const showInFileExplorer = () => {
  * 列表里的徽标走的是另一条重载路径，管不到播放器手上这份快照。
  * 换音质不另开入口：删掉已下载的，再按当前设置重新下载。
  */
+const handleRemoveFromNeteasePlaylist = async () => {
+  const songId = streamOnlySongId.value
+  const listUuid = runtime.playingData.playingSongListUUID
+  if (!songId) return
+  closeMoreMenu()
+  const context = findNeteasePlaylistContext(runtime.libraryTree, listUuid)
+  const removed = await removeNeteasePlaylistTracks({
+    playlistId: context?.playlistId || getNeteasePlaylistId(listUuid),
+    songIds: [songId],
+    title: context?.title
+  })
+  if (!removed) return
+  runtime.playingData.playingSongListData = runtime.playingData.playingSongListData.filter(
+    (item) => {
+      const itemId = String(item.neteaseSongId || parseNeteaseSongId(item.filePath) || '')
+      return itemId !== songId
+    }
+  )
+}
+
 const handleStreamOnlyLocalAction = async (action: 'download' | 'delete') => {
   const songId = streamOnlySongId.value
   if (!songId) return
@@ -914,6 +943,13 @@ onUnmounted(() => {
             @click="handleStreamOnlyLocalAction('delete')"
           >
             <span>{{ t('netease.removeLocalFile') }}</span>
+          </div>
+          <div
+            v-if="streamOnlyCanRemoveFromPlaylist"
+            class="menuButton"
+            @click="handleRemoveFromNeteasePlaylist()"
+          >
+            <span>{{ t('netease.removeFromPlaylist') }}</span>
           </div>
         </div>
         <div v-else style="padding: 5px 5px; border-bottom: 1px solid var(--border)">

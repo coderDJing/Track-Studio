@@ -34,5 +34,5 @@ export class NeteaseApiError extends Error {
   }
 }
 
-/** -460 操作频繁、-462 需要验证：这两类重试只会更糟 */
-export const isFatalCode = (code: number): boolean => code === -460 || code === -462
+/** -460 操作频繁、-462 需要验证、521 需要绑定手机：这几类重试只会更糟 */
+export const isFatalCode = (code: number): boolean => code === -460 || code === -462 || code === 521

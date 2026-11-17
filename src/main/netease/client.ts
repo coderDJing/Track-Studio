@@ -205,10 +205,11 @@ export class NeteaseClient {
         ) {
           // 业务码非成功：登录失效与"资源没了"要能被上层区分出来，
           // 否则调用方只会看到"歌单是空的"。
+          const detail = asStr(parsed.message) || asStr(parsed.msg)
           throw new NeteaseApiError(
             code === 301 || code === 302
-              ? `${path} 登录态已失效（code ${code}）`
-              : `${path} 返回错误码 ${code}`,
+              ? `登录态已失效（code ${code}）`
+              : detail || `${path} 返回错误码 ${code}`,
             response.status,
             code
           )
@@ -336,6 +337,23 @@ export class NeteaseClient {
     return asArr(playlist.trackIds)
       .map((item) => String(asNum(asObj(item)?.id)))
       .filter((id) => id && id !== '0')
+  }
+
+  /**
+   * 从自己的歌单（含「我喜欢的音乐」）里移出曲目。
+   * 走 /weapi/playlist/manipulate/tracks，改的是账号里的云端歌单。
+   */
+  async removePlaylistTracks(playlistId: string, songIds: string[]): Promise<void> {
+    const ids = [
+      ...new Set(songIds.map((id) => String(id || '').trim()).filter((id) => id && id !== '0'))
+    ]
+    if (!playlistId || ids.length === 0) return
+    await this.weapi('/playlist/manipulate/tracks', {
+      op: 'del',
+      pid: String(playlistId),
+      trackIds: JSON.stringify(ids),
+      imme: 'true'
+    })
   }
 
   async albumTrackIds(albumId: string): Promise<string[]> {

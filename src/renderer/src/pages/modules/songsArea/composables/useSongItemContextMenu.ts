@@ -32,12 +32,15 @@ import {
   NETEASE_DOWNLOADED_UUID,
   isNeteasePendingPath,
   isNeteasePlaylistUuid,
-  isNeteasePreviewUrl
+  isNeteasePreviewUrl,
+  getNeteasePlaylistId,
+  parseNeteaseSongId
 } from '@shared/netease'
 import {
   deleteNeteaseLocalFiles,
   downloadNeteaseTracks,
-  mapNeteaseSongsToLocalFiles
+  mapNeteaseSongsToLocalFiles,
+  removeNeteasePlaylistTracks
 } from '@renderer/utils/neteaseActions'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { RECORDING_LIBRARY_UUID } from '@shared/recordingLibrary'
@@ -64,6 +67,7 @@ import {
   SONG_DELETE_MENU_NAMES,
   handleSongDeleteMenuAction
 } from './songItemContextMenuDeleteActions'
+import { canRemoveTracksFromNeteasePlaylist } from '@renderer/utils/neteasePlaylistContext'
 
 // Type for the return value when a dialog needs to be opened by the parent
 interface OpenDialogAction {
@@ -271,7 +275,12 @@ export function useSongItemContextMenu(
       : isRecycleBinView
         ? createRecycleMenuArr()
         : isNeteaseStreamView
-          ? createNeteaseStreamMenuArr(song.neteaseDownloaded === true)
+          ? createNeteaseStreamMenuArr(song.neteaseDownloaded === true, {
+              canRemoveFromPlaylist: canRemoveTracksFromNeteasePlaylist(
+                runtime.libraryTree,
+                songsAreaState.songListUUID
+              )
+            })
           : isNeteaseDownloadedView
             ? createNeteaseDownloadedMenuArr(songsAreaState.songListUUID)
             : isSetView()
@@ -308,6 +317,19 @@ export function useSongItemContextMenu(
         .filter((id) => id.length > 0)
       const fallback = String(song.neteaseSongId || '')
       await deleteNeteaseLocalFiles(ids.length > 0 ? ids : fallback ? [fallback] : [])
+      return null
+    }
+
+    if (result.menuName === 'netease.removeFromPlaylist') {
+      const playlistId = getNeteasePlaylistId(songsAreaState.songListUUID)
+      const ids = resolveSelectedSongs()
+        .map((item) => String(item.neteaseSongId || parseNeteaseSongId(item.filePath) || ''))
+        .filter((id) => id.length > 0)
+      const fallback = String(song.neteaseSongId || parseNeteaseSongId(song.filePath) || '')
+      await removeNeteasePlaylistTracks({
+        playlistId,
+        songIds: ids.length > 0 ? ids : fallback ? [fallback] : []
+      })
       return null
     }
 

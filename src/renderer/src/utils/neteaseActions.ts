@@ -26,6 +26,7 @@ import {
 import { appendExternalSongsToSet } from './setCustody'
 import { appendDownloadedFilesToMixtape } from './mixtapePlaylistAppend'
 import type { ISongInfo } from '../../../types/globals'
+import { findNeteasePlaylistContext } from './neteasePlaylistContext'
 
 /**
  * 网易云相关的渲染层动作。
@@ -364,6 +365,55 @@ export const deleteNeteaseLocalFiles = async (songIds: string[]): Promise<boolea
   await invoke('netease:delete-local', { songIds: ids })
   refreshNeteaseViews()
   return true
+}
+
+const unwrapIpcError = (error: unknown): string => {
+  const raw = error instanceof Error ? error.message : String(error || '')
+  const marker = 'Error invoking remote method'
+  const index = raw.lastIndexOf(': ')
+  if (raw.includes(marker) && index >= 0) {
+    return raw.slice(index + 2).trim() || raw
+  }
+  return raw
+}
+
+/**
+ * 从自己创建的歌单或「我喜欢的音乐」里移出曲目。
+ * 先改云端歌单，成功后再刷新本地列表；已下载的 `.store` 文件会留着。
+ */
+export const removeNeteasePlaylistTracks = async (input: {
+  playlistId: string
+  songIds: string[]
+  title?: string
+}): Promise<boolean> => {
+  const playlistId = String(input.playlistId || '').trim()
+  const songIds = [...new Set(input.songIds.map((id) => String(id || '').trim()).filter(Boolean))]
+  if (!playlistId || songIds.length === 0) return false
+  const runtime = useRuntimeStore()
+  const title =
+    input.title ||
+    findNeteasePlaylistContext(runtime.libraryTree, `${NETEASE_PLAYLIST_PREFIX}${playlistId}`)
+      ?.title ||
+    ''
+  const answer = await confirm({
+    title: t('netease.removeFromPlaylist'),
+    content: [t('netease.removeFromPlaylistConfirm', { title, count: songIds.length })],
+    confirmShow: true
+  })
+  if (!answer) return false
+  try {
+    await invoke('netease:remove-playlist-tracks', { playlistId, songIds })
+    refreshNeteaseViews(`${NETEASE_PLAYLIST_PREFIX}${playlistId}`)
+    return true
+  } catch (error) {
+    const message = unwrapIpcError(error) || t('common.unknownError')
+    await confirm({
+      title: t('netease.removeFromPlaylistFailed'),
+      content: [message],
+      confirmShow: false
+    })
+    return false
+  }
 }
 
 type NeteaseDownloadOutcome = {
