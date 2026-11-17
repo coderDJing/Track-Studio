@@ -19,7 +19,18 @@ import { analyzeFingerprintsForPaths } from '@renderer/utils/fingerprintActions'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
 import { isEditablePioneerUsbSong } from '@renderer/utils/pioneerUsbEditing'
 import { isNeteaseStreamSong, parseNeteaseSongId } from '@renderer/utils/neteaseSongs'
-import { deleteNeteaseLocalFiles, downloadNeteaseTracks } from '@renderer/utils/neteaseActions'
+import {
+  deleteNeteaseLocalFiles,
+  downloadNeteaseTracks,
+  mapNeteaseSongsToLocalFiles
+} from '@renderer/utils/neteaseActions'
+import {
+  exportNeteaseTracksToRekordboxXml,
+  showNeteaseSongInFolder,
+  startNeteaseAudioConvert,
+  startNeteaseBpmFix
+} from '@renderer/utils/neteaseLocalActions'
+import { startBpmFix } from '@renderer/utils/bpmFixActions'
 import type { LibraryTransferActionMode } from '@renderer/utils/libraryTransfer'
 import {
   getMusicSearchOpenFailedMessageKey,
@@ -73,10 +84,10 @@ const isReadOnlyPlaybackSource = computed(() =>
   )
 )
 /**
- * 网易云歌单里正在播的这一首：盘上没有文件，只有一个试听流地址。
+ * 网易云歌单里正在播的这一首：列表行仍是试听流地址，本地文件要另外解析。
  *
- * 这类行不能走导出/移动/复制/删除那套按路径干活的逻辑，菜单里换成网易云自己的
- * 三个动作（下载、按音质重下、删除本地文件），语义和曲目行右键保持一致。
+ * 菜单和歌单右键同一套：能落地再做的动作先下载再执行；转码 / 修 BPM / XML 先选存放位置；
+ * 在文件夹中显示只对已下载开放；指纹和改元数据藏掉；不提供删除、删除上方全部、移动。
  */
 const isStreamOnlySong = computed(() => isNeteaseStreamSong(runtime.playingData.playingSong))
 const streamOnlySongId = computed(() => {
@@ -86,6 +97,21 @@ const streamOnlySongId = computed(() => {
 const streamOnlyDownloaded = computed(
   () => runtime.playingData.playingSong?.neteaseDownloaded === true
 )
+const markPlayingSongDownloaded = () => {
+  if (runtime.playingData.playingSong) {
+    runtime.playingData.playingSong.neteaseDownloaded = true
+  }
+}
+const resolvePlayingSongForLocalAction = async (): Promise<ISongInfo | null> => {
+  const song = runtime.playingData.playingSong
+  if (!song) return null
+  if (!isNeteaseStreamSong(song)) return { ...song }
+  const mapped = await mapNeteaseSongsToLocalFiles([song])
+  const resolved = mapped[0]
+  if (!resolved) return null
+  markPlayingSongDownloaded()
+  return resolved
+}
 const isPlaying = computed(() => props.playing === true)
 watch(
   () => runtime.activeMenuUUID,
@@ -216,8 +242,14 @@ const exportTrack = () => {
   emits('exportTrack')
 }
 const showInFileExplorer = () => {
-  window.electron.ipcRenderer.send('show-item-in-folder', runtime.playingData.playingSong?.filePath)
+  const song = runtime.playingData.playingSong
+  if (!song) return
   closeMoreMenu()
+  if (isNeteaseStreamSong(song)) {
+    void showNeteaseSongInFolder(song)
+    return
+  }
+  window.electron.ipcRenderer.send('show-item-in-folder', song.filePath)
 }
 
 /**
@@ -473,9 +505,15 @@ const handleEditMetadata = async () => {
 }
 
 const handleConvertFormat = async () => {
-  const filePath = runtime.playingData.playingSong?.filePath
-  if (!filePath) return
+  const song = runtime.playingData.playingSong
+  if (!song) return
   closeMoreMenu()
+  if (isNeteaseStreamSong(song)) {
+    await startNeteaseAudioConvert([song], runtime.setting.audioExt)
+    return
+  }
+  const filePath = song.filePath
+  if (!filePath) return
   try {
     await startAudioConvertFromFiles({
       files: [filePath],
@@ -487,26 +525,46 @@ const handleConvertFormat = async () => {
   }
 }
 
+const handleBpmFix = async () => {
+  const song = runtime.playingData.playingSong
+  if (!song) return
+  closeMoreMenu()
+  if (isNeteaseStreamSong(song)) {
+    await startNeteaseBpmFix([song])
+    return
+  }
+  const filePath = String(song.filePath || '').trim()
+  if (!filePath) return
+  const songListUUID = runtime.playingData.playingSongListUUID
+  await startBpmFix({
+    filePaths: [filePath],
+    songListUUID,
+    songListPath: libraryUtils.findDirPathByUuid(songListUUID) || ''
+  })
+}
+
 const handleStemSeparation = async () => {
   const song = runtime.playingData.playingSong
-  if (!song?.filePath) return
+  if (!song) return
   closeMoreMenu()
+  const targetSong = isNeteaseStreamSong(song) ? await resolvePlayingSongForLocalAction() : song
+  if (!targetSong?.filePath) return
   const { default: openLibraryStemSeparationDialog } =
     await import('@renderer/components/libraryStemSeparationDialog')
   await openLibraryStemSeparationDialog({
-    filePath: song.filePath,
-    songTitle: song.title
+    filePath: targetSong.filePath,
+    songTitle: targetSong.title
   })
 }
 
 const handleClearTrackCache = async () => {
-  const filePath = runtime.playingData.playingSong?.filePath
-  if (!filePath) return
+  const song = runtime.playingData.playingSong
+  if (!song) return
   closeMoreMenu()
-  await promptAndStartTrackReanalysis(
-    [filePath],
-    runtime.playingData.playingSong ? [runtime.playingData.playingSong] : []
-  )
+  const targetSong = isNeteaseStreamSong(song) ? await resolvePlayingSongForLocalAction() : song
+  const filePath = String(targetSong?.filePath || '').trim()
+  if (!filePath || !targetSong) return
+  await promptAndStartTrackReanalysis([filePath], [targetSong])
 }
 
 const handleRekordboxDesktopPlaylist = async () => {
@@ -522,12 +580,17 @@ const handleRekordboxDesktopPlaylist = async () => {
     return
   }
   closeMoreMenu()
+  const tracks = isNeteaseStreamSong(song) ? await mapNeteaseSongsToLocalFiles([song]) : [song]
+  if (!tracks.length) return
+  if (isNeteaseStreamSong(song)) markPlayingSongDownloaded()
   runtime.isProgressing = true
   try {
     const songListPath = resolvePlaybackSourceSongListPath(sourceListUuid)
+    const keepSourceTracks = isNeteaseStreamSong(song) || Boolean(song.neteaseSongId)
     const summary = await openRekordboxDesktopPlaylistForSelectedTracks({
-      tracks: [song],
+      tracks,
       songListUUID: sourceListUuid,
+      forceKeepSourceTracks: keepSourceTracks,
       ...(songListPath ? { deletePayload: { songListPath } } : {})
     })
     if (summary?.removedSetItemIds?.length) {
@@ -552,9 +615,12 @@ const handleExternalPlaylist = async (kind: 'serato' | 'traktor') => {
     return
   }
   closeMoreMenu()
+  const tracks = isNeteaseStreamSong(song) ? await mapNeteaseSongsToLocalFiles([song]) : [song]
+  if (!tracks.length) return
+  if (isNeteaseStreamSong(song)) markPlayingSongDownloaded()
   runtime.isProgressing = true
   try {
-    await openExternalLibraryPlaylistForSelectedTracks({ tracks: [song], kind })
+    await openExternalLibraryPlaylistForSelectedTracks({ tracks, kind })
   } finally {
     runtime.isProgressing = false
   }
@@ -586,6 +652,14 @@ const handleRekordboxXmlExport = async () => {
       title: t('dialog.hint'),
       content: [t('import.waitForTask')],
       confirmShow: false
+    })
+    return
+  }
+  if (isNeteaseStreamSong(song)) {
+    closeMoreMenu()
+    await exportNeteaseTracksToRekordboxXml({
+      tracks: [song],
+      songListUUID: sourceListUuid || ''
     })
     return
   }
@@ -822,7 +896,7 @@ onUnmounted(() => {
     </div>
     <transition name="fade">
       <div v-if="moreMenuShow && !props.hidePlaybackControls" class="moreMenu unselectable">
-        <!-- 网易云歌单里的这一首：盘上没有文件，只给「下载」相关的动作 -->
+        <!-- 网易云歌单里的这一首：下载/删除本地文件，其余动作和歌单右键同一套 -->
         <div
           v-if="isStreamOnlySong"
           style="padding: 5px 5px; border-bottom: 1px solid var(--border)"
@@ -854,14 +928,8 @@ onUnmounted(() => {
           <div class="menuButton" @click="exportTrack()">
             <span>{{ t('tracks.exportTracksCopyOnly') }}</span>
           </div>
-          <div class="menuButton" @click="moveToSetLibrary()">
-            <span>{{ t('library.addToSet') }}</span>
-          </div>
         </div>
-        <div
-          v-if="!isStreamOnlySong"
-          style="padding: 5px 5px; border-bottom: 1px solid var(--border)"
-        >
+        <div style="padding: 5px 5px; border-bottom: 1px solid var(--border)">
           <div class="menuButton" @click="handleRekordboxDesktopPlaylist()">
             <span>{{ t('rekordboxDesktop.menuCreatePlaylistFromSelectedTracks') }}</span>
           </div>
@@ -879,11 +947,12 @@ onUnmounted(() => {
             <span>{{ t('rekordboxXmlExport.menuExportSelectedTracks') }}</span>
           </div>
         </div>
-        <div
-          v-if="!isStreamOnlySong"
-          style="padding: 5px 5px; border-bottom: 1px solid var(--border)"
-        >
-          <div v-if="!isReadOnlyPlaybackSource" class="menuButton" @click="moveToListLibrary()">
+        <div style="padding: 5px 5px; border-bottom: 1px solid var(--border)">
+          <div
+            v-if="!isReadOnlyPlaybackSource && !isStreamOnlySong"
+            class="menuButton"
+            @click="moveToListLibrary()"
+          >
             <div>
               <span>{{ t('library.moveToFilter') }}</span>
             </div>
@@ -891,7 +960,11 @@ onUnmounted(() => {
               <img :src="shortcutIcon" style="margin-right: 5px" :draggable="false" /><span>Q</span>
             </div>
           </div>
-          <div v-if="!isReadOnlyPlaybackSource" class="menuButton" @click="moveToLikeLibrary()">
+          <div
+            v-if="!isReadOnlyPlaybackSource && !isStreamOnlySong"
+            class="menuButton"
+            @click="moveToLikeLibrary()"
+          >
             <div>
               <span>{{ t('library.moveToCurated') }}</span>
             </div>
@@ -926,7 +999,11 @@ onUnmounted(() => {
           <div class="menuButton" @click="moveToSetLibrary()">
             <span>{{ t('library.addToSet') }}</span>
           </div>
-          <div v-if="isReadOnlyPlaybackSource" class="menuButton" @click="moveToMixtapeLibrary()">
+          <div
+            v-if="isReadOnlyPlaybackSource || isStreamOnlySong"
+            class="menuButton"
+            @click="moveToMixtapeLibrary()"
+          >
             <span>{{ t('library.addToMixtapeByCopy') }}</span>
           </div>
         </div>
@@ -950,7 +1027,7 @@ onUnmounted(() => {
           </div>
         </div>
         <div
-          v-if="!isStreamOnlySong"
+          v-if="!isStreamOnlySong || streamOnlyDownloaded"
           style="padding: 5px 5px; border-bottom: 1px solid var(--border)"
         >
           <div class="menuButton" @click="showInFileExplorer()">
@@ -1011,7 +1088,10 @@ onUnmounted(() => {
             <span>{{ t('similarTracks.menu') }}</span>
           </div>
         </div>
-        <div style="padding: 5px 5px; border-bottom: 1px solid var(--border)">
+        <div
+          v-if="!isStreamOnlySong"
+          style="padding: 5px 5px; border-bottom: 1px solid var(--border)"
+        >
           <div class="menuButton" @click="handleAutoFillMetadata()">
             <span>{{ t('metadata.autoFillMenu') }}</span>
           </div>
@@ -1019,7 +1099,10 @@ onUnmounted(() => {
             <span>{{ t('tracks.editMetadata') }}</span>
           </div>
         </div>
-        <div style="padding: 5px 5px; border-bottom: 1px solid var(--border)">
+        <div
+          v-if="!isStreamOnlySong"
+          style="padding: 5px 5px; border-bottom: 1px solid var(--border)"
+        >
           <div class="menuButton" @click="handleAnalyzeCurrentSongFingerprint()">
             <span>{{ t('fingerprints.analyzeAndAdd') }}</span>
           </div>
@@ -1028,12 +1111,15 @@ onUnmounted(() => {
           <div class="menuButton" @click="handleConvertFormat()">
             <span>{{ t('tracks.convertFormat') }}</span>
           </div>
+          <div class="menuButton" @click="handleBpmFix()">
+            <span>{{ t('bpmFix.menu') }}</span>
+          </div>
         </div>
         <div style="padding: 5px 5px">
           <div class="menuButton" @click="handleClearTrackCache()">
             <span>{{ t('tracks.clearTrackCache') }}</span>
           </div>
-          <div v-if="!isStreamOnlySong" class="menuButton" @click="handleStemSeparation()">
+          <div class="menuButton" @click="handleStemSeparation()">
             <span>{{ t('stemSeparation.menu') }}</span>
           </div>
         </div>

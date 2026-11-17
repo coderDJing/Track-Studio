@@ -18,6 +18,7 @@ export default (params: {
   defaultExportDirName: string
   defaultXmlFileName: string
   defaultXmlPlaylistName: string
+  lockMode?: RekordboxXmlExportMode
 }): Promise<RekordboxXmlExportDialogResult> => {
   return new Promise((resolve) => {
     const div = document.createElement('div')

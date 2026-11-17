@@ -12,7 +12,8 @@ import type {
 const SUPPORTED_SOURCE_LIBRARIES = new Set<RekordboxXmlExportSourceLibraryName>([
   'FilterLibrary',
   'CuratedLibrary',
-  'SetLibrary'
+  'SetLibrary',
+  'NeteaseLibrary'
 ])
 
 const normalizeComparePath = (value: string) => {
@@ -125,6 +126,13 @@ export const validateRequestLibrary = (request: RekordboxXmlExportRequest) => {
       ok: false as const,
       code: 'UNSUPPORTED_LIBRARY',
       message: '当前来源暂不支持导出到 Rekordbox XML。'
+    }
+  }
+  if (request.sourceLibraryName === 'NeteaseLibrary' && request.mode === 'move') {
+    return {
+      ok: false as const,
+      code: 'MOVE_NOT_ALLOWED',
+      message: '网易云曲目只能复制导出，不能移动缓存文件。'
     }
   }
   return { ok: true as const }

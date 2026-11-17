@@ -62,10 +62,12 @@ async function findSongListRoot(startDir: string): Promise<string | null> {
       getCoreFsDirName('SetLibrary'),
       SET_CUSTODY_DIR_NAME
     )
+    const neteaseRoot = path.join(rootDir, mapRendererPathToFsPath('library/NeteaseLibrary'))
     const normalizedStart = normalizePath(startDir)
     const normalizedRecycle = normalizePath(recycleRoot)
     const normalizedRecording = normalizePath(recordingRoot)
     const normalizedSetCustody = normalizePath(setCustodyRoot)
+    const normalizedNetease = normalizePath(neteaseRoot)
     if (
       normalizedStart &&
       normalizedRecycle &&
@@ -89,6 +91,14 @@ async function findSongListRoot(startDir: string): Promise<string | null> {
         normalizedStart.startsWith(normalizedSetCustody + path.sep))
     ) {
       return setCustodyRoot
+    }
+    if (
+      normalizedStart &&
+      normalizedNetease &&
+      (normalizedStart === normalizedNetease ||
+        normalizedStart.startsWith(normalizedNetease + path.sep))
+    ) {
+      return neteaseRoot
     }
   }
   return await findSongListRootByPath(startDir)

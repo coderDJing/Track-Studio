@@ -304,6 +304,7 @@ export const prepareBpmFix = async (owner: WebContents, value: unknown) => {
   activeJob = job
   try {
     job.playlist = await resolveBpmFixPlaylist(input)
+    if (job.playlist.kind === 'external') job.snapshot.lockSaveCopy = true
   } catch (error) {
     activeJob = null
     throw error
@@ -362,6 +363,9 @@ const readOptions = (value: unknown, job: Job): BpmFixOptions => {
     return item as BpmFixTrackOptions
   })
   if (!tracks.some((t) => t.enabled)) throw new Error('BPM_FIX_NO_SELECTION')
+  if (job.snapshot.lockSaveCopy && value.saveMode === 'overwrite') {
+    throw new Error('BPM_FIX_INVALID_OPTIONS')
+  }
   return {
     saveMode: value.saveMode as BpmFixOptions['saveMode'],
     format: value.format as BpmFixOptions['format'],

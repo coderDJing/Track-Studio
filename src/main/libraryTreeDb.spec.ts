@@ -5,6 +5,7 @@ import path from 'node:path'
 import { closeLibraryDb } from './libraryDb'
 import {
   ensureLibraryTreeBaseline,
+  findSongListRootByPath,
   loadLibraryNodes,
   syncLibraryTreeFromDisk
 } from './libraryTreeDb'
@@ -93,5 +94,37 @@ describe('library tree core baseline', () => {
     )
     expect(kept).toHaveLength(1)
     expect(kept[0].uuid).toBe(inserted[0].uuid)
+  })
+})
+
+describe('findSongListRootByPath for NeteaseLibrary', () => {
+  it('uses NeteaseLibrary as the cache root for files under .store', async () => {
+    const dbRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'frkb-library-tree-'))
+    temporaryDirectories.push(dbRoot)
+    const libraryRoot = path.join(dbRoot, 'library')
+    const neteaseRoot = path.join(libraryRoot, 'NeteaseLibrary')
+    const storeDir = path.join(neteaseRoot, '.store')
+    for (const name of [...Object.values(coreDirNames), 'NeteaseLibrary']) {
+      await fs.mkdir(path.join(libraryRoot, name), { recursive: true })
+    }
+    await fs.mkdir(storeDir, { recursive: true })
+
+    const withNetease = { ...coreDirNames, NeteaseLibrary: 'NeteaseLibrary' }
+    await ensureLibraryTreeBaseline(dbRoot, { coreDirNames: withNetease })
+
+    await expect(findSongListRootByPath(storeDir, dbRoot)).resolves.toBe(neteaseRoot)
+    await expect(
+      findSongListRootByPath(path.join(storeDir, 'unused-for-root-resolution'), dbRoot)
+    ).resolves.toBe(neteaseRoot)
+  })
+
+  it('does not treat FilterLibrary itself as a song-list cache root', async () => {
+    const dbRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'frkb-library-tree-'))
+    temporaryDirectories.push(dbRoot)
+    const filterRoot = path.join(dbRoot, 'library', coreDirNames.FilterLibrary)
+    await fs.mkdir(filterRoot, { recursive: true })
+    await syncLibraryTreeFromDisk(dbRoot, { coreDirNames })
+
+    await expect(findSongListRootByPath(filterRoot, dbRoot)).resolves.toBeNull()
   })
 })

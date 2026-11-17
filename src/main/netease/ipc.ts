@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { ipcMain, type BrowserWindow } from 'electron'
 import { log } from '../log'
 import store from '../store'
@@ -270,6 +271,16 @@ export function registerNeteaseHandlers(getWindow: () => BrowserWindow | null): 
 
   ipcMain.handle('netease:fulfill-pending-set', async (_event, payload: { songId?: string }) => {
     return await fulfillPendingSetSong(String(payload?.songId || ''))
+  })
+
+  ipcMain.handle('netease:resolve-local', async (_event, payload: { songIds?: string[] }) => {
+    const songIds = sanitizeSongIds(payload?.songIds)
+    const items: Array<{ songId: string; filePath: string }> = []
+    for (const songId of songIds) {
+      const filePath = getLocalFilePath(songId)
+      if (filePath && existsSync(filePath)) items.push({ songId, filePath })
+    }
+    return { items }
   })
 
   ipcMain.handle('netease:delete-local', async (_event, payload: { songIds?: string[] }) => {

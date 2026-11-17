@@ -2,7 +2,8 @@ import type { ISongHotCue, ISongMemoryCue } from '../types/globals'
 
 export type RekordboxXmlExportMode = 'copy' | 'move'
 
-export type RekordboxXmlExportSourceLibraryName = 'FilterLibrary' | 'CuratedLibrary' | 'SetLibrary'
+export type RekordboxXmlExportSourceLibraryName =
+  'FilterLibrary' | 'CuratedLibrary' | 'SetLibrary' | 'NeteaseLibrary'
 
 export type RekordboxXmlExportTrackInput = {
   filePath: string
@@ -33,8 +34,7 @@ type RekordboxXmlExportPlaylistSource = {
 }
 
 export type RekordboxXmlExportSource =
-  | RekordboxXmlExportSelectedTracksSource
-  | RekordboxXmlExportPlaylistSource
+  RekordboxXmlExportSelectedTracksSource | RekordboxXmlExportPlaylistSource
 
 export type RekordboxXmlExportRequest = {
   jobId: string

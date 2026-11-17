@@ -29,6 +29,7 @@ const applySnapshot = (snapshot: BpmFixSnapshot | null) => {
     bpmFixAdvanced.value = false
   }
   bpmFixSnapshot.value = snapshot
+  if (snapshot?.lockSaveCopy) bpmFixDraft.saveMode = 'copy'
   if (snapshot?.status === 'ready') bpmFixAdvanced.value = true
   for (const track of snapshot?.tracks || []) {
     if (!track.analysis || bpmFixDraft.tracks[track.id]) continue

@@ -43,6 +43,7 @@ import { useHorizontalBrowseDeckSongSync } from '@renderer/composables/horizonta
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { isHarmonicMixCompatible } from '@shared/keyDisplay'
 import emitter from '@renderer/utils/mitt'
+import { mapNeteaseSongsToLocalFiles } from '@renderer/utils/neteaseActions'
 import { createHorizontalBrowseDeckAssigner } from '@renderer/composables/horizontalBrowse/horizontalBrowseDeckAssignment'
 import type { HorizontalBrowseDeckAssignTransportOptions } from '@renderer/composables/horizontalBrowse/horizontalBrowseDeckAssignment'
 import { useHorizontalBrowseTransportController } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseTransportController'
@@ -429,6 +430,9 @@ const assignSongToDeck = async (
   sourceOptions?: HorizontalBrowseDeckSongSourceOptions,
   transportOptions?: HorizontalBrowseDeckAssignTransportOptions
 ) => {
+  const mappedSongs = await mapNeteaseSongsToLocalFiles([song])
+  const nextSong = mappedSongs[0]
+  if (!nextSong) return
   setDeckSongListSource(deck, resolveDeckSongSourceOptions(sourceOptions))
   const shouldApplyEditPlaybackRange =
     deck === 'top' &&
@@ -440,12 +444,12 @@ const assignSongToDeck = async (
         ...(transportOptions || {}),
         initialCurrentSec: resolveInitialPlaybackRangeStartSec(
           runtime.setting,
-          song.songStructure,
-          parseHorizontalBrowseDurationToSeconds(song.duration)
+          nextSong.songStructure,
+          parseHorizontalBrowseDurationToSeconds(nextSong.duration)
         )
       }
     : transportOptions
-  await assignSongToDeckBase(deck, song, resolvedTransportOptions)
+  await assignSongToDeckBase(deck, nextSong, resolvedTransportOptions)
 }
 
 const {

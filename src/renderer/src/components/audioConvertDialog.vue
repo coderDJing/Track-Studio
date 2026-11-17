@@ -25,6 +25,8 @@ const props = defineProps<{
   standaloneMode?: boolean
   presetTargetFormat?: SupportedAudioFormat
   lockTargetFormat?: boolean
+  lockNewFile?: boolean
+  requireOutputDir?: boolean
 }>()
 const uuid = uuidV4()
 
@@ -259,6 +261,7 @@ onMounted(async () => {
     form.value = { ...form.value, ...next }
   }
   applySupportedFormats()
+  if (props.lockNewFile) form.value.strategy = 'new_file'
 })
 
 onUnmounted(() => {
@@ -270,7 +273,10 @@ const confirm = async () => {
     if (!flashArea.value) flashBorder('selectedFiles')
     return
   }
-  if (isStandaloneMode.value && shouldShowOutputDir.value && outputDir.value.trim().length === 0) {
+  if (props.lockNewFile) form.value.strategy = 'new_file'
+  const needsOutputDir =
+    Boolean(props.requireOutputDir) || (isStandaloneMode.value && shouldShowOutputDir.value)
+  if (needsOutputDir && outputDir.value.trim().length === 0) {
     if (!flashArea.value) flashBorder('outputDir')
     return
   }
@@ -279,12 +285,11 @@ const confirm = async () => {
     if (!flashArea.value) flashBorder('targetFormat')
     return
   }
-  const payloadOptions: ConvertOptions = isStandaloneMode.value
-    ? {
-        ...form.value,
-        outputDir: shouldShowOutputDir.value ? outputDir.value.trim() : undefined
-      }
-    : { ...form.value }
+  const payloadOptions: ConvertOptions = {
+    ...form.value,
+    outputDir:
+      shouldShowOutputDir.value && outputDir.value.trim() ? outputDir.value.trim() : undefined
+  }
   try {
     const setting = await window.electron.ipcRenderer.invoke('getSetting')
     const nextConvertDefaults: ConvertDefaults = { ...form.value }
@@ -445,10 +450,14 @@ const cancel = () => {
             <singleRadioGroup
               v-model="form.strategy"
               name="convertStrategy"
-              :options="[
-                { label: t('convert.newFile'), value: 'new_file' },
-                { label: t('convert.replaceOriginal'), value: 'replace' }
-              ]"
+              :options="
+                props.lockNewFile
+                  ? [{ label: t('convert.newFile'), value: 'new_file' }]
+                  : [
+                      { label: t('convert.newFile'), value: 'new_file' },
+                      { label: t('convert.replaceOriginal'), value: 'replace' }
+                    ]
+              "
               :option-font-size="12"
             />
           </div>

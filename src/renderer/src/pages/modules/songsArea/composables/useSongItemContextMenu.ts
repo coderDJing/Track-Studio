@@ -18,6 +18,12 @@ import { invokeMetadataAutoFill } from '@renderer/utils/metadataAutoFill'
 import { hasEffectiveAcoustIdKey } from '@renderer/utils/acoustid'
 import libraryUtils from '@renderer/utils/libraryUtils'
 import { startAudioConvertFromFiles } from '@renderer/utils/audioConvertActions'
+import {
+  exportNeteaseTracksToRekordboxXml,
+  showNeteaseSongInFolder,
+  startNeteaseAudioConvert,
+  startNeteaseBpmFix
+} from '@renderer/utils/neteaseLocalActions'
 import { promptAndStartTrackReanalysis } from '@renderer/utils/trackReanalysis'
 import choiceDialog from '@renderer/components/choiceDialog'
 import { normalizeArtistName, splitArtistNames } from '@shared/artistNames'
@@ -447,7 +453,13 @@ export function useSongItemContextMenu(
         return null
       }
       case 'tracks.convertFormat': {
-        if (isNeteaseStreamSong(song) || selectedSongsForSetDuration.some(isNeteaseStreamSong)) {
+        if (
+          isNeteaseStreamView ||
+          isNeteaseDownloadedView ||
+          isNeteaseStreamSong(song) ||
+          selectedSongsForSetDuration.some(isNeteaseStreamSong)
+        ) {
+          await startNeteaseAudioConvert(resolveSelectedSongs(), runtime.setting.audioExt)
           return null
         }
         const files = resolveSelectedFilePaths()
@@ -464,9 +476,12 @@ export function useSongItemContextMenu(
       }
       case 'bpmFix.menu': {
         if (
-          !isNeteaseStreamView &&
-          (isNeteaseStreamSong(song) || selectedSongsForSetDuration.some(isNeteaseStreamSong))
+          isNeteaseStreamView ||
+          isNeteaseDownloadedView ||
+          isNeteaseStreamSong(song) ||
+          selectedSongsForSetDuration.some(isNeteaseStreamSong)
         ) {
+          await startNeteaseBpmFix(resolveSelectedSongs())
           return null
         }
         const files = await resolveLocalFilePathsForAction()
@@ -692,6 +707,27 @@ export function useSongItemContextMenu(
           await confirmTaskBusy()
           return null
         }
+        if (
+          isNeteaseStreamView ||
+          isNeteaseDownloadedView ||
+          isNeteaseStreamSong(song) ||
+          selectedSongsForSetDuration.some(isNeteaseStreamSong)
+        ) {
+          const selectedSongs = resolveSelectedSongs()
+          if (!selectedSongs.length) {
+            await confirm({
+              title: t('rekordboxXmlExport.failureTitle'),
+              content: [t('rekordboxXmlExport.noTracksToExport')],
+              confirmShow: false
+            })
+            return null
+          }
+          await exportNeteaseTracksToRekordboxXml({
+            tracks: selectedSongs,
+            songListUUID: songsAreaState.songListUUID
+          })
+          return null
+        }
         const sourceLibraryName = resolveCoreLibraryName()
         if (!sourceLibraryName) {
           await confirm({
@@ -862,7 +898,10 @@ export function useSongItemContextMenu(
         break
       }
       case 'tracks.showInFileExplorer':
-        if (isNeteaseStreamSong(song)) return null
+        if (isNeteaseStreamView || isNeteaseDownloadedView || isNeteaseStreamSong(song)) {
+          await showNeteaseSongInFolder(song)
+          break
+        }
         window.electron.ipcRenderer.send('show-item-in-folder', song.filePath)
         break
       case 'tracks.clearTrackCache': {

@@ -131,11 +131,10 @@ export const withoutRecordingAnalysisMenus = (groups: IMenu[][]): IMenu[][] =>
  * 这一行的 filePath 是 `frkb-preview://` 流地址，磁盘上**没有**这个文件。
  * 菜单主体与普通曲目一致，但落地前会先把流地址换成 `.store/` 里的真实文件。
  * 去掉的项：
- *   - 在文件夹中显示：没有文件可显示；
+ *   - 在文件夹中显示：仅已下载曲目显示，定位 `.store` 里的具体文件，不为了显示去下载；
  *   - 删除曲目 / 删除上方全部：删的是网易云歌单结构，不是本地缓存；
- *   - Rekordbox XML 导出：它只认筛选/精选/SET 这几个核心库，且带移动语义；
- *   - 元数据编辑 / 自动补全 / 指纹 / 转码：元数据权威在网易云 API，`.store` 不是曲库歌曲；
- *   - 修 BPM：要求真实曲库节点，网易云是虚拟节点。
+ *   - 元数据编辑 / 自动补全 / 指纹：元数据权威在网易云 API，导入本地库会走正式导入流程。
+ * 转码、修 BPM、Rekordbox XML：先让用户确认存放位置，取消则不下载体；生成的是新文件，不覆盖 `.store`。
  * 传输动作一律是**复制**：网易云来源只复制不移动（草案 9.6）。
  * 「下载到本地 / 删除本地文件」代替默认菜单里的删除项。
  */
@@ -147,6 +146,7 @@ export const createNeteaseStreamMenuArr = (downloaded: boolean): IMenu[][] => {
     [{ menuName: 'tracks.exportTracks' }],
     [
       { menuName: 'rekordboxDesktop.menuCreatePlaylistFromSelectedTracks' },
+      { menuName: 'rekordboxXmlExport.menuExportSelectedTracks' },
       { menuName: 'library.writeToSeratoPlaylist' },
       { menuName: 'library.writeToTraktorPlaylist' }
     ],
@@ -156,9 +156,11 @@ export const createNeteaseStreamMenuArr = (downloaded: boolean): IMenu[][] => {
       { menuName: 'library.addToMixtape' }
     ],
     localActions,
+    ...(downloaded ? [[{ menuName: 'tracks.showInFileExplorer' }]] : []),
     createMusicSearchMenuItems(),
     [{ menuName: 'similarTracks.menu' }],
-    [{ menuName: 'stemSeparation.menu' }]
+    [{ menuName: 'tracks.convertFormat' }],
+    [{ menuName: 'stemSeparation.menu' }, { menuName: 'bpmFix.menu' }]
   ]
 }
 
@@ -171,9 +173,12 @@ export const createNeteaseStreamMenuArr = (downloaded: boolean): IMenu[][] => {
  */
 export const createNeteaseSetStreamMenuArr = (): IMenu[][] => [
   [{ menuName: 'tracks.exportTracks' }],
+  [{ menuName: 'rekordboxXmlExport.menuExportSelectedTracks' }],
   [{ menuName: 'netease.downloadToLocal' }],
   [{ menuName: 'library.removeFromSet' }],
-  createMusicSearchMenuItems()
+  createMusicSearchMenuItems(),
+  [{ menuName: 'tracks.convertFormat' }],
+  [{ menuName: 'bpmFix.menu' }]
 ]
 
 /**
@@ -197,18 +202,11 @@ const COPY_ONLY_MENU_REWRITE: Record<string, string> = {
  */
 const NETEASE_HIDDEN_MENU_NAMES = new Set([
   'tracks.deleteAllAbove',
-  // Rekordbox XML 导出只认筛选/精选/SET 这几个核心库，网易云是虚拟节点。
-  'rekordboxXmlExport.menuExportSelectedTracks',
-  // 直接暴露 `.store` 会让用户绕过索引改名或删文件。
-  'tracks.showInFileExplorer',
   'metadata.autoFillMenu',
   'tracks.editMetadata',
-  'tracks.convertFormat',
   'fingerprints.analyzeAndAdd',
   // 网易云行不展示分析结果，清缓存没有意义，还会顺带删掉分轨。
-  'tracks.clearTrackCache',
-  // 修 BPM 要求真实的曲库节点（uuid + 路径 + nodeType），网易云下载视图是虚拟节点。
-  'bpmFix.menu'
+  'tracks.clearTrackCache'
 ])
 
 export const createNeteaseDownloadedMenuArr = (songListUUID: string): IMenu[][] => {

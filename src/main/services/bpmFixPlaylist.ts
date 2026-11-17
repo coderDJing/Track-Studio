@@ -24,10 +24,38 @@ import type { BpmFixStart, BpmFixSummary } from '../../shared/bpmFix'
 import { compactSongListTrackNumbersByFilePaths } from './playlistTrackNumbers'
 import { stripMixtapeGridCopies } from './mixtapeAnalysisInfo'
 
-export type BpmFixPlaylist = { root: string; uuid: string; kind: 'physical' | 'set' | 'mixtape' }
+export type BpmFixPlaylist = {
+  root: string
+  uuid: string
+  kind: 'physical' | 'set' | 'mixtape' | 'external'
+}
 export const beginBpmFixPublication = (paths: string[]) =>
   beginPlaylistViewSnapshotMutationByPaths(paths)
+const resolveOutputDir = async (outputDir: string) => {
+  const requested = path.isAbsolute(outputDir) ? outputDir : path.resolve(outputDir)
+  await fs.mkdir(requested, { recursive: true })
+  return fs.realpath(requested)
+}
+
 export const resolveBpmFixPlaylist = async (input: BpmFixStart): Promise<BpmFixPlaylist> => {
+  const outputDir = typeof input.outputDir === 'string' ? input.outputDir.trim() : ''
+  if (outputDir) {
+    const root = await resolveOutputDir(outputDir)
+    if (store.databaseDir) {
+      try {
+        const library = await fs.realpath(path.join(store.databaseDir, 'library'))
+        if (isUnderPath(library, root)) {
+          const node = findLibraryNodeByPath(path.relative(library, root))
+          if (node && node.nodeType === 'songList') {
+            return { root, uuid: node.uuid, kind: 'external' }
+          }
+        }
+      } catch {
+        // 输出目录在库外，或还不是一个库节点，按外部目录写文件即可。
+      }
+    }
+    return { root, uuid: input.songListUUID || 'external', kind: 'external' }
+  }
   if (
     !store.databaseDir ||
     typeof input.songListPath !== 'string' ||
@@ -59,6 +87,7 @@ export const resolveBpmFixPlaylist = async (input: BpmFixStart): Promise<BpmFixP
 }
 
 export const assertBpmFixPlaylistTrack = (playlist: BpmFixPlaylist, source: string) => {
+  if (playlist.kind === 'external') return
   const node = findLibraryNodeByPath(
     path.relative(path.join(store.databaseDir, 'library'), playlist.root)
   )
@@ -86,7 +115,10 @@ export const chooseBpmFixDestination = async (
   const ext = format === 'wav' ? '.wav' : path.extname(source).toLowerCase()
   if (!['.wav', '.mp3', '.flac', '.aif', '.aiff', '.m4a', '.aac', '.ogg', '.opus'].includes(ext))
     throw new Error('BPM_FIX_UNSUPPORTED_FORMAT')
-  if (overwrite) return path.join(path.dirname(source), path.parse(source).name + ext)
+  if (overwrite) {
+    if (playlist.kind === 'external') throw new Error('BPM_FIX_INVALID_OPTIONS')
+    return path.join(path.dirname(source), path.parse(source).name + ext)
+  }
   const base = path.parse(source).name + '_BPM_fixed'
   for (let i = 0; i < 10000; i++) {
     const candidate = path.join(playlist.root, base + (i ? ` (${i})` : '') + ext)
@@ -269,25 +301,40 @@ export const commitBpmFixPlaylist = (
       }
     } else {
       const info = transformBpmFixInfo(baseInfo, output, summary, map)
-      insertCache(playlist.root, undefined, baseInfo)
-      stripMixtapeGridCopies(info)
-      if (playlist.kind !== 'physical') {
-        const table = playlist.kind === 'set' ? 'set_items' : 'mixtape_items'
-        const order = playlist.kind === 'set' ? 'sort_order' : 'mix_order'
-        const column = playlist.kind === 'set' ? 'analysis_json' : 'info_json'
-        const max = db
-          .prepare(`SELECT COALESCE(MAX(${order}), 0) AS n FROM ${table} WHERE playlist_uuid = ?`)
-          .get(playlist.uuid)
-        db.prepare(
-          `INSERT INTO ${table} (id, playlist_uuid, file_path, ${order}, ${column}, created_at_ms) VALUES (?, ?, ?, ?, ?, ?)`
-        ).run(
-          randomUUID(),
-          playlist.uuid,
-          output,
-          Number(max?.n || 0) + 1,
-          JSON.stringify(info),
-          Date.now()
-        )
+      if (playlist.kind === 'external') {
+        try {
+          if (store.databaseDir) {
+            const library = path.join(store.databaseDir, 'library')
+            if (isUnderPath(library, playlist.root)) {
+              const node = findLibraryNodeByPath(path.relative(library, playlist.root))
+              if (node && node.nodeType === 'songList')
+                insertCache(playlist.root, undefined, baseInfo)
+            }
+          }
+        } catch {
+          // 输出目录在库外时只写音频文件，不登记曲库缓存。
+        }
+      } else {
+        insertCache(playlist.root, undefined, baseInfo)
+        stripMixtapeGridCopies(info)
+        if (playlist.kind !== 'physical') {
+          const table = playlist.kind === 'set' ? 'set_items' : 'mixtape_items'
+          const order = playlist.kind === 'set' ? 'sort_order' : 'mix_order'
+          const column = playlist.kind === 'set' ? 'analysis_json' : 'info_json'
+          const max = db
+            .prepare(`SELECT COALESCE(MAX(${order}), 0) AS n FROM ${table} WHERE playlist_uuid = ?`)
+            .get(playlist.uuid)
+          db.prepare(
+            `INSERT INTO ${table} (id, playlist_uuid, file_path, ${order}, ${column}, created_at_ms) VALUES (?, ?, ?, ?, ?, ?)`
+          ).run(
+            randomUUID(),
+            playlist.uuid,
+            output,
+            Number(max?.n || 0) + 1,
+            JSON.stringify(info),
+            Date.now()
+          )
+        }
       }
     }
   })()

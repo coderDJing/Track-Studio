@@ -18,6 +18,13 @@ vi.mock('./playlistTrackNumbers', () => ({ compactSongListTrackNumbersByFilePath
 let db: DatabaseSync | undefined
 afterEach(() => db?.close())
 
+describe('external BPM-fix destinations skip source-in-playlist checks', () => {
+  it('does not require the source to belong to the destination folder', () => {
+    const playlist = { root: '/tmp/out', uuid: 'external', kind: 'external' as const }
+    expect(() => assertBpmFixPlaylistTrack(playlist, '/store/123.flac')).not.toThrow()
+  })
+})
+
 describe.each(['win32', 'darwin'] as const)('%s BPM-fix playlist identity', (platform) => {
   it.each(['set', 'mixtape'] as const)(
     'checks the exact physical source before a %s write',

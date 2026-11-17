@@ -24,6 +24,7 @@ const props = defineProps<{
   defaultExportDirName: string
   defaultXmlFileName: string
   defaultXmlPlaylistName: string
+  lockMode?: RekordboxXmlExportMode
   confirmCallback: (payload: DialogPayload) => void
   cancelCallback: () => void
 }>()
@@ -36,10 +37,18 @@ const xmlPlaylistName = ref(String(props.defaultXmlPlaylistName || '').trim())
 const mode = ref<RekordboxXmlExportMode>('copy')
 const flashArea = ref('')
 
-const modeOptions: Array<{ key: RekordboxXmlExportMode; labelKey: string }> = [
-  { key: 'copy', labelKey: 'rekordboxXmlExport.modeCopy' },
-  { key: 'move', labelKey: 'rekordboxXmlExport.modeMove' }
-]
+const modeOptions = computed(() => {
+  if (props.lockMode === 'copy') {
+    return [{ key: 'copy' as const, labelKey: 'rekordboxXmlExport.modeCopy' }]
+  }
+  if (props.lockMode === 'move') {
+    return [{ key: 'move' as const, labelKey: 'rekordboxXmlExport.modeMove' }]
+  }
+  return [
+    { key: 'copy' as const, labelKey: 'rekordboxXmlExport.modeCopy' },
+    { key: 'move' as const, labelKey: 'rekordboxXmlExport.modeMove' }
+  ]
+})
 
 const loadPersistedDefaults = () => {
   try {
@@ -68,6 +77,7 @@ const persistStableDefaults = () => {
 }
 
 loadPersistedDefaults()
+if (props.lockMode) mode.value = props.lockMode
 
 const flashBorder = (field: string) => {
   flashArea.value = field
@@ -187,7 +197,7 @@ onUnmounted(() => {
               :key="option.key"
               class="mode-option"
               :class="{ active: mode === option.key }"
-              @click="mode = option.key"
+              @click="mode = props.lockMode || option.key"
             >
               {{ t(option.labelKey) }}
             </div>

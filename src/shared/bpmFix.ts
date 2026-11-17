@@ -77,9 +77,15 @@ export type BpmFixSnapshot = {
   currentPercent: number
   percent: number
   error?: string
+  lockSaveCopy?: boolean
 }
 
-export type BpmFixStart = { filePaths: string[]; songListUUID: string; songListPath: string }
+export type BpmFixStart = {
+  filePaths: string[]
+  songListUUID: string
+  songListPath: string
+  outputDir?: string
+}
 
 export type BpmFixRuntime = {
   command: string

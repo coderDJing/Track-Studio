@@ -4,6 +4,7 @@ import { t } from '@renderer/utils/translate'
 import type { ISongInfo } from '../../../types/globals'
 import { normalizePlaylistTrackNumber, sortByPlaylistTrackNumber } from '@shared/playlistTrackOrder'
 import type {
+  RekordboxXmlExportMode,
   RekordboxXmlExportRequest,
   RekordboxXmlExportResponse,
   RekordboxXmlExportSourceLibraryName,
@@ -147,6 +148,8 @@ export const openRekordboxXmlExportForSelectedTracks = async (params: {
   sourceLibraryName: RekordboxXmlExportSourceLibraryName
   songListUUID: string
   playlistName?: string
+  lockMode?: RekordboxXmlExportMode
+  prepareTracks?: (tracks: ISongInfo[]) => Promise<ISongInfo[] | null>
 }) => {
   const orderedTracks = sortByPlaylistTrackNumber(params.tracks)
   const defaultPlaylistName =
@@ -155,9 +158,17 @@ export const openRekordboxXmlExportForSelectedTracks = async (params: {
     dialogTitle: t('rekordboxXmlExport.dialogTitleTracks'),
     defaultExportDirName: buildDefaultExportDirName(defaultPlaylistName),
     defaultXmlFileName: buildDefaultXmlFileName(defaultPlaylistName),
-    defaultXmlPlaylistName: defaultPlaylistName
+    defaultXmlPlaylistName: defaultPlaylistName,
+    lockMode: params.lockMode
   })
   if (dialogResult === 'cancel') return null
+
+  let exportTracks = orderedTracks
+  if (params.prepareTracks) {
+    const prepared = await params.prepareTracks(orderedTracks)
+    if (!prepared || prepared.length === 0) return null
+    exportTracks = prepared
+  }
 
   return await runExportRequest({
     jobId: buildJobId(),
@@ -165,12 +176,12 @@ export const openRekordboxXmlExportForSelectedTracks = async (params: {
     exportDirName: dialogResult.exportDirName,
     xmlFileName: dialogResult.xmlFileName,
     xmlPlaylistName: dialogResult.xmlPlaylistName,
-    mode: dialogResult.mode,
+    mode: params.lockMode || dialogResult.mode,
     sourceLibraryName: params.sourceLibraryName,
     source: {
       kind: 'selected-tracks',
       songListUUID: params.songListUUID,
-      tracks: orderedTracks.map(buildTrackInput)
+      tracks: exportTracks.map(buildTrackInput)
     }
   })
 }

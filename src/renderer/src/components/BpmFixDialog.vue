@@ -33,10 +33,14 @@ const tempoOptions = [
   { label: '1×', value: 1 },
   { label: '2×', value: 2 }
 ]
-const saveModeOptions = computed(() => [
-  { label: t('bpmFix.saveCopy'), value: 'copy' },
-  { label: t('bpmFix.saveOverwrite'), value: 'overwrite' }
-])
+const saveModeOptions = computed(() =>
+  snapshot.value?.lockSaveCopy
+    ? [{ label: t('bpmFix.saveCopy'), value: 'copy' }]
+    : [
+        { label: t('bpmFix.saveCopy'), value: 'copy' },
+        { label: t('bpmFix.saveOverwrite'), value: 'overwrite' }
+      ]
+)
 const formatOptions = computed(() => [
   { label: 'WAV · 24-bit', value: 'wav' },
   { label: t('bpmFix.keepFormat'), value: 'original' }

@@ -111,15 +111,8 @@ export function usePlayerControlsLogic({
       runtime.playingData.playingSong
     )
   /**
-   * 网易云歌单里的曲目：filePath 是 frkb-preview 流地址，盘上没有文件。
-   *
-   * 播放器菜单已经把这类操作藏起来了，但快捷键（Q/E/F）和小窗命令绕得过去，
-   * 所以逻辑层再兜一道——否则会把一个 URL 当路径送进文件系统，最后只收获一个失败弹窗。
-   */
-  /**
-   * 网易云歌单里的曲目没有本地文件。导出 / 移动这类"必须有个真实文件"的操作，
-   * 先把它下到 `.store`，然后用真实路径继续——草案 9.1 的体验就是
-   * "在歌单里选中就能导出"，而不是要求用户先切到「查看已下载」。
+   * 网易云歌单里的曲目没有本地文件。导出 / 复制到筛选精选 / 加入 Mixtape
+   * 这类必须有真实文件的操作，先把它下到 `.store`，再用真实路径继续。
    */
   const withResolvedNeteasePath = async (song: ISongInfo): Promise<ISongInfo | null> => {
     if (isNeteasePendingSetSong(song)) {

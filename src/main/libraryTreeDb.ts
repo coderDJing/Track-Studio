@@ -20,6 +20,7 @@ import {
 } from './libraryTreeDbHelpers'
 import type { LibraryNodeType, LibraryNodeRow, LegacyLibraryNode } from './libraryTreeDbHelpers'
 import type { SqliteDatabase } from './libraryDb'
+import { getCoreFsDirName } from './coreLibraries'
 import {
   invalidateLibraryNodeCache,
   readLibraryNodeCache,
@@ -976,6 +977,12 @@ export function removeLibraryNodesByParentUuid(parentUuid: string, dbRoot?: stri
   }
 }
 
+const isNeteaseLibraryCacheRoot = (node: Pick<LibraryNodeRow, 'nodeType' | 'dirName'>) => {
+  if (node.nodeType !== 'library') return false
+  const fsName = getCoreFsDirName('NeteaseLibrary')
+  return node.dirName === 'NeteaseLibrary' || node.dirName === fsName
+}
+
 export async function findSongListRootByPath(
   startDir: string,
   dbRoot?: string
@@ -1019,7 +1026,8 @@ export async function findSongListRootByPath(
     if (
       next.nodeType === 'songList' ||
       next.nodeType === 'setList' ||
-      next.nodeType === 'mixtapeList'
+      next.nodeType === 'mixtapeList' ||
+      isNeteaseLibraryCacheRoot(next)
     ) {
       lastSongList = [...walked]
     }

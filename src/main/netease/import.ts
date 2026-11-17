@@ -21,6 +21,8 @@ import { markGlobalSongSearchDirty } from '../services/globalSongSearch'
 import { scheduleCuratedLibrarySyncAfterLocalChange } from '../cloudSyncScheduler'
 import { rememberCuratedArtistsForAddedTracks } from '../curatedArtistLibrary'
 import { downloadTrack, getLocalFileOutcome, getPlaylistTracks, getTrackMeta } from './library'
+import { ensureTracksDownloaded } from './ensureDownloaded'
+export { ensureTracksDownloaded } from './ensureDownloaded'
 import type { NeteaseLevel } from './client'
 import { estimateImportSize, type ImportEstimate } from './importEstimate'
 import { isSafeSongId } from './paths'
@@ -339,52 +341,6 @@ function resolvePendingTracks(options: NeteaseImportOptions): PendingTrack[] {
     title: track.title,
     artist: track.artist
   }))
-}
-
-/**
- * 只做「确保已下载」，不复制。
- *
- * SET 库与混音库各自有自己的保管方式（SET 走 custody 复制、混音走 vault 复制），
- * 由渲染层接着调用它们已有的追加接口——这里不重复实现第三套搬运逻辑。
- */
-export async function ensureTracksDownloaded(
-  songIds: string[],
-  level: NeteaseLevel,
-  progressId?: string,
-  sendProgress?: (payload: NeteaseProgressPayload) => void
-): Promise<{
-  items: Array<{ songId: string; filePath: string; title: string; artist: string }>
-  failed: Array<{ songId: string; error: string }>
-}> {
-  const id = progressId || `netease_download_${Date.now()}`
-  const progress = sendProgress || (() => {})
-  const items: Array<{ songId: string; filePath: string; title: string; artist: string }> = []
-  const failed: Array<{ songId: string; error: string }> = []
-
-  progress({ id, titleKey: 'netease.downloadingTracks', now: 0, total: songIds.length })
-  for (let index = 0; index < songIds.length; index += 1) {
-    const songId = songIds[index]
-    try {
-      const outcome = await downloadTrack(songId, level)
-      const meta = getTrackMeta(songId)
-      items.push({
-        songId,
-        filePath: outcome.filePath,
-        title: meta?.title || '',
-        artist: meta?.artist || ''
-      })
-    } catch (error) {
-      failed.push({ songId, error: error instanceof Error ? error.message : String(error) })
-    }
-    progress({
-      id,
-      titleKey: 'netease.downloadingTracks',
-      now: index + 1,
-      total: songIds.length
-    })
-  }
-  progress({ id, dismiss: true })
-  return { items, failed }
 }
 
 /** 导入确认框用的体积估算：不请求 CDN，已下载的用实际大小 */
