@@ -32,6 +32,10 @@ import { remapKeyAnalysisTrackedPath } from '../services/keyAnalysisQueue'
 import { protectSetReferencedFilesForDeletion } from './setListHandlers'
 import { normalizeFilePathForComparison } from '../../shared/filePathComparison'
 import {
+  allocateUniqueFileName,
+  buildSetFolderExportFileName
+} from '../../shared/setFolderExportName'
+import {
   appendSongListTrackNumbers,
   compactSongListTrackNumbers,
   compactSongListTrackNumbersByFilePaths,
@@ -50,6 +54,12 @@ type MoveSongsToDirOptions = {
 type ExportSongInput = {
   filePath?: unknown
   setItemId?: unknown
+  title?: unknown
+  artist?: unknown
+}
+
+type ExportSongsToDirOptions = {
+  fileNameStyle?: 'original' | 'setOrder'
 }
 
 type ExportTaskResult = {
@@ -79,6 +89,43 @@ const toErrorSample = (result: unknown, index: number): ErrorSample | null => {
 const normalizeNonEmptyString = (value: unknown): string => {
   if (typeof value !== 'string') return ''
   return value.trim()
+}
+
+const listExistingFileNameKeys = async (folderPath: string): Promise<Set<string>> => {
+  const usedKeys = new Set<string>()
+  const caseInsensitive = process.platform === 'win32'
+  try {
+    const entries = await fs.readdir(folderPath)
+    for (const name of entries) {
+      usedKeys.add(caseInsensitive ? name.toLowerCase() : name)
+    }
+  } catch {
+    // Destination may not exist yet; the copy helper will create it.
+  }
+  return usedKeys
+}
+
+const resolveExportFileName = (
+  item: ExportSongInput,
+  sourcePath: string,
+  index: number,
+  total: number,
+  fileNameStyle: 'original' | 'setOrder',
+  usedKeys: Set<string>
+): string => {
+  const originalName = path.basename(sourcePath)
+  if (fileNameStyle !== 'setOrder') return originalName
+  return allocateUniqueFileName(
+    buildSetFolderExportFileName({
+      index,
+      total,
+      title: normalizeNonEmptyString(item.title),
+      artist: normalizeNonEmptyString(item.artist),
+      originalFileName: originalName
+    }),
+    usedKeys,
+    { caseInsensitive: process.platform === 'win32' }
+  )
 }
 
 const createExportTaskResult = (
@@ -292,118 +339,138 @@ export function registerExportHandlers() {
     }
   )
 
-  ipcMain.handle('exportSongsToDir', async (_e, folderPathVal, deleteSongsAfterExport, songs) => {
-    assertLibraryMergeMutationAllowed()
-    const songItems: ExportSongInput[] = Array.isArray(songs) ? songs : []
-    const tasks: Array<() => Promise<ExportTaskResult>> = []
-    if (deleteSongsAfterExport) {
-      const groups = new Map<
-        string,
-        {
-          sourcePath: string
-          targetPaths: string[]
-          setItemIds: string[]
-        }
-      >()
-      for (const item of songItems) {
+  ipcMain.handle(
+    'exportSongsToDir',
+    async (_e, folderPathVal, deleteSongsAfterExport, songs, options?: ExportSongsToDirOptions) => {
+      assertLibraryMergeMutationAllowed()
+      const songItems: ExportSongInput[] = Array.isArray(songs) ? songs : []
+      const fileNameStyle = options?.fileNameStyle === 'setOrder' ? 'setOrder' : 'original'
+      const usedKeys =
+        fileNameStyle === 'setOrder'
+          ? await listExistingFileNameKeys(String(folderPathVal || ''))
+          : new Set<string>()
+      const validItems = songItems.filter((item) => {
         const sourcePath = normalizeNonEmptyString(item?.filePath)
-        const fileName = path.basename(sourcePath)
-        if (!fileName) continue
-        const key = normalizeFilePathForComparison(
-          path.resolve(sourcePath),
-          process.platform === 'win32'
-        )
-        const group = groups.get(key) || {
+        return Boolean(sourcePath && path.basename(sourcePath))
+      })
+      const prepared = validItems.map((item, index) => {
+        const sourcePath = normalizeNonEmptyString(item.filePath)
+        const fileName = resolveExportFileName(
+          item,
           sourcePath,
-          targetPaths: [],
-          setItemIds: []
-        }
-        group.targetPaths.push(path.join(folderPathVal, fileName))
-        const setItemId = normalizeNonEmptyString(item?.setItemId)
-        if (setItemId) group.setItemIds.push(setItemId)
-        groups.set(key, group)
-      }
-      for (const group of groups.values()) {
-        tasks.push(() =>
-          exportThenRemoveSource(group.sourcePath, group.targetPaths, {
-            setItemIds: group.setItemIds
-          })
+          index + 1,
+          validItems.length,
+          fileNameStyle,
+          usedKeys
         )
-      }
-    } else {
-      for (const item of songItems) {
-        const sourcePath = normalizeNonEmptyString(item?.filePath)
-        const fileName = path.basename(sourcePath)
-        if (!fileName) continue
-        const targetPath = path.join(folderPathVal, fileName)
-        tasks.push(() =>
-          copySourceForExport(sourcePath, targetPath).then((exportedPath) =>
-            createExportTaskResult([exportedPath])
+        return {
+          sourcePath,
+          targetPath: path.join(folderPathVal, fileName),
+          setItemId: normalizeNonEmptyString(item?.setItemId)
+        }
+      })
+      const tasks: Array<() => Promise<ExportTaskResult>> = []
+      if (deleteSongsAfterExport) {
+        const groups = new Map<
+          string,
+          {
+            sourcePath: string
+            targetPaths: string[]
+            setItemIds: string[]
+          }
+        >()
+        for (const item of prepared) {
+          const key = normalizeFilePathForComparison(
+            path.resolve(item.sourcePath),
+            process.platform === 'win32'
           )
-        )
-      }
-    }
-    const batchId = `exportSongs_${Date.now()}`
-    if (mainWindow.instance) {
-      mainWindow.instance.webContents.send('progressSet', {
-        id: batchId,
-        titleKey: 'tracks.copyingTracks',
-        now: 0,
-        total: tasks.length,
-        isInitial: true
-      })
-    }
-    const { success, failed, hasENOSPC, skipped, results } = await runWithConcurrency(tasks, {
-      concurrency: 16,
-      onProgress: (done, total) => {
-        if (mainWindow.instance) {
-          mainWindow.instance.webContents.send('progressSet', {
-            id: batchId,
-            titleKey: 'tracks.copyingTracks',
-            now: done,
-            total
-          })
+          const group = groups.get(key) || {
+            sourcePath: item.sourcePath,
+            targetPaths: [],
+            setItemIds: []
+          }
+          group.targetPaths.push(item.targetPath)
+          if (item.setItemId) group.setItemIds.push(item.setItemId)
+          groups.set(key, group)
         }
-      },
-      stopOnENOSPC: true,
-      onInterrupted: async (payload) =>
-        waitForUserDecision(mainWindow.instance ?? null, batchId, 'exportSongs', payload)
-    })
-    if (hasENOSPC && mainWindow.instance) {
-      mainWindow.instance.webContents.send('file-batch-summary', {
-        context: 'exportSongs',
-        total: tasks.length,
-        success,
-        failed,
-        hasENOSPC,
-        skipped,
-        errorSamples: results
-          .map((r, i) => toErrorSample(r, i))
-          .filter(Boolean)
-          .slice(0, 3)
-      })
-    }
-    if (mainWindow.instance) {
-      mainWindow.instance.webContents.send('progressSet', {
-        id: batchId,
-        titleKey: 'tracks.copyingTracks',
-        now: tasks.length,
-        total: tasks.length
-      })
-    }
-    const summary = collectExportSummary(results)
-    if (deleteSongsAfterExport && success > 0) {
-      const compactResult = await compactSongListTrackNumbersByFilePaths(summary.removedPaths)
-      if (compactResult.roots > 0) {
-        markGlobalSongSearchDirty('exportSongsToDir')
+        for (const group of groups.values()) {
+          tasks.push(() =>
+            exportThenRemoveSource(group.sourcePath, group.targetPaths, {
+              setItemIds: group.setItemIds
+            })
+          )
+        }
+      } else {
+        for (const item of prepared) {
+          tasks.push(() =>
+            copySourceForExport(item.sourcePath, item.targetPath).then((exportedPath) =>
+              createExportTaskResult([exportedPath])
+            )
+          )
+        }
       }
-      scheduleCuratedLibrarySyncIfUnderCurated(summary.removedPaths)
+      const batchId = `exportSongs_${Date.now()}`
+      if (mainWindow.instance) {
+        mainWindow.instance.webContents.send('progressSet', {
+          id: batchId,
+          titleKey: 'tracks.copyingTracks',
+          now: 0,
+          total: tasks.length,
+          isInitial: true
+        })
+      }
+      const { success, failed, hasENOSPC, skipped, results } = await runWithConcurrency(tasks, {
+        concurrency: 16,
+        onProgress: (done, total) => {
+          if (mainWindow.instance) {
+            mainWindow.instance.webContents.send('progressSet', {
+              id: batchId,
+              titleKey: 'tracks.copyingTracks',
+              now: done,
+              total
+            })
+          }
+        },
+        stopOnENOSPC: true,
+        onInterrupted: async (payload) =>
+          waitForUserDecision(mainWindow.instance ?? null, batchId, 'exportSongs', payload)
+      })
+      if (hasENOSPC && mainWindow.instance) {
+        mainWindow.instance.webContents.send('file-batch-summary', {
+          context: 'exportSongs',
+          total: tasks.length,
+          success,
+          failed,
+          hasENOSPC,
+          skipped,
+          errorSamples: results
+            .map((r, i) => toErrorSample(r, i))
+            .filter(Boolean)
+            .slice(0, 3)
+        })
+      }
+      if (mainWindow.instance) {
+        mainWindow.instance.webContents.send('progressSet', {
+          id: batchId,
+          titleKey: 'tracks.copyingTracks',
+          now: tasks.length,
+          total: tasks.length
+        })
+      }
+      const summary = collectExportSummary(results)
+      if (deleteSongsAfterExport && success > 0) {
+        const compactResult = await compactSongListTrackNumbersByFilePaths(summary.removedPaths)
+        if (compactResult.roots > 0) {
+          markGlobalSongSearchDirty('exportSongsToDir')
+        }
+        scheduleCuratedLibrarySyncIfUnderCurated(summary.removedPaths)
+      }
+      if (failed > 0) {
+        throw new Error('exportSongsToDir failed')
+      }
+      return summary
     }
-    if (failed > 0) {
-      throw new Error('exportSongsToDir failed')
-    }
-    return summary
-  })
+  )
 
   ipcMain.handle('moveSongsToDir', async (_e, srcs, dest, options: MoveSongsToDirOptions = {}) => {
     assertLibraryMergeMutationAllowed()

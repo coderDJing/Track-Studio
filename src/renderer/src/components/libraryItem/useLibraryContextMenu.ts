@@ -471,11 +471,19 @@ export function useLibraryContextMenu({
           await confirmTaskBusy()
           return
         }
-        const dialogResult = await exportDialog({ title: 'tracks.title' })
+        const operateUuids = getOperateUuids()
+        const setListUuids = collectSetListUuids(operateUuids)
+        const dialogResult = await exportDialog({
+          title: 'tracks.title',
+          allowSetOrderFileNames: setListUuids.length > 0
+        })
         if (dialogResult !== 'cancel') {
-          const operateUuids = getOperateUuids()
-          const setListUuids = collectSetListUuids(operateUuids)
-          const setExportItems: Array<{ filePath: string; setItemId?: string }> = []
+          const setExportItems: Array<{
+            filePath: string
+            setItemId?: string
+            title?: string
+            artist?: string
+          }> = []
           const setItemPlaylistUuid = new Map<string, string>()
           for (const uuid of setListUuids) {
             const songs = await loadSetPlaylistSongs(uuid)
@@ -487,7 +495,9 @@ export function useLibraryContextMenu({
               }
               setExportItems.push({
                 filePath: song.filePath,
-                setItemId: setItemId || undefined
+                setItemId: setItemId || undefined,
+                title: song.title,
+                artist: song.artist
               })
             }
           }
@@ -496,7 +506,8 @@ export function useLibraryContextMenu({
               'exportSongsToDir',
               dialogResult.folderPathVal,
               dialogResult.deleteSongsAfterExport,
-              setExportItems
+              setExportItems,
+              { fileNameStyle: dialogResult.useSetOrderFileNames ? 'setOrder' : 'original' }
             )) as ExportSongsToDirSummary | undefined
             if (dialogResult.deleteSongsAfterExport) {
               const removedSetItemIds =

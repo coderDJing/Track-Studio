@@ -24,6 +24,10 @@ const props = defineProps({
   forceCopyOnly: {
     type: Boolean,
     default: false
+  },
+  allowSetOrderFileNames: {
+    type: Boolean,
+    default: false
   }
 })
 const flashArea = ref('') // 控制动画是否正在播放
@@ -56,6 +60,7 @@ const clickChooseDir = async () => {
   }
 }
 const deleteSongsAfterExport = ref(false)
+const useSetOrderFileNames = ref(true)
 const localStorageKey = 'exportDialog'
 let localStorageData = localStorage.getItem(localStorageKey)
 if (localStorageData === null) {
@@ -63,16 +68,20 @@ if (localStorageData === null) {
     localStorageKey,
     JSON.stringify({
       deleteSongsAfterExport: true,
+      useSetOrderFileNames: true,
       folderPathVal: ''
     })
   )
   deleteSongsAfterExport.value = true
+  useSetOrderFileNames.value = true
 } else {
   const parsedLocalStorageData = JSON.parse(localStorageData) as {
     deleteSongsAfterExport: boolean
+    useSetOrderFileNames?: boolean
     folderPathVal?: string
   }
   deleteSongsAfterExport.value = parsedLocalStorageData.deleteSongsAfterExport
+  useSetOrderFileNames.value = parsedLocalStorageData.useSetOrderFileNames !== false
   if (parsedLocalStorageData.folderPathVal) {
     folderPathVal.value = parsedLocalStorageData.folderPathVal
   }
@@ -86,6 +95,7 @@ const saveLocalStorage = () => {
     localStorageKey,
     JSON.stringify({
       deleteSongsAfterExport: props.forceCopyOnly ? false : deleteSongsAfterExport.value,
+      useSetOrderFileNames: useSetOrderFileNames.value,
       folderPathVal: folderPathVal.value
     })
   )
@@ -110,7 +120,8 @@ const confirm = async () => {
   closeWithAnimation(() => {
     props.confirmCallback({
       folderPathVal: folderPathVal.value,
-      deleteSongsAfterExport: props.forceCopyOnly ? false : deleteSongsAfterExport.value
+      deleteSongsAfterExport: props.forceCopyOnly ? false : deleteSongsAfterExport.value,
+      useSetOrderFileNames: props.allowSetOrderFileNames ? useSetOrderFileNames.value : false
     })
   })
 }
@@ -141,7 +152,12 @@ onUnmounted(() => {
   <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
     <div
       v-dialog-drag="'.dialog-title'"
-      style="width: 450px; height: 300px; display: flex; flex-direction: column"
+      :style="{
+        width: '450px',
+        height: props.allowSetOrderFileNames ? '360px' : '300px',
+        display: 'flex',
+        flexDirection: 'column'
+      }"
       class="inner"
     >
       <div class="dialog-title dialog-header">
@@ -191,6 +207,19 @@ onUnmounted(() => {
         </div>
         <div v-else class="copyOnlyHint">
           {{ t('tracks.exportCopyOnlyHint') }}
+        </div>
+        <div v-if="props.allowSetOrderFileNames" style="display: flex">
+          <div class="formLabel" style="text-align: right">
+            <label for="export-checkbox-useSetOrderFileNames" style="user-select: none">{{
+              tLabel('tracks.useSetOrderFileNames')
+            }}</label>
+          </div>
+          <div style="flex: 1; width: 21px; height: 21px; display: flex; align-items: center">
+            <singleCheckbox
+              id="export-checkbox-useSetOrderFileNames"
+              v-model="useSetOrderFileNames"
+            />
+          </div>
         </div>
       </div>
       <div class="dialog-footer">

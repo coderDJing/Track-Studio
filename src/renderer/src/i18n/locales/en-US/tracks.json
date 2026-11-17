@@ -39,6 +39,7 @@
     "recyclingDuplicates": "Moving duplicates to Recycle Bin",
     "exportToFolder": "Export to folder",
     "deleteAfterExport": "Delete after export",
+    "useSetOrderFileNames": "Name files as 01 Title - Artist in set order",
     "exportCopyOnlyHint": "This source is read-only. Export is copy-only and will not delete source files.",
     "exportPathNotExist": "Path does not exist, please select again",
     "readOnlySourceDeleteNotAllowed": "The current playback source is read-only. Deleting source files is not allowed.",

@@ -4,16 +4,29 @@ import { attachAppContext } from '@renderer/utils/appContext'
 
 export default ({
   title,
-  forceCopyOnly = false
+  forceCopyOnly = false,
+  allowSetOrderFileNames = false
 }: {
   title: string
   forceCopyOnly?: boolean
-}): Promise<'cancel' | { folderPathVal: string; deleteSongsAfterExport: boolean }> => {
+  allowSetOrderFileNames?: boolean
+}): Promise<
+  | 'cancel'
+  | {
+      folderPathVal: string
+      deleteSongsAfterExport: boolean
+      useSetOrderFileNames: boolean
+    }
+> => {
   return new Promise((resolve, _reject) => {
     const div = document.createElement('div')
     document.body.appendChild(div)
 
-    const confirmCallback = (data: { folderPathVal: string; deleteSongsAfterExport: boolean }) => {
+    const confirmCallback = (data: {
+      folderPathVal: string
+      deleteSongsAfterExport: boolean
+      useSetOrderFileNames: boolean
+    }) => {
       render(null, div)
       div.remove()
       resolve(data)
@@ -27,6 +40,7 @@ export default ({
     const vnode = createVNode(exportDialog, {
       title,
       forceCopyOnly,
+      allowSetOrderFileNames,
       confirmCallback,
       cancelCallback
     })
