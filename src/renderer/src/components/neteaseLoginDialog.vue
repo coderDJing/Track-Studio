@@ -28,7 +28,7 @@ const message = ref('')
 let unikey = ''
 let timer: ReturnType<typeof setInterval> | null = null
 
-/** 扫码必须用手机上的网易云音乐 App，没装的用户从这里去官网取。 */
+/** 官网首页：给不了解网易云音乐的用户一个了解入口，不做下载引导。 */
 const OFFICIAL_SITE_URL = 'https://music.163.com'
 const openOfficialSite = () => {
   window.electron.ipcRenderer.send('openLocalBrowser', OFFICIAL_SITE_URL)
@@ -228,7 +228,7 @@ onUnmounted(() => {
   text-align: center;
 }
 
-/* 「没有 App」的兜底入口：一行弱提示 + 一枚外链小药丸，不抢二维码的注意力。 */
+/* 官网入口：一行弱提示 + 一枚外链小药丸，不抢二维码的注意力。 */
 .login-official {
   display: flex;
   align-items: center;
