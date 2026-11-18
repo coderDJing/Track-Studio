@@ -194,8 +194,6 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/renderer/', 'index.html'),
           databaseInit: resolve(__dirname, 'src/renderer/', 'databaseInit.html'),
-          update: resolve(__dirname, 'src/renderer/', 'update.html'),
-          foundNewVersion: resolve(__dirname, 'src/renderer/', 'foundNewVersion.html'),
           whatsNew: resolve(__dirname, 'src/renderer/', 'whatsNew.html'),
           startup: resolve(__dirname, 'src/renderer/', 'startup.html'),
           mixtape: resolve(__dirname, 'src/renderer/', 'mixtape.html'),

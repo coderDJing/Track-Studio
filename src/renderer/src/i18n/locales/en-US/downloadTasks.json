@@ -15,6 +15,7 @@
     "appUpdate": "App update",
     "updateChecking": "Checking for updates…",
     "updateAvailable": "Version {version} available",
+    "updateManualInstall": "Manual install required: download it and drag Track Studio into Applications",
     "updateDownloading": "Downloading {percent}%",
     "updateLatest": "Already up to date ({version})",
     "dismiss": "Got it",

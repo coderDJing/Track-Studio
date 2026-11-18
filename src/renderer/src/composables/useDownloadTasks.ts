@@ -178,7 +178,7 @@ const syncAppUpdateState = async () => {
   try {
     applyAppUpdateState(await invoke('app-update:get-state'))
   } catch {
-    // 未注册该通道（例如 macOS 仍走更新窗口）时静默跳过。
+    // 通道未注册时（例如窗口早于服务初始化）静默跳过，后续会靠状态推送补齐。
   }
 }
 
@@ -301,16 +301,28 @@ const buildUpdateTask = (
   }
 
   if (status === 'available') {
+    // 无法原地替换的环境（macOS 从 DMG 运行、应用目录只读、旧版本未签名）不给「下载 + 重启安装」，
+    // 直接引导手动下载，避免点下去下载完却在安装阶段无声失败。
+    const manualOnly = appUpdate.installMode === 'manual'
+    const releasedAt = formatReleaseDate(appUpdate.releaseDate)
     return [
       {
         ...base,
         status: 'available',
         statusText: t('downloadTasks.updateAvailable', { version: appUpdate.version }),
         percent: null,
-        detail: formatReleaseDate(appUpdate.releaseDate),
+        detail: manualOnly
+          ? [t('downloadTasks.updateManualInstall'), releasedAt].filter(Boolean).join(' · ')
+          : releasedAt,
         error: '',
         actions: [
-          { id: 'download-update', label: t('downloadTasks.download'), primary: true },
+          manualOnly
+            ? {
+                id: 'manual-download' as const,
+                label: t('downloadTasks.manualDownload'),
+                primary: true
+              }
+            : { id: 'download-update' as const, label: t('downloadTasks.download'), primary: true },
           {
             id: 'release-notes',
             label: t('downloadTasks.viewReleaseNotes'),
@@ -531,9 +543,7 @@ export function useDownloadTasks() {
   const runtime = useRuntimeStore()
   const componentDownloads = useOptionalComponentDownloads()
 
-  if (runtime.setting.platform === 'win32') {
-    void syncAppUpdateState()
-  }
+  void syncAppUpdateState()
 
   const tasks = computed<DownloadTaskView[]>(() =>
     composeDownloadTasks({

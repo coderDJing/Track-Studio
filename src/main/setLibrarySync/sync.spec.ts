@@ -26,7 +26,6 @@ vi.mock('electron', () => ({
 }))
 vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('../window/mainWindow', () => ({ default: { instance: null } }))
-vi.mock('../window/updateWindow', () => ({ default: {} }))
 vi.mock('../services/globalSongSearch', () => ({ markGlobalSongSearchDirty: vi.fn() }))
 vi.mock('../services/libraryMerge/runtime', () => ({ assertLibraryMergeMutationAllowed: () => {} }))
 vi.mock('../curatedLibrarySync/busyPaths', () => ({ isPathBusyForRemoteMutation: () => false }))

@@ -13,7 +13,6 @@ import path = require('path')
 import fs = require('fs-extra')
 import store from '../../store'
 import { log } from '../../log'
-import updateWindow from '../updateWindow'
 import appUpdateService from '../../services/appUpdateService'
 import { registerAudioDecodeHandlers } from './audioDecodeHandlers'
 import { registerFingerprintHandlers } from './fingerprintHandlers'
@@ -658,19 +657,8 @@ function createWindow() {
   )
 
   ipcMain.on('checkForUpdates', () => {
-    // Windows：检查结果进右下角下载卡片，不再打开独立更新窗口。
-    if (process.platform === 'win32') {
-      void appUpdateService.checkForUpdates()
-      return
-    }
-    if (updateWindow.instance === null) {
-      updateWindow.createWindow()
-    } else {
-      if (updateWindow.instance.isMinimized()) {
-        updateWindow.instance.restore()
-      }
-      updateWindow.instance.focus()
-    }
+    // 检查结果进右下角下载卡片，Windows 与 macOS 一致。
+    void appUpdateService.checkForUpdates()
   })
 
   mainWindow.on('closed', () => {

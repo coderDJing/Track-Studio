@@ -34,7 +34,6 @@ vi.mock('electron', () => ({
 }))
 vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('./index', () => ({ default: { instance: null } }))
-vi.mock('../updateWindow', () => ({ default: {} }))
 vi.mock('../mixtapeWindow', () => ({ isMixtapeWindowOpenByPlaylistId: () => false }))
 vi.mock('../../services/globalSongSearch', () => ({ markGlobalSongSearchDirty: () => {} }))
 vi.mock('../../services/libraryMerge/runtime', () => ({

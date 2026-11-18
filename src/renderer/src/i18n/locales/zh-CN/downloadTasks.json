@@ -15,6 +15,7 @@
     "appUpdate": "应用更新",
     "updateChecking": "正在检查更新…",
     "updateAvailable": "发现新版本 {version}",
+    "updateManualInstall": "需手动下载安装：下载后把 Track Studio 拖入「应用程序」替换",
     "updateDownloading": "下载中 {percent}%",
     "updateLatest": "已是最新版本 {version}",
     "dismiss": "知道了",

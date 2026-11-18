@@ -73,6 +73,19 @@ describe('下载任务卡片聚合', () => {
     ])
   })
 
+  it('无法原地替换时只给手动下载入口，不给下载与重启安装', () => {
+    const [task] = compose({
+      appUpdate: { status: 'available', version: '1.2.9', installMode: 'manual' }
+    })
+    expect(task.status).toBe('available')
+    expect(task.detail).not.toBe('')
+    expect(task.actions.map((action) => action.id)).toEqual([
+      'manual-download',
+      'release-notes',
+      'dismiss'
+    ])
+  })
+
   it('手动检查更新时给出检查中反馈', () => {
     const [task] = compose({ appUpdate: { status: 'checking' } })
     expect(task.status).toBe('checking')

@@ -4,7 +4,8 @@ import type { UpdateInfo } from 'electron-updater'
 import {
   EMPTY_APP_UPDATE_STATE,
   type AppUpdateState,
-  type AppUpdateChannel
+  type AppUpdateChannel,
+  type AppUpdateInstallMode
 } from '@shared/appUpdate'
 import { GITHUB_RELEASES_URL } from '@shared/productBrand'
 import { log } from '../log'
@@ -15,6 +16,7 @@ import { installResumableAutoUpdaterDownload } from './resumableAutoUpdaterDownl
 import { installPublishedReleaseUpdateProvider } from './publishedReleaseUpdateProvider'
 import { updateDownloadDiagnosticLogger } from './updateDownloadDiagnostic'
 import { openSafeExternalUrl } from '../window/externalNavigation'
+import { resolveMacUpdateStrategy } from './macInPlaceUpdate'
 
 const autoUpdater = electronUpdater.autoUpdater
 const RELEASES_BASE_URL = GITHUB_RELEASES_URL
@@ -37,6 +39,19 @@ let silentPhase = false
 /** 静默检查进行中用户又手动点了检查：等静默那次结束后补一次真实反馈。 */
 let pendingManualCheck = false
 let manualUrl = DEFAULT_MANUAL_URL
+/**
+ * 当前环境能否用 electron-updater 原地替换。
+ * macOS 上从 DMG 直接运行、应用目录不可写、或当前应用不是 Developer ID 签名时无法原地替换，
+ * 这些机器只能引导用户手动下载安装包，不能在卡片里给「下载 + 重启安装」。
+ * Windows 的 NSIS 安装器自己会覆盖旧版本，恒为 auto。
+ */
+let installMode: AppUpdateInstallMode = 'auto'
+
+const refreshInstallMode = () => {
+  installMode =
+    process.platform === 'darwin' && resolveMacUpdateStrategy() === 'manual' ? 'manual' : 'auto'
+  return installMode
+}
 
 const publish = (patch: Partial<AppUpdateState>, options?: { silent?: boolean }) => {
   state = { ...state, ...patch, updatedAt: Date.now() }
@@ -102,6 +117,7 @@ const rememberAvailable = (info: UpdateInfo) => {
     version: typeof info?.version === 'string' ? info.version : '',
     releaseDate: typeof info?.releaseDate === 'string' ? info.releaseDate : '',
     channel: resolveChannel(info?.version || ''),
+    installMode: refreshInstallMode(),
     percent: 0,
     transferredBytes: 0,
     totalBytes: 0,
@@ -191,7 +207,13 @@ export const checkForUpdates = async (options?: { silent?: boolean }) => {
   autoUpdater.autoDownload = false
   applyChannelConfig()
   publish(
-    { status: 'checking', errorKind: '', error: '', silent: silentPhase },
+    {
+      status: 'checking',
+      installMode: refreshInstallMode(),
+      errorKind: '',
+      error: '',
+      silent: silentPhase
+    },
     silentPhase ? { silent: true } : undefined
   )
   try {
@@ -211,6 +233,11 @@ export const checkForUpdates = async (options?: { silent?: boolean }) => {
 
 export const startDownload = async () => {
   init()
+  // 当前环境没法原地替换时电子更新器装不上，卡片只给手动下载入口，不能真的去下载。
+  if (refreshInstallMode() === 'manual') {
+    log.error('[appUpdate] 当前环境不支持原地更新，已跳过自动下载')
+    return state
+  }
   // downloadStarting 覆盖“重试时先重新检查”的那几秒，避免连点触发重复下载。
   if (downloadInProgress || downloadStarting) return state
   downloadStarting = true

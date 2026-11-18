@@ -1,10 +1,18 @@
 import type { ReleaseNotesRangePayload } from './releaseNotes'
 
-/** Windows 卡片式更新的状态机取值；macOS 仍走既有更新窗口。 */
+/** 统一下载卡片式更新的状态机取值，Windows 与 macOS 共用。 */
 export type AppUpdateStatus =
   'idle' | 'checking' | 'latest' | 'available' | 'downloading' | 'downloaded' | 'error'
 
 export type AppUpdateChannel = 'stable' | 'rc'
+
+/**
+ * 安装方式：
+ * - auto：交给 electron-updater 原地替换（Windows 的 NSIS、macOS 的 Squirrel.Mac）；
+ * - manual：当前环境无法原地替换（例如从 DMG 直接运行、应用目录只读、旧版本未签名），
+ *   只能引导用户手动下载安装包替换。
+ */
+export type AppUpdateInstallMode = 'auto' | 'manual'
 
 export type AppUpdateErrorKind = '' | 'network' | 'signature' | 'install' | 'gone' | 'unknown'
 
@@ -13,6 +21,7 @@ export type AppUpdateState = {
   version: string
   releaseDate: string
   channel: AppUpdateChannel
+  installMode: AppUpdateInstallMode
   percent: number
   transferredBytes: number
   totalBytes: number
@@ -31,6 +40,7 @@ export const EMPTY_APP_UPDATE_STATE: AppUpdateState = {
   version: '',
   releaseDate: '',
   channel: 'stable',
+  installMode: 'auto',
   percent: 0,
   transferredBytes: 0,
   totalBytes: 0,
@@ -93,6 +103,7 @@ export const normalizeAppUpdateState = (value: unknown): AppUpdateState => {
     version: readString(record.version),
     releaseDate: readString(record.releaseDate),
     channel: record.channel === 'rc' ? 'rc' : 'stable',
+    installMode: record.installMode === 'manual' ? 'manual' : 'auto',
     percent: Math.max(0, Math.min(100, Math.round((Number(record.percent) || 0) * 10) / 10)),
     transferredBytes: readNumber(record.transferredBytes),
     totalBytes: readNumber(record.totalBytes),

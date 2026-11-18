@@ -33,7 +33,6 @@ vi.mock('electron', () => ({
 }))
 vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('../../window/mainWindow', () => ({ default: { instance: null } }))
-vi.mock('../../window/updateWindow', () => ({ default: {} }))
 vi.mock('../globalSongSearch', () => ({ markGlobalSongSearchDirty: () => {} }))
 vi.mock('../libraryMerge/runtime', () => ({ assertLibraryMergeMutationAllowed: () => {} }))
 
