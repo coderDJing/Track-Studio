@@ -728,7 +728,7 @@ jobs:
           done < <(find "$RUST_DIR" -maxdepth 1 -name '*.node' -type f | sort)
 
           if [ "${#NODE_FILES[@]}" -eq 0 ]; then
-            echo "::error::包内没有找到任何原生模块（$RUST_DIR）"
+            echo "::error::包内没有找到任何原生模块（${RUST_DIR}）"
             exit 1
           fi
 
@@ -770,14 +770,14 @@ jobs:
                 case " $dylib_arches " in
                   *" $arch "*) ;;
                   *)
-                    echo "::error::$dylib_name 的架构是「${dylib_arches:-未知}」，无法为 $node_name（$arch）提供依赖。"
+                    echo "::error::${dylib_name} 的架构是「${dylib_arches:-未知}」，无法为 ${node_name}（${arch}）提供依赖。"
                     exit 1
                     ;;
                 esac
               done
             done < <(list_load_dylibs "$node_file")
 
-            echo "$node_name：${node_arches:-未知}"
+            echo "${node_name}：${node_arches:-未知}"
           done
 
           # 4) Frameworks 里的动态库 install_name 必须是 @rpath 形式，
