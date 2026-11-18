@@ -609,8 +609,24 @@ jobs:
             echo "signed=true" >> "$GITHUB_OUTPUT"
             echo "已启用 Developer ID 签名。"
           else
+            if [ -n "${MACOS_CERTIFICATE_PASSWORD}" ]; then
+              echo "::error::配置了 MACOS_CERTIFICATE_PASSWORD，但缺少 MACOS_CERTIFICATE_P12_BASE64。"
+              exit 1
+            fi
             echo "signed=false" >> "$GITHUB_OUTPUT"
             echo "::notice::未配置 MACOS_CERTIFICATE_P12_BASE64，本次 macOS 产物不做签名与公证。"
+          fi
+
+          # 公证凭据同样是「全有或全无」：只配了一部分必须直接失败。
+          # 否则 electron-builder 拿不到完整凭据时只会 warn 一句就跳过公证，
+          # 产出「已签名但未公证」的包——构建显示成功，分发时却被 Gatekeeper 拦下。
+          APPLE_KEY_COUNT=0
+          if [ -n "${APPLE_API_KEY_P8}" ]; then APPLE_KEY_COUNT=$((APPLE_KEY_COUNT + 1)); fi
+          if [ -n "${APPLE_API_KEY_ID}" ]; then APPLE_KEY_COUNT=$((APPLE_KEY_COUNT + 1)); fi
+          if [ -n "${APPLE_API_ISSUER}" ]; then APPLE_KEY_COUNT=$((APPLE_KEY_COUNT + 1)); fi
+          if [ "$APPLE_KEY_COUNT" -ne 0 ] && [ "$APPLE_KEY_COUNT" -ne 3 ]; then
+            echo "::error::App Store Connect API Key 凭据配置不完整（已配置 ${APPLE_KEY_COUNT}/3），必须直接失败，不能静默降级为未公证产物。"
+            exit 1
           fi
 
           if [ -n "${APPLE_API_KEY_P8}" ] && [ -n "${APPLE_API_KEY_ID}" ] && [ -n "${APPLE_API_ISSUER}" ]; then
