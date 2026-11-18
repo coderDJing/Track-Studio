@@ -282,6 +282,30 @@ Mac notary service 团队的官方 Q&A
 而且**卡片大小不是原因**：有开发者用 16 KB、10 KB 甚至 **210 字节**的纯测试包，
 同样卡住 17~19 小时且拿不到日志——说明这是**账号级 hold**，不是内容问题。
 
+**本仓库实测（第一手数据）**：Team ID `MQP48TLX8K` 的首次提交
+`636611fe-c672-4c0d-9f18-76e17447fb4a`（`FRKB.zip`，401 MB，arm64 Electron 签名包）
+自 2026-11-16 14:13:45 CST 提交，到 2026-11-18 03:17 CST 变为 `Accepted`，
+**耗时约 37 小时**，`statusSummary` 为 `Ready for distribution`。
+
+期间为排除账号侧因素做过完整核对，结论是**账号侧没有可修的阻塞项**，
+所有待办都属正常：
+
+- 团队与会员：`status: active`、`developerStatus: active`
+- 协议：Apple Developer Program License Agreement 与 Apple Developer Agreement 均为 `active`，无待签
+- 账号通知：`notifications` 为空
+- 身份：邮箱、手机号、地址均已验证，`isIDVerificationRequired: false`、`isCountryUpdateRequired: false`
+
+> 核对账号状态不必登录浏览器。开发者站点的前端调用了这些接口，
+> 在已登录页面里用 `fetch` 直接取同一份数据，比读 UI 更准、也更省事：
+>
+> - `POST /services-account/QH65B2/account/getTeams`
+> - `POST /services-account/QH65B2/account/getAgreementHistory`（body 传 `{ teamId }`）
+> - `POST /services-account/QH65B2/account/getNotifications`（body 传 `{ teamId }`）
+> - `POST /services-account/QH65B2/account/getUserProfile`（body 传 `{ teamId }`）
+>
+> `teamId` 就是 Team ID。证书链、签名时间戳、hardened runtime 这些都已经本地验证过，
+> 公证长时间 `In Progress` 时不必反复重签或重打包——**换了包体也只会多排一个队**。
+
 > Apple 官方状态页 <https://developer.apple.com/system-status/> 的
 > **Developer ID Notary Service** 条目没有事件记录，即这不是一次公开的服务故障，
 > 而是一项常态机制。核对状态：<https://developer.apple.com/system-status/data/system_status_en_US.js>
