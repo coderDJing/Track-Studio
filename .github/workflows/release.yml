@@ -651,6 +651,139 @@ jobs:
           sed -i.bak '/^electron_mirror=/d' .npmrc && rm -f .npmrc.bak
           npx electron-builder --mac --universal --publish never
 
+      - name: Verify macOS native modules (universal)
+        run: |
+          set -euo pipefail
+          APP_DIR="$(find dist/mac-universal -maxdepth 1 -name '*.app' -type d | head -n 1 || true)"
+          if [ -z "$APP_DIR" ]; then
+            echo "::error::macOS app bundle not found under dist/mac-universal"
+            exit 1
+          fi
+
+          RUST_DIR="$APP_DIR/Contents/Resources/app.asar.unpacked/node_modules/rust_package"
+          FRAMEWORKS_DIR="$APP_DIR/Contents/Frameworks"
+
+          if [ ! -d "$RUST_DIR" ]; then
+            echo "::error::包内缺少原生模块目录：$RUST_DIR"
+            exit 1
+          fi
+
+          # 只看 LC_LOAD_DYLIB：otool -L 的第一项是 LC_ID_DYLIB（库自己的身份），
+          # 由 dlopen 按路径加载，不构成运行时依赖，不能算进来。
+          list_load_dylibs() {
+            otool -l "$1" | awk '
+              $1 == "cmd" && $2 == "LC_LOAD_DYLIB" { inload = 1; next }
+              $1 == "cmd" { inload = 0 }
+              inload && $1 == "name" { print $2 }
+            '
+          }
+
+          NODE_FILES=()
+          while IFS= read -r node_file; do
+            NODE_FILES+=("$node_file")
+          done < <(find "$RUST_DIR" -maxdepth 1 -name '*.node' -type f | sort)
+
+          if [ "${#NODE_FILES[@]}" -eq 0 ]; then
+            echo "::error::包内没有找到任何原生模块（$RUST_DIR）"
+            exit 1
+          fi
+
+          for node_file in "${NODE_FILES[@]}"; do
+            node_name="$(basename "$node_file")"
+            node_arches="$(lipo -archs "$node_file" 2>/dev/null || true)"
+
+            # 1) 不能依赖构建机的绝对路径。
+            #    build.rs 会把 Homebrew 的 libvpx 等动态库写进 install_name，
+            #    那些路径在用户机器上不存在，模块加载会直接失败。
+            bad_deps="$(list_load_dylibs "$node_file" | grep -vE '^(@|/System/|/usr/lib/)' || true)"
+            if [ -n "$bad_deps" ]; then
+              echo "::error::$node_name 仍依赖构建机绝对路径："
+              echo "$bad_deps"
+              exit 1
+            fi
+
+            # 2) 必须能通过 @loader_path 找到 Frameworks 里的动态库。
+            if ! otool -l "$node_file" | grep -q '@loader_path/../../../../Frameworks'; then
+              echo "::error::$node_name 缺少 @loader_path/../../../../Frameworks 的 rpath。"
+              exit 1
+            fi
+
+            # 3) 依赖的动态库必须在 Frameworks 里，而且架构要覆盖当前模块。
+            #    架构不匹配时 dyld 会直接拒绝加载，表现为进程被 Killed: 9。
+            while IFS= read -r dep; do
+              case "$dep" in
+                @rpath/*) ;;
+                *) continue ;;
+              esac
+              dylib_name="$(basename "$dep")"
+              dylib_path="$FRAMEWORKS_DIR/$dylib_name"
+              if [ ! -f "$dylib_path" ]; then
+                echo "::error::$node_name 依赖的 $dylib_name 不在 $FRAMEWORKS_DIR 里。"
+                exit 1
+              fi
+              dylib_arches="$(lipo -archs "$dylib_path" 2>/dev/null || true)"
+              for arch in $node_arches; do
+                case " $dylib_arches " in
+                  *" $arch "*) ;;
+                  *)
+                    echo "::error::$dylib_name 的架构是「${dylib_arches:-未知}」，无法为 $node_name（$arch）提供依赖。"
+                    exit 1
+                    ;;
+                esac
+              done
+            done < <(list_load_dylibs "$node_file")
+
+            echo "$node_name：${node_arches:-未知}"
+          done
+
+          # 4) Frameworks 里的动态库 install_name 必须是 @rpath 形式，
+          #    否则两个架构会互相加载对方架构的库。
+          for dylib in "$FRAMEWORKS_DIR"/*.dylib; do
+            [ -e "$dylib" ] || continue
+            lib_id="$(otool -D "$dylib" 2>/dev/null | tail -n +2 | head -n 1 | tr -d '[:space:]')"
+            case "$lib_id" in
+              @rpath/*) ;;
+              *)
+                echo "::error::$(basename "$dylib") 的 install_name 不是 @rpath 形式：${lib_id:-<空>}"
+                exit 1
+                ;;
+            esac
+          done
+
+          # 5) 主程序必须是通用二进制，否则「universal」这个名字不成立。
+          main_exe="$(find "$APP_DIR/Contents/MacOS" -maxdepth 1 -type f | head -n 1 || true)"
+          if [ -z "$main_exe" ]; then
+            echo "::error::找不到主程序：$APP_DIR/Contents/MacOS"
+            exit 1
+          fi
+          exe_arches="$(lipo -archs "$main_exe" 2>/dev/null || true)"
+          for arch in arm64 x86_64; do
+            case " $exe_arches " in
+              *" $arch "*) ;;
+              *)
+                echo "::error::主程序 $(basename "$main_exe") 缺少 $arch 切片（当前：${exe_arches:-未知}）"
+                exit 1
+                ;;
+            esac
+          done
+
+          # 原生模块目前只覆盖部分架构时不能静默放过：该架构下原生模块无法加载，
+          # 但这是既有构建链路的缺口，单独告警留痕，不阻断签名与公证流程。
+          native_arches=""
+          for node_file in "${NODE_FILES[@]}"; do
+            native_arches="$native_arches $(lipo -archs "$node_file" 2>/dev/null || true)"
+          done
+          for arch in $exe_arches; do
+            case " $native_arches " in
+              *" $arch "*) ;;
+              *)
+                echo "::warning::$arch 切片没有对应的原生模块，该架构下原生模块无法加载。"
+                ;;
+            esac
+          done
+
+          echo "macOS 原生模块校验通过"
+
       - name: Verify macOS signing and notarization
         env:
           EXPECT_SIGNED: ${{ steps.mac_signing.outputs.signed }}

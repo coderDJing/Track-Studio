@@ -36,7 +36,7 @@
     "manualStepReplaceApp": "3. 看到里面的 Track Studio 后，把它拖到“应用程序”。",
     "manualStepReplaceConfirm": "4. 如果系统问要不要替换旧版本，点“替换”。",
     "manualStepOpenFromApps": "5. 装好后，从“应用程序”里打开 Track Studio。",
-    "manualStepRightClickOpen": "6. 如果第一次打不开，就在 Track Studio 图标上点右键，再点“打开”。",
+    "manualStepRightClickOpen": "6. 这个版本已通过 Apple 公证，双击即可打开，不会再提示“无法验证开发者”；如果 macOS 仍然拦截，到「系统设置 → 隐私与安全性」里点「仍要打开」。",
     "quitApp": "退出 Track Studio",
     "openDownloadedFile": "打开刚下载的文件",
     "openDownloadFolder": "打开下载位置",
