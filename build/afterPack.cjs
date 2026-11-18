@@ -17,6 +17,44 @@ const otoolDependencies = async (filePath) => {
     .filter(Boolean)
 }
 
+const lipoArches = async (filePath) => {
+  try {
+    const { stdout } = await run('lipo', ['-archs', filePath])
+    return stdout.trim().split(/\s+/).filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * 保证目标动态库存在且可写。
+ *
+ * Homebrew 的动态库是只读的（444），copyFileSync 会把源权限位原样带到产物里，
+ * 后续 Developer ID 签名要重写二进制内容，只读文件会直接失败。
+ *
+ * 目标已经存在时不能盲目覆盖：universal 构建里 afterPack 会被调用三次
+ * （x64 临时包、arm64 临时包、合并后的最终包），最后一次面对的可能是
+ * @electron/universal 用 lipo 合出来的通用动态库，覆盖会把它降级成单架构。
+ * 所以只在「目标缺失」或「目标不包含调用方需要的架构」时才重新复制。
+ */
+const ensureBundledDylib = async (destination, source, requiredArches) => {
+  if (!fs.existsSync(destination)) {
+    fs.copyFileSync(source, destination)
+    await fsExtra.chmod(destination, 0o755).catch(() => {})
+    return 'copied'
+  }
+
+  await fsExtra.chmod(destination, 0o755).catch(() => {})
+  const existingArches = await lipoArches(destination)
+  const covers =
+    requiredArches.length === 0 || requiredArches.every((arch) => existingArches.includes(arch))
+  if (covers) return 'kept'
+
+  fs.copyFileSync(source, destination)
+  await fsExtra.chmod(destination, 0o755).catch(() => {})
+  return 'replaced'
+}
+
 /**
  * 把 Rust N-API 模块依赖的 dylib 收进 Contents/Frameworks，并把 install name
  * 改写成 @rpath 形式，保证 universal 包里两个架构的 .node 都能找到自己的库。
@@ -43,10 +81,28 @@ const collectMacNativeDependencies = async (context, appPath) => {
     const current = pending.shift()
     if (!current || visited.has(current) || !fs.existsSync(current)) continue
     visited.add(current)
+    const currentArches = await lipoArches(current)
     for (const dependency of await otoolDependencies(current)) {
       if (dependency.startsWith('/usr/lib/') || dependency.startsWith('/System/')) continue
-      if (dependency.startsWith('@')) continue
       const basename = path.basename(dependency)
+      if (dependency.startsWith('@')) {
+        // 已经是 @rpath 形式：说明上一轮已经把依赖改写进 Frameworks 了。
+        // 这时不能再复制（目标可能是 lipo 合出来的通用库），只要保证它可写、
+        // 并且确实存在于 Frameworks 里，否则模块加载会直接失败。
+        if (dependency.startsWith('@loader_path/') || dependency.startsWith('@executable_path/'))
+          continue
+        const destination = path.join(frameworkPath, basename)
+        if (!fs.existsSync(destination)) {
+          throw new Error(
+            `macOS native module dependency is missing from Frameworks: ${dependency}`
+          )
+        }
+        await fsExtra.chmod(destination, 0o755).catch(() => {})
+        bundled.set(basename, destination)
+        // 合并阶段如果用 lipo 合过这个库，原来的签名会失效，这里一并补一次 ad-hoc 签名。
+        rewrittenFiles.add(destination)
+        continue
+      }
       let source = dependency
       if (!fs.existsSync(source)) {
         const candidates = [
@@ -60,7 +116,7 @@ const collectMacNativeDependencies = async (context, appPath) => {
       }
       const destination = path.join(frameworkPath, basename)
       if (!bundled.has(basename)) {
-        fs.copyFileSync(source, destination)
+        await ensureBundledDylib(destination, source, currentArches)
         bundled.set(basename, destination)
         pending.push(destination)
         rewrittenFiles.add(destination)
