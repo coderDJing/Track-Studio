@@ -25,6 +25,7 @@ import {
 } from './setPending'
 import { clearPreviewCache, enforcePreviewCacheLimit, getPreviewCacheUsage } from './cache'
 import { isSafeSongId } from './paths'
+import { loadNeteaseAnalysisHydration } from './analysisHydration'
 import { getLibrary } from '../utils'
 import { clearTrackCache } from '../services/cacheMaintenance'
 import { getNeteaseGroupsFromDb } from './tree'
@@ -132,12 +133,28 @@ export function registerNeteaseHandlers(getWindow: () => BrowserWindow | null): 
     const playlistId = String(payload?.playlistId || '')
     if (!playlistId) throw new Error('缺少 playlistId')
     const tracks = getPlaylistTracks(playlistId)
+    const resolved = tracks.map((track) => {
+      const localPath = getLocalFilePath(track.songId)
+      return { track, localPath }
+    })
+    const hydrations = await loadNeteaseAnalysisHydration(
+      resolved
+        .filter((item) => item.localPath)
+        .map((item) => ({ songId: item.track.songId, filePath: item.localPath as string }))
+    )
+    const hydrationBySongId = new Map(hydrations.map((item) => [item.songId, item]))
     return {
       playlistId,
-      tracks: tracks.map((track) => ({
-        ...track,
-        downloaded: Boolean(getLocalFilePath(track.songId))
-      }))
+      tracks: resolved.map(({ track, localPath }) => {
+        const hydration = hydrationBySongId.get(track.songId)
+        return {
+          ...track,
+          downloaded: Boolean(localPath),
+          localPath: localPath || undefined,
+          listRoot: hydration?.listRoot,
+          analysis: hydration?.analysis ?? null
+        }
+      })
     }
   })
 
@@ -148,12 +165,37 @@ export function registerNeteaseHandlers(getWindow: () => BrowserWindow | null): 
     } catch (error) {
       log.warn('[netease] 补录已下载索引失败', error)
     }
-    return { tracks: listDownloaded() }
+    const tracks = listDownloaded()
+    const hydrations = await loadNeteaseAnalysisHydration(
+      tracks.map((row) => ({ songId: row.songId, filePath: row.absPath }))
+    )
+    const hydrationBySongId = new Map(hydrations.map((item) => [item.songId, item]))
+    return {
+      tracks: tracks.map((row) => {
+        const hydration = hydrationBySongId.get(row.songId)
+        return {
+          ...row,
+          localPath: hydration?.localPath || row.absPath,
+          listRoot: hydration?.listRoot,
+          analysis: hydration?.analysis ?? null
+        }
+      })
+    }
   })
 
   ipcMain.handle('netease:downloaded-summary', async () => {
     return getDownloadedSummary()
   })
+
+  ipcMain.handle(
+    'netease:analysis-cache',
+    async (_event, payload: { items?: Array<{ songId?: string; filePath?: string }> }) => {
+      const items = await loadNeteaseAnalysisHydration(
+        Array.isArray(payload?.items) ? payload.items : []
+      )
+      return { items }
+    }
+  )
 
   ipcMain.handle('netease:preview-cache-usage', async () => {
     return await getPreviewCacheUsage()

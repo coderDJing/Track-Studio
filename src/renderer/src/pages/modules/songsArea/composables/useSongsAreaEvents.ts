@@ -14,6 +14,7 @@ import libraryUtils from '@renderer/utils/libraryUtils'
 import { markGlobalSongSearchDirty } from '@renderer/utils/globalSongSearchEvents'
 import type { OpenSongListOptions } from './useSongsLoader'
 import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
+import { neteaseSongMatchesPath, parseNeteaseSongIdFromStorePath } from '@shared/netease'
 
 type UserOpenedSongListOptions = {
   forceAnalysisPrompt?: boolean
@@ -481,9 +482,23 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
     scheduleApply()
   }
 
+  const songMatchesPath = (song: ISongInfo | null | undefined, normalizedTargetPath: string) => {
+    if (!song || !normalizedTargetPath) return false
+    if (normalizePath(song.filePath) === normalizedTargetPath) return true
+    return neteaseSongMatchesPath(song, normalizedTargetPath, normalizePath)
+  }
+
+  const attachNeteaseLocalPathIfMissing = (song: ISongInfo, eventFilePath: string) => {
+    if (song.neteaseLocalPath) return song
+    const rawPath = String(eventFilePath || '').trim()
+    if (!parseNeteaseSongIdFromStorePath(rawPath)) return song
+    if (!neteaseSongMatchesPath(song, rawPath, normalizePath)) return song
+    return { ...song, neteaseLocalPath: rawPath }
+  }
+
   const findSongIndexByPath = (songs: readonly ISongInfo[], normalizedTargetPath: string) => {
     for (let index = 0; index < songs.length; index += 1) {
-      if (normalizePath(songs[index]?.filePath) === normalizedTargetPath) {
+      if (songMatchesPath(songs[index], normalizedTargetPath)) {
         return index
       }
     }
@@ -532,7 +547,7 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
   const patchPlayingSongByPath = (normalizedTargetPath: string, patch: SongPatchFn) => {
     const currentPlayingSong = runtime.playingData.playingSong
     if (!currentPlayingSong) return false
-    if (normalizePath(currentPlayingSong.filePath) !== normalizedTargetPath) return false
+    if (!songMatchesPath(currentPlayingSong, normalizedTargetPath)) return false
     const nextPlayingSong = patch(currentPlayingSong)
     if (nextPlayingSong === currentPlayingSong) return false
     runtime.playingData.playingSong = nextPlayingSong
@@ -546,6 +561,7 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
   }
 
   type PreparedSongGridPatch = {
+    eventFilePath: string
     normalizedTargetPath: string
     timeBasisOffsetMs?: number
     hasTimeBasisOffsetMs: boolean
@@ -567,6 +583,7 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
       allowSingleClip: true
     })
     return {
+      eventFilePath: filePath,
       normalizedTargetPath: normalizePath(filePath),
       timeBasisOffsetMs: payload?.timeBasisOffsetMs,
       hasTimeBasisOffsetMs,
@@ -592,7 +609,21 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
       nextSong.timeBasisOffsetMs = patch.timeBasisOffsetMs
       touched = true
     }
-    return touched ? nextSong : song
+    const resolved = touched ? nextSong : song
+    return attachNeteaseLocalPathIfMissing(resolved, patch.eventFilePath)
+  }
+
+  const findGridPatchForSong = (
+    song: ISongInfo | undefined,
+    patchByPath: Map<string, PreparedSongGridPatch>
+  ) => {
+    if (!song || patchByPath.size === 0) return undefined
+    const direct = patchByPath.get(normalizePath(song.filePath))
+    if (direct) return direct
+    for (const [pathKey, patch] of patchByPath) {
+      if (songMatchesPath(song, pathKey)) return patch
+    }
+    return undefined
   }
 
   const patchSongListByGridPatchMap = (
@@ -603,7 +634,7 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
     let touched = false
     for (let index = 0; index < songs.length; index += 1) {
       const song = songs[index]
-      const patch = patchByPath.get(normalizePath(song?.filePath))
+      const patch = findGridPatchForSong(song, patchByPath)
       if (!song || !patch) continue
       const nextSong = applyPreparedSongGridPatch(song, patch)
       if (nextSong === song) continue
@@ -639,7 +670,7 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
 
     const currentPlayingSong = runtime.playingData.playingSong
     if (currentPlayingSong) {
-      const patch = patchByPath.get(normalizePath(currentPlayingSong.filePath))
+      const patch = findGridPatchForSong(currentPlayingSong, patchByPath)
       if (patch) {
         const nextPlayingSong = applyPreparedSongGridPatch(currentPlayingSong, patch)
         if (nextPlayingSong !== currentPlayingSong) {
@@ -659,13 +690,16 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
     if (!filePath || typeof keyText !== 'string') return
     const normalizedTargetPath = normalizePath(filePath)
 
-    const applyKeyPatch = (song: ISongInfo): ISongInfo =>
-      song.key === keyText
-        ? song
-        : {
-            ...song,
-            key: keyText
-          }
+    const applyKeyPatch = (song: ISongInfo): ISongInfo => {
+      const next =
+        song.key === keyText
+          ? song
+          : {
+              ...song,
+              key: keyText
+            }
+      return attachNeteaseLocalPathIfMissing(next, filePath)
+    }
 
     if (patchOriginalSongByPath(normalizedTargetPath, applyKeyPatch)) {
       scheduleApplyIfNeeded(['key'])
@@ -708,12 +742,15 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
       ) {
         return song
       }
-      return {
-        ...song,
-        energyScore,
-        energyAlgorithmVersion: energyAlgorithmVersion ?? song.energyAlgorithmVersion,
-        energyAnalysis
-      }
+      return attachNeteaseLocalPathIfMissing(
+        {
+          ...song,
+          energyScore,
+          energyAlgorithmVersion: energyAlgorithmVersion ?? song.energyAlgorithmVersion,
+          energyAnalysis
+        },
+        filePath
+      )
     }
 
     const changedFields = [
@@ -750,10 +787,13 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
       if (JSON.stringify(normalizeSongStructureAnalysis(song.songStructure)) === signature) {
         return song
       }
-      return {
-        ...song,
-        songStructure
-      }
+      return attachNeteaseLocalPathIfMissing(
+        {
+          ...song,
+          songStructure
+        },
+        filePath
+      )
     }
 
     if (patchOriginalSongByPath(normalizedTargetPath, applyStructurePatch)) {

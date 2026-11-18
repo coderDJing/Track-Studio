@@ -5,6 +5,7 @@ import {
   NETEASE_LIBRARY_NAME,
   NETEASE_PLAYLIST_PREFIX,
   buildNeteasePreviewUrl,
+  createNeteaseOpenPlaylistRemovalPayload,
   getNeteasePlaylistId,
   isNeteaseGroupUuid,
   isNeteaseNodeUuid,
@@ -13,7 +14,10 @@ import {
   isNeteasePreviewUrl,
   isNeteaseVirtualUuid,
   parseNeteasePendingSongId,
-  parseNeteaseSongId
+  parseNeteaseSongId,
+  parseNeteaseSongIdFromStorePath,
+  collectNeteaseSongPathAliases,
+  neteaseSongMatchesPath
 } from '@shared/netease'
 import { t } from '@renderer/utils/translate'
 
@@ -34,6 +38,7 @@ export {
   NETEASE_LIBRARY_NAME,
   NETEASE_PLAYLIST_PREFIX,
   buildNeteasePreviewUrl,
+  createNeteaseOpenPlaylistRemovalPayload,
   getNeteasePlaylistId,
   isNeteaseGroupUuid,
   isNeteaseNodeUuid,
@@ -42,7 +47,71 @@ export {
   isNeteasePreviewUrl,
   isNeteaseVirtualUuid,
   parseNeteasePendingSongId,
-  parseNeteaseSongId
+  parseNeteaseSongId,
+  parseNeteaseSongIdFromStorePath,
+  collectNeteaseSongPathAliases,
+  neteaseSongMatchesPath
+}
+
+export const NETEASE_ANALYSIS_FIELD_KEYS = [
+  'key',
+  'keyAnalysisAlgorithmVersion',
+  'bpm',
+  'firstBeatMs',
+  'downbeatBeatOffset',
+  'timeBasisOffsetMs',
+  'timeBasisOffsetAlgorithmVersion',
+  'beatGridSource',
+  'beatGridStatus',
+  'beatGridMap',
+  'beatGridAlgorithmVersion',
+  'beatGridAnalysisMode',
+  'beatGridResultShape',
+  'beatGridPolicyVersion',
+  'energyScore',
+  'energyAlgorithmVersion',
+  'energyAnalysis',
+  'energySourceGridSignature',
+  'songStructure'
+] as const
+
+export type NeteaseAnalysisHydrationPayload = {
+  localPath?: string | null
+  listRoot?: string | null
+  analysis?: Partial<ISongInfo> | null
+}
+
+/** 把 NeteaseLibrary / `.store` 缓存里的分析字段贴到列表行上，但不改 display filePath。 */
+export function applyNeteaseAnalysisToSong(
+  song: ISongInfo,
+  payload?: NeteaseAnalysisHydrationPayload | null
+): ISongInfo {
+  if (!payload) return song
+  const localPath = String(payload.localPath || '').trim()
+  const listRoot = String(payload.listRoot || '').trim()
+  const analysis = payload.analysis
+  let touched = false
+  const next: ISongInfo = { ...song }
+  if (localPath && next.neteaseLocalPath !== localPath) {
+    next.neteaseLocalPath = localPath
+    touched = true
+  }
+  if (listRoot && next.waveformPreviewListRoot !== listRoot) {
+    next.waveformPreviewListRoot = listRoot
+    touched = true
+  }
+  if (analysis) {
+    for (const key of NETEASE_ANALYSIS_FIELD_KEYS) {
+      if (!Object.prototype.hasOwnProperty.call(analysis, key)) continue
+      const value = analysis[key]
+      if (value === undefined) continue
+      if (next[key] !== value) {
+        ;(next as unknown as Record<string, unknown>)[key] = value
+        touched = true
+      }
+    }
+  }
+  return touched ? next : song
 }
 
 const formatDuration = (durationMs: number): string => {
@@ -61,6 +130,9 @@ export type NeteaseTrackPayload = {
   coverUrl: string
   position: number
   downloaded?: boolean
+  localPath?: string | null
+  listRoot?: string | null
+  analysis?: Partial<ISongInfo> | null
 }
 
 /**
@@ -72,7 +144,7 @@ export type NeteaseTrackPayload = {
 export function mapNeteaseTrackToSongInfo(track: NeteaseTrackPayload): ISongInfo {
   const displayName =
     track.artist && track.title ? `${track.artist} - ${track.title}` : track.title || track.songId
-  return {
+  const base: ISongInfo = {
     filePath: buildNeteasePreviewUrl(track.songId),
     fileName: displayName,
     fileFormat: '',
@@ -90,6 +162,11 @@ export function mapNeteaseTrackToSongInfo(track: NeteaseTrackPayload): ISongInfo
     neteaseDownloaded: track.downloaded === true,
     addedAtMs: undefined
   }
+  return applyNeteaseAnalysisToSong(base, {
+    localPath: track.localPath,
+    listRoot: track.listRoot,
+    analysis: track.analysis
+  })
 }
 
 /**
@@ -121,6 +198,9 @@ export type NeteaseDownloadedRowPayload = {
   sampleRate: number
   sizeBytes: number
   inPlaylist: boolean
+  localPath?: string | null
+  listRoot?: string | null
+  analysis?: Partial<ISongInfo> | null
 }
 
 /**
@@ -143,7 +223,7 @@ export function mapNeteaseDownloadedRowToSongInfo(row: NeteaseDownloadedRowPaylo
     row.sizeBytes > 0 && row.durationMs > 0
       ? Math.round((row.sizeBytes * 8) / row.durationMs)
       : undefined
-  return {
+  const base: ISongInfo = {
     filePath: String(row.absPath || ''),
     fileName:
       String(row.absPath || '')
@@ -162,6 +242,11 @@ export function mapNeteaseDownloadedRowToSongInfo(row: NeteaseDownloadedRowPaylo
     neteaseSongId: row.songId,
     neteaseDownloaded: true
   }
+  return applyNeteaseAnalysisToSong(base, {
+    localPath: row.localPath || row.absPath,
+    listRoot: row.listRoot,
+    analysis: row.analysis
+  })
 }
 
 type NeteaseGroupPayload = {

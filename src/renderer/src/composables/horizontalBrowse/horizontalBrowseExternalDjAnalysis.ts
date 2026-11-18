@@ -1,6 +1,7 @@
 import type { ISongInfo } from 'src/types/globals'
 import { normalizeSongBeatGridMapV2 } from '@shared/songBeatGridMapV2'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
+import { isNeteasePendingPath, isNeteasePreviewUrl } from '@shared/netease'
 import type { HorizontalBrowseDeckKey } from './horizontalBrowseNativeTransport'
 
 export const resolveExternalDjAnalysisTargets = (song: ISongInfo | null | undefined) => {
@@ -15,8 +16,12 @@ export const queueHorizontalBrowseDeckAnalysis = (
   defer = false
 ) => {
   if (isRekordboxExternalPlaybackSource('', song)) return
-  const filePath = String(song?.filePath || '').trim()
-  if (!filePath) return
+  const rawPath = String(song?.filePath || '').trim()
+  const filePath =
+    rawPath && !isNeteasePreviewUrl(rawPath) && !isNeteasePendingPath(rawPath)
+      ? rawPath
+      : String(song?.neteaseLocalPath || '').trim()
+  if (!filePath || isNeteasePreviewUrl(filePath) || isNeteasePendingPath(filePath)) return
   const analysisTargets = resolveExternalDjAnalysisTargets(song)
   window.electron.ipcRenderer.send(
     defer ? 'key-analysis:queue-deck-idle' : 'key-analysis:queue-playing',

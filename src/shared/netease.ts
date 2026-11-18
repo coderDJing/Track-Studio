@@ -86,7 +86,114 @@ export function parseNeteasePendingSongId(filePath: string): string | null {
   return id || null
 }
 
+/**
+ * 从当前打开的网易云歌单移出曲目后，用来就地更新 songsArea 的事件载荷。
+ *
+ * 歌单视图里的 filePath 始终是 frkb-preview URL（即便已经下载过），
+ * `songsArea/optimistic-remove` 也按 filePath 匹配，所以必须发同一套地址，
+ * 打开中的列表才会立刻少掉这些行，而不必等用户重进歌单。
+ */
+export function createNeteaseOpenPlaylistRemovalPayload(
+  playlistId: string,
+  songIds: readonly string[]
+): { listUUID: string; paths: string[] } {
+  const id = String(playlistId || '').trim()
+  const seen = new Set<string>()
+  const paths: string[] = []
+  for (const raw of songIds) {
+    const songId = String(raw || '').trim()
+    if (!songId || seen.has(songId)) continue
+    seen.add(songId)
+    paths.push(buildNeteasePreviewUrl(songId))
+  }
+  return {
+    listUUID: id ? `${NETEASE_PLAYLIST_PREFIX}${id}` : '',
+    paths
+  }
+}
+
 /** 自己创建的歌单和「我喜欢的音乐」可以增删曲目；收藏的歌单和专辑不行。 */
 export function canEditNeteasePlaylistTracks(kind: string | null | undefined): boolean {
   return kind === 'liked' || kind === 'created'
+}
+
+export function parseNeteaseSongIdFromStorePath(
+  filePath: string | undefined | null
+): string | null {
+  const raw = String(filePath || '').trim()
+  if (!raw) return null
+  const normalized = raw.replace(/\\/g, '/')
+  const marker = '/.store/'
+  let rest = ''
+  const index = normalized.lastIndexOf(marker)
+  if (index >= 0) {
+    rest = normalized.slice(index + marker.length)
+  } else if (normalized.startsWith('.store/')) {
+    rest = normalized.slice('.store/'.length)
+  } else {
+    return null
+  }
+  if (!rest || rest.includes('/')) return null
+  const dot = rest.lastIndexOf('.')
+  if (dot <= 0) return null
+  const songId = rest.slice(0, dot).trim()
+  if (!songId || songId === '.' || songId.includes('..')) return null
+  return songId
+}
+
+export type NeteaseSongPathAliasInput = {
+  filePath?: string | null
+  neteaseLocalPath?: string | null
+  neteaseSongId?: string | null
+}
+
+export function resolveNeteaseSongIdFromPathAliases(
+  input: NeteaseSongPathAliasInput
+): string | null {
+  const direct = String(input.neteaseSongId || '').trim()
+  if (direct) return direct
+  return (
+    parseNeteaseSongId(input.filePath || '') ||
+    parseNeteasePendingSongId(input.filePath || '') ||
+    parseNeteaseSongIdFromStorePath(input.filePath) ||
+    parseNeteaseSongIdFromStorePath(input.neteaseLocalPath)
+  )
+}
+
+export function collectNeteaseSongPathAliases(input: NeteaseSongPathAliasInput): string[] {
+  const aliases: string[] = []
+  const seen = new Set<string>()
+  const add = (value?: string | null) => {
+    const next = String(value || '').trim()
+    if (!next || seen.has(next)) return
+    seen.add(next)
+    aliases.push(next)
+  }
+  add(input.filePath)
+  add(input.neteaseLocalPath)
+  const songId = resolveNeteaseSongIdFromPathAliases(input)
+  if (songId) {
+    add(buildNeteasePreviewUrl(songId))
+    add(buildNeteasePendingPath(songId))
+  }
+  return aliases
+}
+
+export function neteaseSongMatchesPath(
+  song: NeteaseSongPathAliasInput | null | undefined,
+  candidatePath: string | undefined | null,
+  normalize: (value: string) => string = (value) => value
+): boolean {
+  if (!song) return false
+  const needle = normalize(String(candidatePath || '').trim())
+  if (!needle) return false
+  for (const alias of collectNeteaseSongPathAliases(song)) {
+    if (normalize(alias) === needle) return true
+  }
+  const candidateId =
+    parseNeteaseSongId(candidatePath || '') ||
+    parseNeteasePendingSongId(candidatePath || '') ||
+    parseNeteaseSongIdFromStorePath(candidatePath)
+  const songId = resolveNeteaseSongIdFromPathAliases(song)
+  return Boolean(candidateId && songId && candidateId === songId)
 }

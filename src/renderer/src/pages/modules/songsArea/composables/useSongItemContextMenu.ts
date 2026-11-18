@@ -39,6 +39,7 @@ import {
 import {
   deleteNeteaseLocalFiles,
   downloadNeteaseTracks,
+  mapExistingNeteaseSongsToLocalFiles,
   mapNeteaseSongsToLocalFiles,
   removeNeteasePlaylistTracks
 } from '@renderer/utils/neteaseActions'
@@ -927,13 +928,16 @@ export function useSongItemContextMenu(
         window.electron.ipcRenderer.send('show-item-in-folder', song.filePath)
         break
       case 'tracks.clearTrackCache': {
-        if (
-          !isNeteaseStreamView &&
-          (isNeteaseStreamSong(song) || selectedSongsForSetDuration.some(isNeteaseStreamSong))
-        ) {
-          return null
-        }
-        const localSongs = await resolveLocalSongsForAction()
+        // 分析只能用已经在 `.store` 里的文件，不能走 resolveLocalSongsForAction（那会下载）。
+        const selected = resolveSelectedSongs()
+        const hasNeteaseStream =
+          isNeteaseStreamView ||
+          isNeteaseDownloadedView ||
+          isNeteaseStreamSong(song) ||
+          selected.some(isNeteaseStreamSong)
+        const localSongs = hasNeteaseStream
+          ? await mapExistingNeteaseSongsToLocalFiles(selected)
+          : await resolveLocalSongsForAction()
         if (!localSongs || localSongs.length === 0) return null
         await promptAndStartTrackReanalysis(
           localSongs.map((item) => item.filePath),

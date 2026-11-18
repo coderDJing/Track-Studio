@@ -10,6 +10,7 @@ import emitter from '@renderer/utils/mitt'
 import {
   NETEASE_DOWNLOADED_UUID,
   NETEASE_PLAYLIST_PREFIX,
+  createNeteaseOpenPlaylistRemovalPayload,
   applyNeteaseGroupsToTree,
   findNeteaseLibraryNode,
   localizeNeteaseTreeTitles,
@@ -18,7 +19,8 @@ import {
   isNeteasePlaylistUuid,
   isNeteasePreviewUrl,
   parseNeteasePendingSongId,
-  parseNeteaseSongId
+  parseNeteaseSongId,
+  applyNeteaseAnalysisToSong
 } from './neteaseSongs'
 import {
   queueMainPlayerPlayingAnalysis,
@@ -409,8 +411,28 @@ export const removeNeteasePlaylistTracks = async (input: {
     if (!answer) return false
   }
   try {
-    await invoke('netease:remove-playlist-tracks', { playlistId, songIds })
-    refreshNeteaseViews(`${NETEASE_PLAYLIST_PREFIX}${playlistId}`)
+    const result = await invoke<{ removedIds?: string[] }>('netease:remove-playlist-tracks', {
+      playlistId,
+      songIds
+    })
+    const removedIds = [
+      ...new Set(
+        (Array.isArray(result?.removedIds) && result.removedIds.length > 0
+          ? result.removedIds
+          : songIds
+        )
+          .map((id) => String(id || '').trim())
+          .filter(Boolean)
+      )
+    ]
+    // 先就地从当前打开的歌单列表里拿掉这些行。只发 reload-if-current
+    // 会再走一遍 openSongList，但那是异步的，也常被后续 invalidate 丢掉，
+    // 用户就会看到列表还在、必须重进歌单才消失。
+    const removal = createNeteaseOpenPlaylistRemovalPayload(playlistId, removedIds)
+    if (removal.paths.length > 0) {
+      emitter.emit('songsArea/optimistic-remove', removal)
+    }
+    refreshNeteaseViews(removal.listUUID || `${NETEASE_PLAYLIST_PREFIX}${playlistId}`)
     return true
   } catch (error) {
     const message = unwrapIpcError(error) || t('common.unknownError')
@@ -776,6 +798,7 @@ function withLocalNeteasePath(song: ISongInfo, localPath: string): ISongInfo {
     filePath: localPath,
     fileName,
     fileFormat: ext ? ext.toUpperCase() : song.fileFormat,
+    neteaseLocalPath: localPath,
     neteaseDownloaded: true,
     neteasePendingDownload: false,
     neteasePendingStatus: undefined,
@@ -856,6 +879,110 @@ export const mapNeteaseSongsToLocalFiles = async (songs: ISongInfo[]): Promise<I
   const byId =
     uniqueIds.length > 0
       ? await downloadNeteaseLocalPathBySongId(uniqueIds, pendingIds)
+      : new Map<string, string>()
+  const ready: ISongInfo[] = []
+  for (const song of list) {
+    if (!needsNeteaseLocalFile(song)) {
+      ready.push(song)
+      continue
+    }
+    const localPath = byId.get(neteaseSongLookupId(song)) || ''
+    if (!localPath) continue
+    ready.push(withLocalNeteasePath(song, localPath))
+  }
+  return ready
+}
+
+/**
+ * 只查询已经落在 `.store` 里的文件，不触发下载。
+ * 分析、在文件夹中显示这类动作不能为了打开菜单或试听去占下载额度。
+ */
+export const resolveExistingNeteaseLocalPaths = async (
+  songIds: string[]
+): Promise<Map<string, string>> => {
+  const uniqueIds = [
+    ...new Set(
+      (Array.isArray(songIds) ? songIds : []).map((id) => String(id || '').trim()).filter(Boolean)
+    )
+  ]
+  const byId = new Map<string, string>()
+  if (uniqueIds.length === 0) return byId
+  const result = await invoke<{ items?: DownloadedItem[] }>('netease:resolve-local', {
+    songIds: uniqueIds
+  })
+  for (const item of result?.items || []) {
+    if (item?.songId && item?.filePath) byId.set(item.songId, item.filePath)
+  }
+  return byId
+}
+
+/** 用 NeteaseLibrary / `.store` 缓存给已下载曲目补上分析字段，不改 display filePath。 */
+export const hydrateNeteaseSongAnalysis = async (songs: ISongInfo[]): Promise<ISongInfo[]> => {
+  const list = Array.isArray(songs) ? songs : []
+  if (list.length === 0) return []
+  const requests: Array<{ songId?: string; filePath?: string }> = []
+  for (const song of list) {
+    const localPath = String(
+      song.neteaseLocalPath || (!needsNeteaseLocalFile(song) ? song.filePath : '') || ''
+    ).trim()
+    const songId = neteaseSongLookupId(song)
+    if (!songId && !localPath) continue
+    requests.push({
+      songId: songId || undefined,
+      filePath: localPath || undefined
+    })
+  }
+  if (requests.length === 0) return list
+  const result = await invoke<{
+    items?: Array<{
+      songId?: string
+      localPath?: string
+      listRoot?: string
+      analysis?: Partial<ISongInfo> | null
+    }>
+  }>('netease:analysis-cache', { items: requests })
+  const bySongId = new Map<
+    string,
+    { songId?: string; localPath?: string; listRoot?: string; analysis?: Partial<ISongInfo> | null }
+  >()
+  const byPath = new Map<
+    string,
+    { songId?: string; localPath?: string; listRoot?: string; analysis?: Partial<ISongInfo> | null }
+  >()
+  for (const item of result?.items || []) {
+    if (item?.songId) bySongId.set(item.songId, item)
+    if (item?.localPath) byPath.set(item.localPath, item)
+  }
+  return list.map((song) => {
+    const songId = neteaseSongLookupId(song)
+    const item =
+      (songId ? bySongId.get(songId) : undefined) ||
+      (song.neteaseLocalPath ? byPath.get(song.neteaseLocalPath) : undefined) ||
+      (song.filePath ? byPath.get(song.filePath) : undefined)
+    if (!item) return song
+    return applyNeteaseAnalysisToSong(song, {
+      localPath: item.localPath,
+      listRoot: item.listRoot,
+      analysis: item.analysis
+    })
+  })
+}
+
+/** 把已下载曲目换成 `.store` 真实路径；未下载的一首不往下传，也不会开始下载 */
+export const mapExistingNeteaseSongsToLocalFiles = async (
+  songs: ISongInfo[]
+): Promise<ISongInfo[]> => {
+  const list = Array.isArray(songs) ? songs : []
+  if (list.length === 0) return []
+  const uniqueIds: string[] = []
+  for (const song of list) {
+    if (!needsNeteaseLocalFile(song)) continue
+    const songId = neteaseSongLookupId(song)
+    if (songId) uniqueIds.push(songId)
+  }
+  const byId =
+    uniqueIds.length > 0
+      ? await resolveExistingNeteaseLocalPaths(uniqueIds)
       : new Map<string, string>()
   const ready: ISongInfo[] = []
   for (const song of list) {

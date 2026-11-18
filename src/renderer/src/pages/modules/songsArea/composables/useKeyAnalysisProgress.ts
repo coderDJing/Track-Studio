@@ -1,4 +1,5 @@
 import { sameRendererFilePath, rendererFilePathKey } from '@renderer/utils/filePathComparison'
+import { collectNeteaseSongPathAliases, neteaseSongMatchesPath } from '@shared/netease'
 
 import { computed, ref, type Ref } from 'vue'
 import type { ISongInfo } from '../../../../../../types/globals'
@@ -301,12 +302,21 @@ export const hasCompleteKeyAnalysis = (song: ISongInfo | undefined): boolean => 
   )
 }
 
+const resolveProgressEntryForSong = (song: ISongInfo | null | undefined) => {
+  if (!song) return undefined
+  for (const alias of collectNeteaseSongPathAliases(song)) {
+    const normalized = normalizePath(alias)
+    if (!normalized) continue
+    const entry = progressMap.value.get(normalized)
+    if (isDisplayableProgressEntry(entry)) return entry
+  }
+  return undefined
+}
+
 export const hasDisplayableAnalysisProgressForSongs = (songs: ISongInfo[]): boolean => {
   progressVersion.value
   for (const song of songs) {
-    const normalized = normalizePath(song?.filePath || '')
-    if (!normalized) continue
-    if (isDisplayableProgressEntry(progressMap.value.get(normalized))) return true
+    if (resolveProgressEntryForSong(song)) return true
   }
   return false
 }
@@ -331,28 +341,54 @@ export function useKeyAnalysisProgress(params: {
     // 触发响应式依赖
     progressVersion.value
     const normalized = normalizePath(filePath)
-    const entry = progressMap.value.get(normalized)
-    if (isDisplayableProgressEntry(entry)) return Math.round(entry.displayPercent)
+    const direct = progressMap.value.get(normalized)
+    if (isDisplayableProgressEntry(direct)) return Math.round(direct.displayPercent)
+    for (const item of visibleSongsWithIndex.value || []) {
+      if (
+        normalizePath(item?.song?.filePath || '') === normalized ||
+        neteaseSongMatchesPath(item?.song, filePath, normalizePath)
+      ) {
+        const entry = resolveProgressEntryForSong(item.song)
+        if (isDisplayableProgressEntry(entry)) return Math.round(entry.displayPercent)
+        break
+      }
+    }
     return null
   }
 
   const getAnalysisDynamicGrid = (filePath: string): DynamicGridPublicProgress | null => {
     progressVersion.value
-    const entry = progressMap.value.get(normalizePath(filePath))
-    if (!isDisplayableProgressEntry(entry)) return null
-    return entry.dynamicGrid ?? null
+    const normalized = normalizePath(filePath)
+    const direct = progressMap.value.get(normalized)
+    if (isDisplayableProgressEntry(direct)) return direct.dynamicGrid ?? null
+    for (const item of visibleSongsWithIndex.value || []) {
+      if (
+        normalizePath(item?.song?.filePath || '') === normalized ||
+        neteaseSongMatchesPath(item?.song, filePath, normalizePath)
+      ) {
+        const entry = resolveProgressEntryForSong(item.song)
+        if (isDisplayableProgressEntry(entry)) return entry.dynamicGrid ?? null
+        break
+      }
+    }
+    return null
   }
 
   const isSongNeedsAnalysis = (filePath: string): boolean => {
     const normalized = normalizePath(filePath)
-    const entry = progressMap.value.get(normalized)
+    const direct = progressMap.value.get(normalized)
     // 有真实进度就说明正在分析，不再算"待分析"
-    if (isDisplayableProgressEntry(entry)) return false
+    if (isDisplayableProgressEntry(direct)) return false
     // 检查可见歌曲列表中是否有这首歌且需要分析
     for (const item of visibleSongsWithIndex.value || []) {
-      const songPath = normalizePath(item?.song?.filePath || '')
-      if (sameRendererFilePath(songPath, normalized)) {
-        return !hasRequiredAnalysis(item.song) && !isAnalysisCompleteOverride?.(filePath)
+      const song = item?.song
+      const songPath = normalizePath(song?.filePath || '')
+      if (
+        sameRendererFilePath(songPath, normalized) ||
+        neteaseSongMatchesPath(song, filePath, normalizePath)
+      ) {
+        if (isDisplayableProgressEntry(resolveProgressEntryForSong(song))) return false
+        return !hasRequiredAnalysis(song) && !isAnalysisCompleteOverride?.(filePath)
       }
     }
     return false

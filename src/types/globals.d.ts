@@ -108,6 +108,8 @@ interface ISongInfo {
   neteaseSongId?: string
   /** 这首在网易云歌单里是否有本地文件（`.store` 命中） */
   neteaseDownloaded?: boolean
+  /** 已下载时 `.store` 真实路径。歌单行的 filePath 仍是预览 URL，分析缓存与列展示用这个地址匹配 */
+  neteaseLocalPath?: string
   /** SET 里尚未下完 / 下载失败的网易云条目；有这个标记时 filePath 是占位路径，不能拿去播 */
   neteasePendingDownload?: boolean
   neteasePendingStatus?: 'pending' | 'failed'

@@ -22,6 +22,7 @@ import { isNeteaseStreamSong, parseNeteaseSongId } from '@renderer/utils/netease
 import {
   deleteNeteaseLocalFiles,
   downloadNeteaseTracks,
+  mapExistingNeteaseSongsToLocalFiles,
   mapNeteaseSongsToLocalFiles,
   removeNeteasePlaylistTracks
 } from '@renderer/utils/neteaseActions'
@@ -92,8 +93,8 @@ const isReadOnlyPlaybackSource = computed(() =>
 /**
  * 网易云歌单里正在播的这一首：列表行仍是试听流地址，本地文件要另外解析。
  *
- * 菜单和歌单右键同一套：能落地再做的动作先下载再执行；转码 / 修 BPM / XML 先选存放位置；
- * 在文件夹中显示只对已下载开放；指纹和改元数据藏掉；不提供删除上方全部、移动；自建歌单可从歌单中移除。
+ * 菜单和歌单右键同一套：转码 / 修 BPM / XML 先选存放位置；重新分析和在文件夹中显示
+ * 只对已下载开放，不为了分析去下载；指纹和改元数据藏掉；不提供删除上方全部、移动；自建歌单可从歌单中移除。
  */
 const isStreamOnlySong = computed(() => isNeteaseStreamSong(runtime.playingData.playingSong))
 const streamOnlySongId = computed(() => {
@@ -590,7 +591,9 @@ const handleClearTrackCache = async () => {
   const song = runtime.playingData.playingSong
   if (!song) return
   closeMoreMenu()
-  const targetSong = isNeteaseStreamSong(song) ? await resolvePlayingSongForLocalAction() : song
+  const targetSong = isNeteaseStreamSong(song)
+    ? (await mapExistingNeteaseSongsToLocalFiles([song]))[0] || null
+    : song
   const filePath = String(targetSong?.filePath || '').trim()
   if (!filePath || !targetSong) return
   await promptAndStartTrackReanalysis([filePath], [targetSong])
@@ -1152,7 +1155,11 @@ onUnmounted(() => {
           </div>
         </div>
         <div style="padding: 5px 5px">
-          <div class="menuButton" @click="handleClearTrackCache()">
+          <div
+            v-if="!isStreamOnlySong || streamOnlyDownloaded"
+            class="menuButton"
+            @click="handleClearTrackCache()"
+          >
             <span>{{ t('tracks.clearTrackCache') }}</span>
           </div>
           <div class="menuButton" @click="handleStemSeparation()">

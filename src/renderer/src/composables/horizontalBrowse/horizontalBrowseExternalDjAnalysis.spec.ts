@@ -77,4 +77,37 @@ describe('external DJ deck waveform analysis', () => {
     expect(send).not.toHaveBeenCalled()
     expect(isHorizontalBrowseNativeDetailSong(song)).toBe(true)
   })
+
+  it('does not queue NetEase preview URLs as a disposable analysis path', () => {
+    const song = {
+      ...makeSong('traktor'),
+      externalLibraryKind: undefined,
+      externalSourceKind: undefined,
+      filePath: 'frkb-preview://netease/?netease=1901371647',
+      neteaseSongId: '1901371647'
+    }
+    const send = vi.fn()
+    vi.stubGlobal('window', { electron: { ipcRenderer: { send } } })
+    queueHorizontalBrowseDeckAnalysis('top', song)
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('queues the persisted .store path when a preview row already has neteaseLocalPath', () => {
+    const localPath = 'E:/lib/library/NeteaseLibrary/.store/1901371647.flac'
+    const song = {
+      ...makeSong('traktor'),
+      externalLibraryKind: undefined,
+      externalSourceKind: undefined,
+      filePath: 'frkb-preview://netease/?netease=1901371647',
+      neteaseSongId: '1901371647',
+      neteaseLocalPath: localPath
+    }
+    const send = vi.fn()
+    vi.stubGlobal('window', { electron: { ipcRenderer: { send } } })
+    queueHorizontalBrowseDeckAnalysis('top', song)
+    expect(send).toHaveBeenCalledWith(
+      'key-analysis:queue-playing',
+      expect.objectContaining({ filePath: localPath })
+    )
+  })
 })

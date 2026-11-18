@@ -27,6 +27,7 @@ import type { NeteaseLevel } from './client'
 import { estimateImportSize, type ImportEstimate } from './importEstimate'
 import { isSafeSongId } from './paths'
 import { buildImportBaseName } from './importName'
+import { transferCopiedTrackAnalysisCaches } from './importAnalysisTransfer'
 
 export { buildImportBaseName }
 
@@ -288,6 +289,17 @@ export async function importNeteasePlaylist(
     result.importedSongIds = candidates
       .filter((_, index) => orderedTargets[index])
       .map((item) => item.songId)
+
+    const analysisPairs = candidates
+      .map((item, index) => {
+        const destPath = orderedTargets[index]
+        if (!destPath) return null
+        return { sourcePath: item.filePath, destPath }
+      })
+      .filter((item): item is { sourcePath: string; destPath: string } => item !== null)
+    if (analysisPairs.length > 0) {
+      await transferCopiedTrackAnalysisCaches(analysisPairs)
+    }
 
     if (importedPaths.length > 0) {
       if (isSupportedPlaylistTrackNumberListRoot(target.absPath)) {

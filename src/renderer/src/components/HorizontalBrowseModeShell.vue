@@ -43,7 +43,10 @@ import { useHorizontalBrowseDeckSongSync } from '@renderer/composables/horizonta
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import { isHarmonicMixCompatible } from '@shared/keyDisplay'
 import emitter from '@renderer/utils/mitt'
-import { mapNeteaseSongsToLocalFiles } from '@renderer/utils/neteaseActions'
+import {
+  hydrateNeteaseSongAnalysis,
+  mapNeteaseSongsToLocalFiles
+} from '@renderer/utils/neteaseActions'
 import { createHorizontalBrowseDeckAssigner } from '@renderer/composables/horizontalBrowse/horizontalBrowseDeckAssignment'
 import type { HorizontalBrowseDeckAssignTransportOptions } from '@renderer/composables/horizontalBrowse/horizontalBrowseDeckAssignment'
 import { useHorizontalBrowseTransportController } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseTransportController'
@@ -431,8 +434,11 @@ const assignSongToDeck = async (
   transportOptions?: HorizontalBrowseDeckAssignTransportOptions
 ) => {
   const mappedSongs = await mapNeteaseSongsToLocalFiles([song])
-  const nextSong = mappedSongs[0]
+  let nextSong = mappedSongs[0]
   if (!nextSong) return
+  if (nextSong.neteaseSongId || nextSong.neteaseLocalPath) {
+    nextSong = (await hydrateNeteaseSongAnalysis([nextSong]))[0] || nextSong
+  }
   setDeckSongListSource(deck, resolveDeckSongSourceOptions(sourceOptions))
   const shouldApplyEditPlaybackRange =
     deck === 'top' &&

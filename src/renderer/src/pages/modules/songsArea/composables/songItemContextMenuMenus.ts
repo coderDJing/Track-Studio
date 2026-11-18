@@ -132,6 +132,7 @@ export const withoutRecordingAnalysisMenus = (groups: IMenu[][]): IMenu[][] =>
  * 菜单主体与普通曲目一致，但落地前会先把流地址换成 `.store/` 里的真实文件。
  * 去掉的项：
  *   - 在文件夹中显示：仅已下载曲目显示，定位 `.store` 里的具体文件，不为了显示去下载；
+ *   - 重新分析曲目：仅已下载曲目显示，解析已有的 `.store` 文件，不为了分析去下载；
  *   - 删除曲目 / 删除上方全部：不绑 Delete；自建歌单和「我喜欢的音乐」另有「从歌单中移除」；
  *   - 元数据编辑 / 自动补全 / 指纹：元数据权威在网易云 API，导入本地库会走正式导入流程。
  * 转码、修 BPM、Rekordbox XML：先让用户确认存放位置，取消则不下载体；生成的是新文件，不覆盖 `.store`。
@@ -164,6 +165,7 @@ export const createNeteaseStreamMenuArr = (
     createMusicSearchMenuItems(),
     [{ menuName: 'similarTracks.menu' }],
     [{ menuName: 'tracks.convertFormat' }],
+    ...(downloaded ? [[{ menuName: 'tracks.clearTrackCache' }]] : []),
     [{ menuName: 'stemSeparation.menu' }, { menuName: 'bpmFix.menu' }]
   ]
 }
@@ -208,9 +210,7 @@ const NETEASE_HIDDEN_MENU_NAMES = new Set([
   'tracks.deleteAllAbove',
   'metadata.autoFillMenu',
   'tracks.editMetadata',
-  'fingerprints.analyzeAndAdd',
-  // 网易云行不展示分析结果，清缓存没有意义，还会顺带删掉分轨。
-  'tracks.clearTrackCache'
+  'fingerprints.analyzeAndAdd'
 ])
 
 export const createNeteaseDownloadedMenuArr = (songListUUID: string): IMenu[][] => {

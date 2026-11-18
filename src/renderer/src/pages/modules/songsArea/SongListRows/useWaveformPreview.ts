@@ -44,6 +44,7 @@ import { loadManualExternalWaveformPreviews } from './loadManualExternalWaveform
 import { loadWaveformPreviewBatch } from './loadWaveformPreviewBatch'
 import { toWaveformPreviewWorkerData, type WaveformCacheEntry } from './waveformPreviewWorkerData'
 import { parseDurationToSeconds } from './waveformPreviewDuration'
+import { neteaseSongMatchesPath } from '@shared/netease'
 type VisibleSongItem = { song: ISongInfo; idx: number }
 const PIONEER_WAVEFORM_EAGER_COUNT = 8
 const clamp01 = (value: number) => (Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0)
@@ -231,10 +232,15 @@ export function useWaveformPreview(params: {
       .join(':')
   const resolveVisibleSongByFilePath = (filePath: string) => {
     const normalizedTargetPath = normalizePath(filePath)
-    return (
-      visibleSongsWithIndex.value.find(
+    const items = visibleSongsWithIndex.value || []
+    const direct =
+      items.find(
         (item) => normalizePath(String(item?.song?.filePath || '')) === normalizedTargetPath
       )?.song || null
+    if (direct) return direct
+    return (
+      items.find((item) => neteaseSongMatchesPath(item?.song, filePath, normalizePath))?.song ||
+      null
     )
   }
   const resolveWaveformListRootForFilePath = (filePath: string) => {
@@ -604,16 +610,33 @@ export function useWaveformPreview(params: {
       })
     }
   }
-  const fetchWaveformBatch = async (filePaths: string[]) => {
+  const resolveWaveformCacheFilePath = (visibleFilePath: string, override?: string) => {
+    const song = resolveVisibleSongByFilePath(visibleFilePath)
+    return String(override || song?.neteaseLocalPath || visibleFilePath).trim() || visibleFilePath
+  }
+
+  const fetchWaveformBatch = async (
+    filePaths: string[],
+    cachePathOverrides?: Record<string, string>
+  ) => {
     if (!filePaths.length) return
     const requestVersions = new RendererFilePathMap(
       filePaths.map((filePath) => [filePath, getWaveformDataVersion(filePath)] as const)
     )
+    const visibleToCache = new RendererFilePathMap<string>()
+    const cachePaths: string[] = []
     for (const filePath of filePaths) {
+      const cachePath = resolveWaveformCacheFilePath(filePath, cachePathOverrides?.[filePath])
+      visibleToCache.set(filePath, cachePath)
+      cachePaths.push(cachePath)
       inflight.add(filePath)
       setWaveformPlaceholderLoading(filePath)
     }
-    const items = await loadWaveformPreviewBatch(filePaths, resolveWaveformListRootForFilePath)
+    const items = await loadWaveformPreviewBatch(cachePaths, (cachePath) => {
+      const visibleFilePath =
+        filePaths.find((filePath) => visibleToCache.get(filePath) === cachePath) || cachePath
+      return resolveWaveformListRootForFilePath(visibleFilePath)
+    })
     if (!items) {
       for (const filePath of filePaths) {
         inflight.delete(filePath)
@@ -633,7 +656,12 @@ export function useWaveformPreview(params: {
         inflight.delete(filePath)
         continue
       }
-      const data = itemMap.has(filePath) ? itemMap.get(filePath) : null
+      const cachePath = visibleToCache.get(filePath) || filePath
+      const data = itemMap.has(cachePath)
+        ? itemMap.get(cachePath)
+        : itemMap.has(filePath)
+          ? itemMap.get(filePath)
+          : null
       storeWaveformData(
         filePath,
         data
@@ -876,7 +904,12 @@ export function useWaveformPreview(params: {
       return
     }
     clearWaveformDataForFilePath(visibleFilePath)
-    void fetchWaveformBatch([visibleFilePath])
+    const cacheOverride =
+      normalizePath(filePath) === normalizePath(visibleFilePath) ? undefined : filePath
+    void fetchWaveformBatch(
+      [visibleFilePath],
+      cacheOverride ? { [visibleFilePath]: cacheOverride } : undefined
+    )
   }
   const handlePioneerPreviewWaveformItem: PioneerPreviewWaveformItemHandler = (_event, payload) => {
     const requestId = String(payload?.requestId || '').trim()
