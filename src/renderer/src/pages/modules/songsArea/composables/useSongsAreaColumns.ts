@@ -23,11 +23,13 @@ import libraryUtils from '@renderer/utils/libraryUtils'
 import { getSongListFieldRawValue } from '@renderer/utils/songListFieldDisplay'
 import { filterSongsByPlaylistSearch } from '@renderer/utils/playlistSongSearch'
 import { usePlaylistColumnSettings } from './usePlaylistColumnSettings'
+import { getNeteaseDownloadStatusRank } from '@renderer/utils/neteaseDownloadStatus'
 export {
   buildSongsAreaDefaultColumns,
   getSongsAreaMinWidthByKey,
   SONGS_AREA_MIXTAPE_STORAGE_KEY
 } from './songColumnStorage'
+import { isDefaultLikeColumnMode, resolveSongsAreaColumnMode } from './songColumnStorage'
 
 interface UseSongsAreaColumnsParams {
   runtime: ReturnType<typeof useRuntimeStore>
@@ -56,12 +58,14 @@ export function useSongsAreaColumns(params: UseSongsAreaColumnsParams) {
   const isSetView = computed(
     () => libraryUtils.getLibraryTreeByUUID(songsAreaState.songListUUID)?.type === 'setList'
   )
-  const columnMode = computed<SongsAreaColumnMode>(() => {
-    if (isRecycleBinView.value) return 'recycle'
-    if (isRecordingLibraryView.value) return 'recording'
-    if (isMixtapeView.value) return 'mixtape'
-    return 'default'
-  })
+  const columnMode = computed<SongsAreaColumnMode>(() =>
+    resolveSongsAreaColumnMode(
+      songsAreaState.songListUUID,
+      isMixtapeView.value
+        ? 'mixtapeList'
+        : libraryUtils.getLibraryTreeByUUID(songsAreaState.songListUUID)?.type
+    )
+  )
   const canUsePlaylistTrackNumberForIndex = computed(() => {
     if (columnMode.value !== 'default') return false
     if (isSetView.value) return true
@@ -372,6 +376,17 @@ export function useSongsAreaColumns(params: UseSongsAreaColumnsParams) {
           if (!validB) return -1
           return sortedCol.order === 'asc' ? valueA - valueB : valueB - valueA
         })
+      } else if (sortedCol.key === 'neteaseDownloadStatus') {
+        filtered = [...filtered].sort((a, b) => {
+          const valueA = getNeteaseDownloadStatusRank(a)
+          const valueB = getNeteaseDownloadStatusRank(b)
+          const validA = valueA !== null
+          const validB = valueB !== null
+          if (!validA && !validB) return 0
+          if (!validA) return 1
+          if (!validB) return -1
+          return sortedCol.order === 'asc' ? valueA - valueB : valueB - valueA
+        })
       } else if (sortedCol.key === 'originalPlaylistPath') {
         const collator = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' })
         filtered = [...filtered].sort((a, b) => {
@@ -506,7 +521,7 @@ export function useSongsAreaColumns(params: UseSongsAreaColumnsParams) {
   const colMenuClick = (col: ISongsAreaColumn) => {
     if (columnMode.value === 'mixtape') return
     if (col.key === 'cover' || col.key === 'waveformPreview') return
-    if (col.key === 'index' && columnMode.value !== 'default') return
+    if (col.key === 'index' && !isDefaultLikeColumnMode(columnMode.value)) return
 
     const newColumnData = columnData.value.map((item) => {
       if (item.key !== col.key) {
@@ -548,6 +563,7 @@ export function useSongsAreaColumns(params: UseSongsAreaColumnsParams) {
     shouldApplyFiltersAndSortingForSongChange,
     persistColumnData,
     resetToSharedSettings,
-    independentSettings
+    independentSettings,
+    columnMode
   }
 }

@@ -4,6 +4,7 @@ import confirm from '@renderer/components/confirmDialog'
 import rightClickMenu from '@renderer/components/rightClickMenu'
 import openNeteaseLoginDialog from '@renderer/components/neteaseLoginDialog'
 import openNeteaseImportDialog from '@renderer/components/neteaseImportDialog'
+import openNeteaseCopyToLibraryDialog from '@renderer/components/neteaseCopyToLibraryDialog'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import emitter from '@renderer/utils/mitt'
 import {
@@ -26,7 +27,10 @@ import {
 import { appendExternalSongsToSet } from './setCustody'
 import { appendDownloadedFilesToMixtape } from './mixtapePlaylistAppend'
 import type { ISongInfo } from '../../../types/globals'
-import { findNeteasePlaylistContext } from './neteasePlaylistContext'
+import {
+  canRemoveTracksFromNeteasePlaylist,
+  findNeteasePlaylistContext
+} from './neteasePlaylistContext'
 
 /**
  * 网易云相关的渲染层动作。
@@ -385,6 +389,7 @@ export const removeNeteasePlaylistTracks = async (input: {
   playlistId: string
   songIds: string[]
   title?: string
+  confirm?: boolean
 }): Promise<boolean> => {
   const playlistId = String(input.playlistId || '').trim()
   const songIds = [...new Set(input.songIds.map((id) => String(id || '').trim()).filter(Boolean))]
@@ -395,12 +400,14 @@ export const removeNeteasePlaylistTracks = async (input: {
     findNeteasePlaylistContext(runtime.libraryTree, `${NETEASE_PLAYLIST_PREFIX}${playlistId}`)
       ?.title ||
     ''
-  const answer = await confirm({
-    title: t('netease.removeFromPlaylist'),
-    content: [t('netease.removeFromPlaylistConfirm', { title, count: songIds.length })],
-    confirmShow: true
-  })
-  if (!answer) return false
+  if (input.confirm !== false) {
+    const answer = await confirm({
+      title: t('netease.removeFromPlaylist'),
+      content: [t('netease.removeFromPlaylistConfirm', { title, count: songIds.length })],
+      confirmShow: true
+    })
+    if (!answer) return false
+  }
   try {
     await invoke('netease:remove-playlist-tracks', { playlistId, songIds })
     refreshNeteaseViews(`${NETEASE_PLAYLIST_PREFIX}${playlistId}`)
@@ -413,6 +420,111 @@ export const removeNeteasePlaylistTracks = async (input: {
       confirmShow: false
     })
     return false
+  }
+}
+
+/**
+ * 从网易云歌单（或「查看已下载」）把选中曲目复制到筛选库 / 精选库。
+ * 先弹出和「导入新曲目」同款的选项框：选目标歌单、是否入指纹库、是否比对去重，
+ * 以及（仅自建 / 我喜欢）复制后要不要从当前网易云歌单移除。
+ * 真正落地走主进程的 import-playlist（下载、改名、去重），不用 moveSongsToDir。
+ */
+export const copyNeteaseSongsToLibrary = async (options: {
+  songs: ISongInfo[]
+  sourcePlaylistUuid: string
+  libraryName: 'FilterLibrary' | 'CuratedLibrary'
+}): Promise<boolean> => {
+  const songs = options.songs.filter((song) => !!neteaseSongLookupId(song))
+  if (songs.length === 0) return false
+  if (!(await ensureNeteaseLoggedIn())) return false
+
+  const runtime = useRuntimeStore()
+  const canRemove = canRemoveTracksFromNeteasePlaylist(
+    runtime.libraryTree,
+    options.sourcePlaylistUuid
+  )
+  const result = await openNeteaseCopyToLibraryDialog({
+    libraryName: options.libraryName,
+    canRemoveFromPlaylist: canRemove
+  })
+  if (!result) return false
+
+  const songIds = songs.map((song) => neteaseSongLookupId(song)).filter(Boolean)
+  const playlistId = isNeteasePlaylistUuid(options.sourcePlaylistUuid)
+    ? getNeteasePlaylistId(options.sourcePlaylistUuid)
+    : ''
+  runtime.isProgressing = true
+  try {
+    const summary = await invoke<{
+      imported?: number
+      skippedDuplicate?: number
+      skippedUnavailable?: number
+      failed?: number
+      errorSamples?: string[]
+      importedSongIds?: string[]
+      skippedDuplicateSongIds?: string[]
+    }>('netease:import-playlist', {
+      playlistId,
+      songIds,
+      songListPath: result.songListPath,
+      songListUUID: result.songListUuid,
+      deduplicateMode: result.deduplicateMode === 'none' ? 'none' : 'library',
+      pushFingerprintLibrary: result.isPushSongFingerprintLibrary
+    })
+    const imported = Number(summary?.imported || 0)
+    const skipped =
+      Number(summary?.skippedDuplicate || 0) + Number(summary?.skippedUnavailable || 0)
+    let removed = 0
+    if (result.removeFromPlaylist && canRemove && playlistId) {
+      const removableIds = [
+        ...new Set(
+          [...(summary?.importedSongIds || []), ...(summary?.skippedDuplicateSongIds || [])]
+            .map((id) => String(id || '').trim())
+            .filter(Boolean)
+        )
+      ]
+      if (removableIds.length > 0) {
+        const didRemove = await removeNeteasePlaylistTracks({
+          playlistId,
+          songIds: removableIds,
+          confirm: false
+        })
+        if (didRemove) removed = removableIds.length
+      }
+    }
+    const copyContent = (() => {
+      if (skipped > 0 && removed > 0) {
+        return t('netease.copyFinishedWithSkipAndRemove', {
+          count: imported,
+          skipped,
+          removed
+        })
+      }
+      if (removed > 0) {
+        return t('netease.copyFinishedWithRemove', { count: imported, removed })
+      }
+      if (skipped > 0) {
+        return t('netease.copyFinishedWithSkip', { count: imported, skipped })
+      }
+      return t('netease.copyFinished', { count: imported })
+    })()
+    await confirm({
+      title: t('netease.copyConfirm'),
+      content: [
+        copyContent,
+        ...(Array.isArray(summary?.errorSamples) ? summary.errorSamples.slice(0, 3) : [])
+      ],
+      confirmShow: false
+    })
+    emitter.emit('playlistContentChanged', { uuids: [result.songListUuid] })
+    refreshNeteaseViews(options.sourcePlaylistUuid)
+    return true
+  } catch (error) {
+    const message = unwrapIpcError(error) || t('common.unknownError')
+    await confirm({ title: t('netease.copyFailed'), content: [message], confirmShow: false })
+    return false
+  } finally {
+    runtime.isProgressing = false
   }
 }
 

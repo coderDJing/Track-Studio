@@ -282,6 +282,23 @@ const readFloatTensorData = (tensor: ort.Tensor): Float32Array | Float64Array =>
   throw new Error(`unexpected song energy model tensor type: ${tensor.type}`)
 }
 
+export const disposeOnnxValues = (
+  values: Array<unknown> | Record<string, unknown> | null | undefined
+) => {
+  if (!values) return
+  const items = Array.isArray(values) ? values : Object.values(values)
+  for (const value of items) {
+    const dispose = (value as { dispose?: unknown } | null)?.dispose
+    if (typeof dispose === 'function') {
+      try {
+        dispose.call(value)
+      } catch {
+        // Ignore double-dispose; native tensors must still be released on the happy path.
+      }
+    }
+  }
+}
+
 const runArousalInference = async (
   frames: Float32Array,
   patchStarts: readonly number[],
@@ -304,33 +321,45 @@ const runArousalInference = async (
       )
     }
     onPhase?.(`energy:embedding-batch:${batchStart}/${patchStarts.length}`)
-    const embeddingOutputs = await sessions.embedding.run({
-      [EMBEDDING_INPUT]: new ort.Tensor('float32', inputData, [
-        batchStarts.length,
-        PATCH_FRAME_COUNT,
-        MEL_BAND_COUNT
-      ])
-    })
-    const embeddings = embeddingOutputs[EMBEDDING_OUTPUT]
-    if (!embeddings) throw new Error('MusiCNN embedding output missing')
-    onPhase?.(`energy:arousal-batch:${batchStart}/${patchStarts.length}`)
-    const [deamOutputs, emomusicOutputs] = await Promise.all([
-      sessions.deam.run({ [AROUSAL_INPUT]: embeddings }),
-      sessions.emomusic.run({ [AROUSAL_INPUT]: embeddings })
+    const inputTensor = new ort.Tensor('float32', inputData, [
+      batchStarts.length,
+      PATCH_FRAME_COUNT,
+      MEL_BAND_COUNT
     ])
-    const deamTensor = deamOutputs[AROUSAL_OUTPUT]
-    const emomusicTensor = emomusicOutputs[AROUSAL_OUTPUT]
-    if (!deamTensor || !emomusicTensor) throw new Error('song energy arousal output missing')
-    const deamData = readFloatTensorData(deamTensor)
-    const emomusicData = readFloatTensorData(emomusicTensor)
-    if (deamData.length !== batchStarts.length * 2 || emomusicData.length !== deamData.length) {
-      throw new Error(
-        `unexpected song energy output lengths: ${deamData.length}, ${emomusicData.length}`
-      )
-    }
-    for (let patchIndex = 0; patchIndex < batchStarts.length; patchIndex += 1) {
-      deamPredictions.push(Number(deamData[patchIndex * 2 + 1]))
-      emomusicPredictions.push(Number(emomusicData[patchIndex * 2 + 1]))
+    type OnnxRunResult = Awaited<ReturnType<ort.InferenceSession['run']>>
+    let embeddingOutputs: OnnxRunResult | undefined
+    let deamOutputs: OnnxRunResult | undefined
+    let emomusicOutputs: OnnxRunResult | undefined
+    try {
+      embeddingOutputs = await sessions.embedding.run({
+        [EMBEDDING_INPUT]: inputTensor
+      })
+      const embeddings = embeddingOutputs[EMBEDDING_OUTPUT]
+      if (!embeddings) throw new Error('MusiCNN embedding output missing')
+      onPhase?.(`energy:arousal-batch:${batchStart}/${patchStarts.length}`)
+      ;[deamOutputs, emomusicOutputs] = await Promise.all([
+        sessions.deam.run({ [AROUSAL_INPUT]: embeddings }),
+        sessions.emomusic.run({ [AROUSAL_INPUT]: embeddings })
+      ])
+      const deamTensor = deamOutputs[AROUSAL_OUTPUT]
+      const emomusicTensor = emomusicOutputs[AROUSAL_OUTPUT]
+      if (!deamTensor || !emomusicTensor) throw new Error('song energy arousal output missing')
+      const deamData = readFloatTensorData(deamTensor)
+      const emomusicData = readFloatTensorData(emomusicTensor)
+      if (deamData.length !== batchStarts.length * 2 || emomusicData.length !== deamData.length) {
+        throw new Error(
+          `unexpected song energy output lengths: ${deamData.length}, ${emomusicData.length}`
+        )
+      }
+      for (let patchIndex = 0; patchIndex < batchStarts.length; patchIndex += 1) {
+        deamPredictions.push(Number(deamData[patchIndex * 2 + 1]))
+        emomusicPredictions.push(Number(emomusicData[patchIndex * 2 + 1]))
+      }
+    } finally {
+      disposeOnnxValues([inputTensor])
+      disposeOnnxValues(embeddingOutputs)
+      disposeOnnxValues(deamOutputs)
+      disposeOnnxValues(emomusicOutputs)
     }
   }
   return { deam: deamPredictions, emomusic: emomusicPredictions }

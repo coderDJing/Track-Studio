@@ -1007,6 +1007,10 @@ def serve(device: str, dbn: bool) -> int:
             )
             continue
 
+        pcm_bytes = None
+        signal = None
+        prepared_windows = None
+        result = None
         try:
             sample_rate = int(header.get("sampleRate") or 0)
             channels = int(header.get("channels") or 0)
@@ -1026,6 +1030,7 @@ def serve(device: str, dbn: bool) -> int:
 
             pcm_bytes = _read_exact(byte_length)
             signal = _decode_signal(pcm_bytes, channels)
+            pcm_bytes = None
             duration_sec = signal.shape[0] / float(sample_rate) if sample_rate > 0 else 0.0
             tuning = _resolve_anchor_tuning()
             prepared_windows = _prepare_analysis_windows(
@@ -1054,6 +1059,8 @@ def serve(device: str, dbn: bool) -> int:
                 min_bpm=min_bpm,
                 max_bpm=max_bpm,
             )
+            prepared_windows = None
+            signal = None
 
             result_bpm = float(result.get("bpm") or 0.0)
             if not (min_bpm <= result_bpm <= max_bpm):
@@ -1071,6 +1078,11 @@ def serve(device: str, dbn: bool) -> int:
             )
         except Exception as error:
             _emit({"type": "error", "requestId": request_id, "error": str(error)})
+        finally:
+            pcm_bytes = None
+            signal = None
+            prepared_windows = None
+            result = None
 
 
 def main() -> int:

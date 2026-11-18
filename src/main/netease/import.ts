@@ -58,6 +58,8 @@ export type NeteaseImportResult = {
   failed: number
   errorSamples: string[]
   importedPaths: string[]
+  importedSongIds: string[]
+  skippedDuplicateSongIds: string[]
   fingerprintAdded: number
 }
 
@@ -153,6 +155,8 @@ export async function importNeteasePlaylist(
     failed: 0,
     errorSamples: [],
     importedPaths: [],
+    importedSongIds: [],
+    skippedDuplicateSongIds: [],
     fingerprintAdded: 0
   }
   if (pending.length === 0) return result
@@ -218,11 +222,13 @@ export async function importNeteasePlaylist(
       }
       if (dedupMode === 'library' && libraryHashes.has(hash)) {
         result.skippedDuplicate += 1
+        result.skippedDuplicateSongIds.push(item.songId)
         continue
       }
       if (dedupMode === 'batch') {
         if (seenInBatch.has(hash)) {
           result.skippedDuplicate += 1
+          result.skippedDuplicateSongIds.push(item.songId)
           continue
         }
         seenInBatch.add(hash)
@@ -279,6 +285,9 @@ export async function importNeteasePlaylist(
     const importedPaths = orderedTargets.filter((item): item is string => !!item)
     result.imported = importedPaths.length
     result.importedPaths = importedPaths
+    result.importedSongIds = candidates
+      .filter((_, index) => orderedTargets[index])
+      .map((item) => item.songId)
 
     if (importedPaths.length > 0) {
       if (isSupportedPlaylistTrackNumberListRoot(target.absPath)) {

@@ -78,6 +78,19 @@
     "importEstimateCopyNote": "这是目标库将增加的体积。网易云库的 .store 里还会保留一份副本。",
     "setPendingCount": "{count} 首待下载",
     "setPendingBadge": "待下载",
-    "setPendingFailedBadge": "下载失败"
+    "setPendingFailedBadge": "下载失败",
+    "copyToLibraryTitle": "复制到{libraryType}",
+    "copyHint": "将选中的网易云曲目复制到本地歌单。还没下载的会先下载。不会改动网易云的下载缓存。",
+    "copyConfirm": "复制",
+    "removeAfterCopy": "复制后从当前网易云歌单中移除",
+    "removeAfterCopyHint": "只从这首网易云歌单里拿掉这些歌，已下载的本地文件会保留。",
+    "compareFingerprint": "比对指纹去重",
+    "compareFingerprintHint": "如果曲库里已经有相同指纹的歌曲，就跳过这首，避免重复导入。",
+    "copyFinished": "已复制 {count} 首",
+    "copyFinishedWithSkip": "已复制 {count} 首，跳过 {skipped} 首（重复或无法下载）",
+    "copyFinishedWithRemove": "已复制 {count} 首，并从网易云歌单中移除 {removed} 首",
+    "copyFinishedWithSkipAndRemove": "已复制 {count} 首，跳过 {skipped} 首，并从网易云歌单中移除 {removed} 首",
+    "copyFailed": "复制失败",
+    "copyNoTracks": "没有可复制的曲目"
   }
 }

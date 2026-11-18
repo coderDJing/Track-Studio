@@ -250,10 +250,19 @@
   user-select: none;
 }
 
-/* 网易云歌单里"已下载到本地"的小标记：贴着标题显示，不占列宽 */
+.cell-netease-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 8px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* 网易云库「下载状态」列里的小标记 */
 .netease-downloaded-badge,
 .netease-pending-badge {
-  margin-left: 6px;
+  margin-left: 0;
   padding: 0 4px;
   font-size: 10px;
   line-height: 14px;

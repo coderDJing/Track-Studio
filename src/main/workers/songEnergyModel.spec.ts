@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   CURRENT_SONG_ENERGY_ALGORITHM_VERSION,
   buildSongEnergyScoreFromArousal,
@@ -10,6 +10,7 @@ import {
   buildSongEnergyMelFrames,
   buildSongEnergyBeatValuesFromLines,
   buildSongEnergyTemporalSegments,
+  disposeOnnxValues,
   normalizeRhythmicFluxScore,
   normalizeSongEnergyBeatGrid,
   resolveSongEnergyMapBpm,
@@ -238,5 +239,21 @@ describe('songEnergyModel', () => {
     expect(segments[1].startSeconds).toBeCloseTo(8, 6)
     expect(segments[segments.length - 1].endSeconds).toBeCloseTo(60, 6)
     expect(segments.every((segment) => segment.endSeconds > segment.startSeconds)).toBe(true)
+  })
+
+  it('disposes ONNX-like tensors and ignores already-released values', () => {
+    const first = { dispose: vi.fn() }
+    const second = {
+      dispose: vi.fn(() => {
+        throw new Error('already disposed')
+      })
+    }
+    disposeOnnxValues({ embeddings: first, leftover: second, missing: undefined })
+    expect(first.dispose).toHaveBeenCalledTimes(1)
+    expect(second.dispose).toHaveBeenCalledTimes(1)
+    disposeOnnxValues([first])
+    expect(first.dispose).toHaveBeenCalledTimes(2)
+    disposeOnnxValues(null)
+    disposeOnnxValues(undefined)
   })
 })

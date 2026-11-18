@@ -35,6 +35,7 @@
     "deletedAt": "删除时间",
     "addedAt": "加入时间",
     "originalPlaylist": "原歌单",
-    "mixSource": "来源路径"
+    "mixSource": "来源路径",
+    "neteaseDownloadStatus": "下载状态"
   }
 }

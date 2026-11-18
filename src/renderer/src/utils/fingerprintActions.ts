@@ -53,7 +53,6 @@ export const analyzeFingerprintsForPaths = async (
       origin: options?.origin || 'selection'
     })
   } catch (error) {
-    runtime.isProgressing = false
     let message: string
     const detail = error && typeof error === 'object' ? (error as ErrorLike) : null
     const errorMessage = String(detail?.message || '')
@@ -69,6 +68,8 @@ export const analyzeFingerprintsForPaths = async (
       content: [message],
       confirmShow: false
     })
+  } finally {
+    runtime.isProgressing = false
   }
 }
 

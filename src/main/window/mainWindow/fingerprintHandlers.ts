@@ -55,6 +55,7 @@ export function registerFingerprintHandlers({
     ).flat()
     sendProgress({ id: progressId, titleKey: 'fingerprints.scanningFiles', now: 1, total: 1 })
     if (songFileUrls.length === 0) {
+      sendProgress({ id: progressId, dismiss: true })
       getWindow()?.webContents.send('noAudioFileWasScanned', progressId)
       return
     }
@@ -99,6 +100,7 @@ export function registerFingerprintHandlers({
       fingerprintTotalAfter: store.songFingerprintList.length,
       fingerprintMode: getFingerprintMode()
     }
+    sendProgress({ id: progressId, dismiss: true })
     getWindow()?.webContents.send('addSongFingerprintFinished', fingerprintSummary, progressId)
   })
 
@@ -135,6 +137,7 @@ export function registerFingerprintHandlers({
     const progressId = `fingerprints_${Date.now()}`
     const fingerprintStartAt = Date.now()
     const finalize = (summary: FingerprintSummary | null) => {
+      sendProgress({ id: progressId, dismiss: true })
       getWindow()?.webContents.send('fingerprints:addExistingFinished', summary, progressId)
     }
     sendProgress({

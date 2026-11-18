@@ -135,6 +135,9 @@
     "analyzePlaylistPromptQuestion": "是否现在分析全部？",
     "analyzePlaylistConfirm": "分析全部",
     "analyzePlaylistCancel": "暂不",
-    "analyzingPlaylist": "正在分析歌单"
+    "analyzingPlaylist": "正在分析歌单",
+    "independentListSettingsOnHintNetease": "当前歌单单独保存排序、列布局和筛选条件；取消勾选可切回网易云库设置，并保留独立设置",
+    "independentListSettingsOffHintNetease": "当前使用网易云库列表设置，调整会影响其他未开独立设置的网易云歌单；勾选后仅对当前歌单设置",
+    "resetIndependentListSettingsNetease": "用网易云库设置重置当前歌单"
   }
 }

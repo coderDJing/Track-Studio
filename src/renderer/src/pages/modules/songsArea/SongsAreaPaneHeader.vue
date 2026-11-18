@@ -10,6 +10,7 @@ import {
   usePlaylistViewSettingsStore
 } from '@renderer/stores/playlistViewSettings'
 import libraryUtils from '@renderer/utils/libraryUtils'
+import { resolveSongsAreaColumnMode } from '@renderer/pages/modules/songsArea/composables/songColumnStorage'
 import { useHarmonicReferenceKey } from '@renderer/composables/useHarmonicReferenceKey'
 import { isHarmonicMixCompatible } from '@shared/keyDisplay'
 
@@ -33,6 +34,9 @@ const canCustomize = computed(
     !!runtime.libraryTree.uuid &&
     (Boolean(paneState.value.djPlaylist) || isPlaylistViewNode(playlistNode.value))
 )
+const listColumnMode = computed(() =>
+  resolveSongsAreaColumnMode(paneState.value.songListUUID, playlistNode.value?.type)
+)
 const independentSettings = computed({
   get: () =>
     canCustomize.value &&
@@ -46,12 +50,23 @@ const independentSettings = computed({
     viewSettings.setIndependent(
       runtime.libraryTree.uuid,
       paneState.value.songListUUID,
-      playlistNode.value?.type === 'mixtapeList' ? 'mixtape' : 'default',
+      listColumnMode.value,
       enabled,
       compatibleKeyOnly.value,
       runtime.setting.persistSongFilters
     )
   }
+})
+const independentSettingsHint = computed(() => {
+  const netease = listColumnMode.value === 'netease'
+  if (independentSettings.value) {
+    return netease
+      ? 'tracks.independentListSettingsOnHintNetease'
+      : 'tracks.independentListSettingsOnHint'
+  }
+  return netease
+    ? 'tracks.independentListSettingsOffHintNetease'
+    : 'tracks.independentListSettingsOffHint'
 })
 const harmonicReferenceKey = useHarmonicReferenceKey(runtime)
 const hasHarmonicReference = computed(() =>
@@ -98,13 +113,7 @@ const clearSearch = () => {
     <bubbleBoxTrigger
       v-if="canCustomize"
       class="songs-pane-header__key-filter"
-      :title="
-        t(
-          independentSettings
-            ? 'tracks.independentListSettingsOnHint'
-            : 'tracks.independentListSettingsOffHint'
-        )
-      "
+      :title="t(independentSettingsHint)"
       @click.stop
       @keydown.stop
     >

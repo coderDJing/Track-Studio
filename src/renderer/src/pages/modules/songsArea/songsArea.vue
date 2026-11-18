@@ -308,7 +308,8 @@ const {
   shouldApplyFiltersAndSortingForSongChange,
   persistColumnData,
   resetToSharedSettings,
-  independentSettings
+  independentSettings,
+  columnMode
 } = useSongsAreaColumns({
   runtime,
   songsAreaState,
@@ -1043,6 +1044,11 @@ const { shouldShowEmptyState, emptyTitleText, emptyHintText } = useSongsAreaEmpt
       :target-event="triggeringColContextEvent"
       :columns="columnData"
       :independent-settings="independentSettings"
+      :reset-settings-label-key="
+        columnMode === 'netease'
+          ? 'tracks.resetIndependentListSettingsNetease'
+          : 'tracks.resetIndependentListSettings'
+      "
       @toggle-column-visibility="handleToggleColumnVisibility"
       @reset-to-shared-settings="resetToSharedSettings"
     />

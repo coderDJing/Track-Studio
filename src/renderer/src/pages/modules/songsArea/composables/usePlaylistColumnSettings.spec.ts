@@ -31,6 +31,15 @@ const tree = (): IDir => ({
           children: [{ uuid: 'c', type: 'songList', dirName: 'C' }]
         }
       ]
+    },
+    {
+      uuid: 'netease-library',
+      type: 'library',
+      dirName: 'NeteaseLibrary',
+      children: [
+        { uuid: 'netease:pl:liked', type: 'songList', dirName: 'Liked' },
+        { uuid: 'netease:pl:created', type: 'songList', dirName: 'Created' }
+      ]
     }
   ]
 })
@@ -354,5 +363,77 @@ describe('confirmed playlist deletion cleanup', () => {
     await operation
     expect(store.getPlaylist('library-id', 'a', false)).toBeUndefined()
     expect(store.getPlaylist('library-id', 'c', false)).toBeDefined()
+  })
+})
+
+describe('netease library column settings', () => {
+  const neteaseUuid = 'netease:pl:liked'
+  const otherNeteaseUuid = 'netease:pl:created'
+
+  const mountNetease = (uuid = neteaseUuid, pane: SongsAreaPaneKey = 'left') => {
+    const runtime = useRuntimeStore()
+    const state = runtime.songsAreaPanels.panes[pane]
+    state.songListUUID = uuid
+    const scope = effectScope()
+    scopes.push(scope)
+    const columns = scope.run(() =>
+      useSongsAreaColumns({
+        runtime,
+        songsAreaState: state,
+        originalSongInfoArr: shallowRef([...songs]),
+        shouldPersistToLocalStorage: () => true
+      })
+    )!
+    columns.applyFiltersAndSorting()
+    const toggle = (enabled: boolean) =>
+      usePlaylistViewSettingsStore().setIndependent(
+        runtime.libraryTree.uuid,
+        state.songListUUID,
+        'netease',
+        enabled,
+        state.compatibleKeyOnly,
+        runtime.setting.persistSongFilters
+      )
+    const update = (key: string, patch: Partial<ISongsAreaColumn>) => {
+      columns.handleColumnsUpdate(
+        columns.columnData.value.map((column) =>
+          column.key === key ? { ...column, ...patch } : column
+        )
+      )
+    }
+    const col = (key: string) => columns.columnData.value.find((column) => column.key === key)!
+    return { runtime, state, columns, toggle, update, col }
+  }
+
+  it('keeps netease library-level settings separate from local shared settings', () => {
+    const local = mount('a', 'right')
+    local.update('title', { width: 640 })
+    const netease = mountNetease()
+    expect(netease.col('title').width).not.toBe(640)
+    expect(netease.col('neteaseDownloadStatus').show).toBe(true)
+    expect(
+      local.columns.columnData.value.some((column) => column.key === 'neteaseDownloadStatus')
+    ).toBe(false)
+    netease.update('title', { width: 280 })
+    expect(local.col('title').width).toBe(640)
+    expect(memory.get('neteaseColumnData')).toBeTruthy()
+    expect(
+      JSON.parse(memory.get('songColumnData')!).find((c: ISongsAreaColumn) => c.key === 'title')
+        .width
+    ).toBe(640)
+  })
+
+  it('clones and resets independent netease playlist settings from the netease library defaults', async () => {
+    const first = mountNetease()
+    first.update('title', { width: 330 })
+    first.toggle(true)
+    first.update('title', { width: 510, filterActive: true, filterValue: 'One' })
+    const second = mountNetease(otherNeteaseUuid, 'right')
+    expect(second.columns.independentSettings.value).toBe(false)
+    expect(second.col('title').width).toBe(330)
+    first.columns.resetToSharedSettings()
+    expect(first.columns.independentSettings.value).toBe(true)
+    expect(first.col('title').width).toBe(330)
+    expect(first.col('title').filterActive).not.toBe(true)
   })
 })

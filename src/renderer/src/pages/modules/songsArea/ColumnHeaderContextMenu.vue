@@ -6,6 +6,10 @@ import SongAreaColRightClickMenu from '@renderer/components/songAreaColRightClic
 const props = defineProps({
   modelValue: Boolean, // for v-model
   independentSettings: Boolean,
+  resetSettingsLabelKey: {
+    type: String,
+    default: 'tracks.resetIndependentListSettings'
+  },
   targetEvent: {
     type: Object as PropType<MouseEvent | null>,
     default: null
@@ -43,6 +47,7 @@ const onMenuVModelUpdate = (value: boolean) => {
     :click-event="targetEvent"
     :column-data="columns"
     :show-reset-to-shared-settings="independentSettings"
+    :reset-settings-label-key="resetSettingsLabelKey"
     @update:model-value="onMenuVModelUpdate"
     @col-menu-handle-click="handleMenuItemClick"
     @reset-to-shared-settings="emit('reset-to-shared-settings')"

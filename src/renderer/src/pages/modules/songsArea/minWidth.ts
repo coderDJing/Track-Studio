@@ -3,6 +3,7 @@ export const MIN_WIDTH_BY_KEY: Record<string, number> = {
   cover: 56,
   index: 76,
   title: 140,
+  neteaseDownloadStatus: 88,
   fileName: 160,
   artist: 120,
   duration: 120,

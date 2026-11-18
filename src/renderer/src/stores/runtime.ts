@@ -40,7 +40,7 @@ export type LibrarySelection =
 
 export type SongsAreaPaneKey = 'single' | 'left' | 'right'
 export type SplitSongsAreaPaneKey = 'left' | 'right'
-export type SongsAreaColumnMode = 'default' | 'recycle' | 'recording' | 'mixtape'
+export type SongsAreaColumnMode = 'default' | 'recycle' | 'recording' | 'mixtape' | 'netease'
 
 export type SongsAreaDjPlaylist = {
   browser: IRekordboxLibraryBrowserState

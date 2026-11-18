@@ -2,7 +2,26 @@ import type { ISongsAreaColumn } from 'src/types/globals'
 import { MIN_WIDTH_BY_KEY } from '../minWidth'
 import pkg from '../../../../../../../package.json'
 import type { SongsAreaColumnMode } from '@renderer/stores/runtime'
+import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
+import { RECORDING_LIBRARY_UUID } from '@shared/recordingLibrary'
+import { NETEASE_DOWNLOADED_UUID, isNeteasePlaylistUuid } from '@shared/netease'
 export type { SongsAreaColumnMode } from '@renderer/stores/runtime'
+
+export const isDefaultLikeColumnMode = (mode: SongsAreaColumnMode): boolean =>
+  mode === 'default' || mode === 'netease'
+
+export const resolveSongsAreaColumnMode = (
+  songListUUID: string,
+  nodeType?: string | null
+): SongsAreaColumnMode => {
+  if (songListUUID === RECYCLE_BIN_UUID) return 'recycle'
+  if (songListUUID === RECORDING_LIBRARY_UUID) return 'recording'
+  if (nodeType === 'mixtapeList') return 'mixtape'
+  if (isNeteasePlaylistUuid(songListUUID) || songListUUID === NETEASE_DOWNLOADED_UUID) {
+    return 'netease'
+  }
+  return 'default'
+}
 
 const INIT_EXTRA_WIDTH = 40
 const IS_RC_BUILD = /-rc(?:\.|$)/i.test(String(pkg.version || '').trim())
@@ -22,7 +41,7 @@ const buildSongsAreaBaseColumns = (
       columnName: isMixtape ? 'columns.mixOrder' : 'columns.index',
       key: 'index',
       show: true,
-      order: mode === 'default' ? 'asc' : undefined
+      order: isDefaultLikeColumnMode(mode) ? 'asc' : undefined
     }
   ]
   if (isRecycleBin) {
@@ -79,6 +98,15 @@ const buildSongsAreaBaseColumns = (
       show: true,
       filterType: isMixtape ? undefined : 'text'
     },
+    ...(mode === 'netease'
+      ? [
+          {
+            columnName: 'columns.neteaseDownloadStatus',
+            key: 'neteaseDownloadStatus',
+            show: true
+          }
+        ]
+      : []),
     {
       columnName: 'columns.artist',
       key: 'artist',
@@ -240,11 +268,27 @@ const buildSongsAreaBaseColumns = (
       filterType: isMixtape ? undefined : 'date'
     })
   }
+  if (mode === 'netease') {
+    const visible = new Set([
+      'index',
+      'cover',
+      'waveformPreview',
+      'title',
+      'neteaseDownloadStatus',
+      'artist',
+      'duration',
+      'album'
+    ])
+    for (const column of columns) {
+      column.show = visible.has(column.key)
+    }
+  }
   return columns
 }
 
 const defaultNoExtraWidthKeys = new Set([
   'index',
+  'neteaseDownloadStatus',
   'duration',
   'bpm',
   'energyScore',
@@ -281,6 +325,7 @@ export const songColumnStorageKey = (mode: SongsAreaColumnMode): string => {
   if (mode === 'recycle') return SONGS_AREA_RECYCLE_STORAGE_KEY
   if (mode === 'recording') return SONGS_AREA_RECORDING_STORAGE_KEY
   if (mode === 'mixtape') return SONGS_AREA_MIXTAPE_STORAGE_KEY
+  if (mode === 'netease') return 'neteaseColumnData'
   return SONGS_AREA_DEFAULT_STORAGE_KEY
 }
 
@@ -300,6 +345,35 @@ const filterTextFields = [
   'filterDate',
   'filterDateTo'
 ] as const
+
+const LEGACY_NETEASE_VISIBLE_WITH_FILENAME = new Set([
+  'index',
+  'cover',
+  'waveformPreview',
+  'title',
+  'neteaseDownloadStatus',
+  'artist',
+  'duration',
+  'album',
+  'fileName'
+])
+
+// 纠正此前误把「文件名」放进网易云库默认可见列的已保存设置；用户另有勾选/隐藏则不动。
+const hideLegacyNeteaseFileNameColumn = (
+  columns: ISongsAreaColumn[],
+  mode: SongsAreaColumnMode
+) => {
+  if (mode !== 'netease') return
+  const visibleKeys = columns.filter((column) => column.show).map((column) => column.key)
+  if (
+    visibleKeys.length !== LEGACY_NETEASE_VISIBLE_WITH_FILENAME.size ||
+    visibleKeys.some((key) => !LEGACY_NETEASE_VISIBLE_WITH_FILENAME.has(key))
+  ) {
+    return
+  }
+  const fileName = columns.find((column) => column.key === 'fileName')
+  if (fileName) fileName.show = false
+}
 
 // 只在从磁盘载入时应用 persistFilters；会话内切换设置不能清掉正在使用的筛选。
 export const normalizeSongColumns = (
@@ -351,6 +425,7 @@ export const normalizeSongColumns = (
     }
     columns.splice(insertion, 0, { ...column })
   })
+  hideLegacyNeteaseFileNameColumn(columns, mode)
   if (!columns.some((column) => column.show)) columns[0].show = true
   let hasOrder = false
   for (const column of columns) {

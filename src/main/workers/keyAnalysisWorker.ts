@@ -47,6 +47,14 @@ import {
   type DynamicGridTimelineDefinition
 } from '../services/keyAnalysis/dynamicGridIntegration'
 import { runDynamicBeatGridAnalysis } from './dynamicGridAnalysisRunner'
+import {
+  BEAT_GRID_ANALYSIS_CHANNELS,
+  BEAT_GRID_ANALYSIS_MAX_SCAN_SEC,
+  BEAT_GRID_ANALYSIS_SAMPLE_RATE,
+  releaseAnalysisPcm,
+  requestAnalysisMemoryReclaim,
+  sliceBeatGridPcmFromDecoded
+} from './analysisPcmRelease'
 
 type KeyJob = {
   jobId: number
@@ -128,9 +136,6 @@ type KeyResponse = {
 }
 
 const K_FAST_ANALYSIS_SECONDS = 60
-const BEAT_GRID_ANALYSIS_SAMPLE_RATE = 44100
-const BEAT_GRID_ANALYSIS_CHANNELS = 2
-const BEAT_GRID_ANALYSIS_MAX_SCAN_SEC = 120
 
 const isNonEmptyByteArray = (value: unknown): value is Uint8Array =>
   value instanceof Uint8Array && value.length > 0
@@ -375,437 +380,473 @@ const analyzeKeyForFileInternal = async (
     }
     return rust
   }
-  if (needsRustDecode || useNativeLibavPrimaryDecode || needsBpm || needsEnergy) {
-    reportProgress({
-      stage: 'decode-start',
-      needsKey,
-      needsBpm,
-      needsWaveform,
-      needsEnergy,
-      needsStructure
-    })
-    const decodeStartAt = Date.now()
-    if (useNativeLibavPrimaryDecode) {
-      reportDiagnosticPhase?.('decode:native-primary')
-      reusableNativeLibavWaveformDecoded = decodeSongAnalysisAudio(resolveRustBinding(), filePath)
-      decoded = reusableNativeLibavWaveformDecoded
-    } else if (needsRustDecode) {
-      reportDiagnosticPhase?.('decode:rust-pcm')
-      const rustDecoded = resolveRustBinding().decodeAudioFile(filePath)
-      if (rustDecoded.error) {
-        throw new Error(rustDecoded.error)
+  try {
+    if (needsRustDecode || useNativeLibavPrimaryDecode || needsBpm) {
+      reportProgress({
+        stage: 'decode-start',
+        needsKey,
+        needsBpm,
+        needsWaveform,
+        needsEnergy,
+        needsStructure
+      })
+      const decodeStartAt = Date.now()
+      if (useNativeLibavPrimaryDecode) {
+        reportDiagnosticPhase?.('decode:native-primary')
+        reusableNativeLibavWaveformDecoded = decodeSongAnalysisAudio(resolveRustBinding(), filePath)
+        decoded = reusableNativeLibavWaveformDecoded
+      } else if (needsRustDecode) {
+        reportDiagnosticPhase?.('decode:rust-pcm')
+        const rustDecoded = resolveRustBinding().decodeAudioFile(filePath)
+        if (rustDecoded.error) {
+          throw new Error(rustDecoded.error)
+        }
+        decoded = rustDecoded
+      } else if (needsBpm && !isDynamicGrid) {
+        reportDiagnosticPhase?.('decode:beat-grid-pcm')
+        beatGridDecoded = await decodeBeatGridPcmForFile(filePath)
       }
-      decoded = rustDecoded
-    } else if (needsBpm && !isDynamicGrid) {
-      reportDiagnosticPhase?.('decode:beat-grid-pcm')
-      beatGridDecoded = await decodeBeatGridPcmForFile(filePath)
+      // Energy PCM is decoded later, after BPM frees its buffer, so large lossless
+      // tracks do not keep full-track + beat-grid + energy PCM alive together.
+      if (needsBpm && !isDynamicGrid && !beatGridDecoded && decoded) {
+        const reusedBeatGrid = sliceBeatGridPcmFromDecoded(decoded)
+        if (reusedBeatGrid) {
+          reportDiagnosticPhase?.('decode:beat-grid-reuse')
+          beatGridDecoded = reusedBeatGrid
+        }
+      }
+      const decodeMs = Date.now() - decodeStartAt
+      const decodedMeta = decoded || beatGridDecoded
+      const framesToProcess = decodedMeta
+        ? estimateFramesToProcess(
+            decodedMeta.totalFrames,
+            decodedMeta.sampleRate,
+            options.fastAnalysis
+          )
+        : undefined
+      reportProgress({
+        stage: 'decode-done',
+        decodeMs,
+        decodeBackend: decodedMeta?.decoderBackend,
+        sampleRate: decodedMeta?.sampleRate,
+        channels: decodedMeta?.channels,
+        totalFrames: decodedMeta?.totalFrames,
+        framesToProcess
+      })
     }
-    if (needsEnergy) {
-      reportDiagnosticPhase?.('decode:energy-pcm')
-      energyDecoded = await decodeSongEnergyPcmForFile(filePath)
-    }
-    const decodeMs = Date.now() - decodeStartAt
-    const decodedMeta = decoded || energyDecoded || beatGridDecoded
-    const framesToProcess = decodedMeta
-      ? estimateFramesToProcess(
-          decodedMeta.totalFrames,
-          decodedMeta.sampleRate,
-          options.fastAnalysis
-        )
-      : undefined
-    reportProgress({
-      stage: 'decode-done',
-      decodeMs,
-      decodeBackend: decodedMeta?.decoderBackend,
-      sampleRate: decodedMeta?.sampleRate,
-      channels: decodedMeta?.channels,
-      totalFrames: decodedMeta?.totalFrames,
-      framesToProcess
-    })
-  }
 
-  if (needsKey || needsBpm) {
-    const analysisFramesToProcess = estimateFramesToProcess(
-      (beatGridDecoded || decoded)?.totalFrames || 0,
-      (beatGridDecoded || decoded)?.sampleRate || 0,
-      options.fastAnalysis
-    )
-    const analyzePlanDetail = needsBpm
-      ? options.fastAnalysis
-        ? 'key+beat-this-windowed-fast'
-        : 'key+beat-this-windowed'
-      : options.fastAnalysis
-        ? 'key-fast'
-        : 'key-full'
-    reportProgress({
-      stage: 'analyze-start',
-      needsKey,
-      needsBpm,
-      needsStructure,
-      framesToProcess: analysisFramesToProcess,
-      detail: analyzePlanDetail
-    })
-    const analyzeStartAt = Date.now()
-    let hasAnalysisError = false
-
-    if (needsKey) {
-      reportDiagnosticPhase?.('key:native-start')
-      if (!decoded) {
-        throw new Error('Rust PCM decode missing for key analysis')
-      }
-      const analyzeKey = resolveRustBinding().analyzeKeyFromPcm
-      if (typeof analyzeKey !== 'function') {
-        throw new Error('analyzeKeyFromPcm not available')
-      }
-      const keyOnly = analyzeKey(
-        decoded.pcmData,
-        decoded.sampleRate,
-        decoded.channels,
+    if (needsKey || needsBpm) {
+      const analysisFramesToProcess = estimateFramesToProcess(
+        (beatGridDecoded || decoded)?.totalFrames || 0,
+        (beatGridDecoded || decoded)?.sampleRate || 0,
         options.fastAnalysis
       )
-      result.keyText = keyOnly.keyText
-      result.keyError = keyOnly.error
-      reportDiagnosticPhase?.('key:native-done')
-      if (keyOnly.error) {
-        hasAnalysisError = true
-      }
-    }
+      const analyzePlanDetail = needsBpm
+        ? options.fastAnalysis
+          ? 'key+beat-this-windowed-fast'
+          : 'key+beat-this-windowed'
+        : options.fastAnalysis
+          ? 'key-fast'
+          : 'key-full'
+      reportProgress({
+        stage: 'analyze-start',
+        needsKey,
+        needsBpm,
+        needsStructure,
+        framesToProcess: analysisFramesToProcess,
+        detail: analyzePlanDetail
+      })
+      const analyzeStartAt = Date.now()
+      let hasAnalysisError = false
 
-    if (needsBpm && isDynamicGrid) {
-      const rawTimeBasisOffsetMs = options.analyzedTimeBasisOffsetMs
-      const hasTimeBasis =
-        rawTimeBasisOffsetMs !== undefined && Number.isFinite(Number(rawTimeBasisOffsetMs))
-      let outcome: DynamicGridOutcome = hasTimeBasis
-        ? await runDynamicBeatGridAnalysis({
-            filePath,
-            durationAudioSec: options.audioDurationSec,
+      if (needsKey) {
+        reportDiagnosticPhase?.('key:native-start')
+        if (!decoded) {
+          throw new Error('Rust PCM decode missing for key analysis')
+        }
+        const analyzeKey = resolveRustBinding().analyzeKeyFromPcm
+        if (typeof analyzeKey !== 'function') {
+          throw new Error('analyzeKeyFromPcm not available')
+        }
+        const keyOnly = analyzeKey(
+          decoded.pcmData,
+          decoded.sampleRate,
+          decoded.channels,
+          options.fastAnalysis
+        )
+        result.keyText = keyOnly.keyText
+        result.keyError = keyOnly.error
+        reportDiagnosticPhase?.('key:native-done')
+        if (keyOnly.error) {
+          hasAnalysisError = true
+        }
+      }
+
+      if (needsBpm && isDynamicGrid) {
+        const rawTimeBasisOffsetMs = options.analyzedTimeBasisOffsetMs
+        const hasTimeBasis =
+          rawTimeBasisOffsetMs !== undefined && Number.isFinite(Number(rawTimeBasisOffsetMs))
+        let outcome: DynamicGridOutcome = hasTimeBasis
+          ? await runDynamicBeatGridAnalysis({
+              filePath,
+              durationAudioSec: options.audioDurationSec,
+              minBpm: options.analysisBpmRange?.minBpm,
+              maxBpm: options.analysisBpmRange?.maxBpm,
+              onProgress: (dynamicGrid) => {
+                reportProgress({
+                  stage: 'analyze-start',
+                  needsKey,
+                  needsBpm,
+                  needsStructure,
+                  dynamicGrid,
+                  detail: `dynamic-grid:${dynamicGrid.phase}`
+                })
+              }
+            })
+          : { status: 'error', reason: 'audio-time-basis-unavailable' }
+        if (outcome.status === 'fixed' || outcome.status === 'dynamic') {
+          const definition = resolveDynamicGridTimelineDefinition({
+            outcome,
+            timeBasisOffsetMs: rawTimeBasisOffsetMs,
+            expectedDurationAudioSec: options.audioDurationSec
+          })
+          if (definition.ok) {
+            dynamicTimelineDefinition = definition.value
+            result.bpm = definition.value.projection.bpm
+            result.firstBeatMs = definition.value.projection.firstBeatMs
+            result.downbeatBeatOffset = definition.value.projection.downbeatBeatOffset
+            result.timeBasisOffsetMs = rawTimeBasisOffsetMs
+            result.bpmError = undefined
+          } else {
+            outcome = { status: 'error', reason: definition.reason }
+          }
+        }
+        result.dynamicGridOutcome = outcome
+        if (outcome.status !== 'fixed' && outcome.status !== 'dynamic') {
+          // 无法确认网格 ≠ 没有节拍：绝不写 no-bpm，也不回退首段固定网格。
+          result.bpm = undefined
+          result.firstBeatMs = undefined
+          result.downbeatBeatOffset = undefined
+          result.bpmError = buildDynamicGridFailureDetail(outcome)
+        }
+        reportDiagnosticPhase?.(result.bpmError ? 'bpm:failed' : 'bpm:dynamic-done')
+        if (result.bpmError) hasAnalysisError = true
+      } else if (needsBpm) {
+        try {
+          if (!beatGridDecoded) {
+            reportDiagnosticPhase?.('bpm:decode')
+            beatGridDecoded = await decodeBeatGridPcmForFile(filePath)
+          }
+          reportDiagnosticPhase?.('bpm:beat-this-start')
+          const beatThisResult = await analyzeBeatGridWithBeatThisSlidingWindowsFromPcm({
+            pcmData: beatGridDecoded.pcmData,
+            sampleRate: beatGridDecoded.sampleRate,
+            channels: beatGridDecoded.channels,
+            sourceFilePath: filePath,
             minBpm: options.analysisBpmRange?.minBpm,
             maxBpm: options.analysisBpmRange?.maxBpm,
-            onProgress: (dynamicGrid) => {
-              reportProgress({
-                stage: 'analyze-start',
-                needsKey,
-                needsBpm,
-                needsStructure,
-                dynamicGrid,
-                detail: `dynamic-grid:${dynamicGrid.phase}`
-              })
-            }
+            onDiagnosticPhase: reportDiagnosticPhase
           })
-        : { status: 'error', reason: 'audio-time-basis-unavailable' }
-      if (outcome.status === 'fixed' || outcome.status === 'dynamic') {
-        const definition = resolveDynamicGridTimelineDefinition({
-          outcome,
-          timeBasisOffsetMs: rawTimeBasisOffsetMs,
-          expectedDurationAudioSec: options.audioDurationSec
-        })
-        if (definition.ok) {
-          dynamicTimelineDefinition = definition.value
-          result.bpm = definition.value.projection.bpm
-          result.firstBeatMs = definition.value.projection.firstBeatMs
-          result.downbeatBeatOffset = definition.value.projection.downbeatBeatOffset
-          result.timeBasisOffsetMs = rawTimeBasisOffsetMs
+          result.bpm = beatThisResult.bpm
+          result.firstBeatMs = beatThisResult.firstBeatMs
+          result.downbeatBeatOffset = beatThisResult.downbeatBeatOffset
+          result.timeBasisOffsetMs = options.analyzedTimeBasisOffsetMs
           result.bpmError = undefined
-        } else {
-          outcome = { status: 'error', reason: definition.reason }
+          reportDiagnosticPhase?.('bpm:beat-this-done')
+        } catch (error) {
+          result.bpmError =
+            error instanceof Error ? error.message : String(error || 'Beat This! analyze failed')
+        }
+
+        if (!result.bpmError) {
+          const normalizedBpm = Number(result.bpm)
+          if (!Number.isFinite(normalizedBpm) || normalizedBpm <= 0) {
+            result.bpmError = 'invalid bpm value from Beat This! analyzer'
+          } else {
+            const analyzedBeatGridMap = createSongBeatGridMapV2FromFixedGrid({
+              bpm: normalizedBpm,
+              firstBeatMs: result.firstBeatMs,
+              downbeatBeatOffset: result.downbeatBeatOffset,
+              source: 'analysis'
+            })
+            if (!analyzedBeatGridMap) {
+              result.bpmError = 'invalid v2 beat grid from Beat This! analyzer'
+            }
+          }
+        }
+
+        if (result.bpmError) {
+          reportDiagnosticPhase?.('bpm:failed')
+          hasAnalysisError = true
+        }
+        reportDiagnosticPhase?.('bpm:release-pcm')
+        beatGridDecoded = releaseAnalysisPcm(beatGridDecoded)
+      }
+
+      reportProgress({
+        stage: 'analyze-done',
+        analyzeMs: Date.now() - analyzeStartAt,
+        detail: hasAnalysisError ? 'analysis-has-errors' : undefined,
+        partialResult: {
+          keyText: result.keyText,
+          keyError: result.keyError,
+          bpm: result.bpm,
+          firstBeatMs: result.firstBeatMs,
+          downbeatBeatOffset: result.downbeatBeatOffset,
+          timeBasisOffsetMs: result.timeBasisOffsetMs,
+          bpmError: result.bpmError,
+          dynamicGridOutcome: result.dynamicGridOutcome
+        }
+      })
+    }
+
+    const dynamicOutcome = result.dynamicGridOutcome
+    const dynamicAudioGridMap =
+      dynamicOutcome && (dynamicOutcome.status === 'fixed' || dynamicOutcome.status === 'dynamic')
+        ? dynamicOutcome.beatGridMap
+        : null
+    if (cachedUnifiedDisplayWaveformData) {
+      reportProgress({
+        stage: 'waveform-start',
+        needsEnergy,
+        needsStructure,
+        detail: 'structure-cache'
+      })
+      const waveformStartAt = Date.now()
+      reportProgress({
+        stage: 'waveform-done',
+        waveformMs: Date.now() - waveformStartAt,
+        needsEnergy,
+        needsStructure,
+        detail: 'structure-cache'
+      })
+    }
+
+    if (
+      (needsWaveform || (needsStructure && !structureWaveformData)) &&
+      (typeof resolveRustBinding().computeMixxxWaveformWithRate === 'function' ||
+        typeof resolveRustBinding().computeMixxxWaveform === 'function')
+    ) {
+      if (!decoded) {
+        if (!useNativeLibavWaveformDecode) {
+          throw new Error('Rust PCM decode missing for waveform/structure analysis')
         }
       }
-      result.dynamicGridOutcome = outcome
-      if (outcome.status !== 'fixed' && outcome.status !== 'dynamic') {
-        // 无法确认网格 ≠ 没有节拍：绝不写 no-bpm，也不回退首段固定网格。
-        result.bpm = undefined
-        result.firstBeatMs = undefined
-        result.downbeatBeatOffset = undefined
-        result.bpmError = buildDynamicGridFailureDetail(outcome)
-      }
-      reportDiagnosticPhase?.(result.bpmError ? 'bpm:failed' : 'bpm:dynamic-done')
-      if (result.bpmError) hasAnalysisError = true
-    } else if (needsBpm) {
+      reportProgress({ stage: 'waveform-start', needsEnergy, needsStructure })
+      const waveformStartAt = Date.now()
       try {
-        if (!beatGridDecoded) {
-          reportDiagnosticPhase?.('bpm:decode')
-          beatGridDecoded = await decodeBeatGridPcmForFile(filePath)
+        const targetRate = UNIFIED_DISPLAY_WAVEFORM_DETAIL_RATE
+        let waveformDecoded: DecodedAudioPcm
+        if (useNativeLibavWaveformDecode) {
+          if (reusableNativeLibavWaveformDecoded) {
+            waveformDecoded = reusableNativeLibavWaveformDecoded
+          } else {
+            const nativeLibavWaveformDecoded = decodeSongAnalysisAudio(
+              resolveRustBinding(),
+              filePath
+            )
+            reusableNativeLibavWaveformDecoded = nativeLibavWaveformDecoded
+            waveformDecoded = nativeLibavWaveformDecoded
+          }
+        } else {
+          waveformDecoded = decoded as DecodedAudioPcm
         }
-        reportDiagnosticPhase?.('bpm:beat-this-start')
-        const beatThisResult = await analyzeBeatGridWithBeatThisSlidingWindowsFromPcm({
-          pcmData: beatGridDecoded.pcmData,
-          sampleRate: beatGridDecoded.sampleRate,
-          channels: beatGridDecoded.channels,
-          sourceFilePath: filePath,
-          minBpm: options.analysisBpmRange?.minBpm,
-          maxBpm: options.analysisBpmRange?.maxBpm,
+        const mixxxWaveformData =
+          typeof resolveRustBinding().computeMixxxWaveformWithRate === 'function'
+            ? resolveRustBinding().computeMixxxWaveformWithRate!(
+                waveformDecoded.pcmData,
+                waveformDecoded.sampleRate,
+                waveformDecoded.channels,
+                targetRate
+              )
+            : resolveRustBinding().computeMixxxWaveform!(
+                waveformDecoded.pcmData,
+                waveformDecoded.sampleRate,
+                waveformDecoded.channels
+              )
+        const rawWaveformData = computeRawWaveform(
+          waveformDecoded.pcmData,
+          waveformDecoded.sampleRate,
+          waveformDecoded.channels,
+          COMPACT_VISUAL_WAVEFORM_COLOR_RAW_RATE
+        )
+        const unifiedDisplayWaveformData = mixxxWaveformData
+          ? buildUnifiedDisplayWaveformDetailFromMixxx(mixxxWaveformData, rawWaveformData)
+          : null
+        structureWaveformData = unifiedDisplayWaveformData
+        if (needsWaveform) {
+          result.mixxxWaveformData = mixxxWaveformData
+          result.unifiedDisplayWaveformData = unifiedDisplayWaveformData
+        }
+        reportProgress({
+          stage: 'waveform-done',
+          waveformMs: Date.now() - waveformStartAt,
+          needsEnergy,
+          needsStructure,
+          detail: String(waveformDecoded.decoderBackend || '').startsWith('native-libav')
+            ? 'waveform-ok:native-libav'
+            : 'waveform-ok'
+        })
+      } catch (error) {
+        result.mixxxWaveformData = null
+        reportProgress({
+          stage: 'waveform-done',
+          waveformMs: Date.now() - waveformStartAt,
+          needsEnergy,
+          needsStructure,
+          detail: 'waveform-failed'
+        })
+      } finally {
+        reportDiagnosticPhase?.('waveform:release-pcm')
+        decoded = releaseAnalysisPcm(decoded)
+        reusableNativeLibavWaveformDecoded = releaseAnalysisPcm(reusableNativeLibavWaveformDecoded)
+      }
+    }
+
+    if (decoded || reusableNativeLibavWaveformDecoded) {
+      // Waveform was skipped (cached or not requested); drop full-track PCM before energy.
+      reportDiagnosticPhase?.('waveform:release-unused-pcm')
+      decoded = releaseAnalysisPcm(decoded)
+      reusableNativeLibavWaveformDecoded = releaseAnalysisPcm(reusableNativeLibavWaveformDecoded)
+    }
+
+    if (needsEnergy && !(needsBpm && result.bpmError)) {
+      reportDiagnosticPhase?.('energy:start')
+      try {
+        if (!energyDecoded) {
+          reportDiagnosticPhase?.('decode:energy-pcm')
+          energyDecoded = await decodeSongEnergyPcmForFile(filePath)
+        }
+        if (!energyDecoded) throw new Error('missing 16 kHz mono PCM for song energy model')
+        const cachedGridProjection = projectSongBeatGridMapV2ToFixedGrid(options.cachedBeatGridMap)
+        const analyzedEnergyGrid = normalizeSongEnergyBeatGrid(result.bpm, result.firstBeatMs)
+        const cachedEnergyGrid = normalizeSongEnergyBeatGrid(
+          cachedGridProjection?.bpm ?? options.cachedBpm,
+          cachedGridProjection?.firstBeatMs
+        )
+        const energyGrid = analyzedEnergyGrid ?? cachedEnergyGrid
+        const hasValidBpm = [result.bpm, cachedGridProjection?.bpm, options.cachedBpm].some(
+          (value) => Number.isFinite(Number(value)) && Number(value) > 0
+        )
+        if (!hasValidBpm) {
+          throw new Error('song energy requires a valid beat-grid BPM')
+        }
+        if (!energyGrid) {
+          throw new Error('song energy requires a valid beat-grid first beat')
+        }
+        const dynamicDefinition = dynamicAudioGridMap ? dynamicTimelineDefinition : null
+        if (dynamicAudioGridMap && !dynamicDefinition) {
+          throw new Error('dynamic song energy requires a validated timeline grid')
+        }
+        if (dynamicDefinition) {
+          const decodedAudioSec = energyDecoded.totalFrames / energyDecoded.sampleRate
+          if (Math.abs(decodedAudioSec - dynamicDefinition.durationAudioSec) > 0.25) {
+            throw new Error('song energy audio duration does not match dynamic grid duration')
+          }
+        }
+        // 人工/既有完整 map 也必须用 audio 坐标参与能量计算，而不是退回首段固定分桶。
+        let energyAudioGridMap = dynamicAudioGridMap
+        let energySourceGridSignature = dynamicDefinition?.map.signature
+        if (!energyAudioGridMap) {
+          const cachedMap = normalizeSongBeatGridMapV2(options.cachedBeatGridMap, {
+            allowSingleClip: true
+          })
+          if (cachedMap && cachedMap.clips.length > 1) {
+            const timeBasisOffsetMs = Number(options.analyzedTimeBasisOffsetMs)
+            if (!Number.isFinite(timeBasisOffsetMs) || timeBasisOffsetMs < 0) {
+              throw new Error('manual dynamic grid requires a valid audio time basis offset')
+            }
+            const audioDurationSec = energyDecoded.totalFrames / energyDecoded.sampleRate
+            const conversion = convertDynamicTimelineGridMapToAudio({
+              beatGridMap: cachedMap,
+              timelineDurationSec: audioDurationSec + timeBasisOffsetMs / 1000,
+              timeBasisOffsetMs,
+              audioDurationSec
+            })
+            if (conversion.status === 'error') {
+              throw new Error(`manual dynamic grid audio conversion failed: ${conversion.reason}`)
+            }
+            energyAudioGridMap = conversion.map
+            energySourceGridSignature = cachedMap.signature
+          }
+        }
+        const energy = await analyzeSongEnergyWithModel({
+          pcmData: energyDecoded.pcmData,
+          sampleRate: energyDecoded.sampleRate,
+          channels: energyDecoded.channels,
+          bpm: dynamicDefinition?.projection.bpm ?? energyGrid.bpm,
+          firstBeatMs: energyAudioGridMap ? undefined : energyGrid.firstBeatMs,
+          ...(energyAudioGridMap ? { beatGridMapAudio: energyAudioGridMap } : {}),
           onDiagnosticPhase: reportDiagnosticPhase
         })
-        result.bpm = beatThisResult.bpm
-        result.firstBeatMs = beatThisResult.firstBeatMs
-        result.downbeatBeatOffset = beatThisResult.downbeatBeatOffset
-        result.timeBasisOffsetMs = options.analyzedTimeBasisOffsetMs
-        result.bpmError = undefined
-        reportDiagnosticPhase?.('bpm:beat-this-done')
+        if (!energy) throw new Error('audio is silent or shorter than the model input window')
+        result.energyScore = energy.energyScore
+        result.energyAlgorithmVersion = energy.energyAlgorithmVersion
+        result.energyAnalysis = energy.analysis
+        // 派生能量绑定有效源网格签名，后续 clip 变化即可判定 stale。
+        result.energySourceGridSignature = energySourceGridSignature
       } catch (error) {
-        result.bpmError =
-          error instanceof Error ? error.message : String(error || 'Beat This! analyze failed')
+        result.energyError = error instanceof Error ? error.message : String(error)
       }
-
-      if (!result.bpmError) {
-        const normalizedBpm = Number(result.bpm)
-        if (!Number.isFinite(normalizedBpm) || normalizedBpm <= 0) {
-          result.bpmError = 'invalid bpm value from Beat This! analyzer'
-        } else {
-          const analyzedBeatGridMap = createSongBeatGridMapV2FromFixedGrid({
-            bpm: normalizedBpm,
-            firstBeatMs: result.firstBeatMs,
-            downbeatBeatOffset: result.downbeatBeatOffset,
-            source: 'analysis'
-          })
-          if (!analyzedBeatGridMap) {
-            result.bpmError = 'invalid v2 beat grid from Beat This! analyzer'
-          }
-        }
-      }
-
-      if (result.bpmError) {
-        reportDiagnosticPhase?.('bpm:failed')
-        hasAnalysisError = true
-      }
+      reportDiagnosticPhase?.(result.energyError ? 'energy:failed' : 'energy:done')
+      reportDiagnosticPhase?.('energy:release-pcm')
+      energyDecoded = releaseAnalysisPcm(energyDecoded)
     }
 
-    reportProgress({
-      stage: 'analyze-done',
-      analyzeMs: Date.now() - analyzeStartAt,
-      detail: hasAnalysisError ? 'analysis-has-errors' : undefined,
-      partialResult: {
-        keyText: result.keyText,
-        keyError: result.keyError,
-        bpm: result.bpm,
-        firstBeatMs: result.firstBeatMs,
-        downbeatBeatOffset: result.downbeatBeatOffset,
-        timeBasisOffsetMs: result.timeBasisOffsetMs,
-        bpmError: result.bpmError,
-        dynamicGridOutcome: result.dynamicGridOutcome
-      }
-    })
-  }
-
-  const dynamicOutcome = result.dynamicGridOutcome
-  const dynamicAudioGridMap =
-    dynamicOutcome && (dynamicOutcome.status === 'fixed' || dynamicOutcome.status === 'dynamic')
-      ? dynamicOutcome.beatGridMap
-      : null
-  if (needsEnergy && !(needsBpm && result.bpmError)) {
-    reportDiagnosticPhase?.('energy:start')
-    try {
-      if (!energyDecoded) throw new Error('missing 16 kHz mono PCM for song energy model')
-      const cachedGridProjection = projectSongBeatGridMapV2ToFixedGrid(options.cachedBeatGridMap)
-      const analyzedEnergyGrid = normalizeSongEnergyBeatGrid(result.bpm, result.firstBeatMs)
-      const cachedEnergyGrid = normalizeSongEnergyBeatGrid(
-        cachedGridProjection?.bpm ?? options.cachedBpm,
-        cachedGridProjection?.firstBeatMs
-      )
-      const energyGrid = analyzedEnergyGrid ?? cachedEnergyGrid
-      const hasValidBpm = [result.bpm, cachedGridProjection?.bpm, options.cachedBpm].some(
-        (value) => Number.isFinite(Number(value)) && Number(value) > 0
-      )
-      if (!hasValidBpm) {
-        throw new Error('song energy requires a valid beat-grid BPM')
-      }
-      if (!energyGrid) {
-        throw new Error('song energy requires a valid beat-grid first beat')
-      }
-      const dynamicDefinition = dynamicAudioGridMap ? dynamicTimelineDefinition : null
-      if (dynamicAudioGridMap && !dynamicDefinition) {
-        throw new Error('dynamic song energy requires a validated timeline grid')
-      }
-      if (dynamicDefinition) {
-        const decodedAudioSec = energyDecoded.totalFrames / energyDecoded.sampleRate
-        if (Math.abs(decodedAudioSec - dynamicDefinition.durationAudioSec) > 0.25) {
-          throw new Error('song energy audio duration does not match dynamic grid duration')
-        }
-      }
-      // 人工/既有完整 map 也必须用 audio 坐标参与能量计算，而不是退回首段固定分桶。
-      let energyAudioGridMap = dynamicAudioGridMap
-      let energySourceGridSignature = dynamicDefinition?.map.signature
-      if (!energyAudioGridMap) {
-        const cachedMap = normalizeSongBeatGridMapV2(options.cachedBeatGridMap, {
-          allowSingleClip: true
-        })
-        if (cachedMap && cachedMap.clips.length > 1) {
-          const timeBasisOffsetMs = Number(options.analyzedTimeBasisOffsetMs)
-          if (!Number.isFinite(timeBasisOffsetMs) || timeBasisOffsetMs < 0) {
-            throw new Error('manual dynamic grid requires a valid audio time basis offset')
-          }
-          const audioDurationSec = energyDecoded.totalFrames / energyDecoded.sampleRate
-          const conversion = convertDynamicTimelineGridMapToAudio({
-            beatGridMap: cachedMap,
-            timelineDurationSec: audioDurationSec + timeBasisOffsetMs / 1000,
-            timeBasisOffsetMs,
-            audioDurationSec
-          })
-          if (conversion.status === 'error') {
-            throw new Error(`manual dynamic grid audio conversion failed: ${conversion.reason}`)
-          }
-          energyAudioGridMap = conversion.map
-          energySourceGridSignature = cachedMap.signature
-        }
-      }
-      const energy = await analyzeSongEnergyWithModel({
-        pcmData: energyDecoded.pcmData,
-        sampleRate: energyDecoded.sampleRate,
-        channels: energyDecoded.channels,
-        bpm: dynamicDefinition?.projection.bpm ?? energyGrid.bpm,
-        firstBeatMs: energyAudioGridMap ? undefined : energyGrid.firstBeatMs,
-        ...(energyAudioGridMap ? { beatGridMapAudio: energyAudioGridMap } : {}),
-        onDiagnosticPhase: reportDiagnosticPhase
+    if (needsStructure && isDynamicGrid) {
+      // 段落算法正在独立重构：不启动基于首段投影的段落计算，也不让网格任务因此失败。
+      reportDiagnosticPhase?.('structure:deferred-dynamic-grid')
+      result.songStructureError = DYNAMIC_GRID_DEFERRED_STRUCTURE_ERROR
+    } else if (needsStructure) {
+      reportDiagnosticPhase?.('structure:start')
+      const cachedBeatGridMap = normalizeSongBeatGridMapV2(options.cachedBeatGridMap, {
+        allowSingleClip: true
       })
-      if (!energy) throw new Error('audio is silent or shorter than the model input window')
-      result.energyScore = energy.energyScore
-      result.energyAlgorithmVersion = energy.energyAlgorithmVersion
-      result.energyAnalysis = energy.analysis
-      // 派生能量绑定有效源网格签名，后续 clip 变化即可判定 stale。
-      result.energySourceGridSignature = energySourceGridSignature
-    } catch (error) {
-      result.energyError = error instanceof Error ? error.message : String(error)
-    }
-    reportDiagnosticPhase?.(result.energyError ? 'energy:failed' : 'energy:done')
-  }
-
-  if (cachedUnifiedDisplayWaveformData) {
-    reportProgress({
-      stage: 'waveform-start',
-      needsEnergy,
-      needsStructure,
-      detail: 'structure-cache'
-    })
-    const waveformStartAt = Date.now()
-    reportProgress({
-      stage: 'waveform-done',
-      waveformMs: Date.now() - waveformStartAt,
-      needsEnergy,
-      needsStructure,
-      detail: 'structure-cache'
-    })
-  }
-
-  if (
-    (needsWaveform || (needsStructure && !structureWaveformData)) &&
-    (typeof resolveRustBinding().computeMixxxWaveformWithRate === 'function' ||
-      typeof resolveRustBinding().computeMixxxWaveform === 'function')
-  ) {
-    if (!decoded) {
-      if (!useNativeLibavWaveformDecode) {
-        throw new Error('Rust PCM decode missing for waveform/structure analysis')
-      }
-    }
-    reportProgress({ stage: 'waveform-start', needsEnergy, needsStructure })
-    const waveformStartAt = Date.now()
-    try {
-      const targetRate = UNIFIED_DISPLAY_WAVEFORM_DETAIL_RATE
-      let waveformDecoded: DecodedAudioPcm
-      if (useNativeLibavWaveformDecode) {
-        if (reusableNativeLibavWaveformDecoded) {
-          waveformDecoded = reusableNativeLibavWaveformDecoded
-        } else {
-          const nativeLibavWaveformDecoded = decodeSongAnalysisAudio(resolveRustBinding(), filePath)
-          reusableNativeLibavWaveformDecoded = nativeLibavWaveformDecoded
-          waveformDecoded = nativeLibavWaveformDecoded
-        }
+      const analyzedFirstBeatMs = Number(result.firstBeatMs)
+      const timeBasisOffsetMs = Number(options.analyzedTimeBasisOffsetMs)
+      const analyzedBeatGridMap =
+        Number.isFinite(Number(result.bpm)) &&
+        Number.isFinite(analyzedFirstBeatMs) &&
+        Number.isInteger(result.downbeatBeatOffset)
+          ? createSongBeatGridMapV2FromFixedGrid({
+              bpm: result.bpm,
+              firstBeatMs: Number.isFinite(timeBasisOffsetMs)
+                ? analyzedFirstBeatMs + Math.max(0, timeBasisOffsetMs)
+                : analyzedFirstBeatMs,
+              downbeatBeatOffset: result.downbeatBeatOffset,
+              source: 'analysis'
+            })
+          : null
+      const beatGridMap =
+        cachedBeatGridMap?.source === 'manual' || !analyzedBeatGridMap
+          ? cachedBeatGridMap
+          : analyzedBeatGridMap
+      if (!structureWaveformData) {
+        result.songStructureError = 'missing unified waveform for v23 structure analysis'
+      } else if (!beatGridMap) {
+        result.songStructureError = 'missing v2 beat grid for v23 structure analysis'
       } else {
-        waveformDecoded = decoded as DecodedAudioPcm
+        const songStructure = buildSongStructureAnalysisV23({
+          waveformData: structureWaveformData,
+          beatGridMap
+        })
+        if (songStructure) {
+          result.songStructure = songStructure
+          result.structureBeatGridMap = beatGridMap
+        } else result.songStructureError = 'v23 structure analyzer returned no result'
       }
-      const mixxxWaveformData =
-        typeof resolveRustBinding().computeMixxxWaveformWithRate === 'function'
-          ? resolveRustBinding().computeMixxxWaveformWithRate!(
-              waveformDecoded.pcmData,
-              waveformDecoded.sampleRate,
-              waveformDecoded.channels,
-              targetRate
-            )
-          : resolveRustBinding().computeMixxxWaveform!(
-              waveformDecoded.pcmData,
-              waveformDecoded.sampleRate,
-              waveformDecoded.channels
-            )
-      const rawWaveformData = computeRawWaveform(
-        waveformDecoded.pcmData,
-        waveformDecoded.sampleRate,
-        waveformDecoded.channels,
-        COMPACT_VISUAL_WAVEFORM_COLOR_RAW_RATE
-      )
-      const unifiedDisplayWaveformData = mixxxWaveformData
-        ? buildUnifiedDisplayWaveformDetailFromMixxx(mixxxWaveformData, rawWaveformData)
-        : null
-      structureWaveformData = unifiedDisplayWaveformData
-      if (needsWaveform) {
-        result.mixxxWaveformData = mixxxWaveformData
-        result.unifiedDisplayWaveformData = unifiedDisplayWaveformData
-      }
-      reportProgress({
-        stage: 'waveform-done',
-        waveformMs: Date.now() - waveformStartAt,
-        needsEnergy,
-        needsStructure,
-        detail: String(waveformDecoded.decoderBackend || '').startsWith('native-libav')
-          ? 'waveform-ok:native-libav'
-          : 'waveform-ok'
-      })
-    } catch (error) {
-      result.mixxxWaveformData = null
-      reportProgress({
-        stage: 'waveform-done',
-        waveformMs: Date.now() - waveformStartAt,
-        needsEnergy,
-        needsStructure,
-        detail: 'waveform-failed'
-      })
+      reportDiagnosticPhase?.(result.songStructureError ? 'structure:failed' : 'structure:done')
     }
-  }
 
-  if (needsStructure && isDynamicGrid) {
-    // 段落算法正在独立重构：不启动基于首段投影的段落计算，也不让网格任务因此失败。
-    reportDiagnosticPhase?.('structure:deferred-dynamic-grid')
-    result.songStructureError = DYNAMIC_GRID_DEFERRED_STRUCTURE_ERROR
-  } else if (needsStructure) {
-    reportDiagnosticPhase?.('structure:start')
-    const cachedBeatGridMap = normalizeSongBeatGridMapV2(options.cachedBeatGridMap, {
-      allowSingleClip: true
-    })
-    const analyzedFirstBeatMs = Number(result.firstBeatMs)
-    const timeBasisOffsetMs = Number(options.analyzedTimeBasisOffsetMs)
-    const analyzedBeatGridMap =
-      Number.isFinite(Number(result.bpm)) &&
-      Number.isFinite(analyzedFirstBeatMs) &&
-      Number.isInteger(result.downbeatBeatOffset)
-        ? createSongBeatGridMapV2FromFixedGrid({
-            bpm: result.bpm,
-            firstBeatMs: Number.isFinite(timeBasisOffsetMs)
-              ? analyzedFirstBeatMs + Math.max(0, timeBasisOffsetMs)
-              : analyzedFirstBeatMs,
-            downbeatBeatOffset: result.downbeatBeatOffset,
-            source: 'analysis'
-          })
-        : null
-    const beatGridMap =
-      cachedBeatGridMap?.source === 'manual' || !analyzedBeatGridMap
-        ? cachedBeatGridMap
-        : analyzedBeatGridMap
-    if (!structureWaveformData) {
-      result.songStructureError = 'missing unified waveform for v23 structure analysis'
-    } else if (!beatGridMap) {
-      result.songStructureError = 'missing v2 beat grid for v23 structure analysis'
-    } else {
-      const songStructure = buildSongStructureAnalysisV23({
-        waveformData: structureWaveformData,
-        beatGridMap
-      })
-      if (songStructure) {
-        result.songStructure = songStructure
-        result.structureBeatGridMap = beatGridMap
-      } else result.songStructureError = 'v23 structure analyzer returned no result'
-    }
-    reportDiagnosticPhase?.(result.songStructureError ? 'structure:failed' : 'structure:done')
+    return result
+  } finally {
+    reportDiagnosticPhase?.('job:release-leftover-pcm')
+    beatGridDecoded = releaseAnalysisPcm(beatGridDecoded)
+    energyDecoded = releaseAnalysisPcm(energyDecoded)
+    decoded = releaseAnalysisPcm(decoded)
+    reusableNativeLibavWaveformDecoded = releaseAnalysisPcm(reusableNativeLibavWaveformDecoded)
+    requestAnalysisMemoryReclaim()
   }
-
-  return result
 }
 
 parentPort?.on('message', async (job: KeyJob) => {
@@ -908,4 +949,5 @@ parentPort?.on('message', async (job: KeyJob) => {
     transferableResponse,
     collectTransferableArrayBuffers(transferableResponse)
   )
+  requestAnalysisMemoryReclaim()
 })

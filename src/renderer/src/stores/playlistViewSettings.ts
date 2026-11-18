@@ -44,7 +44,9 @@ export const usePlaylistViewSettingsStore = defineStore('playlistViewSettings', 
         if (isRecord(parsed)) {
           for (const [uuid, entry] of Object.entries(parsed)) {
             if (!isRecord(entry) || !Array.isArray(entry.columns)) continue
-            if (entry.mode !== 'default' && entry.mode !== 'mixtape') continue
+            if (entry.mode !== 'default' && entry.mode !== 'mixtape' && entry.mode !== 'netease') {
+              continue
+            }
             settings[uuid] = {
               enabled: entry.enabled === true,
               mode: entry.mode,

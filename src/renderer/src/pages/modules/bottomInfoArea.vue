@@ -688,21 +688,41 @@ onMounted(() => {
   document.addEventListener('click', handleDocumentClick)
 })
 
+const looksLikeIpcEvent = (value: unknown) => {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) return false
+  const rec = value as Record<string, unknown>
+  if ('sender' in rec || 'senderId' in rec || 'ports' in rec || 'frameId' in rec) return true
+  return Object.keys(rec).length === 0
+}
+
+const resolveFinishedIpcArgs = (eventOrFirst: unknown, ...rest: unknown[]) =>
+  looksLikeIpcEvent(eventOrFirst) ? rest : [eventOrFirst, ...rest]
+
+const removeFinishedProgressTask = (progressId: unknown) => {
+  if (typeof progressId === 'string' && progressId) {
+    tasks.value = tasks.value.filter((t) => t.id !== progressId)
+    return
+  }
+  tasks.value = tasks.value.filter((t) => t.id !== 'import')
+}
+
 const handleImportFinished = async (
-  _event: unknown,
-  songListUUID: unknown,
-  importSummary: unknown,
-  progressId?: string
+  eventOrSongListUUID: unknown,
+  songListUUIDOrSummary: unknown,
+  importSummaryOrProgressId: unknown,
+  maybeProgressId?: string
 ) => {
+  const [songListUUID, importSummary, progressId] = resolveFinishedIpcArgs(
+    eventOrSongListUUID,
+    songListUUIDOrSummary,
+    importSummaryOrProgressId,
+    maybeProgressId
+  )
   const finishSummary = beginImportSummary(String(songListUUID || ''))
   runtime.isProgressing = false
   runtime.importingSongListUUID = ''
   // 有 progressId 则按 id 清理；否则清理整组 import
-  if (progressId) {
-    tasks.value = tasks.value.filter((t) => t.id !== String(progressId))
-  } else {
-    tasks.value = tasks.value.filter((t) => t.id !== 'import')
-  }
+  removeFinishedProgressTask(progressId)
   try {
     if (isRecord(importSummary)) {
       const openImportSummary = (await import('@renderer/components/importFinishedSummaryDialog'))
@@ -718,17 +738,18 @@ const handleImportFinished = async (
 window.electron.ipcRenderer.on('importFinished', handleImportFinished)
 
 const handleAddSongFingerprintFinished = async (
-  _event: unknown,
-  fingerprintSummary: unknown,
-  progressId?: string
+  eventOrSummary: unknown,
+  fingerprintSummaryOrProgressId: unknown,
+  maybeProgressId?: string
 ) => {
+  const [fingerprintSummary, progressId] = resolveFinishedIpcArgs(
+    eventOrSummary,
+    fingerprintSummaryOrProgressId,
+    maybeProgressId
+  )
   runtime.isProgressing = false
   // 清理导入/指纹相关进度行
-  if (progressId) {
-    tasks.value = tasks.value.filter((t) => t.id !== String(progressId))
-  } else {
-    tasks.value = tasks.value.filter((t) => t.id !== 'import')
-  }
+  removeFinishedProgressTask(progressId)
   const openFingerprintSummary = (
     await import('@renderer/components/addSongFingerprintFinishedDialog')
   ).default
@@ -741,16 +762,17 @@ const handleAddSongFingerprintFinished = async (
 window.electron.ipcRenderer.on('addSongFingerprintFinished', handleAddSongFingerprintFinished)
 
 const handleFingerprintsAddExistingFinished = async (
-  _event: unknown,
-  summary: unknown,
-  progressId?: string
+  eventOrSummary: unknown,
+  summaryOrProgressId: unknown,
+  maybeProgressId?: string
 ) => {
+  const [summary, progressId] = resolveFinishedIpcArgs(
+    eventOrSummary,
+    summaryOrProgressId,
+    maybeProgressId
+  )
   runtime.isProgressing = false
-  if (progressId) {
-    tasks.value = tasks.value.filter((t) => t.id !== String(progressId))
-  } else {
-    tasks.value = tasks.value.filter((t) => t.id !== 'import')
-  }
+  removeFinishedProgressTask(progressId)
   const openImportSummary = (await import('@renderer/components/importFinishedSummaryDialog'))
     .default
   if (isRecord(summary)) {
@@ -763,10 +785,16 @@ window.electron.ipcRenderer.on(
   'fingerprints:addExistingFinished',
   handleFingerprintsAddExistingFinished
 )
-const handleNoAudioFileWasScanned = async (_event: unknown, progressId?: string) => {
+const handleNoAudioFileWasScanned = async (
+  eventOrProgressId: unknown,
+  maybeProgressId?: string
+) => {
+  const [progressId] = resolveFinishedIpcArgs(eventOrProgressId, maybeProgressId)
   runtime.isProgressing = false
   runtime.importingSongListUUID = ''
-  if (progressId) tasks.value = tasks.value.filter((t) => t.id !== String(progressId))
+  if (typeof progressId === 'string' && progressId) {
+    tasks.value = tasks.value.filter((t) => t.id !== progressId)
+  }
   await confirm({
     title: t('common.finished'),
     content: [t('fingerprints.noAudioFilesFound')],

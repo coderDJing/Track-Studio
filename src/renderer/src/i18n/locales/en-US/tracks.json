@@ -135,6 +135,9 @@
     "analyzePlaylistPromptQuestion": "Analyze all of them now?",
     "analyzePlaylistConfirm": "Analyze all",
     "analyzePlaylistCancel": "Not now",
-    "analyzingPlaylist": "Analyzing playlist"
+    "analyzingPlaylist": "Analyzing playlist",
+    "independentListSettingsOnHintNetease": "Save sorting, columns and filters for this playlist. Uncheck to use NetEase library settings while keeping this playlist's settings.",
+    "independentListSettingsOffHintNetease": "Using NetEase library list settings. Changes affect other NetEase playlists that are not using playlist settings. Check to customize only this playlist.",
+    "resetIndependentListSettingsNetease": "Reset this playlist to NetEase library settings"
   }
 }

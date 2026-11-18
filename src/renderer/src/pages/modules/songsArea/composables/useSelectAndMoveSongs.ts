@@ -15,6 +15,7 @@ import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/f
 import { RendererFilePathMap, RendererFilePathSet } from '@renderer/utils/filePathComparison'
 import {
   appendNeteaseSongsToSet,
+  copyNeteaseSongsToLibrary,
   mapNeteaseSongsToLocalFiles
 } from '@renderer/utils/neteaseActions'
 import { NETEASE_DOWNLOADED_UUID, isNeteasePlaylistUuid } from '@shared/netease'
@@ -125,13 +126,29 @@ export function useSelectAndMoveSongs(params: UseSelectAndMoveSongsParams) {
   const targetLibraryName = ref<MoveSongsLibraryName | ''>('')
   const dialogActionMode = ref<LibraryTransferActionMode>('move')
 
-  const initiateMoveSongs = (
+  const initiateMoveSongs = async (
     libraryName: MoveSongsLibraryName,
     actionMode?: LibraryTransferActionMode
   ) => {
     targetLibraryName.value = libraryName
     dialogActionMode.value =
       actionMode ?? resolveLibraryTransferActionModeForSongList(songsAreaState.songListUUID)
+    const sourceSongListUUID = songsAreaState.songListUUID
+    const isNeteaseSource =
+      isNeteasePlaylistUuid(sourceSongListUUID) || sourceSongListUUID === NETEASE_DOWNLOADED_UUID
+    if (isNeteaseSource && (libraryName === 'FilterLibrary' || libraryName === 'CuratedLibrary')) {
+      const selectedKeys = normalizeUniqueStrings(songsAreaState.selectedSongFilePath)
+      const sourceNode = libraryUtils.getLibraryTreeByUUID(sourceSongListUUID)
+      const songs = resolveSelectedSongsByRowKey(selectedKeys, sourceNode?.type)
+      if (songs.length === 0) return
+      const copied = await copyNeteaseSongsToLibrary({
+        songs,
+        sourcePlaylistUuid: sourceSongListUUID,
+        libraryName
+      })
+      if (copied) songsAreaState.selectedSongFilePath.length = 0
+      return
+    }
     isDialogVisible.value = true
   }
 

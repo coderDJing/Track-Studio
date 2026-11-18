@@ -19,6 +19,7 @@ import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExte
 import { isNeteaseStreamSong, parseNeteaseSongId } from '@renderer/utils/neteaseSongs'
 import {
   appendNeteaseSongsToSet,
+  copyNeteaseSongsToLibrary,
   fulfillNeteasePendingSetSong,
   isNeteasePendingSetSong,
   resolveNeteaseLocalPath
@@ -635,7 +636,7 @@ export function usePlayerControlsLogic({
     isReadOnlyPlaybackSource
   })
 
-  const openSongMoveDialog = (
+  const openSongMoveDialog = async (
     libraryName: LibraryTransferTarget,
     song?: ISongInfo,
     actionMode?: LibraryTransferActionMode
@@ -643,6 +644,19 @@ export function usePlayerControlsLogic({
     const targetSong = song || runtime.playingData.playingSong
     if (!targetSong) return
     const sourceListUuid = String(runtime.playingData.playingSongListUUID || '')
+    const isNeteaseSource =
+      isNeteasePlaylistUuid(sourceListUuid) ||
+      sourceListUuid === NETEASE_DOWNLOADED_UUID ||
+      isNeteaseStreamSong(targetSong) ||
+      isNeteasePreviewUrl(targetSong.filePath)
+    if (isNeteaseSource && (libraryName === 'FilterLibrary' || libraryName === 'CuratedLibrary')) {
+      await copyNeteaseSongsToLibrary({
+        songs: [targetSong],
+        sourcePlaylistUuid: sourceListUuid,
+        libraryName
+      })
+      return
+    }
     songToMoveRef.value = {
       song: targetSong,
       sourceListUuid,

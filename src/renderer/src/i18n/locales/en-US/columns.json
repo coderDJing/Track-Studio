@@ -35,6 +35,7 @@
     "deletedAt": "Deleted At",
     "addedAt": "Date Added",
     "originalPlaylist": "Original Playlist",
-    "mixSource": "Source path"
+    "mixSource": "Source path",
+    "neteaseDownloadStatus": "Download status"
   }
 }

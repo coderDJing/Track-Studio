@@ -30,6 +30,7 @@ const COMMON_COLUMN_KEYS = new Set([
   'cover',
   'waveformPreview',
   'title',
+  'neteaseDownloadStatus',
   'artist',
   'duration',
   'bpm',
@@ -47,6 +48,10 @@ watch(
 )
 const props = defineProps({
   showResetToSharedSettings: Boolean,
+  resetSettingsLabelKey: {
+    type: String,
+    default: 'tracks.resetIndependentListSettings'
+  },
   columnData: {
     type: Array as PropType<ISongsAreaColumn[]>,
     required: true
@@ -182,7 +187,7 @@ onUnmounted(() => {
           class="resetSharedSettings"
           @click="resetToSharedSettings"
         >
-          {{ t('tracks.resetIndependentListSettings') }}
+          {{ t(resetSettingsLabelKey) }}
         </button>
         <section v-for="group of groupedColumns" :key="group.id" class="menuSection">
           <div class="menuSectionTitle">{{ t(group.label) }}</div>

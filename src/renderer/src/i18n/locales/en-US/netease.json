@@ -78,6 +78,19 @@
     "importEstimateCopyNote": "This is the size added to the destination library. A copy also remains in the NetEase library .store folder.",
     "setPendingCount": "{count} pending downloads",
     "setPendingBadge": "Pending",
-    "setPendingFailedBadge": "Download failed"
+    "setPendingFailedBadge": "Download failed",
+    "copyToLibraryTitle": "Copy to {libraryType}",
+    "copyHint": "Copy the selected NetEase tracks into a local playlist. Tracks that are not downloaded yet will be downloaded first. The NetEase download cache is left unchanged.",
+    "copyConfirm": "Copy",
+    "removeAfterCopy": "Remove from the current NetEase playlist after copying",
+    "removeAfterCopyHint": "Only removes these tracks from this NetEase playlist. Downloaded local files are kept.",
+    "compareFingerprint": "Skip tracks that already exist in the fingerprint library",
+    "compareFingerprintHint": "If a track with the same fingerprint is already in your library, it will be skipped.",
+    "copyFinished": "Copied {count} track(s)",
+    "copyFinishedWithSkip": "Copied {count} track(s), skipped {skipped} (duplicates or unavailable)",
+    "copyFinishedWithRemove": "Copied {count} track(s) and removed {removed} from the NetEase playlist",
+    "copyFinishedWithSkipAndRemove": "Copied {count} track(s), skipped {skipped}, and removed {removed} from the NetEase playlist",
+    "copyFailed": "Copy failed",
+    "copyNoTracks": "No tracks to copy"
   }
 }

@@ -28,6 +28,7 @@ import WaveformPreviewCell from './SongListRows/WaveformPreviewCell.vue'
 import { createTouchLongPressDrag } from '@renderer/utils/touchLongPressDrag'
 import { createInternalMouseDrag } from '@renderer/utils/internalMouseDrag'
 import { getBottomDropPad } from './SongListRows/dropPadGeometry'
+import { getNeteaseDownloadStatus } from '@renderer/utils/neteaseDownloadStatus'
 
 const props = defineProps({
   searchQuery: {
@@ -806,6 +807,27 @@ onUnmounted(() => {
                   :get-waveform-preview-playhead-style="getWaveformPreviewPlayheadStyle"
                 />
                 <div
+                  v-else-if="col.key === 'neteaseDownloadStatus'"
+                  class="cell-title cell-netease-status"
+                  :style="{ width: `var(--songs-col-${col.key}, ${col.width}px)` }"
+                >
+                  <span
+                    v-if="getNeteaseDownloadStatus(item.song) === 'downloaded'"
+                    class="netease-downloaded-badge"
+                    >{{ t('netease.downloadedBadge') }}</span
+                  >
+                  <span
+                    v-else-if="getNeteaseDownloadStatus(item.song) === 'pending'"
+                    class="netease-pending-badge"
+                    >{{ t('netease.setPendingBadge') }}</span
+                  >
+                  <span
+                    v-else-if="getNeteaseDownloadStatus(item.song) === 'failed'"
+                    class="netease-pending-badge netease-pending-badge--failed"
+                    >{{ t('netease.setPendingFailedBadge') }}</span
+                  >
+                </div>
+                <div
                   v-else
                   :ref="(el) => setCellRef(getCellKey(item.song, col.key), el)"
                   class="cell-title"
@@ -829,28 +851,6 @@ onUnmounted(() => {
                     :value="getCellValue(item.song, col.key)"
                     :query="props.searchQuery"
                   />
-                  <!-- 网易云歌单里，已下到本地的曲目挂一个小标记。数据源是 netease_file，
-                       不会因为别的库的变动而变旧，所以只在这一处显示。
-                       标记本身就是文案，不再挂原生 title 悬停提示（项目规则：悬停提示一律走气泡框）。 -->
-                  <span
-                    v-if="col.key === 'title' && item.song.neteaseDownloaded"
-                    class="netease-downloaded-badge"
-                    >{{ t('netease.downloadedBadge') }}</span
-                  >
-                  <span
-                    v-if="
-                      col.key === 'title' &&
-                      item.song.neteasePendingDownload &&
-                      item.song.neteasePendingStatus !== 'failed'
-                    "
-                    class="netease-pending-badge"
-                    >{{ t('netease.setPendingBadge') }}</span
-                  >
-                  <span
-                    v-if="col.key === 'title' && item.song.neteasePendingStatus === 'failed'"
-                    class="netease-pending-badge netease-pending-badge--failed"
-                    >{{ t('netease.setPendingFailedBadge') }}</span
-                  >
                   <bubbleBox
                     v-if="
                       hoveredCellKey === getCellKey(item.song, col.key) &&

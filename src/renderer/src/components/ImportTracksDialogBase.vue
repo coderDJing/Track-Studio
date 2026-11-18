@@ -23,7 +23,7 @@ import {
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
 const hintIcon = hintIconAsset
 
-type Mode = 'scan' | 'drop' | 'netease'
+type Mode = 'scan' | 'drop' | 'netease' | 'neteaseCopy'
 
 const uuid = uuidV4()
 const props = defineProps({
@@ -35,6 +35,8 @@ const props = defineProps({
   neteasePlaylistId: { type: String, default: '' },
   /** 只影响歌单选择框上那个确认按钮的措辞：网易云导入一律是复制 */
   actionMode: { type: String as PropType<LibraryTransferActionMode>, default: 'move' },
+  /** neteaseCopy：当前源歌单是否允许复制后移除（自建 / 我喜欢） */
+  canRemoveFromPlaylist: { type: Boolean, default: false },
   confirmCallback: { type: Function, required: true },
   cancelCallback: { type: Function, required: true }
 })
@@ -44,39 +46,67 @@ type SettingData = {
   isComparisonSongFingerprint: boolean
   isPushSongFingerprintLibrary: boolean
   deduplicateMode: 'library' | 'batch' | 'none'
+  removeFromPlaylist: boolean
 }
+const COPY_SETTINGS_KEY = 'neteaseCopyToLibraryDialog'
+const defaultCopySettings = (): SettingData => ({
+  isDeleteSourceFile: false,
+  isComparisonSongFingerprint: true,
+  isPushSongFingerprintLibrary: true,
+  deduplicateMode: 'library',
+  removeFromPlaylist: false
+})
 const settingData = ref<SettingData>({
   isDeleteSourceFile: true,
   isComparisonSongFingerprint: true,
   isPushSongFingerprintLibrary: true,
-  deduplicateMode: 'library'
+  deduplicateMode: 'library',
+  removeFromPlaylist: false
 })
-let localStorageData = localStorage.getItem('scanNewSongDialog')
-if (localStorageData == null) {
-  localStorage.setItem(
-    'scanNewSongDialog',
-    JSON.stringify({
+const isNeteaseCopyMode = () => props.mode === 'neteaseCopy'
+if (isNeteaseCopyMode()) {
+  try {
+    const raw = localStorage.getItem(COPY_SETTINGS_KEY)
+    const parsed = raw ? (JSON.parse(raw) as Partial<SettingData>) : null
+    settingData.value = {
+      ...defaultCopySettings(),
+      isPushSongFingerprintLibrary: parsed?.isPushSongFingerprintLibrary ?? true,
+      deduplicateMode: parsed?.deduplicateMode === 'none' ? 'none' : 'library',
+      isComparisonSongFingerprint: parsed?.deduplicateMode !== 'none',
+      removeFromPlaylist: parsed?.removeFromPlaylist === true
+    }
+  } catch {
+    settingData.value = defaultCopySettings()
+  }
+} else {
+  let localStorageData = localStorage.getItem('scanNewSongDialog')
+  if (localStorageData == null) {
+    localStorage.setItem(
+      'scanNewSongDialog',
+      JSON.stringify({
+        isDeleteSourceFile: true,
+        isComparisonSongFingerprint: true,
+        isPushSongFingerprintLibrary: true,
+        deduplicateMode: 'library'
+      })
+    )
+    localStorageData = JSON.stringify({
       isDeleteSourceFile: true,
       isComparisonSongFingerprint: true,
       isPushSongFingerprintLibrary: true,
       deduplicateMode: 'library'
     })
-  )
-  localStorageData = JSON.stringify({
-    isDeleteSourceFile: true,
-    isComparisonSongFingerprint: true,
-    isPushSongFingerprintLibrary: true,
-    deduplicateMode: 'library'
-  })
-}
-const parsedLocalStorageData = JSON.parse(localStorageData) as Partial<SettingData>
-settingData.value = {
-  isDeleteSourceFile: parsedLocalStorageData.isDeleteSourceFile ?? true,
-  isComparisonSongFingerprint: parsedLocalStorageData.isComparisonSongFingerprint ?? true,
-  isPushSongFingerprintLibrary: parsedLocalStorageData.isPushSongFingerprintLibrary ?? true,
-  deduplicateMode:
-    parsedLocalStorageData.deduplicateMode ??
-    ((parsedLocalStorageData.isComparisonSongFingerprint ?? true) ? 'library' : 'none')
+  }
+  const parsedLocalStorageData = JSON.parse(localStorageData) as Partial<SettingData>
+  settingData.value = {
+    isDeleteSourceFile: parsedLocalStorageData.isDeleteSourceFile ?? true,
+    isComparisonSongFingerprint: parsedLocalStorageData.isComparisonSongFingerprint ?? true,
+    isPushSongFingerprintLibrary: parsedLocalStorageData.isPushSongFingerprintLibrary ?? true,
+    deduplicateMode:
+      parsedLocalStorageData.deduplicateMode ??
+      ((parsedLocalStorageData.isComparisonSongFingerprint ?? true) ? 'library' : 'none'),
+    removeFromPlaylist: false
+  }
 }
 
 const runtime = useRuntimeStore()
@@ -156,6 +186,25 @@ const selectSongListDialogConfirm = (uuid: string) => {
   selectSongListDialogShow.value = false
 }
 
+const setCompareFingerprint = (checked: boolean) => {
+  settingData.value.deduplicateMode = checked ? 'library' : 'none'
+}
+
+const persistSettings = () => {
+  if (isNeteaseCopyMode()) {
+    localStorage.setItem(
+      COPY_SETTINGS_KEY,
+      JSON.stringify({
+        isPushSongFingerprintLibrary: settingData.value.isPushSongFingerprintLibrary,
+        deduplicateMode: settingData.value.deduplicateMode === 'none' ? 'none' : 'library',
+        removeFromPlaylist: settingData.value.removeFromPlaylist === true
+      })
+    )
+    return
+  }
+  localStorage.setItem('scanNewSongDialog', JSON.stringify(settingData.value))
+}
+
 const emits = defineEmits(['cancel'])
 const { dialogVisible, closeWithAnimation } = useDialogTransition()
 
@@ -190,11 +239,21 @@ const confirm = () => {
     return
   }
 
-  if (props.mode === 'netease') {
-    // 网易云导入：不移动、不删除源文件（源是 .store 缓存），也没有 selectedPaths。
+  if (props.mode === 'netease' || props.mode === 'neteaseCopy') {
+    // 网易云导入 / 复制：不移动、不删除源文件（源是 .store 缓存），也没有 selectedPaths。
     // 具体搬运在主进程做，这里只把选项交出去。
-    localStorage.setItem('scanNewSongDialog', JSON.stringify(settingData.value))
+    persistSettings()
     closeWithAnimation(() => {
+      if (props.mode === 'neteaseCopy') {
+        ;(props.confirmCallback as Function)({
+          songListUuid: importingSongListUUID,
+          songListPath: songListSelectedPath,
+          isPushSongFingerprintLibrary: settingData.value.isPushSongFingerprintLibrary,
+          deduplicateMode: settingData.value.deduplicateMode === 'none' ? 'none' : 'library',
+          removeFromPlaylist: props.canRemoveFromPlaylist && settingData.value.removeFromPlaylist
+        })
+        return
+      }
       ;(props.confirmCallback as Function)({
         songListUuid: importingSongListUUID,
         songListPath: songListSelectedPath,
@@ -221,14 +280,14 @@ const confirm = () => {
       deduplicateMode: settingData.value.deduplicateMode,
       songListUUID: importingSongListUUID
     })
-    localStorage.setItem('scanNewSongDialog', JSON.stringify(settingData.value))
+    persistSettings()
     // 清除已选中的路径，为下次使用做准备
     selectedPaths.value = []
     closeWithAnimation(() => {
       ;(props.confirmCallback as Function)()
     })
   } else if (props.mode === 'drop') {
-    localStorage.setItem('scanNewSongDialog', JSON.stringify(settingData.value))
+    persistSettings()
     closeWithAnimation(() => {
       ;(props.confirmCallback as Function)({
         importingSongListUUID: importingSongListUUID,
@@ -243,7 +302,7 @@ const confirm = () => {
 }
 
 const cancel = () => {
-  localStorage.setItem('scanNewSongDialog', JSON.stringify(settingData.value))
+  persistSettings()
   // 取消时清空当前已选，确保下次新打开为空
   selectedPaths.value = []
   closeWithAnimation(() => {
@@ -253,6 +312,8 @@ const cancel = () => {
 }
 
 const hint2Ref = useTemplateRef<HTMLImageElement>('hint2Ref')
+const removeAfterCopyHintRef = useTemplateRef<HTMLImageElement>('removeAfterCopyHintRef')
+const compareFingerprintHintRef = useTemplateRef<HTMLImageElement>('compareFingerprintHintRef')
 // 为单选项的 hint 采用映射存储，避免动态 ref 失效
 const dedupOptionHintRefs = reactive<Record<string, HTMLImageElement | null>>({})
 function setDedupOptionHintRef(value: string, el: HTMLImageElement | null) {
@@ -267,7 +328,7 @@ const neteaseEstimateText = computed(() =>
   neteaseEstimate.value ? formatNeteaseImportEstimate(neteaseEstimate.value) : ''
 )
 const innerStyle = computed(() =>
-  props.mode === 'netease'
+  props.mode === 'netease' || props.mode === 'neteaseCopy'
     ? 'width: 500px; height: auto; display: flex; flex-direction: column'
     : 'width: 500px; height: 530px; display: flex; flex-direction: column'
 )
@@ -296,7 +357,14 @@ onUnmounted(() => {
   <div class="dialog unselectable" :class="{ 'dialog-visible': dialogVisible }">
     <div v-dialog-drag="'.dialog-title'" class="inner" :style="innerStyle">
       <div class="dialog-title dialog-header">
-        <span v-if="props.mode === 'netease'">
+        <span v-if="props.mode === 'neteaseCopy'">
+          {{
+            t('netease.copyToLibraryTitle', {
+              libraryType: toLibraryDisplayName(props.libraryName)
+            })
+          }}
+        </span>
+        <span v-else-if="props.mode === 'netease'">
           {{ t('netease.importTitle') }}
           ·
           {{ toLibraryDisplayName(props.libraryName) }}
@@ -315,6 +383,11 @@ onUnmounted(() => {
             <div v-if="neteaseEstimateText" class="netease-import-estimate__note">
               {{ t('netease.importEstimateCopyNote') }}
             </div>
+          </div>
+        </template>
+        <template v-else-if="props.mode === 'neteaseCopy'">
+          <div class="netease-import-estimate">
+            {{ t('netease.copyHint') }}
           </div>
         </template>
         <template v-if="props.mode === 'scan'">
@@ -353,17 +426,49 @@ onUnmounted(() => {
           />
         </div>
 
-        <div v-if="props.mode !== 'netease'" style="margin-top: 20px">
+        <div
+          v-if="props.mode !== 'netease' && props.mode !== 'neteaseCopy'"
+          style="margin-top: 20px"
+        >
           <label for="import-checkbox-deleteAfterImport" style="user-select: none">{{
             tLabel('library.deleteAfterImport')
           }}</label>
         </div>
-        <div v-if="props.mode !== 'netease'" style="margin-top: 10px">
+        <div
+          v-if="props.mode !== 'netease' && props.mode !== 'neteaseCopy'"
+          style="margin-top: 10px"
+        >
           <singleCheckbox
             id="import-checkbox-deleteAfterImport"
             v-model="settingData.isDeleteSourceFile"
           />
         </div>
+
+        <template v-if="props.mode === 'neteaseCopy' && props.canRemoveFromPlaylist">
+          <div style="margin-top: 20px">
+            <label for="import-checkbox-removeAfterCopy" style="user-select: none">{{
+              tLabel('netease.removeAfterCopy')
+            }}</label>
+          </div>
+          <div style="margin-top: 10px; display: inline-flex; align-items: center; gap: 6px">
+            <singleCheckbox
+              id="import-checkbox-removeAfterCopy"
+              v-model="settingData.removeFromPlaylist"
+            />
+            <img
+              ref="removeAfterCopyHintRef"
+              :src="hintIcon"
+              style="width: 15px; height: 15px"
+              :draggable="false"
+              class="theme-icon"
+            />
+            <bubbleBox
+              :dom="removeAfterCopyHintRef || undefined"
+              :title="t('netease.removeAfterCopyHint')"
+              :max-width="280"
+            />
+          </div>
+        </template>
 
         <div style="margin-top: 20px">
           <label for="import-checkbox-addToFingerprintLibrary" style="user-select: none">{{
@@ -389,8 +494,38 @@ onUnmounted(() => {
           />
         </div>
 
-        <div style="margin-top: 20px">{{ tLabel('library.deduplicateMode') }}</div>
-        <div style="margin-top: 10px">
+        <div v-if="props.mode === 'neteaseCopy'" style="margin-top: 20px">
+          <label for="import-checkbox-compareFingerprint" style="user-select: none">{{
+            tLabel('netease.compareFingerprint')
+          }}</label>
+        </div>
+        <div
+          v-if="props.mode === 'neteaseCopy'"
+          style="margin-top: 10px; display: inline-flex; align-items: center; gap: 6px"
+        >
+          <singleCheckbox
+            id="import-checkbox-compareFingerprint"
+            :model-value="settingData.deduplicateMode !== 'none'"
+            @update:model-value="setCompareFingerprint"
+          />
+          <img
+            ref="compareFingerprintHintRef"
+            :src="hintIcon"
+            style="width: 15px; height: 15px"
+            :draggable="false"
+            class="theme-icon"
+          />
+          <bubbleBox
+            :dom="compareFingerprintHintRef || undefined"
+            :title="t('netease.compareFingerprintHint')"
+            :max-width="280"
+          />
+        </div>
+
+        <div v-if="props.mode !== 'neteaseCopy'" style="margin-top: 20px">
+          {{ tLabel('library.deduplicateMode') }}
+        </div>
+        <div v-if="props.mode !== 'neteaseCopy'" style="margin-top: 10px">
           <singleRadioGroup
             v-model="settingData.deduplicateMode"
             :options="[
@@ -428,7 +563,14 @@ onUnmounted(() => {
 
       <div class="dialog-footer">
         <div class="button" style="width: 90px; text-align: center" @click="confirm()">
-          {{ props.mode === 'netease' ? t('netease.importConfirm') : t('common.confirm') }} (E)
+          {{
+            props.mode === 'neteaseCopy'
+              ? t('netease.copyConfirm')
+              : props.mode === 'netease'
+                ? t('netease.importConfirm')
+                : t('common.confirm')
+          }}
+          (E)
         </div>
         <div class="button" style="width: 90px; text-align: center" @click="cancel()">
           {{ t('common.cancel') }} (Esc)
