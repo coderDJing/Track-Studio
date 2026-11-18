@@ -28,6 +28,12 @@ const message = ref('')
 let unikey = ''
 let timer: ReturnType<typeof setInterval> | null = null
 
+/** 扫码必须用手机上的网易云音乐 App，没装的用户从这里去官网取。 */
+const OFFICIAL_SITE_URL = 'https://music.163.com'
+const openOfficialSite = () => {
+  window.electron.ipcRenderer.send('openLocalBrowser', OFFICIAL_SITE_URL)
+}
+
 const clearTimer = () => {
   if (timer) {
     clearInterval(timer)
@@ -141,6 +147,16 @@ onUnmounted(() => {
           <span v-if="status === 'scanned'">{{ t('netease.loginScanned') }}</span>
           <span v-else-if="message">{{ message }}</span>
         </div>
+        <div class="login-official">
+          <span class="login-official-hint">{{ t('netease.loginOfficialHint') }}</span>
+          <button type="button" class="login-official-link" @click="openOfficialSite">
+            <span>{{ t('netease.loginOfficialLink') }}</span>
+            <svg class="login-official-icon" viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M4.9 2.4h4.7v4.7" />
+              <path d="M9.6 2.4 2.9 9.1" />
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="dialog-footer">
         <div class="button login-footer-button" @click="requestQr">
@@ -210,6 +226,70 @@ onUnmounted(() => {
   font-size: 13px;
   color: var(--text-weak);
   text-align: center;
+}
+
+/* 「没有 App」的兜底入口：一行弱提示 + 一枚外链小药丸，不抢二维码的注意力。 */
+.login-official {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: -4px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-weak);
+}
+
+.login-official-hint {
+  opacity: 0.85;
+}
+
+.login-official-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 9px;
+  appearance: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.login-official-link:hover {
+  background: var(--hover);
+  border-color: var(--text-weak);
+}
+
+.login-official-link:active {
+  opacity: 0.75;
+}
+
+.login-official-link:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.login-official-icon {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.75;
 }
 
 .login-footer-button {
