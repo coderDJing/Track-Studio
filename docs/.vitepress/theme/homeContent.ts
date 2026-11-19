@@ -307,25 +307,29 @@ const zhChapters: Omit<Chapter, 'cue' | 'color'>[] = [
   },
   {
     id: 'sync',
-    kicker: '同步与发现',
+    kicker: '同步、网易云与发现',
     title: '换台电脑，接着准备',
-    lead: '精选库的目录树、歌单和音频可以跨设备云同步，指纹和精选表演者也一起同步。全局搜歌跨界面一步定位，相似歌曲从多个来源推荐新歌。',
+    lead: '精选库的目录树、歌单和音频可以跨设备云同步，指纹和精选表演者也一起同步。登录网易云后，喜欢的歌和收藏的歌单直接进同一个侧边栏。全局搜歌跨界面一步定位，相似歌曲从多个来源推荐新歌。',
     surface: 'sync',
     surfaceCaption: '全局搜歌与云端同步完成摘要',
     groups: [
       {
-        title: '同步',
+        title: '同步与网易云',
         items: [
           {
             name: '精选库云同步',
             detail: '首次连接选择对齐方式：合并两边、用云覆盖本机或用本机覆盖云'
           },
           { name: '指纹同步', detail: 'SHA256 指纹双向同步，含差异分析、分页拉取和分批上传' },
-          { name: '精选表演者', detail: '多表演者曲目自动拆分联动，跨设备同步' }
+          { name: '精选表演者', detail: '多表演者曲目自动拆分联动，跨设备同步' },
+          {
+            name: '网易云曲库',
+            detail: '扫码登录后同步「我喜欢的音乐」、自建歌单与收藏歌单，按原分组浏览'
+          }
         ]
       },
       {
-        title: '发现',
+        title: '发现与导入',
         items: [
           {
             name: '全局搜歌',
@@ -336,7 +340,11 @@ const zhChapters: Omit<Chapter, 'cue' | 'color'>[] = [
             detail: '按标题、BPM、时长等条件筛选；调性轮支持多选，也可仅看与 Master 兼容的调性'
           },
           { name: '相似歌曲', detail: 'ListenBrainz 与 Last.fm 双源推荐，可屏蔽不想再看到的' },
-          { name: '网易云 / Spotify', detail: '右键直接去网易云或 Spotify 搜当前曲目' }
+          {
+            name: '网易云下载与导入',
+            detail: '无损或母带下载到本地，复制到筛选库、精选库、SET 或 Mixtape；导入前比对指纹去重'
+          },
+          { name: '网易云 / Spotify', detail: '右键直接去网易云或 Spotify 网页搜索当前曲目' }
         ]
       }
     ]
@@ -690,14 +698,14 @@ const enChapters: Omit<Chapter, 'cue' | 'color'>[] = [
   },
   {
     id: 'sync',
-    kicker: 'Sync & discovery',
+    kicker: 'Sync, NetEase & discovery',
     title: 'Switch machines, keep preparing',
-    lead: 'The Curated folder tree, playlists, and audio sync across devices, along with fingerprints and curated artists. Global search jumps anywhere; similar-track picks come from multiple sources.',
+    lead: 'The Curated folder tree, playlists, and audio sync across devices, along with fingerprints and curated artists. Sign in to NetEase Cloud Music and your liked tracks and saved playlists land in the same sidebar. Global search jumps anywhere; similar-track picks come from multiple sources.',
     surface: 'sync',
     surfaceCaption: 'Global search and the cloud sync summary',
     groups: [
       {
-        title: 'Sync',
+        title: 'Sync & NetEase',
         items: [
           {
             name: 'Curated cloud sync',
@@ -710,11 +718,16 @@ const enChapters: Omit<Chapter, 'cue' | 'color'>[] = [
           {
             name: 'Curated artists',
             detail: 'Multi-artist tracks split and link, synced across devices'
+          },
+          {
+            name: 'NetEase library',
+            detail:
+              'Sign in by QR to sync liked tracks, your playlists, and saved playlists with their original grouping'
           }
         ]
       },
       {
-        title: 'Discovery',
+        title: 'Discovery & import',
         items: [
           {
             name: 'Global search',
@@ -730,8 +743,13 @@ const enChapters: Omit<Chapter, 'cue' | 'color'>[] = [
             detail: 'ListenBrainz and Last.fm picks; hide ones you do not want'
           },
           {
+            name: 'NetEase download & import',
+            detail:
+              'Download lossless or master quality, copy into Filter, Curated, SET, or Mixtape, with fingerprint dedup on import'
+          },
+          {
             name: 'NetEase / Spotify',
-            detail: 'Search the current track on NetEase Cloud Music or Spotify'
+            detail: 'Search the current track on either service in the browser'
           }
         ]
       }
@@ -752,7 +770,7 @@ export const zhContent: HomeContent = {
     titleTop: '终结混乱的',
     titleBottom: 'DJ 音频工作站',
     subtitle:
-      '从真实文件整理、指纹去重、波形试听，到双轨横推、SET 编排、Mixtape 录制和 Stem 分离。演出前要做的事，在一个键盘优先的桌面应用里做完。',
+      '从真实文件整理、网易云曲库、指纹去重、波形试听，到双轨横推、SET 编排、Mixtape 录制和 Stem 分离。演出前要做的事，在一个键盘优先的桌面应用里做完。',
     platforms: 'Windows 10+ · macOS 12+',
     formats: '支持多种音频格式',
     scrollHint: '往下滚，整页就是一首歌'
@@ -772,7 +790,7 @@ export const zhContent: HomeContent = {
     title: '免费下载，开始整理你的曲库',
     subtitle: '选择适合你设备的版本，开始准备下一场演出。',
     systemsTitle: '系统要求',
-    systems: ['Windows 10 或更高版本 (x64)', 'macOS 12 或更高版本'],
+    systems: ['Windows 10 或更高版本 (x64)', 'macOS 12 或更高版本（已签名公证）'],
     formatsTitle: '支持格式',
     formats: FORMATS,
     upgradeTitle: '界面语言',
@@ -789,7 +807,7 @@ export const enContent: HomeContent = {
     titleTop: 'End the Chaos.',
     titleBottom: 'The Ultimate DJ Audio Workspace.',
     subtitle:
-      'Real file organization, fingerprint dedup, and waveform auditioning, through dual-deck browsing, SET programming, Mixtape recording, and stem separation. Everything before a gig, in one keyboard-first desktop app.',
+      'Real file organization, a NetEase Cloud Music library, fingerprint dedup, and waveform auditioning, through dual-deck browsing, SET programming, Mixtape recording, and stem separation. Everything before a gig, in one keyboard-first desktop app.',
     platforms: 'Windows 10+ · macOS 12+',
     formats: 'Multiple audio formats',
     scrollHint: 'Scroll down: this page plays like a track'
@@ -809,7 +827,7 @@ export const enContent: HomeContent = {
     title: 'Free to download. Ready for your next set.',
     subtitle: 'Choose the version for your device and start preparing your next gig.',
     systemsTitle: 'System requirements',
-    systems: ['Windows 10 or later (x64)', 'macOS 12 or later'],
+    systems: ['Windows 10 or later (x64)', 'macOS 12 or later (signed and notarized)'],
     formatsTitle: 'Supported formats',
     formats: FORMATS,
     upgradeTitle: 'Languages',

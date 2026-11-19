@@ -1,6 +1,6 @@
 ---
 title: Features & Workflow Guide
-description: Explore Track Studio's real file management, fingerprint deduplication, dual-deck waveform auditioning, SET playlists, Mixtape, stem separation, external libraries, and sync.
+description: Explore Track Studio's real file management, NetEase Cloud Music library, fingerprint deduplication, dual-deck waveform auditioning, SET playlists, Mixtape, stem separation, external libraries, and sync.
 ---
 
 # Track Studio Features
@@ -103,6 +103,15 @@ A detailed reference for Track Studio’s library, playback, analysis, and prepa
 - **Traktor playback data**: Read native beat grids, Cues, Loops, and existing Stripe waveform previews. Missing Stripe previews are not generated automatically for the track list. Loading a track into two-deck or audio-edit mode generates its detailed waveform in Track Studio while preserving an available native beat grid.
 - **Library refresh**: Check source files for changes, reuse snapshots when unchanged, and reread changed libraries to update the list in place.
 
+## NetEase Cloud Music Library
+
+- **QR sign-in**: Scan a QR code with the NetEase Cloud Music app to sign in; the session stays on this machine and you can sign out or scan again at any time. The sign-in dialog links to the official site so newcomers can see what the service is.
+- **Playlist sync**: Liked tracks, playlists you created, saved playlists, and saved albums sync into the sidebar with their original grouping. The NetEase library keeps its own list settings and never changes your local playlists.
+- **Audition and download**: Stream tracks that are not downloaded yet, with a separate preview-cache cap you can clear at any time. Download locally at the quality set in Settings: lossless, master, exhigh (MP3 320k), or standard (MP3 128k). Master requires a membership and falls back to the best quality available for that track.
+- **Copy and import**: Copy NetEase tracks into Filter, Curated, SET, or Mixtape. Tracks are downloaded first, and optional fingerprint matching skips duplicates already in your library.
+- **Playlist editing**: Remove tracks from playlists you created and from Liked tracks; saved playlists and albums stay read-only. Removal only changes the playlist relationship, and downloaded files are kept.
+- **Downloaded management**: Downloaded tracks get their own group with size totals, local-file deletion to the recycle bin, and cleanup for tracks no longer in any playlist.
+
 ## Mixtape And Stem Workflow
 
 - **Mixtape timeline workspace**: Arrange tracks on a timeline, preview transitions, edit beat alignment, and export a timeline-accurate result.
@@ -110,12 +119,13 @@ A detailed reference for Track Studio’s library, playback, analysis, and prepa
 - **Add to Mixtape from playlists**: Add tracks to Mixtape auto-recording from ordinary playlist context menus.
 - **Beat alignment tools**: Adjust grids, preview alignment on unified waveform controls, use metronome tools, and keep timeline playback aligned with edited grid data.
 - **Gain, BPM, mute, and loop controls**: Shape the mix with timeline controls, envelopes, mute sections, loop overlays, and undo support.
-- **Stem preparation**: Managed Stem runtime, separation cache management, ONNX fast separation, and DirectML/XPU acceleration support auto-recording and mix preparation workflows.
+- **Stem preparation**: Managed Stem runtime, separation cache, ONNX fast separation, and DirectML/XPU acceleration support auto-recording and mix preparation. Base models download on demand instead of shipping in the installer.
 - **Single-track Stem workspace**: Separate a single track into high-quality 4 stems (vocals / drums / bass / other), preview and export WAV files, and download the ultra-quality model when needed.
 
 ## Export, Conversion, And Formats
 
 - **Track export**: Export selected tracks to a folder and optionally delete the source entries after export.
+- **SET export naming**: When exporting a SET to a folder, audio files can be named `01 Track Name - Artist`, ready for other players and software.
 - **Persistent export destination**: Export dialogs remember the last destination and validate that it still exists.
 - **Standalone conversion**: Convert audio files without first importing them into the main library.
 - **Batch conversion with cancel**: Long conversion jobs show progress, can be canceled, and summarize completed, skipped, failed, and canceled items.
@@ -140,3 +150,11 @@ A detailed reference for Track Studio’s library, playback, analysis, and prepa
 
 - **Custom accent color**: Choose a preset in Settings or use the color picker to set your own theme accent.
 - **Internationalization**: Built-in Simplified Chinese and English language packs.
+- **Unified download and update card**: Component downloads and app updates share one card in the bottom-right corner; macOS uses the same update UI as Windows.
+
+## Installation And Updates
+
+- **Windows install**: The installer overwrites the previous version and keeps settings and library.
+- **macOS signing and notarization**: Builds are signed with a Developer ID Application certificate and notarized by Apple, so Gatekeeper opens the app without the unidentified-developer warning.
+- **In-app updates**: From 1.2.8, macOS checks, downloads, installs, and restarts in place. The manual download-and-replace flow is used only when the app runs from a mounted disk image or read-only volume, or the running build is not Developer ID signed (1.2.7 and earlier).
+- **On-demand components**: Base Stem models and the rekordbox environment download the first time they are needed, so the installer carries only the app itself; the rekordbox download entry appears only after a local installation or library is detected.

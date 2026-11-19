@@ -19,16 +19,19 @@ Track Studio helps DJs and music collectors organize large collections without l
 
 Get the latest [Windows and macOS installers](https://github.com/coderDJing/Track-Studio/releases/latest), or visit the [website](https://coderDJing.github.io/Track-Studio/).
 
-- **Windows:** 10 or later (x64)
-- **macOS:** 12 or later. Intel Mac support is planned through summer 2027.
+- **Windows:** 10 or later (x64). The installer upgrades an existing installation in place.
+- **macOS:** 12 or later, signed with a Developer ID certificate and notarized by Apple. Intel Mac support is planned through summer 2027.
 - No official Linux release.
 
-Already using FRKB? Track Studio updates the same installation and keeps your settings and music library.
+macOS installs from 1.2.8 onward update in place: check for updates, download, and the app installs the new build and restarts. Coming from 1.2.7 or earlier, replace the app once by hand (quit the old version, drag Track Studio into Applications, choose Replace); after that, updates stay inside the app. Large components such as the base Stem models and the rekordbox environment download on demand, so the installer stays small.
+
+Already using FRKB? Track Studio keeps the same installation, settings, and music library.
 
 ## What You Can Do
 
 - **Organize real files:** Build Filter, Curated, and SET playlists; move or merge libraries; restore deleted tracks from the recycle bin.
 - **Find and understand tracks:** Deduplicate by audio content, analyze BPM, key, energy, and sections, and fill metadata and cover art.
+- **Pull in NetEase Cloud Music:** Sign in inside the app and browse liked tracks, your own playlists, saved playlists, and saved albums. Download tracks at lossless or master quality, or copy them into Filter, Curated, SET, or Mixtape, with fingerprint matching to skip duplicates.
 - **Choose compatible tracks:** Filter with a Camelot key wheel or match the current Master deck's key. Keep sorting, columns, and filters per playlist, and check the total duration of selected tracks.
 - **Repair BPM drift:** Analyze selected local tracks and correct drifting audio to a chosen steady BPM. Save a new version or overwrite the original after verification.
 - **Listen and edit:** Browse RGB waveforms, audition two decks side by side, record mixes, and edit a track’s audio without leaving the app.

@@ -21,7 +21,7 @@ export default defineConfig({
       lang: 'zh-CN',
       title: 'Track Studio - DJ 音乐整理与演出准备工作站',
       description:
-        '为 DJ 整理真实音频文件、按指纹去重、双轨波形试听、编排 SET，并用 Mixtape 录制与 Stem 分轨准备演出。支持 Windows 和 macOS。'
+        '为 DJ 整理真实音频文件、接入网易云曲库、按指纹去重、双轨波形试听、编排 SET，并用 Mixtape 录制与 Stem 分轨准备演出。支持 Windows 和 macOS。'
     },
     en: {
       label: 'English',
@@ -29,7 +29,7 @@ export default defineConfig({
       link: '/en/',
       title: 'Track Studio - DJ Music Library & Set Preparation',
       description:
-        'Organize real audio files, find duplicates by fingerprint, audition on two decks, prepare SET playlists, record Mixtapes, and separate stems. For Windows and macOS.'
+        'Organize real audio files, browse a NetEase Cloud Music library, find duplicates by fingerprint, audition on two decks, prepare SET playlists, record Mixtapes, and separate stems. For Windows and macOS.'
     }
   },
 
