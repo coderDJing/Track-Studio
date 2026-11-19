@@ -70,6 +70,7 @@ type TimelineScrollHost = InstanceType<typeof OverlayScrollbarsComponent>
 
 type TimelineTransportAndDragContext = {
   tracks: ValueRef<MixtapeTrack[]>
+  laneCount?: ValueRef<number>
   mixtapeMixMode: ValueRef<MixtapeMixMode>
   mixtapeStemMode: ValueRef<unknown>
   timelineLayout: ValueRef<TimelineLayoutSnapshot>
@@ -95,6 +96,7 @@ type TimelineTransportAndDragContext = {
 export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDragContext) => {
   const {
     tracks,
+    laneCount,
     mixtapeMixMode,
     timelineLayout,
     normalizedRenderZoom,
@@ -310,7 +312,11 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
     transportPreloading,
     transportPreloadDone,
     transportPreloadTotal,
-    transportPreloadFailed
+    transportPreloadFailed,
+    resolveTransportPriorityTrackLimit: () => {
+      const numeric = Number(laneCount?.value)
+      return Number.isFinite(numeric) ? Math.floor(numeric) : 0
+    }
   })
 
   const ensureTransportAudioContext = (sampleRate?: number): AudioContext => {
@@ -894,6 +900,7 @@ export const createTimelineTransportAndDragModule = (ctx: TimelineTransportAndDr
   const { isTrackDragging, handleTrackDragStart, cleanupTrackDrag } =
     createTimelineTransportTrackDragModule({
       tracks,
+      laneCount,
       normalizedRenderZoom,
       resolveRenderPxPerSec,
       resolveTrackDurationSeconds,

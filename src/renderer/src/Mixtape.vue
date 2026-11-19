@@ -14,6 +14,7 @@ import MixtapeProjectGainButtons from '@renderer/components/mixtape/MixtapeProje
 import MixtapeEnvelopeOverlay from '@renderer/components/mixtape/MixtapeEnvelopeOverlay.vue'
 import MixtapeEnvelopeToolbar from '@renderer/components/mixtape/MixtapeEnvelopeToolbar.vue'
 import { useMixtape } from '@renderer/composables/useMixtape'
+import { DEFAULT_LANE_COUNT, MAX_LANE_COUNT } from '@renderer/composables/mixtape/constants'
 import { useMixtapePageUi } from '@renderer/composables/mixtape/useMixtapePageUi'
 import { useMixtapeWindowUserGuide } from '@renderer/composables/mixtape/useMixtapeWindowUserGuide'
 import UserGuideCard from '@renderer/components/userGuide/UserGuideCard.vue'
@@ -255,6 +256,12 @@ const {
   showToast: (message) => showTransportToast(message, 'polite')
 })
 
+const laneCount = mixtape.laneCount
+const handleToggleLaneCount = () => {
+  const nextLaneCount = laneCount.value === MAX_LANE_COUNT ? DEFAULT_LANE_COUNT : MAX_LANE_COUNT
+  void mixtape.setMixtapeLaneCount(nextLaneCount)
+}
+
 watch(transportError, (message) => {
   const text = String(message || '').trim()
   if (!text) return
@@ -355,6 +362,26 @@ onBeforeUnmount(() => {
             {{ t(envelopeHintKey) }}
           </div>
           <div class="mixtape-param-bar__actions">
+            <bubbleBoxTrigger
+              tag="button"
+              class="button mixtape-param-bar__action-btn mixtape-param-bar__action-btn--lane"
+              :class="{ 'is-active': laneCount === MAX_LANE_COUNT }"
+              type="button"
+              :title="
+                laneCount === MAX_LANE_COUNT
+                  ? t('mixtape.laneCountCollapseHint')
+                  : t('mixtape.laneCountExpandHint')
+              "
+              :aria-label="t('mixtape.laneCountActionLabel')"
+              :aria-pressed="laneCount === MAX_LANE_COUNT"
+              @click="handleToggleLaneCount"
+            >
+              {{
+                laneCount === MAX_LANE_COUNT
+                  ? t('mixtape.laneCountFour')
+                  : t('mixtape.laneCountTwo')
+              }}
+            </bubbleBoxTrigger>
             <bubbleBoxTrigger
               tag="button"
               class="button mixtape-param-bar__action-btn mixtape-param-bar__action-btn--icon"

@@ -74,6 +74,7 @@ type TimelineTransportAudioDataCtx = {
   transportPreloadDone: Ref<number>
   transportPreloadTotal: Ref<number>
   transportPreloadFailed: Ref<number>
+  resolveTransportPriorityTrackLimit?: () => number
 }
 
 export type TransportStemId = 'vocal' | 'inst' | 'bass' | 'drums'
@@ -743,7 +744,13 @@ export const createTimelineTransportAudioDataModule = (ctx: TimelineTransportAud
     const selectedEntries: TransportEntry[] = []
     const selectedTrackIds = new Set<string>()
     const focusSec = Math.max(0, Number(ctx.playheadSec.value) || 0)
-    const priorityTrackLimit = ctx.isStemMixMode() ? 2 : TRANSPORT_PRELOAD_PRIORITY_TRACK_LIMIT
+    const baseTrackLimit = ctx.isStemMixMode() ? 2 : TRANSPORT_PRELOAD_PRIORITY_TRACK_LIMIT
+    // 展开到 4 轨时，同时发声的曲目会多于 3 首，预加载优先级窗口要跟着放大。
+    const requestedTrackLimit = Math.floor(Number(ctx.resolveTransportPriorityTrackLimit?.()) || 0)
+    const priorityTrackLimit = Math.max(
+      baseTrackLimit,
+      Number.isFinite(requestedTrackLimit) ? requestedTrackLimit : baseTrackLimit
+    )
     const overlapping: TransportEntry[] = []
     const upcoming: TransportEntry[] = []
     const previous: TransportEntry[] = []

@@ -43,6 +43,11 @@ import {
   resolveMixtapeStemModelByProfile
 } from '@shared/mixtapeStemProfiles'
 import { FIXED_MIXTAPE_STEM_MODE } from '@shared/mixtapeStemMode'
+import {
+  DEFAULT_LANE_COUNT,
+  normalizeMixtapeLaneCount
+} from '@renderer/composables/mixtape/constants'
+import { persistMixtapeProjectLaneCount } from '@renderer/composables/mixtape/mixtapeLaneCount'
 import { createClickThroughGuard } from '@renderer/utils/clickThroughGuard'
 import type {
   MixtapeMixMode,
@@ -94,6 +99,7 @@ export const useMixtape = (options: UseMixtapeOptions = {}) => {
   const mixtapeMixMode = ref<MixtapeMixMode>('stem')
   const mixtapeStemMode = ref<MixtapeStemMode>(FIXED_MIXTAPE_STEM_MODE)
   const mixtapeStemProfile = ref<RendererMixtapeStemProfile>(DEFAULT_MIXTAPE_STEM_PROFILE)
+  const laneCount = ref(DEFAULT_LANE_COUNT)
   const tracks = ref<MixtapeTrack[]>([])
   const mixtapeRawItems = ref<MixtapeRawItem[]>([])
   const mixtapeItemsLoading = ref(!!payload.value.playlistId)
@@ -192,12 +198,35 @@ export const useMixtape = (options: UseMixtapeOptions = {}) => {
     applyRenderZoomImmediate
   } = useMixtapeTimeline({
     tracks,
+    laneCount,
     bpmAnalysisActive,
     bpmAnalysisFailed,
     mixtapeMixMode,
     mixtapeStemMode,
-    layoutScaleDeps: options.layoutScaleDeps
+    layoutScaleDeps: options.layoutScaleDeps ? [...options.layoutScaleDeps, laneCount] : [laneCount]
   })
+
+  // 泳道展开/收起只改视图，不写回任何曲目的 laneIndex：
+  // 收起成 2 轨时第 3/4 轨的曲目只在显示上折回前两轨，再展开回 4 轨会回到原位。
+  const setMixtapeLaneCount = async (nextLaneCount: number): Promise<boolean> => {
+    const resolvedLaneCount = normalizeMixtapeLaneCount(nextLaneCount)
+    if (resolvedLaneCount === laneCount.value) return true
+    const playlistId = String(payload.value.playlistId || '').trim()
+    laneCount.value = resolvedLaneCount
+    clearTimelineLayoutCache()
+    updateTimelineWidth(false)
+    scheduleTimelineDraw()
+    scheduleFullPreRender()
+    scheduleWorkerPreRender()
+    if (playlistId) {
+      try {
+        await persistMixtapeProjectLaneCount(playlistId, resolvedLaneCount)
+      } catch (error) {
+        console.error('[mixtape] persist lane count failed', { playlistId, error })
+      }
+    }
+    return true
+  }
   const {
     createEmptyStemSummary,
     stemSummary,
@@ -450,6 +479,7 @@ export const useMixtape = (options: UseMixtapeOptions = {}) => {
     mixtapeMixMode,
     mixtapeStemMode,
     mixtapeStemProfile,
+    laneCount,
     outputDialogVisible,
     outputRunning,
     outputPath,
@@ -795,6 +825,8 @@ export const useMixtape = (options: UseMixtapeOptions = {}) => {
     mixtapeMixMode,
     mixtapeStemMode,
     mixtapeStemProfile,
+    laneCount,
+    setMixtapeLaneCount,
     mixtapeMenus,
     handleTitleOpenDialog,
     mixtapeRawItems,

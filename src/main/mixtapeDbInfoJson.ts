@@ -3,7 +3,9 @@ import { isSqliteRow } from './libraryDb'
 import { log } from './log'
 
 const TABLE = 'mixtape_items'
-const MIXTAPE_LANE_COUNT = 2
+// 时间线支持 2 轨与 4 轨两种布局；落盘时一律按 4 轨上限收敛，
+// 这样收起成 2 轨再展开回去时不会被主进程提前夹掉数据。
+const MIXTAPE_MAX_LANE_COUNT = 4
 
 export type MixtapeMixEnvelopeParam =
   'gain' | 'high' | 'mid' | 'low' | 'vocal' | 'inst' | 'bass' | 'drums' | 'volume'
@@ -402,7 +404,7 @@ export function upsertMixtapeItemStartSecById(
   const normalizeLaneIndex = (value: unknown) => {
     const numeric = Number(value)
     if (!Number.isFinite(numeric)) return null
-    return Math.max(0, Math.min(MIXTAPE_LANE_COUNT - 1, Math.floor(numeric)))
+    return Math.max(0, Math.min(MIXTAPE_MAX_LANE_COUNT - 1, Math.floor(numeric)))
   }
 
   const trackPatchById = new Map<

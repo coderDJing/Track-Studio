@@ -7,6 +7,18 @@ const DEFAULT_PROJECT_STEM_MODE = '4stems'
 const DEFAULT_PROJECT_STEM_PROFILE = 'quality'
 const SAME_SEC_EPSILON = 0.0001
 
+export const DEFAULT_MIXTAPE_PROJECT_LANE_COUNT = 2
+export const MAX_MIXTAPE_PROJECT_LANE_COUNT = 4
+
+// 时间线泳道数只允许 2 或 4；其余取值一律回落到默认的双轨。
+export const normalizeMixtapeProjectLaneCount = (value: unknown): number => {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return DEFAULT_MIXTAPE_PROJECT_LANE_COUNT
+  return Math.floor(numeric) >= MAX_MIXTAPE_PROJECT_LANE_COUNT
+    ? MAX_MIXTAPE_PROJECT_LANE_COUNT
+    : DEFAULT_MIXTAPE_PROJECT_LANE_COUNT
+}
+
 type MixtapeProjectBpmPoint = {
   sec: number
   bpm: number
@@ -205,5 +217,50 @@ export function upsertMixtapeProjectBpmEnvelope(
       error
     })
     return { updated: 0 }
+  }
+}
+
+export function getMixtapeProjectLaneCount(playlistUuid: string): number {
+  const row = ensureProjectRow(playlistUuid)
+  if (!row) return DEFAULT_MIXTAPE_PROJECT_LANE_COUNT
+  const info = parseProjectInfoJson(row.info_json)
+  return normalizeMixtapeProjectLaneCount(info.laneCount)
+}
+
+export function upsertMixtapeProjectLaneCount(
+  playlistUuid: string,
+  laneCount: unknown
+): { updated: number; laneCount: number } {
+  const resolvedLaneCount = normalizeMixtapeProjectLaneCount(laneCount)
+  const db = getLibraryDb()
+  if (!db) return { updated: 0, laneCount: resolvedLaneCount }
+  const row = ensureProjectRow(playlistUuid)
+  if (!row) return { updated: 0, laneCount: resolvedLaneCount }
+  try {
+    const info = parseProjectInfoJson(row.info_json)
+    if (normalizeMixtapeProjectLaneCount(info.laneCount) === resolvedLaneCount) {
+      return { updated: 0, laneCount: resolvedLaneCount }
+    }
+    if (resolvedLaneCount === DEFAULT_MIXTAPE_PROJECT_LANE_COUNT) {
+      delete info.laneCount
+    } else {
+      info.laneCount = resolvedLaneCount
+    }
+    info.laneCountUpdatedAt = Date.now()
+    const update = db
+      .prepare(
+        `UPDATE ${PROJECT_TABLE} SET info_json = ?, updated_at_ms = ? WHERE playlist_uuid = ?`
+      )
+      .run(JSON.stringify(info), Date.now(), row.playlist_uuid)
+    return {
+      updated: Number(update?.changes || 0),
+      laneCount: resolvedLaneCount
+    }
+  } catch (error) {
+    log.error('[sqlite] mixtape project lane count upsert failed', {
+      playlistUuid,
+      error
+    })
+    return { updated: 0, laneCount: resolvedLaneCount }
   }
 }

@@ -1,5 +1,9 @@
 import { resolveContextMenuPoint } from '@renderer/utils/contextMenuPosition'
 import type ConfirmDialog from '@renderer/components/confirmDialog'
+import {
+  DEFAULT_LANE_COUNT,
+  normalizeMixtapeLaneCount
+} from '@renderer/composables/mixtape/constants'
 import { FIXED_MIXTAPE_STEM_MODE } from '@shared/mixtapeStemMode'
 import {
   applyMixtapeGlobalTempoTargetsToTracks,
@@ -68,6 +72,7 @@ type MixtapeListPayload = {
   }
   mixMode?: unknown
   stemProfile?: unknown
+  laneCount?: unknown
   stemSummary?: unknown
 }
 type BpmAnalysisResultItem = {
@@ -91,6 +96,7 @@ type UseMixtapeBpmAndUiModuleContext = {
   mixtapeMixMode: ValueRef<MixtapeMixMode>
   mixtapeStemMode: ValueRef<string>
   mixtapeStemProfile: ValueRef<MixtapeStemProfile>
+  laneCount: ValueRef<number>
   outputDialogVisible: ValueRef<boolean>
   outputRunning: ValueRef<boolean>
   outputPath: ValueRef<string>
@@ -193,6 +199,7 @@ export const createUseMixtapeBpmAndUiModule = (ctx: UseMixtapeBpmAndUiModuleCont
     mixtapeMixMode,
     mixtapeStemMode,
     mixtapeStemProfile,
+    laneCount,
     outputDialogVisible,
     outputRunning,
     outputPath,
@@ -588,6 +595,7 @@ export const createUseMixtapeBpmAndUiModule = (ctx: UseMixtapeBpmAndUiModuleCont
       mixtapeItemsLoading.value = false
       mixtapeRawItems.value = []
       mixtapeMixMode.value = 'stem'
+      laneCount.value = DEFAULT_LANE_COUNT
       mixtapeStemMode.value = FIXED_MIXTAPE_STEM_MODE
       mixtapeStemProfile.value = DEFAULT_MIXTAPE_STEM_PROFILE
       stemSummary.value = createEmptyStemSummary()
@@ -613,6 +621,7 @@ export const createUseMixtapeBpmAndUiModule = (ctx: UseMixtapeBpmAndUiModuleCont
       })) as MixtapeListPayload
       if (requestToken !== mixtapeItemsRequestToken) return
       mixtapeMixMode.value = normalizeMixtapeMixMode(result?.mixMode)
+      laneCount.value = normalizeMixtapeLaneCount(result?.laneCount)
       mixtapeStemMode.value = FIXED_MIXTAPE_STEM_MODE
       mixtapeStemProfile.value = normalizeStemProfile(
         result?.stemProfile,

@@ -5,7 +5,10 @@ import {
   normalizeGainEnvelopePoints,
   normalizeMixEnvelopePoints
 } from '@renderer/composables/mixtape/gainEnvelope'
-import { LANE_COUNT, normalizeMixtapeLaneIndex } from '@renderer/composables/mixtape/constants'
+import {
+  DEFAULT_LANE_COUNT,
+  normalizeMixtapeLaneIndex
+} from '@renderer/composables/mixtape/constants'
 import { normalizeMixtapeTrackLoopSegments } from '@renderer/composables/mixtape/mixtapeTrackLoop'
 import { normalizeTrackBpmValue } from '@renderer/composables/mixtape/trackTempoModel'
 import { normalizeVolumeMuteSegments } from '@renderer/composables/mixtape/volumeMuteSegments'
@@ -139,7 +142,7 @@ export const parseSnapshot = (
     ? Number(parsedStartSecRaw.toFixed(4))
     : undefined
   const parsedLaneIndex = hasLaneIndexField
-    ? normalizeMixtapeLaneIndex(info?.laneIndex, index % LANE_COUNT)
+    ? normalizeMixtapeLaneIndex(info?.laneIndex, index % DEFAULT_LANE_COUNT)
     : undefined
   const parsedStemStatus = normalizeStemStatus(info?.stemStatus, 'ready')
   const parsedStemError =

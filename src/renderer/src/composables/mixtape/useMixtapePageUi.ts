@@ -393,7 +393,7 @@ export const useMixtapePageUi = ({
   })
 
   const overviewPreviewTraceSignature = computed(() => {
-    const laneSignatures = mixtape.laneIndices
+    const laneSignatures = mixtape.laneIndices.value
       .map((laneIndex) => {
         const items = mixtape.laneTracks.value[laneIndex] || []
         return `${laneIndex}:${items
@@ -430,7 +430,7 @@ export const useMixtapePageUi = ({
     await nextTick()
     requestAnimationFrame(() => {
       if (token !== overviewPreviewTraceToken) return
-      const laneItems = mixtape.laneIndices.map((laneIndex) => {
+      const laneItems = mixtape.laneIndices.value.map((laneIndex) => {
         const items = mixtape.laneTracks.value[laneIndex] || []
         return {
           laneIndex,

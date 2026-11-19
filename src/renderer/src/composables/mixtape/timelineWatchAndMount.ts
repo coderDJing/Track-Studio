@@ -1,6 +1,9 @@
 import { nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
 import type { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
-import { LANE_COUNT, normalizeMixtapeLaneIndex } from '@renderer/composables/mixtape/constants'
+import {
+  DEFAULT_LANE_COUNT,
+  normalizeMixtapeLaneIndex
+} from '@renderer/composables/mixtape/constants'
 import type {
   MixtapeMixMode,
   MixtapeStemMode,
@@ -18,6 +21,7 @@ type TimelineScrollHost = InstanceType<typeof OverlayScrollbarsComponent> | null
 
 type TimelineWatchAndMountContext = {
   tracks: ValueRef<MixtapeTrack[]>
+  laneCount?: ValueRef<number>
   mixtapeMixMode: ValueRef<MixtapeMixMode>
   mixtapeStemMode: ValueRef<MixtapeStemMode>
   resolveTrackWaveformFilePaths: (track: MixtapeTrack) => string[]
@@ -60,6 +64,7 @@ type TimelineWatchAndMountContext = {
 export const createTimelineWatchAndMountModule = (ctx: TimelineWatchAndMountContext) => {
   const {
     tracks,
+    laneCount,
     mixtapeMixMode,
     mixtapeStemMode,
     resolveTrackWaveformFilePaths,
@@ -113,8 +118,7 @@ export const createTimelineWatchAndMountModule = (ctx: TimelineWatchAndMountCont
 
   const bindTimelineViewportIfReady = () => {
     const viewportEl = timelineScrollRef.value?.osInstance()?.elements().viewport as
-      | HTMLElement
-      | undefined
+      HTMLElement | undefined
     if (!viewportEl) return false
     setTimelineWheelTarget(viewportEl)
     if (typeof ResizeObserver !== 'undefined') {
@@ -170,16 +174,16 @@ export const createTimelineWatchAndMountModule = (ctx: TimelineWatchAndMountCont
 
   watch(
     () =>
-      tracks.value
+      `${String(laneCount?.value ?? DEFAULT_LANE_COUNT)}|${tracks.value
         .map((track: MixtapeTrack, index: number) => {
           const startSec = Number(track.startSec) || 0
-          const laneIndex = normalizeMixtapeLaneIndex(track.laneIndex, index % LANE_COUNT)
+          const laneIndex = normalizeMixtapeLaneIndex(track.laneIndex, index % DEFAULT_LANE_COUNT)
           const masterTempo = track.masterTempo === false ? 0 : 1
           return `${track.id}:${laneIndex}:${Math.round(startSec * 1000)}:${resolveTrackGridSignature(
             track
           )}:${masterTempo}`
         })
-        .join('|'),
+        .join('|')}`,
     (_next, prev) => {
       if (typeof prev === 'string' && prev) {
         stopTransportForTrackChange()

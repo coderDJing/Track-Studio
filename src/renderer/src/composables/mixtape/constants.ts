@@ -18,8 +18,30 @@ export const WHEEL_ZOOM_MAX_STEP = 0.3
 export const WHEEL_MAX_STEPS_PER_FRAME = 2
 export const WHEEL_LINE_HEIGHT_PX = 16
 export const LANE_GAP = 8
-export const LANE_COUNT = 2
-export const normalizeMixtapeLaneIndex = (value: unknown, fallback: unknown = 0) => {
+export const DEFAULT_LANE_COUNT = 2
+export const MAX_LANE_COUNT = 4
+
+// 泳道数只允许在默认值与上限之间切换；其余值一律回落到默认值。
+export const normalizeMixtapeLaneCount = (value: unknown): number => {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return DEFAULT_LANE_COUNT
+  return Math.floor(numeric) >= MAX_LANE_COUNT ? MAX_LANE_COUNT : DEFAULT_LANE_COUNT
+}
+
+// 展开到 4 轨时压缩单轨高度，保证轨道区总高度与双轨一致，不把时间线撑出视口。
+export const resolveMixtapeTrackLaneBaseHeight = (laneCount: unknown): number => {
+  const resolvedCount = normalizeMixtapeLaneCount(laneCount)
+  return Math.max(
+    1,
+    Math.round((MIXTAPE_BASE_TRACK_LANE_HEIGHT * DEFAULT_LANE_COUNT) / resolvedCount)
+  )
+}
+
+export const normalizeMixtapeLaneIndex = (
+  value: unknown,
+  fallback: unknown = 0,
+  laneCount: unknown = MAX_LANE_COUNT
+) => {
   const numeric = Number(value)
   const fallbackNumeric = Number(fallback)
   const resolved = Number.isFinite(numeric)
@@ -27,8 +49,17 @@ export const normalizeMixtapeLaneIndex = (value: unknown, fallback: unknown = 0)
     : Number.isFinite(fallbackNumeric)
       ? fallbackNumeric
       : 0
-  return Math.max(0, Math.min(LANE_COUNT - 1, Math.floor(resolved)))
+  const safeLaneCount = Math.max(1, Math.floor(Number(laneCount) || MAX_LANE_COUNT))
+  return Math.max(0, Math.min(safeLaneCount - 1, Math.floor(resolved)))
 }
+
+// 取“存起来的”泳道号（0..MAX-1），不按当前可见泳道数夹取。
+// 只有算显示泳道时才需要区分两者：先拿原始值，再交给折叠逻辑决定显示在哪。
+export const resolveMixtapeStoredLaneIndex = (value: unknown, fallbackIndex = 0) =>
+  normalizeMixtapeLaneIndex(
+    value,
+    Math.max(0, Math.floor(Number(fallbackIndex) || 0)) % DEFAULT_LANE_COUNT
+  )
 export const LANE_PADDING_TOP = 10
 export const TIMELINE_SIDE_PADDING_PX = 18
 export const TIMELINE_END_EXTENSION_PX = 120

@@ -2,6 +2,11 @@
   "mixtape": {
     "zoomIn": "Zoom In",
     "zoomOut": "Zoom Out",
+    "laneCountActionLabel": "Lane count",
+    "laneCountTwo": "2 lanes",
+    "laneCountFour": "4 lanes",
+    "laneCountExpandHint": "Expand to 4 lanes to stack up to 4 tracks",
+    "laneCountCollapseHint": "Collapse to 2 lanes; lanes 3-4 fold back for display only and return when expanded",
     "title": "Mixtape Auto-Recording",
     "recordButton": "Record",
     "openRecordWindow": "Open recording window",

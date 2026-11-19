@@ -54,6 +54,7 @@ import {
 
 type UseMixtapeTimelineOptions = {
   tracks: Ref<MixtapeTrack[]>
+  laneCount: Ref<number>
   bpmAnalysisActive: Ref<boolean>
   bpmAnalysisFailed: Ref<boolean>
   mixtapeMixMode: Ref<MixtapeMixMode>
@@ -64,6 +65,7 @@ type UseMixtapeTimelineOptions = {
 export const useMixtapeTimeline = (options: UseMixtapeTimelineOptions) => {
   const {
     tracks,
+    laneCount,
     bpmAnalysisActive,
     bpmAnalysisFailed,
     mixtapeMixMode,
@@ -97,7 +99,7 @@ export const useMixtapeTimeline = (options: UseMixtapeTimelineOptions) => {
   const overviewWidth = ref(0)
   const isOverviewDragging = ref(false)
   const resolveTimelineScalableBaseHeight = () =>
-    resolveTimelineScalableBaseHeightByTrackCount(tracks.value.length)
+    resolveTimelineScalableBaseHeightByTrackCount(tracks.value.length, laneCount.value)
   let timelineOffscreenCanvas: OffscreenCanvas | null = null
   let timelineObserver: ResizeObserver | null = null
   let timelineViewportObserver: ResizeObserver | null = null
@@ -207,6 +209,7 @@ export const useMixtapeTimeline = (options: UseMixtapeTimelineOptions) => {
     pruneWaveformTileCache
   } = createTimelineHelpersModule({
     zoom,
+    laneCount,
     renderZoom,
     tracks,
     mixtapeMixMode,
@@ -235,7 +238,7 @@ export const useMixtapeTimeline = (options: UseMixtapeTimelineOptions) => {
     return buildSequentialLayoutForZoom(normalizedRenderZoom.value)
   })
   const laneTracks = computed(() =>
-    laneIndices.map((laneIndex) =>
+    laneIndices.value.map((laneIndex) =>
       timelineLayout.value.layout.filter((item) => item.laneIndex === laneIndex)
     )
   )
@@ -644,6 +647,7 @@ export const useMixtapeTimeline = (options: UseMixtapeTimelineOptions) => {
     setTransportMasterVolume
   } = createTimelineTransportAndDragModule({
     tracks,
+    laneCount,
     mixtapeMixMode,
     mixtapeStemMode,
     timelineLayout,
@@ -922,6 +926,7 @@ export const useMixtapeTimeline = (options: UseMixtapeTimelineOptions) => {
 
   createTimelineWatchAndMountModule({
     tracks,
+    laneCount,
     mixtapeMixMode,
     mixtapeStemMode,
     resolveTrackWaveformFilePaths,

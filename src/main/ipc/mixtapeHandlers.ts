@@ -31,6 +31,7 @@ import {
   type MixtapeStemProfile
 } from '../mixtapeDb'
 import { summarizeMixtapeStemStatusByPlaylist } from '../mixtapeStemDb'
+import { getMixtapeProjectLaneCount, upsertMixtapeProjectLaneCount } from '../mixtapeProjectTempoDb'
 import { FIXED_MIXTAPE_STEM_MODE } from '../../shared/mixtapeStemMode'
 import { queueMixtapeRawWaveforms } from '../services/mixtapeRawWaveformQueue'
 import { queueUnifiedDisplayWaveforms } from '../services/unifiedDisplayWaveformQueue'
@@ -169,6 +170,7 @@ export function registerMixtapeHandlers() {
       recovery,
       mixMode: stemConfig.mixMode,
       stemProfile: stemConfig.stemProfile,
+      laneCount: getMixtapeProjectLaneCount(playlistId),
       stemSummary
     }
   })
@@ -186,6 +188,14 @@ export function registerMixtapeHandlers() {
       const playlistId = typeof payload?.playlistId === 'string' ? payload.playlistId : ''
       const mixModeRaw = typeof payload?.mixMode === 'string' ? payload.mixMode : 'stem'
       return upsertMixtapeProjectMixMode(playlistId, mixModeRaw as MixtapeMixMode)
+    }
+  )
+
+  ipcMain.handle(
+    'mixtape:project:set-lane-count',
+    async (_e, payload?: { playlistId?: string; laneCount?: number }) => {
+      const playlistId = typeof payload?.playlistId === 'string' ? payload.playlistId : ''
+      return upsertMixtapeProjectLaneCount(playlistId, payload?.laneCount)
     }
   )
 

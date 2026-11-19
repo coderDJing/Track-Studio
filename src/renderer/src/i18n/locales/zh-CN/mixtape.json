@@ -2,6 +2,11 @@
   "mixtape": {
     "zoomIn": "放大",
     "zoomOut": "缩小",
+    "laneCountActionLabel": "泳道数",
+    "laneCountTwo": "2 轨",
+    "laneCountFour": "4 轨",
+    "laneCountExpandHint": "展开为 4 轨，可同时叠放 4 首",
+    "laneCountCollapseHint": "收起为 2 轨，第 3/4 轨只在显示上折回，展开后恢复原位",
     "title": "Mixtape 自动录制",
     "recordButton": "录制",
     "openRecordWindow": "打开录制窗口",

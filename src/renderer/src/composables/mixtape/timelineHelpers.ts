@@ -4,8 +4,6 @@ import {
   BASE_PX_PER_SEC,
   FALLBACK_TRACK_WIDTH,
   GRID_BEAT_LINE_WIDTH,
-  LANE_COUNT,
-  MIXTAPE_BASE_TRACK_LANE_HEIGHT,
   MIXTAPE_WAVEFORM_HEIGHT_SCALE,
   MIN_TRACK_WIDTH,
   TIMELINE_END_EXTENSION_PX,
@@ -13,7 +11,9 @@ import {
   MIXTAPE_WIDTH_SCALE,
   RAW_WAVEFORM_MIN_ZOOM,
   RENDER_ZOOM_STEP,
-  normalizeMixtapeLaneIndex,
+  normalizeMixtapeLaneCount,
+  resolveMixtapeStoredLaneIndex,
+  resolveMixtapeTrackLaneBaseHeight,
   resolveTimelineGridBarWidth,
   WAVEFORM_TILE_WIDTH,
   ZOOM_MAX,
@@ -23,6 +23,7 @@ import {
   resolveFirstBeatTimelineSec,
   resolveTempoRatioByBpm
 } from '@renderer/composables/mixtape/beatSyncModel'
+import { buildMixtapeDisplayLaneMap } from '@renderer/composables/mixtape/mixtapeLaneCount'
 import { resolveMixtapeAudioFirstBeatSec } from '@renderer/composables/mixtape/mixtapeAudioGridBasis'
 import { resolveRoundedTrackLocalPx } from '@renderer/composables/mixtape/timelinePixelMath'
 import { buildTrackRuntimeTempoSnapshot } from '@renderer/composables/mixtape/trackRuntimeTempoSnapshot'
@@ -80,6 +81,7 @@ type TimelineHelpersContext = {
   zoom: ValueRef<number>
   renderZoom: ValueRef<number>
   tracks: ValueRef<MixtapeTrack[]>
+  laneCount?: ValueRef<number>
   mixtapeMixMode: ValueRef<MixtapeMixMode>
   mixtapeStemMode?: ValueRef<unknown>
   t: (key: string) => string
@@ -113,6 +115,7 @@ export const createTimelineHelpersModule = (ctx: TimelineHelpersContext) => {
     zoom,
     renderZoom,
     tracks,
+    laneCount,
     mixtapeMixMode,
     t,
     libraryUtils,
@@ -205,20 +208,24 @@ export const createTimelineHelpersModule = (ctx: TimelineHelpersContext) => {
     return Math.max(0.56, numeric)
   }
 
+  const resolvedLaneCount = computed(() => normalizeMixtapeLaneCount(laneCount?.value))
+
   const resolveLaneHeightForZoom = (_value: number) =>
     Math.max(
       envelopeLaneExpanded?.value ? 200 : 0,
-      Math.round(MIXTAPE_BASE_TRACK_LANE_HEIGHT * resolveTimelineVisualScale())
+      Math.round(
+        resolveMixtapeTrackLaneBaseHeight(resolvedLaneCount.value) * resolveTimelineVisualScale()
+      )
     )
 
   const resolveTimelineBufferId = (zoomValue: number) =>
-    `z:${Math.round(zoomValue * 1000)}:h:${resolveLaneHeightForZoom(zoomValue)}`
+    `z:${Math.round(zoomValue * 1000)}:h:${resolveLaneHeightForZoom(zoomValue)}:l:${resolvedLaneCount.value}`
 
   const laneHeight = computed(() => resolveLaneHeightForZoom(normalizedRenderZoom.value))
 
-  const laneIndices = Array.from({ length: LANE_COUNT }, (_, index) => index)
-  const resolveTrackLaneIndex = (track: MixtapeTrack, fallbackIndex: number) =>
-    normalizeMixtapeLaneIndex(track?.laneIndex, fallbackIndex % LANE_COUNT)
+  const laneIndices = computed(() =>
+    Array.from({ length: resolvedLaneCount.value }, (_, index) => index)
+  )
   const STEM_IDS_4STEMS: MixtapeWaveformStemId[] = ['vocal', 'inst', 'bass', 'drums']
   const isStemMixMode = (): boolean =>
     (mixtapeMixMode?.value as MixtapeMixMode | undefined) !== 'eq'
@@ -448,6 +455,8 @@ export const createTimelineHelpersModule = (ctx: TimelineHelpersContext) => {
     let cursorPx = TIMELINE_SIDE_PADDING_PX
     let cursorSec = 0
     const layout: TimelineTrackLayout[] = []
+    const layoutSpans: Array<{ id: string; laneIndex: number; startSec: number; endSec: number }> =
+      []
 
     for (let i = 0; i < tracks.value.length; i += 1) {
       const track = tracks.value[i]
@@ -464,13 +473,30 @@ export const createTimelineHelpersModule = (ctx: TimelineHelpersContext) => {
       } else {
         cursorSec = Math.max(cursorSec, endX / Math.max(0.0001, px))
       }
+      // 这里必须用“存起来的”泳道号：若先按可见泳道数夹取，折叠逻辑就永远看不到 2/3，
+      // 收起成 2 轨时会退化成把所有折叠曲目堆在最后一条泳道上。
+      const storedLaneIndex = resolveMixtapeStoredLaneIndex(track?.laneIndex, i)
       layout.push({
         track,
-        laneIndex: resolveTrackLaneIndex(track, i),
+        laneIndex: storedLaneIndex,
         startSec,
         startX,
         width
       })
+      layoutSpans.push({
+        id: track.id,
+        laneIndex: storedLaneIndex,
+        startSec,
+        endSec: startSec + (Number.isFinite(durationSec) ? Math.max(0, durationSec) : 0)
+      })
+    }
+
+    // 收起成 2 轨时，第 3/4 轨的曲目只在显示上折回前两轨；存入的 laneIndex 不变，
+    // 所以再展开回 4 轨会回到原位。
+    const displayLaneByTrackId = buildMixtapeDisplayLaneMap(layoutSpans, resolvedLaneCount.value)
+    for (const item of layout) {
+      const displayLaneIndex = displayLaneByTrackId.get(item.track.id)
+      if (typeof displayLaneIndex === 'number') item.laneIndex = displayLaneIndex
     }
 
     layout.sort((a, b) => a.startX - b.startX)

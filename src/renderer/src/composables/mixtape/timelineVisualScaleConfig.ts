@@ -1,8 +1,9 @@
 import {
-  LANE_COUNT,
-  MIXTAPE_BASE_TRACK_LANE_HEIGHT,
+  DEFAULT_LANE_COUNT,
   MIXTAPE_ENVELOPE_PREVIEW_BASE_LANE_HEIGHT,
-  MIXTAPE_OVERVIEW_BASE_LANE_HEIGHT
+  MIXTAPE_OVERVIEW_BASE_LANE_HEIGHT,
+  normalizeMixtapeLaneCount,
+  resolveMixtapeTrackLaneBaseHeight
 } from '@renderer/composables/mixtape/constants'
 
 export const TIMELINE_VISUAL_SCALE_MIN = 0.56
@@ -16,24 +17,32 @@ const ENVELOPE_PREVIEW_LANE_PADDING_Y_PX = 2
 const OVERVIEW_LANE_GAP_PX = 6
 const OVERVIEW_LANE_PADDING_Y_PX = 8
 
-const TRACK_SECTION_BASE_HEIGHT =
-  LANE_COUNT * (MIXTAPE_BASE_TRACK_LANE_HEIGHT + TIMELINE_TRACK_LANE_BORDER_PX) +
-  Math.max(0, LANE_COUNT - 1) * TIMELINE_TRACK_LANE_GAP_PX +
+const resolveTrackSectionBaseHeight = (laneCount: number) =>
+  laneCount * (resolveMixtapeTrackLaneBaseHeight(laneCount) + TIMELINE_TRACK_LANE_BORDER_PX) +
+  Math.max(0, laneCount - 1) * TIMELINE_TRACK_LANE_GAP_PX +
   TIMELINE_TRACK_VERTICAL_PADDING_PX
-const ENVELOPE_SECTION_BASE_HEIGHT =
-  LANE_COUNT * MIXTAPE_ENVELOPE_PREVIEW_BASE_LANE_HEIGHT +
-  Math.max(0, LANE_COUNT - 1) * ENVELOPE_PREVIEW_LANE_GAP_PX +
+
+const resolveEnvelopeSectionBaseHeight = (laneCount: number) =>
+  laneCount * MIXTAPE_ENVELOPE_PREVIEW_BASE_LANE_HEIGHT +
+  Math.max(0, laneCount - 1) * ENVELOPE_PREVIEW_LANE_GAP_PX +
   ENVELOPE_PREVIEW_LANE_PADDING_Y_PX
-const OVERVIEW_SECTION_BASE_HEIGHT =
-  LANE_COUNT * MIXTAPE_OVERVIEW_BASE_LANE_HEIGHT +
-  Math.max(0, LANE_COUNT - 1) * OVERVIEW_LANE_GAP_PX +
+
+const resolveOverviewSectionBaseHeight = (laneCount: number) =>
+  laneCount * MIXTAPE_OVERVIEW_BASE_LANE_HEIGHT +
+  Math.max(0, laneCount - 1) * OVERVIEW_LANE_GAP_PX +
   OVERVIEW_LANE_PADDING_Y_PX
 
-export const resolveTimelineScalableBaseHeightByTrackCount = (trackCount: number) => {
+export const resolveTimelineScalableBaseHeightByTrackCount = (
+  trackCount: number,
+  laneCount: number = DEFAULT_LANE_COUNT
+) => {
+  const resolvedLaneCount = normalizeMixtapeLaneCount(laneCount)
   const hasTracks = Number(trackCount) > 0
-  const envelopeSectionHeight = hasTracks ? ENVELOPE_SECTION_BASE_HEIGHT : 0
+  const envelopeSectionHeight = hasTracks ? resolveEnvelopeSectionBaseHeight(resolvedLaneCount) : 0
   return Math.max(
     1,
-    TRACK_SECTION_BASE_HEIGHT + envelopeSectionHeight + OVERVIEW_SECTION_BASE_HEIGHT
+    resolveTrackSectionBaseHeight(resolvedLaneCount) +
+      envelopeSectionHeight +
+      resolveOverviewSectionBaseHeight(resolvedLaneCount)
   )
 }

@@ -4,7 +4,7 @@ import {
   isTrackTimingSnapshotSame,
   restoreTrackTimingUndoSnapshots
 } from '@renderer/composables/mixtape/mixtapeTrackTimingUndo'
-import { LANE_COUNT } from '@renderer/composables/mixtape/constants'
+import { DEFAULT_LANE_COUNT } from '@renderer/composables/mixtape/constants'
 import type { MixtapeTrack, TimelineTrackLayout } from '@renderer/composables/mixtape/types'
 
 type UseMixtapeTrackDragUndoOptions = {
@@ -41,7 +41,9 @@ export const useMixtapeTrackDragUndo = ({
         : buildTrackTimingUndoSnapshot(
             track,
             Number(track.startSec) || 0,
-            Number.isFinite(Number(track.laneIndex)) ? Number(track.laneIndex) : index % LANE_COUNT
+            Number.isFinite(Number(track.laneIndex))
+              ? Number(track.laneIndex)
+              : index % DEFAULT_LANE_COUNT
           )
     )
     handleTrackDragStart(item, event)
@@ -69,7 +71,7 @@ export const useMixtapeTrackDragUndo = ({
                 Number(track.startSec) || 0,
                 Number.isFinite(Number(track.laneIndex))
                   ? Number(track.laneIndex)
-                  : index % LANE_COUNT
+                  : index % DEFAULT_LANE_COUNT
               )
         ])
       )

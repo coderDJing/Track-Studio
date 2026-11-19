@@ -1,10 +1,12 @@
 import { ref } from 'vue'
 import {
+  DEFAULT_LANE_COUNT,
   GRID_BEAT_LINE_ZOOM,
   GRID_DOWNBEAT_LINE_ZOOM,
-  LANE_COUNT,
-  normalizeMixtapeLaneIndex
+  normalizeMixtapeLaneIndex,
+  resolveMixtapeStoredLaneIndex
 } from '@renderer/composables/mixtape/constants'
+import { buildMixtapeDisplayLaneMap } from '@renderer/composables/mixtape/mixtapeLaneCount'
 import {
   resolveBeatSecByBpm,
   resolveGridAnchorSec
@@ -43,6 +45,7 @@ type TrackTimingItem = {
 
 type TimelineTransportTrackDragContext = {
   tracks: ValueRef<MixtapeTrack[]>
+  laneCount?: ValueRef<number>
   normalizedRenderZoom: ValueRef<number>
   resolveRenderPxPerSec: (zoomValue: number) => number
   resolveTrackDurationSeconds: (track: MixtapeTrack) => number
@@ -77,6 +80,7 @@ type TimelineTransportTrackDragContext = {
 export const createTimelineTransportTrackDragModule = (ctx: TimelineTransportTrackDragContext) => {
   const {
     tracks,
+    laneCount,
     normalizedRenderZoom,
     resolveRenderPxPerSec,
     resolveTrackDurationSeconds,
@@ -107,8 +111,12 @@ export const createTimelineTransportTrackDragModule = (ctx: TimelineTransportTra
   const findTrack = (trackId: string) =>
     tracks.value.find((item: MixtapeTrack) => item.id === trackId) || null
 
-  const resolveTrackLaneIndex = (track: MixtapeTrack | undefined, fallbackIndex: number) =>
-    normalizeMixtapeLaneIndex(track?.laneIndex, fallbackIndex % LANE_COUNT)
+  const resolveActiveLaneCount = () => {
+    const numeric = Number(laneCount?.value)
+    return Number.isFinite(numeric) && numeric >= DEFAULT_LANE_COUNT
+      ? Math.max(DEFAULT_LANE_COUNT, Math.floor(numeric))
+      : DEFAULT_LANE_COUNT
+  }
 
   const resolveDragLaneRects = (event: MouseEvent) => {
     const eventTarget = event.currentTarget || event.target
@@ -119,7 +127,7 @@ export const createTimelineTransportTrackDragModule = (ctx: TimelineTransportTra
       .map((element, index) => {
         const rect = element.getBoundingClientRect()
         return {
-          laneIndex: normalizeMixtapeLaneIndex(index),
+          laneIndex: normalizeMixtapeLaneIndex(index, 0, resolveActiveLaneCount()),
           top: rect.top,
           bottom: rect.bottom
         }
@@ -142,8 +150,9 @@ export const createTimelineTransportTrackDragModule = (ctx: TimelineTransportTra
 
   const buildTrackTimingSnapshot = (inputTracks: MixtapeTrack[]) => {
     let cursorSec = 0
-    return inputTracks.map((track, index) => {
-      const laneIndex = resolveTrackLaneIndex(track, index)
+    const timings = inputTracks.map((track, index) => {
+      // 用存起来的泳道号参与折叠，显示泳道由 buildMixtapeDisplayLaneMap 统一决定。
+      const laneIndex = resolveMixtapeStoredLaneIndex(track?.laneIndex, index)
       const duration = resolveTrackDurationSeconds(track)
       const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0
       const rawStartSec = Number(track.startSec)
@@ -158,6 +167,12 @@ export const createTimelineTransportTrackDragModule = (ctx: TimelineTransportTra
         endSec,
         durationSec: safeDuration
       }
+    }) satisfies TrackTimingItem[]
+    // 泳道收起时，碰撞判定必须按“显示出来的泳道”算，否则会和用户看到的排布不一致。
+    const displayLaneByTrackId = buildMixtapeDisplayLaneMap(timings, resolveActiveLaneCount())
+    return timings.map((item) => {
+      const displayLaneIndex = displayLaneByTrackId.get(item.id)
+      return typeof displayLaneIndex === 'number' ? { ...item, laneIndex: displayLaneIndex } : item
     }) satisfies TrackTimingItem[]
   }
 
@@ -741,7 +756,9 @@ export const createTimelineTransportTrackDragModule = (ctx: TimelineTransportTra
         }
       }
       if (!rippleTrackIds.has(track.id)) return track
-      const restoredLaneIndex = resolveTrackLaneIndex(snapshotTrack, index)
+      // Shift 带动只挪时间、不换轨。这里必须还原“存起来的”泳道号：
+      // 用按可见泳道夹取的值会把收起状态下被折回显示的曲目永久压到前两轨。
+      const restoredLaneIndex = resolveMixtapeStoredLaneIndex(snapshotTrack?.laneIndex, index)
       const restoredStartSec = roundTrackTempoSec(Math.max(0, snapshotTiming.startSec))
       if (!rippleActive) {
         return {
@@ -761,8 +778,8 @@ export const createTimelineTransportTrackDragModule = (ctx: TimelineTransportTra
       if (!previousTrack || previousTrack.id !== track.id) return true
       const previousStartSec = normalizeStartSec(previousTrack.startSec) ?? 0
       const nextStartSecValue = normalizeStartSec(track.startSec) ?? 0
-      const previousLaneIndex = resolveTrackLaneIndex(previousTrack, index)
-      const nextLaneIndex = resolveTrackLaneIndex(track, index)
+      const previousLaneIndex = resolveMixtapeStoredLaneIndex(previousTrack?.laneIndex, index)
+      const nextLaneIndex = resolveMixtapeStoredLaneIndex(track.laneIndex, index)
       return (
         Math.abs(previousStartSec - nextStartSecValue) > 0.0001 ||
         previousLaneIndex !== nextLaneIndex
@@ -794,8 +811,10 @@ export const createTimelineTransportTrackDragModule = (ctx: TimelineTransportTra
         const previousTiming = previousTimingById.get(track.id)
         const currentTiming = currentTimingById.get(track.id)
         if (!previousTrack || !previousTiming || !currentTiming) return null
-        const previousLaneIndex = resolveTrackLaneIndex(previousTrack, index)
-        const currentLaneIndex = resolveTrackLaneIndex(track, index)
+        // 比较“存起来的”泳道号：内存里的 laneIndex 若已被本次拖拽改写，
+        // 必须同步落盘，否则界面和磁盘会各说一套（重开又跳回第 3/4 轨）。
+        const previousLaneIndex = resolveMixtapeStoredLaneIndex(previousTrack?.laneIndex, index)
+        const currentLaneIndex = resolveMixtapeStoredLaneIndex(track.laneIndex, index)
         const startChanged =
           Math.abs(Number(previousTiming.startSec) - Number(currentTiming.startSec)) > 0.0001
         const laneChanged = previousLaneIndex !== currentLaneIndex
@@ -803,12 +822,10 @@ export const createTimelineTransportTrackDragModule = (ctx: TimelineTransportTra
         return {
           itemId: track.id,
           startSec: Number(currentTiming.startSec),
-          laneIndex: currentLaneIndex
+          ...(laneChanged ? { laneIndex: currentLaneIndex } : {})
         }
       })
-      .filter(
-        (entry): entry is { itemId: string; startSec: number; laneIndex: number } => entry !== null
-      )
+      .filter((entry): entry is { itemId: string; startSec: number; laneIndex?: number } => !!entry)
     if (!changedEntries.length) return
     void persistTrackStartSec(changedEntries)
   }
