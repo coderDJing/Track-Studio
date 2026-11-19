@@ -356,13 +356,13 @@ export class NeteaseClient {
     })
   }
 
-  /** 删除自己创建的歌单。走 /weapi/playlist/delete，一次可传多个 id。 */
+  /** 删除自己创建的歌单。走 /weapi/playlist/remove，ids 为 [id] / [id1,id2] 这种 JSON 数组字符串。 */
   async deletePlaylists(playlistIds: string[]): Promise<void> {
     const ids = [
       ...new Set(playlistIds.map((id) => String(id || '').trim()).filter((id) => id && id !== '0'))
     ]
     if (ids.length === 0) return
-    await this.weapi('/playlist/delete', { ids: ids.join(',') })
+    await this.weapi('/playlist/remove', { ids: `[${ids.join(',')}]` })
   }
 
   /** 取消收藏别人的歌单。走 /weapi/playlist/unsubscribe。 */
