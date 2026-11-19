@@ -183,6 +183,7 @@ interface Runtime {
     CuratedLibrary: string
     SetLibrary: string
     MixtapeLibrary: string
+    NeteaseLibrary: string
   }
   importingSongListUUID: string
   openSongListAfterImportUUID: string
@@ -310,7 +311,8 @@ export const useRuntimeStore = defineStore('runtime', {
         FilterLibrary: '',
         CuratedLibrary: '',
         SetLibrary: '',
-        MixtapeLibrary: ''
+        MixtapeLibrary: '',
+        NeteaseLibrary: ''
       },
       importingSongListUUID: '', //正在执行导入中的歌单
       openSongListAfterImportUUID: '', //导入完成后需要打开的歌单

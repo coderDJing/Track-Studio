@@ -100,6 +100,7 @@ watch(
   () => {
     syncNodeRefs()
   },
+  // 不 deep：整树很深。网易云同步/删除后必须换掉 libraryTree 根引用，这里才会刷新。
   { deep: false }
 )
 

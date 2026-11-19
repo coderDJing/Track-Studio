@@ -512,15 +512,27 @@ export async function deletePlaylistFromLibrary(
 ): Promise<NeteasePlaylistDeletePreview> {
   const preview = getPlaylistDeletePreview(playlistId)
   await ensureNeteaseClientLoggedIn()
-  if (preview.kind === 'created') {
-    await neteaseClient.deletePlaylists([preview.playlistId])
-  } else if (preview.kind === 'album') {
-    await neteaseClient.unsubscribeAlbum(preview.playlistId)
-  } else {
-    await neteaseClient.unsubscribePlaylist(preview.playlistId)
-  }
   const userId = getLoggedInUserId()
   if (!userId) throw new Error('需要先登录网易云音乐')
+  if (preview.kind === 'created') {
+    await neteaseClient.deletePlaylists([preview.playlistId])
+    const remaining = await neteaseClient.listPlaylists(userId)
+    if (remaining.some((item) => item.playlistId === preview.playlistId)) {
+      throw new Error('网易云没有删除这张歌单，请稍后重试')
+    }
+  } else if (preview.kind === 'album') {
+    await neteaseClient.unsubscribeAlbum(preview.playlistId)
+    const remaining = await neteaseClient.listAlbums()
+    if (remaining.some((item) => item.playlistId === preview.playlistId)) {
+      throw new Error('网易云没有取消收藏这张专辑，请稍后重试')
+    }
+  } else {
+    await neteaseClient.unsubscribePlaylist(preview.playlistId)
+    const remaining = await neteaseClient.listPlaylists(userId)
+    if (remaining.some((item) => item.playlistId === preview.playlistId)) {
+      throw new Error('网易云没有取消收藏这张歌单，请稍后重试')
+    }
+  }
   applyDeletedPlaylist(requireDb(), getListRoot(), preview.playlistId, userId)
   return preview
 }

@@ -167,16 +167,19 @@ export class NeteaseClient {
   }
 
   async weapi<T extends Json = Json>(path: string, fields: Json = {}): Promise<T> {
-    const csrf = this.jar.get('__csrf')
-    const payload: Json = csrf ? { ...fields, csrf_token: csrf } : fields
+    // 官方网页和 pyncm 会把 csrf_token 同时放进加密 body 和 URL；
+    // 只放 body、或没有这字段时，部分写接口会回 200 却不改数据。
+    const csrf = String(this.jar.get('__csrf') || this.jar.get('_csrf') || '')
+    const payload: Json = { ...fields, csrf_token: csrf }
     const { params, encSecKey } = weapiEncrypt(payload)
     const body = new URLSearchParams({ params, encSecKey }).toString()
+    const url = `${WEB_BASE}/weapi${path}?csrf_token=${encodeURIComponent(csrf)}`
 
     let lastError: unknown = null
     // music.163.com 偶发连接超时，单次重试就能过；失败三次再报错。
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        const response = await fetchWithSystemProxy(`${WEB_BASE}/weapi${path}`, {
+        const response = await fetchWithSystemProxy(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -361,8 +364,12 @@ export class NeteaseClient {
     const ids = [
       ...new Set(playlistIds.map((id) => String(id || '').trim()).filter((id) => id && id !== '0'))
     ]
-    if (ids.length === 0) return
-    await this.weapi('/playlist/remove', { ids: `[${ids.join(',')}]` })
+    if (ids.length === 0) throw new Error('缺少歌单')
+    const result = await this.weapi('/playlist/remove', { ids: `[${ids.join(',')}]` })
+    const detail = asStr(result.message) || asStr(result.msg)
+    log.info(
+      `[netease] playlist/remove 返回 code=${asNum(result.code)}${detail ? ` ${detail}` : ''}`
+    )
   }
 
   /** 取消收藏别人的歌单。走 /weapi/playlist/unsubscribe。 */

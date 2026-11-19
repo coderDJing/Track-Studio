@@ -85,10 +85,31 @@ const neteaseTreeIsEmpty = (tree: unknown): boolean => {
   return !node?.children?.length
 }
 
+const touchLibraryTreeAfterNeteaseApply = (): void => {
+  const runtime = useRuntimeStore()
+  // libraryItem 用 shallowRef + 非 deep watch 盯的是 libraryTree 根引用。
+  // 只改 NeteaseLibrary.children 时根没变，树上会继续显示旧节点，
+  // 右键却按新树查找，删除按钮就会消失。
+  runtime.libraryTree = {
+    ...runtime.libraryTree,
+    children: [...(runtime.libraryTree.children || [])]
+  }
+  runtime.oldLibraryTree = JSON.parse(JSON.stringify(runtime.libraryTree))
+}
+
+const applyNeteaseGroupsToRuntimeTree = (
+  groups: Parameters<typeof applyNeteaseGroupsToTree>[1]
+): boolean => {
+  const runtime = useRuntimeStore()
+  if (!applyNeteaseGroupsToTree(runtime.libraryTree, groups)) return false
+  touchLibraryTreeAfterNeteaseApply()
+  return true
+}
+
 const applyCatalogGroupsToTree = async (groups: NeteaseGroupPayload[]): Promise<boolean> => {
   if (!groups.length) return false
   const runtime = useRuntimeStore()
-  if (applyNeteaseGroupsToTree(runtime.libraryTree, groups)) {
+  if (applyNeteaseGroupsToRuntimeTree(groups)) {
     neteaseCatalogSyncing.value = false
     return true
   }
@@ -99,7 +120,7 @@ const applyCatalogGroupsToTree = async (groups: NeteaseGroupPayload[]): Promise<
     localizeNeteaseTreeTitles(tree)
     runtime.libraryTree = tree
     runtime.oldLibraryTree = JSON.parse(JSON.stringify(tree))
-    const applied = applyNeteaseGroupsToTree(runtime.libraryTree, groups)
+    const applied = applyNeteaseGroupsToRuntimeTree(groups)
     if (applied) neteaseCatalogSyncing.value = false
     return applied
   } catch (error) {
@@ -211,7 +232,7 @@ export const logoutNetease = async (): Promise<void> => {
   await invoke('netease:logout')
   neteaseLoggedIn.value = false
   const runtime = useRuntimeStore()
-  applyNeteaseGroupsToTree(runtime.libraryTree, [])
+  applyNeteaseGroupsToRuntimeTree([])
   emitter.emit('netease/statusChanged')
 }
 
@@ -1348,10 +1369,7 @@ export const deleteNeteasePlaylist = async (uuid: string): Promise<boolean> => {
 
   try {
     const result = await invoke<DeletePreview>('netease:delete-playlist', { playlistId })
-    applyNeteaseGroupsToTree(
-      runtime.libraryTree,
-      Array.isArray(result?.groups) ? result.groups : []
-    )
+    applyNeteaseGroupsToRuntimeTree(Array.isArray(result?.groups) ? result.groups : [])
     if (runtime.songsArea.songListUUID === uuid) {
       runtime.songsArea.songListUUID = ''
     }

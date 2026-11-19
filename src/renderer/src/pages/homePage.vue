@@ -180,9 +180,12 @@ onUnmounted(() => {
 
 let librarySelected = ref('FilterLibrary')
 type CoreLibraryName = 'FilterLibrary' | 'CuratedLibrary' | 'SetLibrary' | 'MixtapeLibrary'
+type RestorableLibraryName = CoreLibraryName | 'NeteaseLibrary'
 const normalizeLibraryPath = (value: string) => (value || '').replace(/\\/g, '/')
 const isCoreLibraryName = (value: string): value is CoreLibraryName =>
   ['FilterLibrary', 'CuratedLibrary', 'SetLibrary', 'MixtapeLibrary'].includes(value)
+const isRestorableLibraryName = (value: string): value is RestorableLibraryName =>
+  isCoreLibraryName(value) || value === 'NeteaseLibrary'
 const isPlaylistUnderLibrary = (uuid: string, libraryName: CoreLibraryName): boolean => {
   if (!uuid) return false
   const node = libraryUtils.getLibraryTreeByUUID(uuid)
@@ -306,6 +309,13 @@ watch(
   () => runtime.songsArea.songListUUID,
   (uuid) => {
     if (
+      runtime.libraryAreaSelected === 'NeteaseLibrary' &&
+      (uuid === NETEASE_DOWNLOADED_UUID || isNeteasePlaylistUuid(uuid))
+    ) {
+      runtime.lastSongListUUIDByLibrary.NeteaseLibrary = uuid
+      return
+    }
+    if (
       !uuid ||
       uuid === EXTERNAL_PLAYLIST_UUID ||
       uuid === RECYCLE_BIN_UUID ||
@@ -340,7 +350,7 @@ watch(
       if (runtime.songsArea.songListUUID !== specialListUUID) {
         runtime.songsArea.songListUUID = specialListUUID
       }
-    } else if (isCoreLibraryName(val)) {
+    } else if (isRestorableLibraryName(val)) {
       if (restoreSplitAfterSpecialLibraryIfNeeded()) {
         triggerLibrarySwitchAnimation(oldVal === undefined)
         return
