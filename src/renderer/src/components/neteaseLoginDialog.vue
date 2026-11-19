@@ -148,7 +148,6 @@ onUnmounted(() => {
           <span v-else-if="message">{{ message }}</span>
         </div>
         <div class="login-official">
-          <span class="login-official-hint">{{ t('netease.loginOfficialHint') }}</span>
           <button type="button" class="login-official-link" @click="openOfficialSite">
             <span>{{ t('netease.loginOfficialLink') }}</span>
             <svg class="login-official-icon" viewBox="0 0 12 12" aria-hidden="true">
@@ -228,21 +227,11 @@ onUnmounted(() => {
   text-align: center;
 }
 
-/* 官网入口：一行弱提示 + 一枚外链小药丸，不抢二维码的注意力。 */
+/* 官网入口：一枚外链小药丸，弱于主操作，不抢二维码的注意力。 */
 .login-official {
   display: flex;
-  align-items: center;
   justify-content: center;
-  flex-wrap: wrap;
-  gap: 8px;
   margin-top: -4px;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--text-weak);
-}
-
-.login-official-hint {
-  opacity: 0.85;
 }
 
 .login-official-link {
