@@ -67,7 +67,9 @@ export const createTimelineViewportModule = (ctx: TimelineViewportContext) => {
     },
     overflow: {
       x: 'scroll',
-      y: 'scroll'
+      // 轨道区高度是按 lane 高度精确算出来的，纵向不该出现滚动条：
+      // 用 auto 而不是 scroll，避免内容刚好放下时也常显一条竖向滚动条。
+      y: 'auto'
     } as const
   }
   const preRenderPercent = computed(() => {

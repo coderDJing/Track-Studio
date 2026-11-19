@@ -100,6 +100,8 @@
   position: relative;
   display: flex;
   align-items: center;
+  /* 高度预算里固定按 24px 记账，边框必须算进 24px 内，否则会撑出 2px 竖向溢出 */
+  box-sizing: border-box;
   height: 24px;
   padding: 0;
   border-top: 1px solid var(--mixtape-panel-border-soft);
