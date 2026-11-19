@@ -39,6 +39,17 @@
     "removeFromPlaylistConfirm": "Remove {count} track(s) from the NetEase playlist “{title}”? Downloaded local files will not be deleted.",
     "removeFromPlaylistFailed": "Could not remove tracks from the playlist",
     "removeFromPlaylistNotEditable": "You can only remove tracks from playlists you created or from Liked Songs. Subscribed playlists and albums can't be changed.",
+    "deletePlaylist": "Delete playlist",
+    "unsubscribePlaylist": "Unsubscribe",
+    "deletePlaylistFailed": "Could not delete the playlist",
+    "unsubscribePlaylistFailed": "Could not unsubscribe",
+    "deletePlaylistConfirmOnly": "Delete the NetEase playlist “{title}”? It has {count} track(s).",
+    "deletePlaylistConfirmKeepLocal": "Delete the NetEase playlist “{title}”? It has {count} track(s). Downloaded local files will be kept.",
+    "deletePlaylistConfirmDeleteLocal": "Delete the NetEase playlist “{title}”? It has {count} track(s). The {downloadedCount} downloaded file(s) that belong only to this playlist will also be moved to the recycle bin.",
+    "unsubscribePlaylistConfirmOnly": "Unsubscribe from “{title}”? It has {count} track(s).",
+    "unsubscribePlaylistConfirmKeepLocal": "Unsubscribe from “{title}”? It has {count} track(s). Downloaded local files will be kept.",
+    "unsubscribePlaylistConfirmDeleteLocal": "Unsubscribe from “{title}”? It has {count} track(s). The {downloadedCount} downloaded file(s) that belong only to this playlist will also be moved to the recycle bin.",
+    "deletePlaylistExclusiveDownloadedCount": "{count} of them are downloaded and belong only to this playlist.",
     "streamOnlyNoFile": "This track is still only in the NetEase playlist, so there is no local file. Export and analysis will download it automatically first. Download it before dragging a playlist track to the Filter or Curated library. NetEase tracks are copied, never moved. To delete the cache, download it first.",
     "streamOnlyDragHint": "No local file yet — download it before dragging to the Filter or Curated library. Dropping onto a SET will download in the background.",
     "downloadedBadge": "Downloaded",
@@ -67,7 +78,14 @@
       "cacheHint": "Audio buffered while previewing. Safe to clear at any time — unrelated to Downloaded.",
       "cacheUsage": "Currently using {size}.",
       "cacheCustom": "Current {size}",
-      "clearCache": "Clear preview cache"
+      "clearCache": "Clear preview cache",
+      "removePlaylistLocalFiles": "Local files when removing or deleting a playlist",
+      "removePlaylistLocalFilesHint": "When you remove tracks from a playlist you created or from Liked Songs, or when you delete or unsubscribe a playlist, choose whether downloaded local files that belong only to that playlist also go to the recycle bin. You can also check “Remember this choice” in the confirmation dialog. The Delete key and multi-select use the same setting.",
+      "removePlaylistLocalFilesAsk": "Ask every time",
+      "removePlaylistLocalFilesDelete": "Also delete downloaded local files",
+      "removePlaylistLocalFilesKeep": "Keep downloaded local files",
+      "showLibraryIcon": "Show library icon",
+      "showLibraryIconHint": "When off, the NetEase Cloud Music icon is hidden from the left library rail. Sign-in state, downloaded tracks, and local files are unchanged, and you can turn it back on here at any time."
     },
     "groups": {
       "liked": "Liked songs",
@@ -92,6 +110,15 @@
     "copyFinishedWithRemove": "Copied {count} track(s) and removed {removed} from the NetEase playlist",
     "copyFinishedWithSkipAndRemove": "Copied {count} track(s), skipped {skipped}, and removed {removed} from the NetEase playlist",
     "copyFailed": "Copy failed",
-    "copyNoTracks": "No tracks to copy"
+    "copyNoTracks": "No tracks to copy",
+    "removeFromPlaylistConfirmOnly": "Remove {count} track(s) from the NetEase playlist “{title}”?",
+    "removeFromPlaylistConfirmKeepLocal": "Remove {count} track(s) from the NetEase playlist “{title}”? Downloaded local files will be kept.",
+    "removeFromPlaylistConfirmDeleteLocal": "Remove {count} track(s) from the NetEase playlist “{title}”? The {downloadedCount} downloaded local file(s) will also be moved to the recycle bin.",
+    "removeFromPlaylistPrefHint": "You can change this later in Settings under NetEase Cloud Music.",
+    "removeFromPlaylistDownloadedCount": "{count} of them are already downloaded.",
+    "removeFromPlaylistAlsoDeleteLocal": "Also delete downloaded local files (they go to the recycle bin and can be downloaded again)",
+    "removeFromPlaylistRememberChoice": "Remember this choice (you can change it in Settings)",
+    "hideLibraryIcon": "Hide library icon",
+    "hideLibraryIconConfirm": "You can show it again in Settings, under NetEase Cloud Music. Hide the icon?"
   }
 }

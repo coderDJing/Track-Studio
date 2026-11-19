@@ -5,6 +5,13 @@ import rightClickMenu from '@renderer/components/rightClickMenu'
 import openNeteaseLoginDialog from '@renderer/components/neteaseLoginDialog'
 import openNeteaseImportDialog from '@renderer/components/neteaseImportDialog'
 import openNeteaseCopyToLibraryDialog from '@renderer/components/neteaseCopyToLibraryDialog'
+import openNeteaseRemovePlaylistDialog from '@renderer/components/neteaseRemovePlaylistDialog'
+import {
+  normalizeNeteaseRemovePlaylistLocalFilesPref,
+  resolveNeteaseRemovePlaylistLocalFilesDecision,
+  shouldAskNeteaseRemovePlaylistLocalFiles,
+  type NeteaseRemovePlaylistLocalFilesPref
+} from '@shared/neteaseRemovePlaylistLocalFiles'
 import { useRuntimeStore } from '@renderer/stores/runtime'
 import emitter from '@renderer/utils/mitt'
 import {
@@ -31,7 +38,8 @@ import { appendDownloadedFilesToMixtape } from './mixtapePlaylistAppend'
 import type { ISongInfo } from '../../../types/globals'
 import {
   canRemoveTracksFromNeteasePlaylist,
-  findNeteasePlaylistContext
+  findNeteasePlaylistContext,
+  getNeteasePlaylistDeletionAction
 } from './neteasePlaylistContext'
 
 /**
@@ -359,18 +367,34 @@ const refreshNeteaseViews = (playlistUuid?: string): void => {
  * 返回 true 表示确实删了——用户取消确认时返回 false，调用方
  * （播放器菜单的「已下载」标记）据此决定要不要改状态。
  */
-export const deleteNeteaseLocalFiles = async (songIds: string[]): Promise<boolean> => {
+export const deleteNeteaseLocalFiles = async (
+  songIds: string[],
+  options?: { confirm?: boolean }
+): Promise<boolean> => {
   const ids = songIds.map((id) => String(id)).filter(Boolean)
   if (ids.length === 0) return false
-  const answer = await confirm({
-    title: t('netease.removeLocalFile'),
-    content: [t('netease.deleteLocalConfirm', { count: ids.length })],
-    confirmShow: true
-  })
-  if (!answer) return false
+  if (options?.confirm !== false) {
+    const answer = await confirm({
+      title: t('netease.removeLocalFile'),
+      content: [t('netease.deleteLocalConfirm', { count: ids.length })],
+      confirmShow: true
+    })
+    if (answer !== 'confirm') return false
+  }
   await invoke('netease:delete-local', { songIds: ids })
   refreshNeteaseViews()
   return true
+}
+
+const persistNeteaseRemovePlaylistLocalFilesPref = async (
+  pref: NeteaseRemovePlaylistLocalFilesPref
+) => {
+  const runtime = useRuntimeStore()
+  runtime.setting.neteaseRemovePlaylistLocalFiles = pref
+  await window.electron.ipcRenderer.invoke(
+    'setSetting',
+    JSON.parse(JSON.stringify(runtime.setting))
+  )
 }
 
 const unwrapIpcError = (error: unknown): string => {
@@ -385,7 +409,9 @@ const unwrapIpcError = (error: unknown): string => {
 
 /**
  * 从自己创建的歌单或「我喜欢的音乐」里移出曲目。
- * 先改云端歌单，成功后再刷新本地列表；已下载的 `.store` 文件会留着。
+ * 先改云端歌单，成功后再刷新本地列表。
+ * 若确认框里选择同时删除已下载文件（或设置里已记住该选择），成功后再删 `.store`。
+ * `confirm: false`（例如复制到本地库后移除）不会顺带删本地文件。
  */
 export const removeNeteasePlaylistTracks = async (input: {
   playlistId: string
@@ -402,13 +428,57 @@ export const removeNeteasePlaylistTracks = async (input: {
     findNeteasePlaylistContext(runtime.libraryTree, `${NETEASE_PLAYLIST_PREFIX}${playlistId}`)
       ?.title ||
     ''
+  let deleteLocal = false
+  let downloadedIds: string[] = []
   if (input.confirm !== false) {
-    const answer = await confirm({
-      title: t('netease.removeFromPlaylist'),
-      content: [t('netease.removeFromPlaylistConfirm', { title, count: songIds.length })],
-      confirmShow: true
-    })
-    if (!answer) return false
+    const localById = await resolveExistingNeteaseLocalPaths(songIds)
+    downloadedIds = songIds.filter((id) => localById.has(id))
+    const pref = normalizeNeteaseRemovePlaylistLocalFilesPref(
+      runtime.setting.neteaseRemovePlaylistLocalFiles
+    )
+    const downloadedCount = downloadedIds.length
+    if (shouldAskNeteaseRemovePlaylistLocalFiles({ pref, downloadedCount })) {
+      const result = await openNeteaseRemovePlaylistDialog({
+        title,
+        count: songIds.length,
+        downloadedCount
+      })
+      if (!result.confirmed) return false
+      const decision = resolveNeteaseRemovePlaylistLocalFilesDecision({
+        pref,
+        downloadedCount,
+        alsoDeleteLocal: result.alsoDeleteLocal,
+        remember: result.remember
+      })
+      deleteLocal = decision.deleteLocal
+      if (decision.nextPref) {
+        await persistNeteaseRemovePlaylistLocalFilesPref(decision.nextPref)
+      }
+    } else {
+      const content =
+        downloadedCount === 0
+          ? [t('netease.removeFromPlaylistConfirmOnly', { title, count: songIds.length })]
+          : pref === 'delete'
+            ? [
+                t('netease.removeFromPlaylistConfirmDeleteLocal', {
+                  title,
+                  count: songIds.length,
+                  downloadedCount
+                }),
+                t('netease.removeFromPlaylistPrefHint')
+              ]
+            : [
+                t('netease.removeFromPlaylistConfirmKeepLocal', { title, count: songIds.length }),
+                t('netease.removeFromPlaylistPrefHint')
+              ]
+      const answer = await confirm({
+        title: t('netease.removeFromPlaylist'),
+        content,
+        confirmShow: true
+      })
+      if (answer !== 'confirm') return false
+      deleteLocal = pref === 'delete' && downloadedCount > 0
+    }
   }
   try {
     const result = await invoke<{ removedIds?: string[] }>('netease:remove-playlist-tracks', {
@@ -433,6 +503,12 @@ export const removeNeteasePlaylistTracks = async (input: {
       emitter.emit('songsArea/optimistic-remove', removal)
     }
     refreshNeteaseViews(removal.listUUID || `${NETEASE_PLAYLIST_PREFIX}${playlistId}`)
+    if (deleteLocal) {
+      const idsToDelete = downloadedIds.filter((id) => removedIds.includes(id))
+      if (idsToDelete.length > 0) {
+        await deleteNeteaseLocalFiles(idsToDelete, { confirm: false })
+      }
+    }
     return true
   } catch (error) {
     const message = unwrapIpcError(error) || t('common.unknownError')
@@ -1094,8 +1170,35 @@ export const formatNeteaseImportEstimate = (estimate: NeteaseImportEstimate): st
   })
 }
 
-/** 库级右键：查看已下载 / 同步 / 登录或退出。图标、树空白处、分组节点共用。 */
-export const handleNeteaseLibraryContextMenu = async (event: MouseEvent): Promise<void> => {
+const persistNeteaseLibraryIconVisible = async (visible: boolean) => {
+  const runtime = useRuntimeStore()
+  runtime.setting.showNeteaseLibraryIcon = visible
+  await window.electron.ipcRenderer.invoke(
+    'setSetting',
+    JSON.parse(JSON.stringify(runtime.setting))
+  )
+}
+
+/** 隐藏左侧库栏的网易云图标；登录状态和已下载文件不受影响，可在设置里重新打开。 */
+export const hideNeteaseLibraryIcon = async (): Promise<boolean> => {
+  const runtime = useRuntimeStore()
+  const answer = await confirm({
+    title: t('netease.hideLibraryIcon'),
+    content: [t('netease.hideLibraryIconConfirm')],
+    confirmShow: true
+  })
+  if (answer !== 'confirm') return false
+  await persistNeteaseLibraryIconVisible(false)
+  if (runtime.libraryAreaSelected === 'NeteaseLibrary') {
+    runtime.libraryAreaSelected = 'FilterLibrary'
+  }
+  return true
+}
+
+const handleNeteaseLibraryMenu = async (
+  event: MouseEvent,
+  options?: { includeHideIcon?: boolean }
+): Promise<void> => {
   const status = await getNeteaseStatus()
   const menuArr = [
     [{ menuName: 'netease.viewDownloaded' }],
@@ -1104,7 +1207,8 @@ export const handleNeteaseLibraryContextMenu = async (event: MouseEvent): Promis
       ...(status.loggedIn
         ? [{ menuName: 'netease.relogin' }, { menuName: 'netease.logout' }]
         : [{ menuName: 'netease.login' }])
-    ]
+    ],
+    ...(options?.includeHideIcon ? [[{ menuName: 'netease.hideLibraryIcon' }]] : [])
   ]
   const result = await rightClickMenu({ menuArr, clickEvent: event })
   if (result === 'cancel') return
@@ -1122,17 +1226,167 @@ export const handleNeteaseLibraryContextMenu = async (event: MouseEvent): Promis
     case 'netease.logout':
       await logoutNetease()
       break
+    case 'netease.hideLibraryIcon':
+      await hideNeteaseLibraryIcon()
+      break
   }
 }
 
-export const handleNeteaseLibraryIconContextMenu = handleNeteaseLibraryContextMenu
+/** 库级右键：查看已下载 / 同步 / 登录或退出。树空白处、分组节点共用。 */
+export const handleNeteaseLibraryContextMenu = async (event: MouseEvent): Promise<void> => {
+  await handleNeteaseLibraryMenu(event)
+}
 
-/** 歌单节点右键：四项导入 + 同步 */
+/** 库图标右键：在库级菜单之外多一项「隐藏库图标」。 */
+export const handleNeteaseLibraryIconContextMenu = async (event: MouseEvent): Promise<void> => {
+  await handleNeteaseLibraryMenu(event, { includeHideIcon: true })
+}
+
+/**
+ * 删除自己创建的网易云歌单，或取消收藏歌单 / 专辑。
+ * 确认框沿用移出曲目时的本地文件选项；真正会删的只是仅属于这张歌单的已下载文件。
+ */
+export const deleteNeteasePlaylist = async (uuid: string): Promise<boolean> => {
+  const runtime = useRuntimeStore()
+  const action = getNeteasePlaylistDeletionAction(runtime.libraryTree, uuid)
+  const context = findNeteasePlaylistContext(runtime.libraryTree, uuid)
+  const playlistId = context?.playlistId || getNeteasePlaylistId(uuid)
+  if (!action || !playlistId) return false
+
+  const headingKey = action === 'delete' ? 'netease.deletePlaylist' : 'netease.unsubscribePlaylist'
+  const failedKey =
+    action === 'delete' ? 'netease.deletePlaylistFailed' : 'netease.unsubscribePlaylistFailed'
+  const messageOnlyKey =
+    action === 'delete'
+      ? 'netease.deletePlaylistConfirmOnly'
+      : 'netease.unsubscribePlaylistConfirmOnly'
+  const messageKeepKey =
+    action === 'delete'
+      ? 'netease.deletePlaylistConfirmKeepLocal'
+      : 'netease.unsubscribePlaylistConfirmKeepLocal'
+  const messageDeleteKey =
+    action === 'delete'
+      ? 'netease.deletePlaylistConfirmDeleteLocal'
+      : 'netease.unsubscribePlaylistConfirmDeleteLocal'
+
+  type DeletePreview = {
+    title?: string
+    trackCount?: number
+    exclusiveDownloadedIds?: string[]
+    groups?: Array<{
+      id: string
+      title: string
+      items: Array<{ playlistId: string; title: string; trackCount: number; coverUrl: string }>
+    }>
+  }
+
+  let preview: DeletePreview
+  try {
+    preview = await invoke<DeletePreview>('netease:playlist-delete-preview', { playlistId })
+  } catch (error) {
+    await confirm({
+      title: t(failedKey),
+      content: [unwrapIpcError(error) || t('common.unknownError')],
+      confirmShow: false
+    })
+    return false
+  }
+
+  const title = preview.title || context?.title || ''
+  const trackCount = Number(preview.trackCount) || 0
+  const exclusiveIds = [
+    ...new Set(
+      (preview.exclusiveDownloadedIds || []).map((id) => String(id || '').trim()).filter(Boolean)
+    )
+  ]
+  const pref = normalizeNeteaseRemovePlaylistLocalFilesPref(
+    runtime.setting.neteaseRemovePlaylistLocalFiles
+  )
+  const downloadedCount = exclusiveIds.length
+  let deleteLocal = false
+  if (shouldAskNeteaseRemovePlaylistLocalFiles({ pref, downloadedCount })) {
+    const result = await openNeteaseRemovePlaylistDialog({
+      title,
+      count: trackCount,
+      downloadedCount,
+      headingKey,
+      messageKey: messageOnlyKey,
+      downloadedCountKey: 'netease.deletePlaylistExclusiveDownloadedCount'
+    })
+    if (!result.confirmed) return false
+    const decision = resolveNeteaseRemovePlaylistLocalFilesDecision({
+      pref,
+      downloadedCount,
+      alsoDeleteLocal: result.alsoDeleteLocal,
+      remember: result.remember
+    })
+    deleteLocal = decision.deleteLocal
+    if (decision.nextPref) {
+      await persistNeteaseRemovePlaylistLocalFilesPref(decision.nextPref)
+    }
+  } else {
+    const content =
+      downloadedCount === 0
+        ? [t(messageOnlyKey, { title, count: trackCount })]
+        : pref === 'delete'
+          ? [
+              t(messageDeleteKey, { title, count: trackCount, downloadedCount }),
+              t('netease.removeFromPlaylistPrefHint')
+            ]
+          : [
+              t(messageKeepKey, { title, count: trackCount }),
+              t('netease.removeFromPlaylistPrefHint')
+            ]
+    const answer = await confirm({
+      title: t(headingKey),
+      content,
+      confirmShow: true
+    })
+    if (answer !== 'confirm') return false
+    deleteLocal = pref === 'delete' && downloadedCount > 0
+  }
+
+  try {
+    const result = await invoke<DeletePreview>('netease:delete-playlist', { playlistId })
+    applyNeteaseGroupsToTree(
+      runtime.libraryTree,
+      Array.isArray(result?.groups) ? result.groups : []
+    )
+    if (runtime.songsArea.songListUUID === uuid) {
+      runtime.songsArea.songListUUID = ''
+    }
+    refreshNeteaseViews()
+    if (deleteLocal) {
+      const idsToDelete = [
+        ...new Set(
+          (result?.exclusiveDownloadedIds || exclusiveIds)
+            .map((id) => String(id || '').trim())
+            .filter(Boolean)
+        )
+      ]
+      if (idsToDelete.length > 0) {
+        await deleteNeteaseLocalFiles(idsToDelete, { confirm: false })
+      }
+    }
+    return true
+  } catch (error) {
+    const message = unwrapIpcError(error) || t('common.unknownError')
+    await confirm({
+      title: t(failedKey),
+      content: [message],
+      confirmShow: false
+    })
+    return false
+  }
+}
+
+/** 歌单节点右键：四项导入 + 删除/取消收藏 + 同步 */
 export const handleNeteasePlaylistContextMenu = async (
   event: MouseEvent,
   uuid: string
 ): Promise<void> => {
   const playlistId = getNeteasePlaylistId(uuid)
+  const action = getNeteasePlaylistDeletionAction(useRuntimeStore().libraryTree, uuid)
   const menuArr = [
     [
       { menuName: 'netease.importToFilter' },
@@ -1140,6 +1394,11 @@ export const handleNeteasePlaylistContextMenu = async (
       { menuName: 'netease.importToSet' },
       { menuName: 'netease.importToMixtape' }
     ],
+    ...(action === 'delete'
+      ? [[{ menuName: 'netease.deletePlaylist' }]]
+      : action === 'unsubscribe'
+        ? [[{ menuName: 'netease.unsubscribePlaylist' }]]
+        : []),
     [{ menuName: 'netease.sync' }]
   ]
   const result = await rightClickMenu({ menuArr, clickEvent: event })
@@ -1153,6 +1412,13 @@ export const handleNeteasePlaylistContextMenu = async (
   const target = targetByMenu[result.menuName as string]
   if (target) {
     await importNeteasePlaylistInto({ playlistId, target })
+    return
+  }
+  if (
+    result.menuName === 'netease.deletePlaylist' ||
+    result.menuName === 'netease.unsubscribePlaylist'
+  ) {
+    await deleteNeteasePlaylist(uuid)
     return
   }
   if (result.menuName === 'netease.sync') await syncNeteaseLibrary()

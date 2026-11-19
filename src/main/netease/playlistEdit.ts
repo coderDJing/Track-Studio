@@ -1,4 +1,4 @@
-import { canEditNeteasePlaylistTracks } from '@shared/netease'
+import { canDeleteNeteasePlaylist, canEditNeteasePlaylistTracks } from '@shared/netease'
 import { isSafeSongId } from './paths'
 
 type SqlStatement = {
@@ -66,6 +66,88 @@ export function findPlaylistRecord(
 export function assertPlaylistTracksEditable(kind: string): void {
   if (canEditNeteasePlaylistTracks(kind)) return
   throw new Error('只能从自己创建的歌单或「我喜欢的音乐」里移除歌曲。收藏的歌单和专辑不能改。')
+}
+
+export function assertPlaylistDeletable(kind: string): void {
+  if (canDeleteNeteasePlaylist(kind)) return
+  throw new Error('「我喜欢的音乐」不能删除。收藏的歌单和专辑可以取消收藏。')
+}
+
+/**
+ * 删除一张歌单在当前账号下的本地记录。
+ * 只有没有任何账号还挂着这张歌单时，才回收曲目关系；不删 netease_track / netease_file。
+ */
+export function applyDeletedPlaylist(
+  db: PlaylistEditDb,
+  listRoot: string,
+  playlistId: string,
+  userId: string
+): { removed: boolean } {
+  const id = String(playlistId || '').trim()
+  const uid = String(userId || '').trim()
+  if (!id || !uid) return { removed: false }
+
+  return db.transaction(() => {
+    const existing = db
+      .prepare(
+        `SELECT 1 AS ok FROM netease_playlist
+          WHERE list_root = ? AND user_id = ? AND playlist_id = ?`
+      )
+      .get(listRoot, uid, id) as { ok?: number } | undefined
+    if (!existing) return { removed: false }
+
+    db.prepare(
+      `DELETE FROM netease_playlist WHERE list_root = ? AND user_id = ? AND playlist_id = ?`
+    ).run(listRoot, uid, id)
+
+    db.prepare(
+      `DELETE FROM netease_playlist_item
+        WHERE list_root = ? AND playlist_id = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM netease_playlist
+             WHERE list_root = ? AND playlist_id = ?
+          )`
+    ).run(listRoot, id, listRoot, id)
+
+    return { removed: true }
+  })()
+}
+
+/**
+ * 这张歌单里已下载、且删掉/取消收藏后会变成孤儿的曲目。
+ * 还出现在其它歌单、或仍被另一个账号收藏着的，不算在内。
+ */
+export function listExclusiveDownloadedSongIds(
+  db: PlaylistEditDb,
+  listRoot: string,
+  playlistId: string,
+  userId: string
+): string[] {
+  const id = String(playlistId || '').trim()
+  const uid = String(userId || '').trim()
+  if (!id || !uid) return []
+  const rows = db
+    .prepare(
+      `SELECT i.song_id AS song_id
+         FROM netease_playlist_item i
+         INNER JOIN netease_file f
+            ON f.list_root = i.list_root AND f.song_id = i.song_id
+        WHERE i.list_root = ? AND i.playlist_id = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM netease_playlist_item other
+             WHERE other.list_root = i.list_root
+               AND other.song_id = i.song_id
+               AND other.playlist_id != i.playlist_id
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM netease_playlist p
+             WHERE p.list_root = i.list_root
+               AND p.playlist_id = i.playlist_id
+               AND p.user_id != ?
+          )`
+    )
+    .all(listRoot, id, uid) as Array<{ song_id: string }>
+  return uniqueSafeIds(rows.map((row) => String(row.song_id || '')))
 }
 
 /**

@@ -2,8 +2,10 @@
 import { describe, expect, it } from 'vitest'
 import type { IDir } from '../../../types/globals'
 import {
+  canDeleteNeteasePlaylist,
   canRemoveTracksFromNeteasePlaylist,
-  findNeteasePlaylistContext
+  findNeteasePlaylistContext,
+  getNeteasePlaylistDeletionAction
 } from './neteasePlaylistContext'
 
 const tree = (): IDir =>
@@ -84,6 +86,8 @@ describe('findNeteasePlaylistContext', () => {
       title: '我喜欢的音乐'
     })
     expect(canRemoveTracksFromNeteasePlaylist(tree(), 'netease:pl:1')).toBe(true)
+    expect(canDeleteNeteasePlaylist(tree(), 'netease:pl:1')).toBe(false)
+    expect(getNeteasePlaylistDeletionAction(tree(), 'netease:pl:1')).toBeNull()
   })
 
   it('只允许自建歌单和我喜欢的音乐移出曲目', () => {
@@ -98,5 +102,17 @@ describe('findNeteasePlaylistContext', () => {
     expect(canRemoveTracksFromNeteasePlaylist(root, 'netease:pl:300')).toBe(false)
     expect(canRemoveTracksFromNeteasePlaylist(root, '__netease_downloaded__')).toBe(false)
     expect(canRemoveTracksFromNeteasePlaylist(root, 'netease:pl:999')).toBe(false)
+  })
+
+  it('自建歌单可删除，收藏歌单和专辑是取消收藏', () => {
+    const root = tree()
+    expect(canDeleteNeteasePlaylist(root, 'netease:pl:100')).toBe(true)
+    expect(getNeteasePlaylistDeletionAction(root, 'netease:pl:100')).toBe('delete')
+    expect(canDeleteNeteasePlaylist(root, 'netease:pl:200')).toBe(true)
+    expect(getNeteasePlaylistDeletionAction(root, 'netease:pl:200')).toBe('unsubscribe')
+    expect(canDeleteNeteasePlaylist(root, 'netease:pl:300')).toBe(true)
+    expect(getNeteasePlaylistDeletionAction(root, 'netease:pl:300')).toBe('unsubscribe')
+    expect(canDeleteNeteasePlaylist(root, '__netease_downloaded__')).toBe(false)
+    expect(canDeleteNeteasePlaylist(root, 'netease:pl:999')).toBe(false)
   })
 })

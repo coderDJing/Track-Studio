@@ -37,6 +37,7 @@ import {
   syncNeteaseLibrary
 } from '@renderer/utils/neteaseActions'
 import { findNeteaseLibraryNode, isNeteasePlaylistUuid } from '@renderer/utils/neteaseSongs'
+import { isNeteaseLibraryIconVisible } from '@shared/netease'
 import { requestUserGuideStep } from '@renderer/composables/userGuideBridge'
 import {
   requestLibraryUserGuide,
@@ -149,14 +150,21 @@ const coreIconNameSet = new Set([
   'RecycleBin',
   'NeteaseLibrary'
 ])
-const coreIconArr = computed(() => iconArr.value.filter((item) => coreIconNameSet.has(item.name)))
+const runtime = useRuntimeStore()
+const coreIconArr = computed(() =>
+  iconArr.value.filter((item) => {
+    if (!coreIconNameSet.has(item.name)) return false
+    if (item.name === 'NeteaseLibrary' && !isNeteaseLibraryIconVisible(runtime.setting)) {
+      return false
+    }
+    return true
+  })
+)
 const dynamicIconArr = computed(() =>
   iconArr.value.filter((item) => !coreIconNameSet.has(item.name))
 )
 const selectedIcon = ref<HoverableIcon>(iconArr.value[0])
 selectedIcon.value.src = selectedIcon.value.white
-
-const runtime = useRuntimeStore()
 const recycleBinTrackCount = ref<number | null>(null)
 let recycleBinTrackCountRequestId = 0
 let recycleBinTrackCountRefreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -605,6 +613,16 @@ onUnmounted(() => {
   )
   emitter.off(RECORDING_LIBRARY_CHANGED_EVENT, handleRecordingLibraryChanged)
 })
+
+watch(
+  () => runtime.setting.showNeteaseLibraryIcon,
+  (visible) => {
+    if (visible === false && runtime.libraryAreaSelected === 'NeteaseLibrary') {
+      runtime.libraryAreaSelected = 'FilterLibrary'
+    }
+  },
+  { immediate: true }
+)
 
 watch(
   () => runtime.libraryAreaSelected,

@@ -11,6 +11,7 @@ import {
   isNeteasePreviewUrl,
   canEditNeteasePlaylistTracks,
   createNeteaseOpenPlaylistRemovalPayload,
+  isNeteaseLibraryIconVisible,
   NETEASE_PLAYLIST_PREFIX,
   buildNeteasePreviewUrl
 } from './netease'
@@ -69,6 +70,15 @@ describe('createNeteaseOpenPlaylistRemovalPayload', () => {
       listUUID: `${NETEASE_PLAYLIST_PREFIX}123456`,
       paths: []
     })
+  })
+})
+
+describe('isNeteaseLibraryIconVisible', () => {
+  it('treats a missing setting as visible so older configs keep the icon', () => {
+    expect(isNeteaseLibraryIconVisible(undefined)).toBe(true)
+    expect(isNeteaseLibraryIconVisible({})).toBe(true)
+    expect(isNeteaseLibraryIconVisible({ showNeteaseLibraryIcon: true })).toBe(true)
+    expect(isNeteaseLibraryIconVisible({ showNeteaseLibraryIcon: false })).toBe(false)
   })
 })
 

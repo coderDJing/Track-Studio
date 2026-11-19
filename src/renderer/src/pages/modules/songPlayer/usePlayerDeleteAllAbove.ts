@@ -7,11 +7,19 @@ import { t } from '@renderer/utils/translate'
 import emitter from '@renderer/utils/mitt'
 import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
-import { NETEASE_DOWNLOADED_UUID, isNeteasePlaylistUuid } from '@shared/netease'
+import {
+  NETEASE_DOWNLOADED_UUID,
+  getNeteasePlaylistId,
+  isNeteasePlaylistUuid
+} from '@shared/netease'
+import { canRemoveTracksFromNeteasePlaylist } from '@renderer/utils/neteasePlaylistContext'
 import { resolvePlaybackDeleteAllAboveTarget } from '@shared/playbackDeleteAllAbove'
 import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 import { showDeleteSummaryIfNeeded } from '@renderer/pages/modules/songsArea/composables/songItemContextMenuSummaries'
-import { deleteNeteaseLocalFiles } from '@renderer/utils/neteaseActions'
+import {
+  deleteNeteaseLocalFiles,
+  removeNeteasePlaylistTracks
+} from '@renderer/utils/neteaseActions'
 
 type DeleteSummary = {
   total?: number
@@ -198,10 +206,22 @@ export const createDelAllAbove = (params: {
       isNeteasePlaylistUuid(currentSongListUUID) ||
       currentSongListUUID === NETEASE_DOWNLOADED_UUID
     ) {
-      // 「查看已下载」视图的行确实是本地文件，但删除要同时清掉 netease_file 索引，
-      // 否则「已下载」列表会留下一条指不到文件的记录。
-      // 只删已下载的那些：歌单视图里未下载的行没有本地文件，
-      // 把它们算进"删除 N 首"的确认框里只会让用户以为删掉了。
+      if (
+        isNeteasePlaylistUuid(currentSongListUUID) &&
+        canRemoveTracksFromNeteasePlaylist(runtime.libraryTree, currentSongListUUID)
+      ) {
+        const songIds = target.songs
+          .map((item) => item.neteaseSongId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0)
+        if (songIds.length > 0) {
+          await removeNeteasePlaylistTracks({
+            playlistId: getNeteasePlaylistId(currentSongListUUID),
+            songIds
+          })
+        }
+        return
+      }
+      // 「查看已下载」或不能改的收藏歌单/专辑：只删已下载缓存，歌单本身不受影响。
       const neteaseSongIds = target.songs
         .filter((item) => item.neteaseDownloaded === true)
         .map((item) => item.neteaseSongId)

@@ -1,10 +1,13 @@
 import type { IDir } from '../../../types/globals'
 import {
   NETEASE_GROUP_PREFIX,
+  canDeleteNeteasePlaylist as canDeleteNeteasePlaylistKind,
   canEditNeteasePlaylistTracks,
+  getNeteasePlaylistDeletionAction as getNeteasePlaylistDeletionActionByKind,
   getNeteasePlaylistId,
   isNeteaseGroupUuid,
-  isNeteasePlaylistUuid
+  isNeteasePlaylistUuid,
+  type NeteasePlaylistDeletionAction
 } from '@shared/netease'
 import { findNeteaseLibraryNode } from '@renderer/utils/neteaseSongs'
 
@@ -55,4 +58,18 @@ export function canRemoveTracksFromNeteasePlaylist(
   uuid: string | null | undefined
 ): boolean {
   return canEditNeteasePlaylistTracks(findNeteasePlaylistContext(root, uuid)?.kind)
+}
+
+export function canDeleteNeteasePlaylist(
+  root: IDir | null | undefined,
+  uuid: string | null | undefined
+): boolean {
+  return canDeleteNeteasePlaylistKind(findNeteasePlaylistContext(root, uuid)?.kind)
+}
+
+export function getNeteasePlaylistDeletionAction(
+  root: IDir | null | undefined,
+  uuid: string | null | undefined
+): NeteasePlaylistDeletionAction | null {
+  return getNeteasePlaylistDeletionActionByKind(findNeteasePlaylistContext(root, uuid)?.kind)
 }

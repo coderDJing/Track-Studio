@@ -29,9 +29,12 @@ import { parseAudioHeader } from './audioHeader'
 import { replaceStoreFileAtomically } from './storeReplace'
 import { getLoggedInUserId, restoreSessionIntoClient } from './session'
 import {
+  applyDeletedPlaylist,
   applyRemovedPlaylistTracks,
+  assertPlaylistDeletable,
   assertPlaylistTracksEditable,
-  findPlaylistRecord
+  findPlaylistRecord,
+  listExclusiveDownloadedSongIds
 } from './playlistEdit'
 
 /**
@@ -458,6 +461,68 @@ export async function removeTracksFromPlaylist(
   await neteaseClient.removePlaylistTracks(id, ids)
   const applied = applyRemovedPlaylistTracks(db, listRoot, id, ids)
   return { ...applied, title: playlist.title, kind: playlist.kind }
+}
+
+const ensureNeteaseClientLoggedIn = async (): Promise<void> => {
+  if (!neteaseClient.isLoggedIn) {
+    const restored = await restoreSessionIntoClient()
+    if (!restored && !neteaseClient.isLoggedIn) {
+      throw new Error('需要先登录网易云音乐')
+    }
+  }
+}
+
+export type NeteasePlaylistDeletePreview = {
+  playlistId: string
+  kind: string
+  title: string
+  trackCount: number
+  exclusiveDownloadedIds: string[]
+}
+
+/** 删除或取消收藏前的本地预览：标题、首数，以及仅属于这张歌单的已下载曲目。 */
+export function getPlaylistDeletePreview(playlistId: string): NeteasePlaylistDeletePreview {
+  const id = String(playlistId || '').trim()
+  if (!isSafeSongId(id)) throw new Error('缺少歌单')
+  const db = requireDb()
+  const listRoot = getListRoot()
+  const playlist = findPlaylistRecord(db, listRoot, id, getLoggedInUserId())
+  if (!playlist) throw new Error('找不到这张歌单')
+  assertPlaylistDeletable(playlist.kind)
+  return {
+    playlistId: id,
+    kind: playlist.kind,
+    title: playlist.title,
+    trackCount: playlist.trackCount,
+    exclusiveDownloadedIds: listExclusiveDownloadedSongIds(
+      db,
+      listRoot,
+      id,
+      playlist.userId || getLoggedInUserId()
+    )
+  }
+}
+
+/**
+ * 从云端删除自己创建的歌单，或取消收藏歌单 / 专辑，成功后再改本地索引。
+ * 不会删除 `.store` 里的文件或 `netease_track` 元数据。
+ */
+export async function deletePlaylistFromLibrary(
+  playlistId: string
+): Promise<NeteasePlaylistDeletePreview> {
+  const preview = getPlaylistDeletePreview(playlistId)
+  await ensureNeteaseClientLoggedIn()
+  if (preview.kind === 'created') {
+    await neteaseClient.deletePlaylists([preview.playlistId])
+  } else if (preview.kind === 'album') {
+    await neteaseClient.unsubscribeAlbum(preview.playlistId)
+  } else {
+    await neteaseClient.unsubscribePlaylist(preview.playlistId)
+  }
+  const userId = getLoggedInUserId()
+  if (!userId) throw new Error('需要先登录网易云音乐')
+  applyDeletedPlaylist(requireDb(), getListRoot(), preview.playlistId, userId)
+  return preview
 }
 
 /**

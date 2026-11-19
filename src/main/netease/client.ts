@@ -356,6 +356,29 @@ export class NeteaseClient {
     })
   }
 
+  /** 删除自己创建的歌单。走 /weapi/playlist/delete，一次可传多个 id。 */
+  async deletePlaylists(playlistIds: string[]): Promise<void> {
+    const ids = [
+      ...new Set(playlistIds.map((id) => String(id || '').trim()).filter((id) => id && id !== '0'))
+    ]
+    if (ids.length === 0) return
+    await this.weapi('/playlist/delete', { ids: ids.join(',') })
+  }
+
+  /** 取消收藏别人的歌单。走 /weapi/playlist/unsubscribe。 */
+  async unsubscribePlaylist(playlistId: string): Promise<void> {
+    const id = String(playlistId || '').trim()
+    if (!id || id === '0') return
+    await this.weapi('/playlist/unsubscribe', { id })
+  }
+
+  /** 取消收藏专辑。走 /weapi/album/unsub。 */
+  async unsubscribeAlbum(albumId: string): Promise<void> {
+    const id = String(albumId || '').trim()
+    if (!id || id === '0') return
+    await this.weapi('/album/unsub', { id })
+  }
+
   async albumTrackIds(albumId: string): Promise<string[]> {
     const detail = await this.weapi('/v1/album/detail', { id: albumId })
     const album = asObj(detail.album)

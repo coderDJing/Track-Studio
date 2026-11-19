@@ -37,6 +37,10 @@ import {
 } from '@shared/browserPlayerRightTrackInfo'
 import { formatSeekPercentModifierSettingValue } from '@shared/playerGlobalShortcuts'
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from '@renderer/utils/accentColor'
+import {
+  normalizeNeteaseRemovePlaylistLocalFilesPref,
+  type NeteaseRemovePlaylistLocalFilesPref
+} from '@shared/neteaseRemovePlaylistLocalFiles'
 
 const accentColorPresets = [
   '#0078d4',
@@ -315,6 +319,29 @@ const neteaseLevelModel = computed({
   get: () => runtime.setting.neteaseLevel || 'lossless',
   set: (value: string) => {
     runtime.setting.neteaseLevel = value as 'jymaster' | 'lossless' | 'exhigh' | 'standard'
+  }
+})
+
+const neteaseRemovePlaylistLocalFilesOptions = computed(() => [
+  { label: t('netease.settings.removePlaylistLocalFilesAsk'), value: 'ask' },
+  { label: t('netease.settings.removePlaylistLocalFilesDelete'), value: 'delete' },
+  { label: t('netease.settings.removePlaylistLocalFilesKeep'), value: 'keep' }
+])
+
+const neteaseRemovePlaylistLocalFilesModel = computed({
+  get: () =>
+    normalizeNeteaseRemovePlaylistLocalFilesPref(runtime.setting.neteaseRemovePlaylistLocalFiles),
+  set: (value: string) => {
+    runtime.setting.neteaseRemovePlaylistLocalFiles = normalizeNeteaseRemovePlaylistLocalFilesPref(
+      value
+    ) as NeteaseRemovePlaylistLocalFilesPref
+  }
+})
+
+const showNeteaseLibraryIconModel = computed({
+  get: () => runtime.setting.showNeteaseLibraryIcon !== false,
+  set: (value: boolean) => {
+    runtime.setting.showNeteaseLibraryIcon = value
   }
 })
 
@@ -1122,6 +1149,18 @@ onMounted(() => {
           <div class="settings-section">
             <div class="section-title">{{ t('settings.layout.sectionNeteaseTitle') }}</div>
 
+            <label class="setting-block" for="setting-checkbox-showNeteaseLibraryIcon">{{
+              tLabel('netease.settings.showLibraryIcon')
+            }}</label>
+            <div class="setting-control">
+              <singleCheckbox
+                id="setting-checkbox-showNeteaseLibraryIcon"
+                v-model="showNeteaseLibraryIconModel"
+                @change="setSetting()"
+              />
+              <div class="setting-hint">{{ t('netease.settings.showLibraryIconHint') }}</div>
+            </div>
+
             <div class="setting-block">{{ tLabel('netease.settings.quality') }}</div>
             <div class="setting-control">
               <BaseSelect
@@ -1151,6 +1190,21 @@ onMounted(() => {
                 <div class="button settings-inline-button" @click="clearNeteasePreviewCache()">
                   {{ t('netease.settings.clearCache') }}
                 </div>
+              </div>
+            </div>
+
+            <div class="setting-block">
+              {{ tLabel('netease.settings.removePlaylistLocalFiles') }}
+            </div>
+            <div class="setting-control">
+              <BaseSelect
+                v-model="neteaseRemovePlaylistLocalFilesModel"
+                :options="neteaseRemovePlaylistLocalFilesOptions"
+                :width="260"
+                @change="setSetting()"
+              />
+              <div class="setting-hint">
+                {{ t('netease.settings.removePlaylistLocalFilesHint') }}
               </div>
             </div>
           </div>

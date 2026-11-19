@@ -57,7 +57,7 @@ let settingConfig: ISettingConfig = {
     energy: true,
     structure: true
   },
-  autoPlayNextSong: false,
+  autoPlayNextSong: true,
   startPlayPercent: 0,
   endPlayPercent: 100,
   playbackRangeMode: 'custom' as const,
@@ -87,7 +87,10 @@ let settingConfig: ISettingConfig = {
   userGuideDismissedSteps: [],
   // 网易云：默认无损；试听缓存默认 10GB（只是一次性缓冲，随时可清）
   neteaseLevel: 'lossless' as const,
-  neteasePreviewCacheBytes: 10 * 1024 * 1024 * 1024
+  neteasePreviewCacheBytes: 10 * 1024 * 1024 * 1024,
+  neteaseRemovePlaylistLocalFiles: 'ask' as const,
+  // 左侧库栏是否显示网易云图标；关掉后可在设置里重新打开。默认显示。
+  showNeteaseLibraryIcon: true
 } //设置config
 export default {
   songFingerprintList,

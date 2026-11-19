@@ -462,7 +462,7 @@ export const useRuntimeStore = defineStore('runtime', {
           energy: true,
           structure: true
         },
-        autoPlayNextSong: false,
+        autoPlayNextSong: true,
         startPlayPercent: 0,
         endPlayPercent: 100,
         playbackRangeMode: 'custom',
@@ -485,7 +485,8 @@ export const useRuntimeStore = defineStore('runtime', {
         enableExplorerContextMenu: false,
         showPlaylistTrackCount: true,
         lastSeenWhatsNewVersion: '',
-        pendingWhatsNewForVersion: ''
+        pendingWhatsNewForVersion: '',
+        showNeteaseLibraryIcon: true
       }, //设置
       playerReady: false,
       isSwitchingSong: false,

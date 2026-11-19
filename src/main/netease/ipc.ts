@@ -15,7 +15,9 @@ import {
   listDownloaded,
   reconcileStoreFromDisk,
   syncCatalog,
-  removeTracksFromPlaylist
+  removeTracksFromPlaylist,
+  getPlaylistDeletePreview,
+  deletePlaylistFromLibrary
 } from './library'
 import { ensureTracksDownloaded, estimatePlaylistImportSize, importNeteasePlaylist } from './import'
 import {
@@ -376,6 +378,34 @@ export function registerNeteaseHandlers(getWindow: () => BrowserWindow | null): 
       }
     }
   )
+
+  ipcMain.handle(
+    'netease:playlist-delete-preview',
+    async (_event, payload: { playlistId?: string }) => {
+      const playlistId = String(payload?.playlistId || '').trim()
+      if (!isSafeSongId(playlistId)) throw new Error('缺少歌单')
+      return getPlaylistDeletePreview(playlistId)
+    }
+  )
+
+  ipcMain.handle('netease:delete-playlist', async (_event, payload: { playlistId?: string }) => {
+    const playlistId = String(payload?.playlistId || '').trim()
+    if (!isSafeSongId(playlistId)) throw new Error('缺少歌单')
+    try {
+      const result = await deletePlaylistFromLibrary(playlistId)
+      const groups = getNeteaseGroupsFromDb()
+      const window = getWindow()
+      if (window && !window.isDestroyed()) {
+        window.webContents.send('netease:catalog-updated', { groups })
+      }
+      return { ...result, groups }
+    } catch (error) {
+      if (error instanceof NeteaseApiError && error.loginExpired) {
+        throw new Error('登录态已失效，请重新扫码后再试')
+      }
+      throw error
+    }
+  })
 
   // 启动时恢复登录态（不阻塞，失败就当未登录）
   void loadSession().then((session) => {

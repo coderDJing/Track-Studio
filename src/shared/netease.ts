@@ -117,6 +117,28 @@ export function canEditNeteasePlaylistTracks(kind: string | null | undefined): b
   return kind === 'liked' || kind === 'created'
 }
 
+/** 自己创建的歌单可以删除；收藏的歌单和专辑是取消收藏。「我喜欢的音乐」不能删。 */
+export function canDeleteNeteasePlaylist(kind: string | null | undefined): boolean {
+  return kind === 'created' || kind === 'subscribed' || kind === 'album'
+}
+
+export type NeteasePlaylistDeletionAction = 'delete' | 'unsubscribe'
+
+export function getNeteasePlaylistDeletionAction(
+  kind: string | null | undefined
+): NeteasePlaylistDeletionAction | null {
+  if (kind === 'created') return 'delete'
+  if (kind === 'subscribed' || kind === 'album') return 'unsubscribe'
+  return null
+}
+
+/** 未设置时视为显示，避免老配置里缺字段时把图标藏掉。 */
+export function isNeteaseLibraryIconVisible(
+  setting: { showNeteaseLibraryIcon?: boolean } | null | undefined
+): boolean {
+  return setting?.showNeteaseLibraryIcon !== false
+}
+
 export function parseNeteaseSongIdFromStorePath(
   filePath: string | undefined | null
 ): string | null {

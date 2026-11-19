@@ -160,7 +160,9 @@ export const createNeteaseStreamMenuArr = (
       { menuName: 'library.addToMixtape' }
     ],
     localActions,
-    ...(options?.canRemoveFromPlaylist ? [[{ menuName: 'netease.removeFromPlaylist' }]] : []),
+    ...(options?.canRemoveFromPlaylist
+      ? [[{ menuName: 'netease.removeFromPlaylist', shortcutKey: 'Delete' }]]
+      : []),
     ...(downloaded ? [[{ menuName: 'tracks.showInFileExplorer' }]] : []),
     createMusicSearchMenuItems(),
     [{ menuName: 'similarTracks.menu' }],

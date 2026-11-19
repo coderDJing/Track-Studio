@@ -39,6 +39,17 @@
     "removeFromPlaylistConfirm": "确定从网易云歌单「{title}」中移除 {count} 首歌曲吗？已下载的本地文件不会删除。",
     "removeFromPlaylistFailed": "从歌单中移除失败",
     "removeFromPlaylistNotEditable": "只能从自己创建的歌单或「我喜欢的音乐」里移除歌曲。收藏的歌单和专辑不能改。",
+    "deletePlaylist": "删除歌单",
+    "unsubscribePlaylist": "取消收藏",
+    "deletePlaylistFailed": "删除歌单失败",
+    "unsubscribePlaylistFailed": "取消收藏失败",
+    "deletePlaylistConfirmOnly": "确定删除网易云歌单「{title}」吗？这张歌单里共有 {count} 首歌曲。",
+    "deletePlaylistConfirmKeepLocal": "确定删除网易云歌单「{title}」吗？这张歌单里共有 {count} 首歌曲，已下载的本地文件会保留。",
+    "deletePlaylistConfirmDeleteLocal": "确定删除网易云歌单「{title}」吗？这张歌单里共有 {count} 首歌曲，仅属于它的 {downloadedCount} 首已下载文件也会删除到回收站。",
+    "unsubscribePlaylistConfirmOnly": "确定取消收藏「{title}」吗？这张列表里共有 {count} 首歌曲。",
+    "unsubscribePlaylistConfirmKeepLocal": "确定取消收藏「{title}」吗？这张列表里共有 {count} 首歌曲，已下载的本地文件会保留。",
+    "unsubscribePlaylistConfirmDeleteLocal": "确定取消收藏「{title}」吗？这张列表里共有 {count} 首歌曲，仅属于它的 {downloadedCount} 首已下载文件也会删除到回收站。",
+    "deletePlaylistExclusiveDownloadedCount": "其中 {count} 首已下载，并且只属于这张歌单。",
     "streamOnlyNoFile": "这一首还在网易云歌单里，本地没有文件。导出或分析时会先自动下载到本地；把歌单里还没下载的曲目拖到筛选库或精选库前，请先下载。网易云源只会复制，不会移动。要删缓存，也请先用「下载到本地」下一遍。",
     "streamOnlyDragHint": "本地还没有文件，先下载再拖到筛选库或精选库。拖进 SET 会自动后台下载。",
     "downloadedBadge": "已下载",
@@ -67,7 +78,14 @@
       "cacheHint": "试听时临时缓存的音频，随时可以清掉；和「已下载」是两回事。",
       "cacheUsage": "当前占用 {size}。",
       "cacheCustom": "当前 {size}",
-      "clearCache": "清空试听缓存"
+      "clearCache": "清空试听缓存",
+      "removePlaylistLocalFiles": "移出或删除歌单时的本地文件",
+      "removePlaylistLocalFilesHint": "从自建歌单或「我喜欢的音乐」里移除歌曲，以及删除或取消收藏整张歌单时，是否把仅属于这些歌单的已下载本地文件放进回收站。也可以在确认框里勾选「记住我的选择」。Delete 键和批量选择同样走这个设置。",
+      "removePlaylistLocalFilesAsk": "每次询问",
+      "removePlaylistLocalFilesDelete": "同时删除已下载的本地文件",
+      "removePlaylistLocalFilesKeep": "保留已下载的本地文件",
+      "showLibraryIcon": "显示库图标",
+      "showLibraryIconHint": "关掉后，左侧库栏里的网易云音乐图标会隐藏。登录状态、已下载的歌曲和本地文件都不受影响，可以随时在这里重新打开。"
     },
     "groups": {
       "liked": "我喜欢的音乐",
@@ -92,6 +110,15 @@
     "copyFinishedWithRemove": "已复制 {count} 首，并从网易云歌单中移除 {removed} 首",
     "copyFinishedWithSkipAndRemove": "已复制 {count} 首，跳过 {skipped} 首，并从网易云歌单中移除 {removed} 首",
     "copyFailed": "复制失败",
-    "copyNoTracks": "没有可复制的曲目"
+    "copyNoTracks": "没有可复制的曲目",
+    "removeFromPlaylistConfirmOnly": "确定从网易云歌单「{title}」中移除 {count} 首歌曲吗？",
+    "removeFromPlaylistConfirmKeepLocal": "确定从网易云歌单「{title}」中移除 {count} 首歌曲吗？已下载的本地文件会保留。",
+    "removeFromPlaylistConfirmDeleteLocal": "确定从网易云歌单「{title}」中移除 {count} 首歌曲吗？已下载的 {downloadedCount} 首本地文件也会删除到回收站。",
+    "removeFromPlaylistPrefHint": "可在设置的「网易云音乐」里更改这项选择。",
+    "removeFromPlaylistDownloadedCount": "其中 {count} 首已下载到本地。",
+    "removeFromPlaylistAlsoDeleteLocal": "同时删除已下载的本地文件（文件会进回收站，随时可以重新下载）",
+    "removeFromPlaylistRememberChoice": "记住我的选择（可在设置里更改）",
+    "hideLibraryIcon": "隐藏库图标",
+    "hideLibraryIconConfirm": "隐藏后可在设置的「网易云音乐」里重新显示。确定隐藏吗？"
   }
 }

@@ -10,11 +10,16 @@ import libraryUtils from '@renderer/utils/libraryUtils'
 import { EXTERNAL_PLAYLIST_UUID } from '@shared/externalPlayback'
 import {
   NETEASE_DOWNLOADED_UUID,
+  getNeteasePlaylistId,
   isNeteasePendingPath,
   isNeteasePlaylistUuid,
   isNeteasePreviewUrl
 } from '@shared/netease'
-import { deleteNeteaseLocalFiles } from '@renderer/utils/neteaseActions'
+import { canRemoveTracksFromNeteasePlaylist } from '@renderer/utils/neteasePlaylistContext'
+import {
+  deleteNeteaseLocalFiles,
+  removeNeteasePlaylistTracks
+} from '@renderer/utils/neteaseActions'
 import { isNeteaseStoreCopyOnlySource } from '@renderer/utils/libraryTransfer'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { createRepeatSingleClickDeselect } from './repeatSingleClickDeselect'
@@ -338,16 +343,33 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
       return false
     }
 
-    // 网易云的两个视图走的不是"删文件 → 进回收站"这条路：
-    //   - 歌单视图里的行大多没有本地文件，Delete 只对**已下载**的那些有意义；
-    //   - 已下载视图删的是下载缓存，歌单本身不受影响，所以走专门的 IPC。
+    // 网易云：
+    //   - 自建歌单 /「我喜欢的音乐」的 Delete 和右键「从歌单中移除」走同一套确认：
+    //     先从歌单拿走，并可选择是否同时删除已下载的本地文件（可记住，设置里可改）；
+    //   - 收藏歌单 / 专辑不能改云端列表，Delete 只删已下载缓存；
+    //   - 「查看已下载」删的是下载缓存，歌单本身不受影响。
     if (
       isNeteasePlaylistUuid(activeSongsAreaState.songListUUID) ||
       activeSongsAreaState.songListUUID === NETEASE_DOWNLOADED_UUID
     ) {
-      const ids = activeSongsAreaState.songInfoArr
-        .filter((song) => selectedKeys.includes(song.filePath))
-        // 未下载的行没有本地文件可删：不能让它弹出"确定删除 N 首"然后什么也没发生
+      const selectedSongs = activeSongsAreaState.songInfoArr.filter((song) =>
+        selectedKeys.includes(song.filePath)
+      )
+      if (
+        isNeteasePlaylistUuid(activeSongsAreaState.songListUUID) &&
+        canRemoveTracksFromNeteasePlaylist(runtime.libraryTree, activeSongsAreaState.songListUUID)
+      ) {
+        const songIds = selectedSongs
+          .map((song) => String(song.neteaseSongId || ''))
+          .filter((id) => id.length > 0)
+        if (songIds.length === 0) return false
+        await removeNeteasePlaylistTracks({
+          playlistId: getNeteasePlaylistId(activeSongsAreaState.songListUUID),
+          songIds
+        })
+        return false
+      }
+      const ids = selectedSongs
         .filter((song) => song.neteaseDownloaded === true)
         .map((song) => String(song.neteaseSongId || ''))
         .filter((id) => id.length > 0)

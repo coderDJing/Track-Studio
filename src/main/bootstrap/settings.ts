@@ -117,7 +117,7 @@ const defaultSettings = {
     energy: true,
     structure: true
   },
-  autoPlayNextSong: false,
+  autoPlayNextSong: true,
   startPlayPercent: 0,
   endPlayPercent: 100,
   playbackRangeMode: 'custom' as const,
@@ -156,7 +156,8 @@ const defaultSettings = {
   lastRunAppVersion: '',
   acoustIdClientKey: '',
   autoFillSkipCompleted: true,
-  userGuideDismissedSteps: []
+  userGuideDismissedSteps: [],
+  showNeteaseLibraryIcon: true
 } as ISettingConfig
 
 type LoadSettingsOptions = {
