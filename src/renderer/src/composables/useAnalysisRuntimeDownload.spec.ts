@@ -148,6 +148,57 @@ describe('BPM repair runtime gate', () => {
     expect(invoke).toHaveBeenCalledOnce()
     expect(confirm.mock.calls[0][0].content).toEqual(['bpmFix.componentUpdateUnavailable'])
   })
+
+  it('does not tell the user to download when a local runtime probe is inconclusive', async () => {
+    const invoke = vi.fn(async () => ({
+      preferred: {
+        ...preferred,
+        downloadable: false,
+        localRuntimePresent: true,
+        reason: 'runtime probe inconclusive'
+      },
+      state
+    }))
+    vi.stubGlobal('window', { electron: { ipcRenderer: { invoke } } })
+    const current = runtime()
+    current.analysisRuntime.available = false
+    const confirm = vi.fn(async (_options: Parameters<typeof confirmDialog>[0]) => 'confirm')
+    const gate = useAnalysisRuntimeDownload({
+      runtime: current as unknown as ReturnType<typeof useRuntimeStore>,
+      t: (key) => key,
+      confirmDialog: confirm as unknown as typeof confirmDialog
+    })
+    expect(await gate.ensureAnalysisRuntimeForHorizontalMode()).toBe(false)
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(confirm.mock.calls[0][0].title).toBe('analysisRuntime.probeInconclusiveTitle')
+    expect(confirm.mock.calls[0][0].content).toEqual(['analysisRuntime.probeInconclusiveHint'])
+    expect(confirm.mock.calls[0][0].confirmShow).toBe(false)
+  })
+
+  it('offers a repair download instead of an uninstalled prompt when local files failed the dependency check', async () => {
+    const invoke = vi.fn(async () => ({
+      preferred: {
+        ...preferred,
+        alreadyAvailable: false,
+        downloadable: true,
+        localRuntimePresent: true,
+        reason: 'local runtime unusable'
+      },
+      state
+    }))
+    vi.stubGlobal('window', { electron: { ipcRenderer: { invoke } } })
+    const current = runtime()
+    current.analysisRuntime.available = false
+    const confirm = vi.fn(async (_options: Parameters<typeof confirmDialog>[0]) => 'cancel')
+    const gate = useAnalysisRuntimeDownload({
+      runtime: current as unknown as ReturnType<typeof useRuntimeStore>,
+      t: (key) => key,
+      confirmDialog: confirm as unknown as typeof confirmDialog
+    })
+    expect(await gate.promptAnalysisRuntimeDownload('horizontal')).toBe('blocked')
+    expect(confirm.mock.calls[0][0].content[0]).toBe('analysisRuntime.localRuntimeUnusableBody')
+    expect(confirm.mock.calls[0][0].content[0]).not.toBe('analysisRuntime.promptBodyFeature')
+  })
 })
 
 describe('分析运行时下载中的重复触发', () => {

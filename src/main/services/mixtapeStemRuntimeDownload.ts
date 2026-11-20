@@ -18,6 +18,8 @@ import {
   resolveInstalledDemucsPlatformRootPath
 } from '../demucs'
 import { getSystemProxy } from '../utils'
+import { log } from '../log'
+import { truncateProbeLogText } from './mixtapeStemDeviceProbeResult'
 import { buildGithubReleaseDownloadUrl } from '../../shared/productBrand'
 import {
   STEM_RUNTIME_INSTALL_VALIDATION_TIMEOUT_MS,
@@ -93,6 +95,7 @@ export type MixtapeStemRuntimeDownloadInfo = {
   supported: boolean
   downloadable: boolean
   alreadyAvailable: boolean
+  localRuntimePresent: boolean
   profile: RuntimeProfileName | ''
   runtimeKey: string
   version: string
@@ -607,6 +610,9 @@ const resolveAnyLocalRuntimeAvailability = async (
   feature: AnalysisRuntimeFeature
 ): Promise<{
   alreadyAvailable: boolean
+  localFilesPresent: boolean
+  probeInconclusive: boolean
+  probeError: string
   profile: RuntimeProfileName | ''
   runtimeKey: string
   title: string
@@ -625,6 +631,9 @@ const resolveAnyLocalRuntimeAvailability = async (
   if (runtimeCandidates.length <= 0) {
     return {
       alreadyAvailable: false,
+      localFilesPresent: false,
+      probeInconclusive: false,
+      probeError: '',
       profile: '',
       runtimeKey: '',
       title: '',
@@ -633,33 +642,57 @@ const resolveAnyLocalRuntimeAvailability = async (
     }
   }
 
+  const fallbackCandidate = runtimeCandidates[0]
+  const fallbackProfile = resolveRuntimeProfileByRuntimeKey(fallbackCandidate.key)
+  const fallback = {
+    alreadyAvailable: false,
+    localFilesPresent: true,
+    probeInconclusive: false,
+    probeError: '',
+    profile: fallbackProfile,
+    runtimeKey: fallbackCandidate.key,
+    title: resolveRuntimeProfileTitle(fallbackProfile),
+    runtimeDir: fallbackCandidate.runtimeDir,
+    pythonPath: fallbackCandidate.pythonPath
+  }
+
   try {
     const runtimeSnapshot = await probeDemucsDevices(resolveBundledFfmpegPath())
+    const snapshotProfile = runtimeSnapshot.runtimeKey
+      ? resolveRuntimeProfileByRuntimeKey(runtimeSnapshot.runtimeKey)
+      : fallbackProfile
+    const snapshotMeta = {
+      profile: snapshotProfile,
+      runtimeKey: normalizeText(runtimeSnapshot.runtimeKey, 120) || fallback.runtimeKey,
+      title: resolveRuntimeProfileTitle(snapshotProfile) || fallback.title,
+      runtimeDir: runtimeSnapshot.runtimeDir || fallback.runtimeDir,
+      pythonPath: runtimeSnapshot.pythonPath || fallback.pythonPath,
+      probeInconclusive: runtimeSnapshot.probeInconclusive === true,
+      probeError: normalizeText(runtimeSnapshot.probeError, 400)
+    }
     if (
       runtimeSnapshot.runtimeUsable &&
       normalizeText(runtimeSnapshot.runtimeKey, 120) &&
       fs.existsSync(runtimeSnapshot.pythonPath) &&
       (feature === 'stem' || (await hasBundledBeatThisSupport(runtimeSnapshot.runtimeDir)))
     ) {
-      const profile = resolveRuntimeProfileByRuntimeKey(runtimeSnapshot.runtimeKey)
       return {
         alreadyAvailable: true,
-        profile,
-        runtimeKey: runtimeSnapshot.runtimeKey,
-        title: resolveRuntimeProfileTitle(profile),
-        runtimeDir: runtimeSnapshot.runtimeDir,
-        pythonPath: runtimeSnapshot.pythonPath
+        localFilesPresent: true,
+        ...snapshotMeta
       }
     }
-  } catch {}
-
-  return {
-    alreadyAvailable: false,
-    profile: '',
-    runtimeKey: '',
-    title: '',
-    runtimeDir: '',
-    pythonPath: ''
+    return {
+      alreadyAvailable: false,
+      localFilesPresent: true,
+      ...snapshotMeta
+    }
+  } catch (error) {
+    return {
+      ...fallback,
+      probeInconclusive: true,
+      probeError: normalizeText(error instanceof Error ? error.message : String(error || ''), 400)
+    }
   }
 }
 
@@ -780,6 +813,7 @@ export const getPreferredStemRuntimeDownloadInfo = async (
       supported: false,
       downloadable: false,
       alreadyAvailable: false,
+      localRuntimePresent: false,
       profile: '',
       runtimeKey: '',
       version: '',
@@ -793,18 +827,24 @@ export const getPreferredStemRuntimeDownloadInfo = async (
     }
   }
   const localRuntime = await resolveAnyLocalRuntimeAvailability(feature)
+  let featureSupportFailed = false
   if (localRuntime.alreadyAvailable) {
-    localRuntime.alreadyAvailable = await hasAnalysisRuntimeFeatureSupport(
+    const featureSupported = await hasAnalysisRuntimeFeatureSupport(
       feature,
       localRuntime.pythonPath,
       localRuntime.runtimeDir
     )
+    if (!featureSupported) {
+      featureSupportFailed = true
+      localRuntime.alreadyAvailable = false
+    }
   }
   if (localRuntime.alreadyAvailable) {
     return {
       supported: true,
       downloadable: false,
       alreadyAvailable: true,
+      localRuntimePresent: true,
       profile: localRuntime.profile,
       runtimeKey: localRuntime.runtimeKey,
       version: '',
@@ -817,6 +857,32 @@ export const getPreferredStemRuntimeDownloadInfo = async (
       state: getStemRuntimeDownloadState()
     }
   }
+  if (localRuntime.localFilesPresent && localRuntime.probeInconclusive) {
+    log.warn('[analysis-runtime-probe]', {
+      event: 'preferred-status',
+      feature,
+      reason: 'runtime probe inconclusive',
+      runtimeKey: localRuntime.runtimeKey,
+      downloadable: false,
+      error: truncateProbeLogText(localRuntime.probeError)
+    })
+    return {
+      supported: true,
+      downloadable: false,
+      alreadyAvailable: false,
+      localRuntimePresent: true,
+      profile: localRuntime.profile || preferredProfiles[0] || '',
+      runtimeKey: localRuntime.runtimeKey,
+      version: '',
+      archiveSize: 0,
+      title: localRuntime.title || resolveRuntimeProfileTitle(preferredProfiles[0] || ''),
+      reason: 'runtime probe inconclusive',
+      manifestUrl: resolveRuntimeManifestUrl(),
+      releaseTag: '',
+      error: localRuntime.probeError,
+      state: getStemRuntimeDownloadState()
+    }
+  }
   const manifest = await readRuntimeManifest()
   if (!manifest) {
     const fallbackProfile = localRuntime.profile || preferredProfiles[0] || ''
@@ -824,6 +890,7 @@ export const getPreferredStemRuntimeDownloadInfo = async (
       supported: true,
       downloadable: !localRuntime.alreadyAvailable,
       alreadyAvailable: localRuntime.alreadyAvailable,
+      localRuntimePresent: localRuntime.localFilesPresent,
       profile: fallbackProfile,
       runtimeKey: localRuntime.runtimeKey,
       version: '',
@@ -850,6 +917,7 @@ export const getPreferredStemRuntimeDownloadInfo = async (
       supported: true,
       downloadable: false,
       alreadyAvailable: false,
+      localRuntimePresent: localRuntime.localFilesPresent,
       profile: preferredProfiles[0] || '',
       runtimeKey: '',
       version: '',
@@ -863,23 +931,38 @@ export const getPreferredStemRuntimeDownloadInfo = async (
     }
   }
   const alreadyAvailable = await isRuntimeAlreadyAvailable(entry, feature)
+  const reason = alreadyAvailable
+    ? 'already available'
+    : feature === 'bpm-fix' && !entry.bpmFixReady
+      ? 'bpm fix asset unavailable'
+      : featureSupportFailed
+        ? 'feature support unavailable'
+        : localRuntime.localFilesPresent
+          ? 'local runtime unusable'
+          : ''
+  log.info('[analysis-runtime-probe]', {
+    event: 'preferred-status',
+    feature,
+    reason: reason || 'downloadable',
+    alreadyAvailable,
+    localRuntimePresent: alreadyAvailable || localRuntime.localFilesPresent,
+    downloadable: !alreadyAvailable && (feature !== 'bpm-fix' || entry.bpmFixReady === true),
+    runtimeKey: alreadyAvailable ? localRuntime.runtimeKey : entry.runtimeKey
+  })
   return {
     supported: true,
     downloadable: !alreadyAvailable && (feature !== 'bpm-fix' || entry.bpmFixReady === true),
     alreadyAvailable,
+    localRuntimePresent: alreadyAvailable || localRuntime.localFilesPresent,
     profile: entry.profile,
     runtimeKey: entry.runtimeKey,
     version: entry.version,
     archiveSize: entry.archiveSize,
     title: resolveRuntimeProfileTitle(entry.profile),
-    reason: alreadyAvailable
-      ? 'already available'
-      : feature === 'bpm-fix' && !entry.bpmFixReady
-        ? 'bpm fix asset unavailable'
-        : '',
+    reason,
     manifestUrl: resolveRuntimeManifestUrl(),
     releaseTag: manifest.releaseTag || '',
-    error: '',
+    error: localRuntime.probeError,
     state: getStemRuntimeDownloadState()
   }
 }

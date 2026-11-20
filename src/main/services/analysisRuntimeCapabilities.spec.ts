@@ -8,6 +8,7 @@ vi.mock('./mixtapeStemSeparationShared', () => ({
   runProbeProcess: mocks.probe
 }))
 vi.mock('./bpmFixProcess', () => ({ resolveBpmFixRuntime: mocks.bpmWorker }))
+vi.mock('../log', () => ({ log: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
 import {
   clearAnalysisRuntimeCapabilityCache,
   hasAnalysisRuntimeFeatureSupport
@@ -38,5 +39,15 @@ describe('feature-specific runtime probes', () => {
     clearAnalysisRuntimeCapabilityCache()
     mocks.bpmWorker.mockResolvedValue({ command: 'selected-runtime' })
     expect(await hasAnalysisRuntimeFeatureSupport('bpm-fix', 'python', 'runtime')).toBe(true)
+  })
+
+  it('does not keep a failed import or timeout cached as a lasting negative result', async () => {
+    mocks.probe.mockResolvedValueOnce({ timedOut: true, status: null, stderr: 'killed' })
+    expect(await hasAnalysisRuntimeFeatureSupport('horizontal', 'python', 'runtime')).toBe(false)
+    mocks.probe.mockResolvedValueOnce({ timedOut: false, status: 0, stdout: '', stderr: '' })
+    expect(await hasAnalysisRuntimeFeatureSupport('horizontal', 'python', 'runtime')).toBe(true)
+    expect(mocks.probe).toHaveBeenCalledTimes(2)
+    expect(await hasAnalysisRuntimeFeatureSupport('horizontal', 'python', 'runtime')).toBe(true)
+    expect(mocks.probe).toHaveBeenCalledTimes(2)
   })
 })

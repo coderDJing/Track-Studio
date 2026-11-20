@@ -33,6 +33,9 @@
     "stemBlockedHint": "\"Stem workspace\" needs the analysis runtime. The current component does not support it.",
     "trackAnalysisBlockedHint": "\"Beat grid / BPM analysis\" needs the analysis runtime. It is not installed, so nothing was submitted.",
     "trackAnalysisDownloadingTitle": "The analysis runtime is downloading",
-    "trackAnalysisDownloadingHint": "\"Beat grid / BPM analysis\" has to wait for it to finish. Nothing was submitted this time."
+    "trackAnalysisDownloadingHint": "\"Beat grid / BPM analysis\" has to wait for it to finish. Nothing was submitted this time.",
+    "probeInconclusiveTitle": "Analysis runtime could not be verified",
+    "probeInconclusiveHint": "The analysis runtime is already on this computer, but this health check did not finish. Try again in a moment; you do not need to download it again.",
+    "localRuntimeUnusableBody": "The analysis runtime is installed, but the dependency check failed. Download or update the {title} build (about {size}) to repair it."
   }
 }

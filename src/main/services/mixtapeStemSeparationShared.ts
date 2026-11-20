@@ -25,7 +25,7 @@ const STEM_FFPROBE_TIMEOUT_MS = 20_000
 export const STEM_DEVICE_PROBE_TIMEOUT_MS = 60_000
 export const STEM_RUNTIME_INSTALL_VALIDATION_TIMEOUT_MS = 90_000
 export const STEM_DEVICE_COMPATIBILITY_TIMEOUT_MS = 12_000
-export const STEM_DEVICE_PROBE_CACHE_TTL_MS = 5 * 60 * 1000
+export { STEM_DEVICE_PROBE_CACHE_TTL_MS } from './mixtapeStemDeviceProbeResult'
 export const STEM_WINDOWS_GPU_ADAPTER_PROBE_TIMEOUT_MS = 6_000
 export const DEMUCS_NO_SPLIT_MAX_DURATION_SECONDS = 7 * 60
 const DEMUCS_HTDEMUCS_MAX_SEGMENT_SECONDS = 7.8
@@ -53,15 +53,9 @@ export type MixtapeStemSeparationResult = {
 
 export type MixtapeStemComputeDevice = 'cuda' | 'mps' | 'xpu' | 'directml' | 'cpu'
 export type MixtapeStemRuntimeStage =
-  | 'separating'
-  | 'rendering'
-  | 'validating'
-  | 'saving'
-  | 'cleaning'
+  'separating' | 'rendering' | 'validating' | 'saving' | 'cleaning'
 export type MixtapeStemCpuFallbackReasonCode =
-  | 'gpu_unavailable'
-  | 'gpu_failed'
-  | 'gpu_backend_missing'
+  'gpu_unavailable' | 'gpu_failed' | 'gpu_backend_missing'
 export type MixtapeStemRuntimeProgress = {
   device: MixtapeStemComputeDevice
   stage: MixtapeStemRuntimeStage
@@ -80,6 +74,8 @@ export type MixtapeStemDeviceProbeSnapshot = {
   runtimeDir: string
   pythonPath: string
   runtimeUsable: boolean
+  probeInconclusive?: boolean
+  importOk?: boolean
   probeError: string
   devices: MixtapeStemComputeDevice[]
   cudaAvailable: boolean

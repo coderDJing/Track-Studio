@@ -16,8 +16,15 @@ import type {
   MixtapeStemCpuFallbackReasonCode,
   MixtapeStemDeviceProbeSnapshot
 } from './mixtapeStemSeparationShared'
+import { log } from '../log'
+import {
+  DEMUCS_DEVICE_PROBE_PYTHON_SCRIPT,
+  parseDemucsDeviceProbeOutput,
+  resolveLoggedRuntimePath,
+  resolveStemDeviceProbeCacheTtlMs,
+  truncateProbeLogText
+} from './mixtapeStemDeviceProbeResult'
 const {
-  STEM_DEVICE_PROBE_CACHE_TTL_MS,
   STEM_DEVICE_PROBE_TIMEOUT_MS,
   STEM_WINDOWS_GPU_ADAPTER_PROBE_TIMEOUT_MS,
   buildStemProcessEnv,
@@ -103,6 +110,8 @@ const probeDemucsDevicesForRuntime = async (params: {
   const priority = resolveStemDevicePriority()
   const env = buildStemProcessEnv(params.runtimeCandidate.runtimeDir, params.ffmpegPath)
   let runtimeUsable = false
+  let probeInconclusive: boolean
+  let importOk = false
   let cudaAvailable = false
   let mpsAvailable = false
   let xpuAvailable = false
@@ -112,120 +121,85 @@ const probeDemucsDevicesForRuntime = async (params: {
   let directmlBackendInstalled = false
   let directmlDemucsCompatible = false
   let directmlDevice = ''
-  let probeError = ''
+  let probeError: string
+  const startedAt = Date.now()
   try {
     const result = await runProbeProcess({
       command: params.runtimeCandidate.pythonPath,
-      args: [
-        '-c',
-        [
-          'import json',
-          'payload = {',
-          '  "cuda": False,',
-          '  "mps": False,',
-          '  "xpu": False,',
-          '  "xpu_backend_installed": False,',
-          '  "directml": False,',
-          '  "directml_backend_installed": False,',
-          '  "directml_device": "",',
-          '  "torch_version": ""',
-          '}',
-          'try:',
-          '  import torch',
-          '  torch_version = str(getattr(torch, "__version__", ""))',
-          '  payload["torch_version"] = torch_version',
-          '  cuda_api = getattr(torch, "cuda", None)',
-          '  payload["cuda"] = bool(cuda_api and cuda_api.is_available())',
-          '  mps_backend = getattr(getattr(torch, "backends", None), "mps", None)',
-          '  payload["mps"] = bool(mps_backend and mps_backend.is_available())',
-          '  xpu_api = getattr(torch, "xpu", None)',
-          '  xpu_backend_installed = bool(xpu_api) and ("+cpu" not in torch_version.lower())',
-          '  payload["xpu_backend_installed"] = xpu_backend_installed',
-          '  payload["xpu"] = bool(xpu_backend_installed and xpu_api and xpu_api.is_available())',
-          'except Exception as exc:',
-          '  payload["error"] = str(exc)',
-          'try:',
-          '  import torch_directml',
-          '  payload["directml_backend_installed"] = True',
-          '  try:',
-          '    dml_device = torch_directml.device()',
-          '    payload["directml"] = bool(dml_device)',
-          '    payload["directml_device"] = str(dml_device)',
-          '  except Exception as exc:',
-          '    payload["directml_error"] = str(exc)',
-          'except Exception as exc:',
-          '  payload["directml_import_error"] = str(exc)',
-          'print(json.dumps(payload))'
-        ].join('\n')
-      ],
+      args: ['-c', DEMUCS_DEVICE_PROBE_PYTHON_SCRIPT],
       env,
       timeoutMs: STEM_DEVICE_PROBE_TIMEOUT_MS,
       maxStdoutLen: 2000,
       maxStderrLen: 1600
     })
-    const stdoutText = normalizeText(result.stdout, 1200)
-    const stderrText = normalizeText(result.stderr, 1200)
-    if (result.status === 0 && !result.timedOut && stdoutText) {
-      const lines = stdoutText
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean)
-      const lastLine = lines.at(-1) || ''
-      const parsed = JSON.parse(lastLine) as {
-        cuda?: unknown
-        mps?: unknown
-        xpu?: unknown
-        xpu_backend_installed?: unknown
-        directml?: unknown
-        directml_backend_installed?: unknown
-        directml_device?: unknown
-        error?: unknown
-        directml_error?: unknown
-        directml_import_error?: unknown
+    const parsed = parseDemucsDeviceProbeOutput(result, STEM_DEVICE_PROBE_TIMEOUT_MS)
+    runtimeUsable = parsed.runtimeUsable
+    probeInconclusive = parsed.probeInconclusive
+    importOk = parsed.importOk
+    cudaAvailable = parsed.cudaAvailable
+    mpsAvailable = parsed.mpsAvailable
+    xpuAvailable = parsed.xpuAvailable
+    xpuBackendInstalled = parsed.xpuBackendInstalled
+    directmlAvailable = parsed.directmlAvailable
+    directmlBackendInstalled = parsed.directmlBackendInstalled
+    directmlDevice = parsed.directmlDevice
+    probeError = parsed.probeError
+    if (runtimeUsable && xpuAvailable) {
+      const xpuCompatibility = await probeXpuDemucsCompatibility({
+        pythonPath: params.runtimeCandidate.pythonPath,
+        env
+      })
+      xpuDemucsCompatible = xpuCompatibility.ok
+      if (!xpuCompatibility.ok) {
+        xpuAvailable = false
+        probeError = probeError || normalizeText(xpuCompatibility.error, 400)
       }
-      const torchImportError = normalizeText(parsed?.error, 400)
-      cudaAvailable = !!parsed?.cuda
-      mpsAvailable = !!parsed?.mps
-      xpuAvailable = !!parsed?.xpu
-      xpuBackendInstalled = !!parsed?.xpu_backend_installed
-      directmlAvailable = !!parsed?.directml
-      directmlBackendInstalled = !!parsed?.directml_backend_installed
-      directmlDevice = normalizeText(parsed?.directml_device, 80)
-      runtimeUsable = !torchImportError
-      probeError = normalizeText(
-        torchImportError || parsed?.directml_error || parsed?.directml_import_error,
-        400
-      )
-      if (xpuAvailable) {
-        const xpuCompatibility = await probeXpuDemucsCompatibility({
-          pythonPath: params.runtimeCandidate.pythonPath,
-          env
-        })
-        xpuDemucsCompatible = xpuCompatibility.ok
-        if (!xpuCompatibility.ok) {
-          xpuAvailable = false
-          probeError = probeError || normalizeText(xpuCompatibility.error, 400)
-        }
-      }
-      if (directmlAvailable) {
-        const directmlCompatibility = await probeDirectmlDemucsCompatibility({
-          pythonPath: params.runtimeCandidate.pythonPath,
-          env,
-          directmlDevice: directmlDevice || 'privateuseone:0'
-        })
-        directmlDemucsCompatible = directmlCompatibility.ok
-        if (!directmlCompatibility.ok) {
-          directmlAvailable = false
-          probeError = probeError || normalizeText(directmlCompatibility.error, 400)
-        }
-      }
-    } else {
-      probeError = result.timedOut
-        ? `probe timed out after ${STEM_DEVICE_PROBE_TIMEOUT_MS}ms`
-        : result.error || stderrText || stdoutText || `probe exit ${result.status ?? -1}`
     }
+    if (runtimeUsable && directmlAvailable) {
+      const directmlCompatibility = await probeDirectmlDemucsCompatibility({
+        pythonPath: params.runtimeCandidate.pythonPath,
+        env,
+        directmlDevice: directmlDevice || 'privateuseone:0'
+      })
+      directmlDemucsCompatible = directmlCompatibility.ok
+      if (!directmlCompatibility.ok) {
+        directmlAvailable = false
+        probeError = probeError || normalizeText(directmlCompatibility.error, 400)
+      }
+    }
+    log[runtimeUsable ? 'info' : 'warn']('[analysis-runtime-probe]', {
+      event: 'device-probe',
+      runtimeKey: normalizeText(params.runtimeCandidate.key, 64) || 'runtime',
+      pythonPath: resolveLoggedRuntimePath(params.runtimeCandidate.pythonPath),
+      elapsedMs: Date.now() - startedAt,
+      exit: result.status,
+      timedOut: result.timedOut,
+      importOk,
+      runtimeUsable,
+      probeInconclusive,
+      devices: [
+        cudaAvailable ? 'cuda' : null,
+        mpsAvailable ? 'mps' : null,
+        xpuAvailable ? 'xpu' : null,
+        directmlAvailable ? 'directml' : null,
+        runtimeUsable ? 'cpu' : null
+      ].filter(Boolean),
+      error: truncateProbeLogText(probeError),
+      stderr: truncateProbeLogText(result.stderr, 400)
+    })
   } catch (error) {
     probeError = normalizeText(error instanceof Error ? error.message : String(error || ''), 400)
+    probeInconclusive = !importOk
+    log.warn('[analysis-runtime-probe]', {
+      event: 'device-probe',
+      runtimeKey: normalizeText(params.runtimeCandidate.key, 64) || 'runtime',
+      pythonPath: resolveLoggedRuntimePath(params.runtimeCandidate.pythonPath),
+      elapsedMs: Date.now() - startedAt,
+      importOk,
+      runtimeUsable,
+      probeInconclusive,
+      error: truncateProbeLogText(probeError)
+    })
   }
   const available = new Set<MixtapeStemComputeDevice>()
   if (runtimeUsable) available.add('cpu')
@@ -241,6 +215,8 @@ const probeDemucsDevicesForRuntime = async (params: {
     runtimeDir: params.runtimeCandidate.runtimeDir,
     pythonPath: params.runtimeCandidate.pythonPath,
     runtimeUsable,
+    probeInconclusive,
+    importOk,
     probeError,
     devices,
     cudaAvailable,
@@ -282,11 +258,29 @@ const resolveProbeSnapshotTieBreakScore = (snapshot: MixtapeStemDeviceProbeSnaps
 }
 const probeDemucsDevices = async (ffmpegPath: string): Promise<MixtapeStemDeviceProbeSnapshot> => {
   const now = Date.now()
+  const cacheTtlMs = stemDeviceProbeSnapshot
+    ? resolveStemDeviceProbeCacheTtlMs(stemDeviceProbeSnapshot)
+    : 0
   if (
     stemDeviceProbeSnapshot &&
-    now - stemDeviceProbeSnapshot.checkedAt <= STEM_DEVICE_PROBE_CACHE_TTL_MS
+    cacheTtlMs > 0 &&
+    now - stemDeviceProbeSnapshot.checkedAt <= cacheTtlMs
   ) {
+    log.info('[analysis-runtime-probe]', {
+      event: 'device-probe-cache-hit',
+      runtimeKey: stemDeviceProbeSnapshot.runtimeKey,
+      runtimeUsable: stemDeviceProbeSnapshot.runtimeUsable,
+      probeInconclusive: stemDeviceProbeSnapshot.probeInconclusive === true,
+      ageMs: now - stemDeviceProbeSnapshot.checkedAt,
+      ttlMs: cacheTtlMs
+    })
     return stemDeviceProbeSnapshot
+  }
+  if (
+    stemDeviceProbeSnapshot &&
+    (cacheTtlMs <= 0 || now - stemDeviceProbeSnapshot.checkedAt > cacheTtlMs)
+  ) {
+    stemDeviceProbeSnapshot = null
   }
   if (stemDeviceProbePromise) return await stemDeviceProbePromise
   stemDeviceProbePromise = (async () => {
@@ -335,6 +329,8 @@ const probeDemucsDevices = async (ffmpegPath: string): Promise<MixtapeStemDevice
       runtimeDir: fallbackCandidate.runtimeDir,
       pythonPath: fallbackCandidate.pythonPath,
       runtimeUsable: false,
+      probeInconclusive: false,
+      importOk: false,
       probeError: '',
       devices: [],
       cudaAvailable: false,
@@ -365,7 +361,18 @@ const probeDemucsDevices = async (ffmpegPath: string): Promise<MixtapeStemDevice
       anyXpuBackendInstalled,
       anyDirectmlBackendInstalled
     }
-    stemDeviceProbeSnapshot = snapshot
+    const selectedTtlMs = resolveStemDeviceProbeCacheTtlMs(snapshot)
+    stemDeviceProbeSnapshot = selectedTtlMs > 0 ? snapshot : null
+    log.info('[analysis-runtime-probe]', {
+      event: 'device-probe-selected',
+      runtimeKey: snapshot.runtimeKey,
+      pythonPath: resolveLoggedRuntimePath(snapshot.pythonPath),
+      runtimeUsable: snapshot.runtimeUsable,
+      probeInconclusive: snapshot.probeInconclusive === true,
+      devices: snapshot.devices,
+      error: truncateProbeLogText(snapshot.probeError),
+      cacheTtlMs: selectedTtlMs
+    })
     return snapshot
   })().finally(() => {
     stemDeviceProbePromise = null

@@ -33,6 +33,7 @@ type AnalysisRuntimePreferredInfo = {
   supported: boolean
   downloadable: boolean
   alreadyAvailable: boolean
+  localRuntimePresent: boolean
   profile: string
   runtimeKey: string
   version: string
@@ -78,6 +79,7 @@ const normalizeAnalysisRuntimePreferredInfo = (value: unknown): AnalysisRuntimeP
     supported: raw.supported === true,
     downloadable: raw.downloadable === true,
     alreadyAvailable: raw.alreadyAvailable === true,
+    localRuntimePresent: raw.localRuntimePresent === true,
     profile: typeof raw.profile === 'string' ? raw.profile.trim() : '',
     runtimeKey: typeof raw.runtimeKey === 'string' ? raw.runtimeKey.trim() : '',
     version: typeof raw.version === 'string' ? raw.version.trim() : '',
@@ -301,6 +303,18 @@ export const useAnalysisRuntimeDownload = (options: {
         return 'blocked'
       }
 
+      if (preferred.reason === 'runtime probe inconclusive') {
+        await options.confirmDialog({
+          title: options.t('analysisRuntime.probeInconclusiveTitle'),
+          content: [options.t('analysisRuntime.probeInconclusiveHint')],
+          confirmShow: false,
+          textAlign: 'left',
+          innerWidth: 560,
+          innerHeight: 0
+        })
+        return 'handled'
+      }
+
       if (preferred.reason === 'manifest unavailable') {
         const content = [
           options.t('analysisRuntime.manifestUnavailableHint'),
@@ -343,8 +357,11 @@ export const useAnalysisRuntimeDownload = (options: {
                 size: formatAnalysisRuntimeBytes(preferred.archiveSize)
               })
             : options.t(
-                options.runtime.analysisRuntime.available
-                  ? 'analysisRuntime.featureUpdateBody'
+                preferred.localRuntimePresent || options.runtime.analysisRuntime.available
+                  ? preferred.reason === 'local runtime unusable' ||
+                    preferred.reason === 'feature support unavailable'
+                    ? 'analysisRuntime.localRuntimeUnusableBody'
+                    : 'analysisRuntime.featureUpdateBody'
                   : 'analysisRuntime.promptBodyFeature',
                 {
                   feature: featureLabel,

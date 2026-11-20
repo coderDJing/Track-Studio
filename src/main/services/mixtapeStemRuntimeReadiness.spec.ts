@@ -35,6 +35,7 @@ vi.mock('./analysisRuntimeCapabilities', () => ({
 vi.mock('./mixtapeStemRuntimeDownloadInstall', () => ({
   installRuntimeFromManifestEntry: mocks.install
 }))
+vi.mock('../log', () => ({ log: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
 
 import {
   downloadPreferredStemRuntime,
@@ -188,12 +189,56 @@ describe('analysis runtime readiness', () => {
   it('does not report a broken component as ready even when its files exist', async () => {
     mocks.probe.mockResolvedValue({
       runtimeUsable: false,
+      probeInconclusive: false,
       pythonPath,
       runtimeDir,
       runtimeKey: 'runtime-cuda'
     })
     const result = await getPreferredStemRuntimeDownloadInfo()
-    expect(result).toMatchObject({ alreadyAvailable: false, downloadable: true })
+    expect(result).toMatchObject({
+      alreadyAvailable: false,
+      downloadable: true,
+      localRuntimePresent: true,
+      reason: 'local runtime unusable'
+    })
     expect(mocks.fetch).toHaveBeenCalledOnce()
+  })
+
+  it('does not treat a GPU query failure after a successful import as a missing runtime', async () => {
+    mocks.probe.mockResolvedValue({
+      runtimeUsable: true,
+      probeInconclusive: false,
+      probeError: 'XPU enumeration failed',
+      pythonPath,
+      runtimeDir,
+      runtimeKey: 'runtime-cuda'
+    })
+    const result = await getPreferredStemRuntimeDownloadInfo('horizontal')
+    expect(result).toMatchObject({
+      alreadyAvailable: true,
+      downloadable: false,
+      localRuntimePresent: true,
+      reason: 'already available'
+    })
+    expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it('does not offer a download when a local runtime probe times out without an import result', async () => {
+    mocks.probe.mockResolvedValue({
+      runtimeUsable: false,
+      probeInconclusive: true,
+      probeError: 'probe timed out after 60000ms',
+      pythonPath,
+      runtimeDir,
+      runtimeKey: 'runtime-cuda'
+    })
+    const result = await getPreferredStemRuntimeDownloadInfo('horizontal')
+    expect(result).toMatchObject({
+      alreadyAvailable: false,
+      downloadable: false,
+      localRuntimePresent: true,
+      reason: 'runtime probe inconclusive'
+    })
+    expect(mocks.fetch).not.toHaveBeenCalled()
   })
 })

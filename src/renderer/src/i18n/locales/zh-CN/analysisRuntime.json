@@ -33,6 +33,9 @@
     "stemBlockedHint": "「Stem 工作台」需要分析运行时组件，当前组件尚不支持。",
     "trackAnalysisBlockedHint": "「节拍网格 / BPM 分析」需要分析运行时组件，当前未安装，本次未提交任何改动。",
     "trackAnalysisDownloadingTitle": "分析运行时正在下载",
-    "trackAnalysisDownloadingHint": "「节拍网格 / BPM 分析」要等下载完成，本次未提交任何改动。"
+    "trackAnalysisDownloadingHint": "「节拍网格 / BPM 分析」要等下载完成，本次未提交任何改动。",
+    "probeInconclusiveTitle": "分析运行时暂时无法验证",
+    "probeInconclusiveHint": "本机已有分析运行时组件，但这次健康检查没有完成。请稍后再试，不必重新下载。",
+    "localRuntimeUnusableBody": "本机已安装分析运行时组件，但依赖检查未通过。可以下载或更新 {title} 版（约 {size}）来修复。"
   }
 }
