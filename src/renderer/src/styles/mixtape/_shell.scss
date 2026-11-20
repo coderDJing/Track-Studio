@@ -390,17 +390,19 @@
   overflow: hidden;
 }
 
+/* 这里可能有 2 或 3 个直接子元素（参数栏 / 包络工具栏 / 时间线主体），
+   用弹性列布局保证"时间线主体吃掉剩余高度"，不要再按网格行号写死。 */
 .mixtape-body {
   flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 0;
   padding: 0;
   min-height: 0;
 }
 
 .mixtape-main {
+  flex: 1 1 0;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   gap: 0;
@@ -408,6 +410,7 @@
 }
 
 .mixtape-param-bar {
+  flex: 0 0 auto;
   min-height: 32px;
   border-bottom: 1px solid var(--border);
   background: var(--mixtape-panel-gradient-soft);
