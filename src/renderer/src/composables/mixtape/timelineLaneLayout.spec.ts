@@ -2,7 +2,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ref, type Ref } from 'vue'
 import { createTimelineHelpersModule } from './timelineHelpers'
-import { resolveMixtapeTrackLaneBaseHeight } from './constants'
+import {
+  MIXTAPE_ENVELOPE_PREVIEW_BASE_LANE_HEIGHT,
+  MIXTAPE_ENVELOPE_PREVIEW_COMPACT_LANE_HEIGHT,
+  MIXTAPE_OVERVIEW_BASE_LANE_HEIGHT,
+  MIXTAPE_OVERVIEW_COMPACT_LANE_HEIGHT,
+  resolveMixtapeEnvelopePreviewLaneBaseHeight,
+  resolveMixtapeOverviewLaneBaseHeight,
+  resolveMixtapeTrackLaneBaseHeight
+} from './constants'
 import { resolveTimelineScalableBaseHeightByTrackCount } from './timelineVisualScaleConfig'
 import type { MixtapeTrack } from './types'
 
@@ -137,6 +145,21 @@ describe('Mixtape 泳道数切换', () => {
     const twoLane = resolveTimelineScalableBaseHeightByTrackCount(4, 2)
     const fourLane = resolveTimelineScalableBaseHeightByTrackCount(4, 4)
     expect(fourLane).toBeGreaterThan(twoLane)
-    expect(fourLane - twoLane).toBeLessThan(220)
+    expect(fourLane - twoLane).toBeLessThan(120)
+  })
+
+  it('四轨时把包络预览与概览压薄，把高度让给泳道区', () => {
+    expect(resolveMixtapeEnvelopePreviewLaneBaseHeight(2)).toBe(
+      MIXTAPE_ENVELOPE_PREVIEW_BASE_LANE_HEIGHT
+    )
+    expect(resolveMixtapeEnvelopePreviewLaneBaseHeight(4)).toBe(
+      MIXTAPE_ENVELOPE_PREVIEW_COMPACT_LANE_HEIGHT
+    )
+    expect(resolveMixtapeOverviewLaneBaseHeight(2)).toBe(MIXTAPE_OVERVIEW_BASE_LANE_HEIGHT)
+    expect(resolveMixtapeOverviewLaneBaseHeight(4)).toBe(MIXTAPE_OVERVIEW_COMPACT_LANE_HEIGHT)
+    expect(MIXTAPE_ENVELOPE_PREVIEW_COMPACT_LANE_HEIGHT).toBeLessThan(
+      MIXTAPE_ENVELOPE_PREVIEW_BASE_LANE_HEIGHT
+    )
+    expect(MIXTAPE_OVERVIEW_COMPACT_LANE_HEIGHT).toBeLessThan(MIXTAPE_OVERVIEW_BASE_LANE_HEIGHT)
   })
 })

@@ -1,5 +1,10 @@
 import { computed, type CSSProperties, type Ref } from 'vue'
 import {
+  DEFAULT_LANE_COUNT,
+  resolveMixtapeEnvelopePreviewLaneBaseHeight,
+  resolveMixtapeOverviewLaneBaseHeight
+} from '@renderer/composables/mixtape/constants'
+import {
   MIXTAPE_ENVELOPE_TRACK_FIELD_BY_PARAM,
   buildMixEnvelopePolylineByControlPoints,
   normalizeMixEnvelopePoints
@@ -92,8 +97,6 @@ const TRACK_ENVELOPE_PREVIEW_EDGE_INSET_PERCENT = 1.2
 const TIMELINE_TRACK_LANE_GAP_PX = 8
 const TIMELINE_TRACK_VERTICAL_PADDING_PX = 10
 const TIMELINE_TRACK_LANE_BORDER_PX = 2
-const TIMELINE_ENVELOPE_PREVIEW_BASE_LANE_HEIGHT_PX = 63
-const TIMELINE_OVERVIEW_BASE_LANE_HEIGHT_PX = 12
 
 const normalizeEnvelopePreviewPolyline = (points: string) =>
   points.replace(
@@ -189,14 +192,16 @@ export const useMixtapeEnvelopePreview = (options: UseMixtapeEnvelopePreviewOpti
 
   const timelineAdaptiveStyle = computed(() => {
     const scale = Math.max(1, Number(unwrapMaybeRef(options.timelineVisualScale)) || 1)
+    const laneIndices = unwrapMaybeRef(options.laneIndices)
+    const laneCount = Array.isArray(laneIndices) ? laneIndices.length : DEFAULT_LANE_COUNT
     return {
       '--timeline-envelope-preview-lane-height': `${Math.max(
         1,
-        Math.round(TIMELINE_ENVELOPE_PREVIEW_BASE_LANE_HEIGHT_PX * scale)
+        Math.round(resolveMixtapeEnvelopePreviewLaneBaseHeight(laneCount) * scale)
       )}px`,
       '--timeline-overview-lane-height': `${Math.max(
         1,
-        Math.round(TIMELINE_OVERVIEW_BASE_LANE_HEIGHT_PX * scale)
+        Math.round(resolveMixtapeOverviewLaneBaseHeight(laneCount) * scale)
       )}px`
     }
   })

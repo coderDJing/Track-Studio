@@ -4,6 +4,9 @@ export const MIXTAPE_BASE_TRACK_LANE_HEIGHT = Math.round(
 )
 export const MIXTAPE_ENVELOPE_PREVIEW_BASE_LANE_HEIGHT = 63
 export const MIXTAPE_OVERVIEW_BASE_LANE_HEIGHT = 12
+// 展开到 4 轨时把包络预览与概览压薄，把省下的高度让给泳道区。
+export const MIXTAPE_ENVELOPE_PREVIEW_COMPACT_LANE_HEIGHT = 44
+export const MIXTAPE_OVERVIEW_COMPACT_LANE_HEIGHT = 8
 export const BASE_PX_PER_SEC = 80
 export const MIXTAPE_WIDTH_SCALE = 0.1 * MIXTAPE_TRACK_UI_SCALE
 export const MIN_TRACK_WIDTH = Math.max(6, Math.round(60 * MIXTAPE_WIDTH_SCALE))
@@ -36,6 +39,17 @@ export const resolveMixtapeTrackLaneBaseHeight = (laneCount: unknown): number =>
     Math.round((MIXTAPE_BASE_TRACK_LANE_HEIGHT * DEFAULT_LANE_COUNT) / resolvedCount)
   )
 }
+
+// 包络预览/概览的每泳道基准高度：四轨时压薄，把高度让给泳道区。
+export const resolveMixtapeEnvelopePreviewLaneBaseHeight = (laneCount: unknown): number =>
+  normalizeMixtapeLaneCount(laneCount) >= MAX_LANE_COUNT
+    ? MIXTAPE_ENVELOPE_PREVIEW_COMPACT_LANE_HEIGHT
+    : MIXTAPE_ENVELOPE_PREVIEW_BASE_LANE_HEIGHT
+
+export const resolveMixtapeOverviewLaneBaseHeight = (laneCount: unknown): number =>
+  normalizeMixtapeLaneCount(laneCount) >= MAX_LANE_COUNT
+    ? MIXTAPE_OVERVIEW_COMPACT_LANE_HEIGHT
+    : MIXTAPE_OVERVIEW_BASE_LANE_HEIGHT
 
 export const normalizeMixtapeLaneIndex = (
   value: unknown,

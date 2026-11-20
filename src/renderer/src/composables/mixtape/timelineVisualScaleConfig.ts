@@ -1,8 +1,8 @@
 import {
   DEFAULT_LANE_COUNT,
-  MIXTAPE_ENVELOPE_PREVIEW_BASE_LANE_HEIGHT,
-  MIXTAPE_OVERVIEW_BASE_LANE_HEIGHT,
   normalizeMixtapeLaneCount,
+  resolveMixtapeEnvelopePreviewLaneBaseHeight,
+  resolveMixtapeOverviewLaneBaseHeight,
   resolveMixtapeTrackLaneBaseHeight
 } from '@renderer/composables/mixtape/constants'
 
@@ -23,12 +23,12 @@ const resolveTrackSectionBaseHeight = (laneCount: number) =>
   TIMELINE_TRACK_VERTICAL_PADDING_PX
 
 const resolveEnvelopeSectionBaseHeight = (laneCount: number) =>
-  laneCount * MIXTAPE_ENVELOPE_PREVIEW_BASE_LANE_HEIGHT +
+  laneCount * resolveMixtapeEnvelopePreviewLaneBaseHeight(laneCount) +
   Math.max(0, laneCount - 1) * ENVELOPE_PREVIEW_LANE_GAP_PX +
   ENVELOPE_PREVIEW_LANE_PADDING_Y_PX
 
 const resolveOverviewSectionBaseHeight = (laneCount: number) =>
-  laneCount * MIXTAPE_OVERVIEW_BASE_LANE_HEIGHT +
+  laneCount * resolveMixtapeOverviewLaneBaseHeight(laneCount) +
   Math.max(0, laneCount - 1) * OVERVIEW_LANE_GAP_PX +
   OVERVIEW_LANE_PADDING_Y_PX
 
