@@ -2,6 +2,7 @@
 import { computed, ref, toRef } from 'vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import MixtapeOutputDialog from '@renderer/components/mixtapeOutputDialog.vue'
+import MixtapeChapterDialog from '@renderer/components/mixtapeChapterDialog.vue'
 import MixtapeOutputProgressDialog from '@renderer/components/mixtape/MixtapeOutputProgressDialog.vue'
 import MixtapeBeatAlignDialog from '@renderer/components/MixtapeBeatAlignDialog.vue'
 import ColumnHeaderContextMenu from '@renderer/pages/modules/songsArea/ColumnHeaderContextMenu.vue'
@@ -76,6 +77,10 @@ const props = defineProps<{
   handleAutoGainDialogConfirmClick: () => void
   autoGainReferenceTrackId: string
   outputDialogVisible: boolean
+  chapterDialogVisible: boolean
+  chapterText: string
+  handleChapterDialogClose: () => void
+  handleChapterTextUpdate: (value: string) => void
   outputPath: string
   outputFormat: 'wav' | 'mp3'
   outputFilename: string
@@ -267,6 +272,12 @@ const autoGainColumnMenuVisibleModel = computed({
       </div>
     </div>
   </div>
+  <MixtapeChapterDialog
+    v-if="chapterDialogVisible"
+    :text="chapterText"
+    @update:text="handleChapterTextUpdate"
+    @close="handleChapterDialogClose"
+  />
   <MixtapeOutputDialog
     v-if="outputDialogVisible"
     :output-path="outputPath"

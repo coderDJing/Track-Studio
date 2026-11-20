@@ -98,6 +98,7 @@ type UseMixtapeBpmAndUiModuleContext = {
   mixtapeStemProfile: ValueRef<MixtapeStemProfile>
   laneCount: ValueRef<number>
   outputDialogVisible: ValueRef<boolean>
+  chapterDialogVisible: ValueRef<boolean>
   outputRunning: ValueRef<boolean>
   outputPath: ValueRef<string>
   outputFormat: ValueRef<'wav' | 'mp3'>
@@ -201,6 +202,7 @@ export const createUseMixtapeBpmAndUiModule = (ctx: UseMixtapeBpmAndUiModuleCont
     mixtapeStemProfile,
     laneCount,
     outputDialogVisible,
+    chapterDialogVisible,
     outputRunning,
     outputPath,
     outputFormat,
@@ -887,6 +889,7 @@ export const createUseMixtapeBpmAndUiModule = (ctx: UseMixtapeBpmAndUiModuleCont
     transportPlaying,
     transportDecoding,
     outputDialogVisible,
+    chapterDialogVisible,
     outputRunning,
     autoGainDialogVisible,
     closeTrackContextMenu,

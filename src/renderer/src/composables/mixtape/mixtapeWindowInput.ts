@@ -9,6 +9,7 @@ type MixtapeWindowInputContext = {
   transportPlaying: ValueRef<boolean>
   transportDecoding: ValueRef<boolean>
   outputDialogVisible: ValueRef<boolean>
+  chapterDialogVisible: ValueRef<boolean>
   outputRunning: ValueRef<boolean>
   autoGainDialogVisible: ValueRef<boolean>
   closeTrackContextMenu: () => void
@@ -24,6 +25,7 @@ export const createMixtapeWindowInputHandlers = (ctx: MixtapeWindowInputContext)
     transportPlaying,
     transportDecoding,
     outputDialogVisible,
+    chapterDialogVisible,
     outputRunning,
     autoGainDialogVisible,
     closeTrackContextMenu,
@@ -59,6 +61,7 @@ export const createMixtapeWindowInputHandlers = (ctx: MixtapeWindowInputContext)
       beatAlignDialogVisible.value ||
       transportPreloading.value ||
       outputDialogVisible.value ||
+      chapterDialogVisible.value ||
       outputRunning.value ||
       autoGainDialogVisible.value
     )

@@ -138,6 +138,10 @@ const {
   handleMixtapeSongDragLeave,
   handleMixtapeSongDrop,
   outputDialogVisible,
+  chapterDialogVisible,
+  chapterText,
+  updateChapterText,
+  closeChapterDialog,
   outputPath,
   outputFormat,
   outputFilename,
@@ -998,6 +1002,10 @@ onBeforeUnmount(() => {
       :handle-auto-gain-dialog-confirm-click="handleAutoGainDialogConfirmClick"
       :auto-gain-reference-track-id="autoGainReferenceTrackId"
       :output-dialog-visible="outputDialogVisible"
+      :chapter-dialog-visible="chapterDialogVisible"
+      :chapter-text="chapterText"
+      :handle-chapter-dialog-close="closeChapterDialog"
+      :handle-chapter-text-update="updateChapterText"
       :output-path="outputPath"
       :output-format="outputFormat"
       :output-filename="outputFilename"

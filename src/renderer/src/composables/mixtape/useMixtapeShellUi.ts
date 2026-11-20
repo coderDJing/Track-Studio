@@ -14,6 +14,7 @@ type UseMixtapeShellUiOptions = {
   handleEnvelopeKeydown: (event: KeyboardEvent) => void
   beatAlignDialogVisible: ReadonlyRef<boolean>
   outputDialogVisible: ReadonlyRef<boolean>
+  chapterDialogVisible: ReadonlyRef<boolean>
   autoGainDialogVisible: ReadonlyRef<boolean>
   cleanupGainEnvelopeEditor: () => void
 }
@@ -29,6 +30,7 @@ export const useMixtapeShellUi = ({
   handleEnvelopeKeydown,
   beatAlignDialogVisible,
   outputDialogVisible,
+  chapterDialogVisible,
   autoGainDialogVisible,
   cleanupGainEnvelopeEditor
 }: UseMixtapeShellUiOptions) => {
@@ -67,7 +69,12 @@ export const useMixtapeShellUi = ({
     if (event.defaultPrevented) return
     if (event.isComposing || event.repeat) return
     if (isEditableEventTarget(event.target)) return
-    if (beatAlignDialogVisible.value || outputDialogVisible.value || autoGainDialogVisible.value) {
+    if (
+      beatAlignDialogVisible.value ||
+      outputDialogVisible.value ||
+      chapterDialogVisible.value ||
+      autoGainDialogVisible.value
+    ) {
       return
     }
     handleEnvelopeKeydown(event)

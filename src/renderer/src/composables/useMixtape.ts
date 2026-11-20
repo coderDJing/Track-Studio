@@ -48,6 +48,8 @@ import {
   normalizeMixtapeLaneCount
 } from '@renderer/composables/mixtape/constants'
 import { persistMixtapeProjectLaneCount } from '@renderer/composables/mixtape/mixtapeLaneCount'
+import { buildMixtapeChapterText } from '@shared/mixtapeChapterText'
+import { resolveMixtapeChapterAudibleEntrySec } from '@renderer/composables/mixtape/mixtapeChapterEntry'
 import { createClickThroughGuard } from '@renderer/utils/clickThroughGuard'
 import type {
   MixtapeMixMode,
@@ -109,6 +111,8 @@ export const useMixtape = (options: UseMixtapeOptions = {}) => {
   const outputFormat = ref<'wav' | 'mp3'>('wav')
   const outputFilename = ref(buildRecFilename())
   const outputDialogVisible = ref(false)
+  const chapterDialogVisible = ref(false)
+  const chapterText = ref('')
   const outputRunning = ref(false)
   const outputProgressKey = ref('mixtape.outputProgressPreparing')
   const outputProgressPercent = ref(0)
@@ -342,12 +346,47 @@ export const useMixtape = (options: UseMixtapeOptions = {}) => {
     if (!originalMeta) return baseTitle
     return `${baseTitle} (${originalMeta})`
   }
+  const openChapterDialog = () => {
+    if (!tracks.value.length) {
+      void confirmDialog({
+        title: t('mixtape.chaptersDialogTitle'),
+        content: [t('mixtape.chaptersNoTracks')],
+        confirmShow: false
+      })
+      return
+    }
+    chapterText.value = buildMixtapeChapterText(
+      tracks.value.map((track) => ({
+        startSec: track.startSec,
+        entrySec: resolveMixtapeChapterAudibleEntrySec(
+          track,
+          resolveTrackSourceDurationSeconds(track)
+        ),
+        title: track.title,
+        artist: track.artist,
+        filePath: track.filePath
+      }))
+    )
+    chapterDialogVisible.value = true
+  }
+  const closeChapterDialog = () => {
+    chapterDialogVisible.value = false
+    chapterText.value = ''
+  }
+  const updateChapterText = (value: string) => {
+    chapterText.value = String(value || '')
+  }
   const mixtapeMenus = computed(() => [
     {
       name: 'mixtape.menuOutput',
       subMenu: [],
       directAction: 'mixtape.menuOutput',
       disabled: outputRunning.value
+    },
+    {
+      name: 'mixtape.menuChapters',
+      subMenu: [],
+      directAction: 'mixtape.menuChapters'
     }
   ])
   const applyPayload = (next: MixtapeOpenPayload) => {
@@ -481,6 +520,7 @@ export const useMixtape = (options: UseMixtapeOptions = {}) => {
     mixtapeStemProfile,
     laneCount,
     outputDialogVisible,
+    chapterDialogVisible,
     outputRunning,
     outputPath,
     outputFormat,
@@ -671,6 +711,10 @@ export const useMixtape = (options: UseMixtapeOptions = {}) => {
     if (key === 'mixtape.menuOutput') {
       if (outputRunning.value) return
       openOutputDialog()
+      return
+    }
+    if (key === 'mixtape.menuChapters') {
+      openChapterDialog()
       return
     }
     if (key === 'menu.exit') {
@@ -918,6 +962,10 @@ export const useMixtape = (options: UseMixtapeOptions = {}) => {
     dismissBpmAnalysisFailure,
     retryBpmAnalysis,
     outputDialogVisible,
+    chapterDialogVisible,
+    chapterText,
+    updateChapterText,
+    closeChapterDialog,
     outputPath,
     outputFormat,
     outputFilename,

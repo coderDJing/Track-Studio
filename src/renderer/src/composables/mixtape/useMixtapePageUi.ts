@@ -78,6 +78,11 @@ export const useMixtapePageUi = ({
       disabled: !canOutputFromTitle.value || projectGainBusy.value
     },
     {
+      name: 'mixtape.menuChapters',
+      subMenu: [],
+      directAction: 'mixtape.menuChapters'
+    },
+    {
       name: 'mixtape.cueOverlapTitle',
       subMenu: [],
       directAction: 'mixtape.cueOverlapTitle',
@@ -86,6 +91,10 @@ export const useMixtapePageUi = ({
   ])
 
   const handleTitleMenuOpen = (key: string) => {
+    if (key === 'mixtape.menuChapters') {
+      mixtape.handleTitleOpenDialog(key)
+      return
+    }
     if (projectGainBusy.value) return
     if (key === 'mixtape.cueOverlapTitle') {
       void cueOverlap.open()
@@ -366,6 +375,7 @@ export const useMixtapePageUi = ({
     handleEnvelopeKeydown,
     beatAlignDialogVisible: mixtape.beatAlignDialogVisible,
     outputDialogVisible: mixtape.outputDialogVisible,
+    chapterDialogVisible: mixtape.chapterDialogVisible,
     autoGainDialogVisible: mixtape.autoGainDialogVisible,
     cleanupGainEnvelopeEditor
   })
