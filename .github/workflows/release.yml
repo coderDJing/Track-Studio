@@ -722,6 +722,12 @@ jobs:
           sed -i.bak '/^electron_mirror=/d' .npmrc && rm -f .npmrc.bak
           npx electron-builder --mac --universal --publish never
 
+      # 与 Windows 同一个审计入口：读 app.asar 头表 + 磁盘实际文件，
+      # 额外按 Mach-O 头判定二进制归属，确认 universal 包两种架构都在、
+      # 且没有混入 Windows DLL / 预编译绑定。
+      - name: Audit packaged bundle (macOS)
+        run: node scripts/audit-packaged-bundle.mjs --app-dir dist/mac-universal --platform darwin-universal
+
       - name: Verify macOS native modules (universal)
         run: |
           set -euo pipefail
