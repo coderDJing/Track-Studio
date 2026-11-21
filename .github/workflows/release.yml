@@ -262,6 +262,12 @@ jobs:
       - name: Package (electron-builder, no publish)
         run: npx electron-builder --win --x64 --publish never
 
+      # 直接读实际产物（app.asar 头表 + 磁盘文件）而不是构建配置：
+      # 重复打包、错误平台的二进制、源码/.env 混入都会在这里让发布失败，
+      # 避免「安装包能构建、也能启动，但里面多了几百 MB 无用文件」再次发生。
+      - name: Audit packaged bundle (Windows)
+        run: node scripts/audit-packaged-bundle.mjs --app-dir dist/win-unpacked --platform win32-x64
+
       - name: Verify packaged native module (Windows)
         shell: pwsh
         run: |

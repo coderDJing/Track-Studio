@@ -251,6 +251,31 @@ const ensureWindowsFfmpegNativeDeps = async (repoRoot) => {
   return true
 }
 
+// 打包运行时原生模块从 vendor/ffmpeg/win32-x64/dll（即 resources/ffmpeg/win32-x64/dll）
+// 加载 FFmpeg DLL。全新检出时该目录可能为空，此时用 rust_package/native 下的预编译 DLL
+// 填充，保证 asar 里排除 rust_package/*.dll 之后原生模块仍能找到权威运行时目录。
+// 只在目录内没有任何 DLL 时填充，避免混入两代 FFmpeg。
+const seedWindowsVendorFfmpegDlls = (repoRoot) => {
+  if (process.platform !== 'win32') return
+  const vendorDllDir = path.join(repoRoot, 'vendor/ffmpeg/win32-x64/dll')
+  const seedDir = path.join(repoRoot, 'rust_package/native/ffmpeg/win32-x64/bin')
+  const listDlls = (dir) => {
+    if (!fs.existsSync(dir)) return []
+    return fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.dll'))
+      .map((entry) => entry.name)
+  }
+  if (listDlls(vendorDllDir).length > 0) return
+  const seeds = listDlls(seedDir)
+  if (seeds.length === 0) return
+  fs.mkdirSync(vendorDllDir, { recursive: true })
+  for (const name of seeds) {
+    fs.copyFileSync(path.join(seedDir, name), path.join(vendorDllDir, name))
+    console.log(`[frkb-native] seeded dll/${name}`)
+  }
+}
+
 const syncWindowsFfmpegDlls = (repoRoot, binaryConfig) => {
   if (process.platform !== 'win32') return
   const vendorDllDir = path.join(repoRoot, 'vendor/ffmpeg/win32-x64/dll')
@@ -357,4 +382,5 @@ if (
   console.log(`[frkb-native] synced runtime binary from ${path.basename(binarySourcePath)}`)
 }
 
+seedWindowsVendorFfmpegDlls(repoRoot)
 syncWindowsFfmpegDlls(repoRoot, binaryConfig)
