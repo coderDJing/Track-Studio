@@ -249,6 +249,27 @@ jobs:
         working-directory: rust_package
         run: npx --yes @napi-rs/cli@2.18.4 build --platform --release --target x86_64-pc-windows-msvc
 
+      # BtbN 的 shared 构建会带上 avfilter / avdevice / swscale 等没人引用的库
+      # （实测 36.4 + 4.7 + 2.4 = 43.5 MiB 未压缩）。按原生模块的导入闭包裁掉，
+      # 名单从导入表推导，不写死版本号。若裁错，后面的 Audit packaged bundle
+      # 会因为缺少被导入的 DLL 直接失败，不会把坏包发出去。
+      - name: Prune unused FFmpeg DLLs (Windows)
+        shell: pwsh
+        run: |
+          $nativeModule = Get-ChildItem -Path rust_package -Filter "*.node" -File |
+            Select-Object -First 1
+          if (-not $nativeModule) {
+            throw "rust_package 目录下没有找到构建产物 .node"
+          }
+          Write-Host "Native module: $($nativeModule.FullName)"
+          node scripts/prune-ffmpeg-dlls.mjs `
+            --dll-dir vendor/ffmpeg/win32-x64/dll `
+            --native-module $nativeModule.FullName `
+            --apply
+          if ($LASTEXITCODE -ne 0) {
+            throw "FFmpeg DLL pruning failed with exit code $LASTEXITCODE"
+          }
+
       - name: Build (vite)
         env:
           CLOUD_SYNC_BASE_URL_PROD: ${{ secrets.CLOUD_SYNC_BASE_URL_PROD }}

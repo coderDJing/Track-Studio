@@ -22,6 +22,7 @@ import path from 'node:path'
 
 import asar from '@electron/asar'
 
+import { readMachOInfo } from './lib/macho-archs.mjs'
 import { readPeInfo } from './lib/pe-imports.mjs'
 
 const argv = process.argv.slice(2)
@@ -33,20 +34,60 @@ const readFlag = (flag, fallback = '') => {
 const hasFlag = (flag) => argv.includes(flag)
 
 const appDirArg = readFlag('--app-dir', 'dist/win-unpacked')
-const platformKey = readFlag(
-  '--platform',
-  process.platform === 'darwin' ? 'darwin-universal' : 'win32-x64'
-)
+const platformArg = readFlag('--platform', '')
 const jsonOutput = hasFlag('--json')
 const outputFile = readFlag('--output', '')
 
-const appDir = path.resolve(appDirArg)
-if (!fs.existsSync(appDir)) {
-  console.error(`[audit] 找不到打包目录：${appDir}`)
+const requestedDir = path.resolve(appDirArg)
+if (!fs.existsSync(requestedDir)) {
+  console.error(`[audit] 找不到打包目录：${requestedDir}`)
   process.exit(2)
 }
 
-const resourcesDir = path.join(appDir, 'resources')
+/**
+ * 定位 resources 目录，同时支持三种传参习惯：
+ *   dist/win-unpacked            （Windows / Linux 解包目录）
+ *   dist/mac-universal/Track Studio.app
+ *   dist/mac-universal           （目录下只有一个 .app 时自动进去）
+ */
+const findResourcesDir = (rootDir) => {
+  for (const candidate of [
+    path.join(rootDir, 'Contents', 'Resources'),
+    path.join(rootDir, 'resources')
+  ]) {
+    if (fs.existsSync(candidate)) return candidate
+  }
+  let children = []
+  try {
+    children = fs.readdirSync(rootDir, { withFileTypes: true })
+  } catch {
+    return ''
+  }
+  const apps = children.filter((entry) => entry.isDirectory() && entry.name.endsWith('.app'))
+  if (apps.length !== 1) return ''
+  const nested = path.join(rootDir, apps[0].name, 'Contents', 'Resources')
+  return fs.existsSync(nested) ? nested : ''
+}
+
+const resourcesDir = findResourcesDir(requestedDir)
+if (!resourcesDir) {
+  console.error(`[audit] 在目标目录下找不到 resources/ 或 Contents/Resources：${requestedDir}`)
+  process.exit(2)
+}
+
+const looksLikeMacBundle = /[\\/]Contents[\\/]Resources$/i.test(resourcesDir)
+const platformKey =
+  platformArg ||
+  (looksLikeMacBundle
+    ? 'darwin-universal'
+    : process.platform === 'darwin'
+      ? 'darwin-universal'
+      : 'win32-x64')
+
+// macOS 的 appDir 是 .app 包本身；Windows / Linux 是 resources 的父目录。
+const appDir = looksLikeMacBundle
+  ? path.resolve(resourcesDir, '..', '..')
+  : path.dirname(resourcesDir)
 const asarPath = path.join(resourcesDir, 'app.asar')
 const unpackedDir = path.join(resourcesDir, 'app.asar.unpacked')
 if (!fs.existsSync(asarPath)) {
@@ -191,6 +232,7 @@ const platformForbidden = {
   ],
   'darwin-universal': [
     { id: 'foreign-dll', re: /\.dll$/, hint: 'macOS 包里出现 Windows DLL' },
+    { id: 'foreign-exe', re: /\.exe$/, hint: 'macOS 包里出现 Windows 可执行文件' },
     {
       id: 'onnx-linux',
       re: /^node_modules\/onnxruntime-node\/bin\/napi-v3\/linux\//,
@@ -284,8 +326,11 @@ const isFfmpegDllName = (name) =>
 
 const requiredChecks = []
 const checkRequired = () => {
-  // Electron 自带运行时
-  requireFile(path.join(appDir, 'ffmpeg.dll'), 'Electron 自带 ffmpeg.dll')
+  // Electron 自带运行时：Windows 侧是根目录的 ffmpeg.dll，
+  // macOS 侧在 Electron Framework 里，另有自己的校验分支。
+  if (platformKey === 'win32-x64') {
+    requireFile(path.join(appDir, 'ffmpeg.dll'), 'Electron 自带 ffmpeg.dll')
+  }
 
   // 主进程入口
   const mainEntry = archiveEntries.find((entry) => entry.path === 'out/main/index.js')
@@ -418,7 +463,91 @@ const checkRequired = () => {
   }
 
   if (platformKey === 'darwin-universal') {
+    requireDir(
+      path.join(appDir, 'Contents', 'Frameworks', 'Electron Framework.framework'),
+      'Electron Framework'
+    )
     requireFile(path.join(resourcesDir, 'ffmpeg', 'darwin', 'ffmpeg'), 'macOS 通用 ffmpeg')
+    requireFile(path.join(resourcesDir, 'ffmpeg', 'darwin', 'ffprobe'), 'macOS 通用 ffprobe')
+    requireDir(path.join(resourcesDir, 'r3-stretch', 'darwin-universal'), 'r3-stretch 运行时')
+
+    // rust_package 原生模块：必须是 Mach-O，universal 包要求两种架构都在。
+    const rustUnpacked = path.join(unpackedDir, 'node_modules', 'rust_package')
+    const nativeNodes = listDir(rustUnpacked)
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.node'))
+      .map((entry) => path.join(rustUnpacked, entry.name))
+    if (nativeNodes.length === 0) {
+      fail(
+        'missing-rust-node',
+        `app.asar.unpacked 内缺少 rust_package 原生模块：${rel(rustUnpacked)}`
+      )
+    }
+    const seenArchs = new Set()
+    for (const nodePath of nativeNodes) {
+      const info = readMachOInfo(nodePath)
+      if (!info.ok) {
+        fail('non-macho-native-module', `${rel(nodePath)} 不是 Mach-O：${info.reason}`)
+        continue
+      }
+      for (const arch of info.archs) seenArchs.add(arch)
+      notes.push(`${rel(nodePath)} 是 ${info.kind}，架构 ${info.archs.join('+')}`)
+    }
+    if (nativeNodes.length > 0) {
+      for (const requiredArch of ['x86_64', 'arm64']) {
+        if (seenArchs.has(requiredArch)) continue
+        fail(
+          'missing-mac-arch',
+          `rust_package 原生模块缺少 ${requiredArch}（实际 ${[...seenArchs].join('+') || '无'}），` +
+            'universal 包在对应架构的机器上会加载失败'
+        )
+      }
+    }
+
+    // ONNX Runtime：darwin 的 x64 / arm64 两份都要在
+    const onnxDarwin = path.join(
+      unpackedDir,
+      'node_modules',
+      'onnxruntime-node',
+      'bin',
+      'napi-v3',
+      'darwin'
+    )
+    const onnxArchDirs = listDir(onnxDarwin)
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+    if (onnxArchDirs.length === 0) {
+      fail('missing-onnx-darwin', `onnxruntime-node 缺少 darwin 目录：${rel(onnxDarwin)}`)
+    }
+    for (const arch of ['x64', 'arm64']) {
+      if (onnxArchDirs.includes(arch)) continue
+      fail(
+        'missing-onnx-darwin-arch',
+        `onnxruntime-node 缺少 darwin/${arch}（实际 ${onnxArchDirs.join(',') || '无'}）`
+      )
+    }
+
+    // SQLite 原生绑定（darwin 预编译，或旧布局的 build/Release）
+    const existsInMacBundle = (relativePath) => {
+      if (fs.existsSync(path.join(unpackedDir, relativePath))) return true
+      return archiveEntries.some((entry) => entry.path === relativePath)
+    }
+    for (const sqlitePackage of [
+      'node_modules/better-sqlite3',
+      'node_modules/better-sqlite3-multiple-ciphers',
+      'node_modules/serato-connect/node_modules/better-sqlite3-multiple-ciphers'
+    ]) {
+      if (!existsInMacBundle(`${sqlitePackage}/package.json`)) continue
+      const candidates = [
+        `${sqlitePackage}/prebuilds/darwin-x64.node`,
+        `${sqlitePackage}/prebuilds/darwin-arm64.node`,
+        `${sqlitePackage}/build/Release/better_sqlite3.node`
+      ]
+      if (candidates.some(existsInMacBundle)) continue
+      fail(
+        'missing-sqlite-native',
+        `SQLite 原生绑定缺失：${sqlitePackage}（期望 ${candidates.join(' 或 ')}）`
+      )
+    }
   }
 
   // demucs bootstrap（全平台）
@@ -488,6 +617,93 @@ const checkRequired = () => {
   }
 }
 checkRequired()
+
+// ---------------------------------------------------------------------------
+// 3b. 磁盘上的二进制格式
+//
+// asar 规则只看归档条目，而 extraResources（ffmpeg / demucs / r3-stretch）
+// 与 app.asar.unpacked 里的文件并不经过归档清单。
+// 这里按文件头判断每个二进制的真实格式，避免「配置里排除了，实际还在」。
+// ---------------------------------------------------------------------------
+
+const BINARY_SUFFIX = /\.(dll|exe|node|dylib|so)$/i
+
+const peekMagic = (filePath) => {
+  let fd
+  try {
+    fd = fs.openSync(filePath, 'r')
+    const buffer = Buffer.alloc(4)
+    return fs.readSync(fd, buffer, 0, 4, 0) === 4 ? buffer : null
+  } catch {
+    return null
+  } finally {
+    if (fd !== undefined) {
+      try {
+        fs.closeSync(fd)
+      } catch {
+        // 关闭失败不影响判定
+      }
+    }
+  }
+}
+
+const classifyBinary = (buffer) => {
+  if (!buffer) return 'unknown'
+  if (buffer[0] === 0x4d && buffer[1] === 0x5a) return 'pe'
+  const bigEndianMagic = buffer.readUInt32BE(0)
+  if (bigEndianMagic === 0x7f454c46) return 'elf'
+  if (bigEndianMagic === 0xcafebabe || bigEndianMagic === 0xcafebabf) return 'macho'
+  const littleEndianMagic = buffer.readUInt32LE(0)
+  if (littleEndianMagic === 0xfeedfacf || littleEndianMagic === 0xfeedface) return 'macho'
+  return 'unknown'
+}
+
+const scanDiskBinaries = () => {
+  const expectedKind = platformKey === 'darwin-universal' ? 'macho' : 'pe'
+  const foreign = []
+  const unreadable = []
+  let scanned = 0
+  const pending = [resourcesDir]
+  while (pending.length > 0) {
+    const current = pending.pop()
+    let entries
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const entry of entries) {
+      const absolute = path.join(current, entry.name)
+      if (entry.isDirectory()) {
+        pending.push(absolute)
+        continue
+      }
+      if (!entry.isFile() || !BINARY_SUFFIX.test(entry.name)) continue
+      scanned += 1
+      const kind = classifyBinary(peekMagic(absolute))
+      if (kind === expectedKind) continue
+      if (kind === 'unknown') unreadable.push(rel(absolute))
+      else foreign.push(`${kind.toUpperCase()} ${rel(absolute)}`)
+    }
+  }
+  if (foreign.length > 0) {
+    fail(
+      'foreign-binary-on-disk',
+      `resources 下有 ${foreign.length} 个二进制格式与 ${platformKey} 不符（示例 ${foreign
+        .slice(0, 5)
+        .join(', ')}）`
+    )
+  }
+  if (unreadable.length > 0) {
+    warn(
+      'unclassified-binary',
+      `${unreadable.length} 个二进制文件头无法识别（示例 ${unreadable.slice(0, 5).join(', ')}）`
+    )
+  }
+  return { scanned, foreign: foreign.length, unreadable: unreadable.length, expectedKind }
+}
+
+const diskBinaries = scanDiskBinaries()
 
 // ---------------------------------------------------------------------------
 // 4. 重复二进制检测（按内容哈希）
@@ -642,6 +858,7 @@ const result = {
   ruleReport,
   requiredChecks,
   duplicateGroups,
+  diskBinaries,
   sizes,
   failures,
   warnings,
@@ -662,6 +879,12 @@ if (jsonOutput) {
   console.log(
     `[audit] 体积：app.asar ${sizes.appAsarMiB} MiB（其中未压缩内容 ${sizes.appAsarPackedMiB} MiB）` +
       `，app.asar.unpacked ${sizes.appAsarUnpackedDirMiB} MiB，resources 合计 ${sizes.resourcesMiB} MiB，整包 ${sizes.appDirTotalMiB} MiB`
+  )
+
+  console.log(
+    `[audit] 磁盘二进制：扫描 ${diskBinaries.scanned} 个，期望格式 ${
+      diskBinaries.expectedKind === 'macho' ? 'Mach-O' : 'PE'
+    }，不符 ${diskBinaries.foreign} 个，无法识别 ${diskBinaries.unreadable} 个`
   )
 
   if (ruleReport.length > 0) {
