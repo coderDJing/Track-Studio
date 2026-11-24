@@ -34,6 +34,7 @@ import {
   syncCuratedLibraryLiveSync
 } from '../curatedLibrarySync/liveSync'
 import { cancelCuratedLibrarySync } from '../curatedLibrarySync/engine'
+import { seedDemoAnalysis } from './demoAnalysisSeed'
 import type { LibrarySetupErrorHint } from '../../shared/librarySetup'
 
 export type InitializeLibraryOptions = {
@@ -168,7 +169,9 @@ export const initializeLibraryAtPath = async (
     }
   } catch {}
 
-  await initDatabaseStructure(dirPath, { createSamples: options?.createSamples !== false })
+  const initResult = await initDatabaseStructure(dirPath, {
+    createSamples: options?.createSamples !== false
+  })
 
   try {
     if (options?.reset === true) {
@@ -186,6 +189,10 @@ export const initializeLibraryAtPath = async (
   if (!proceed) return { status: 'canceled' }
 
   store.databaseDir = dirPath
+  // 必须在 databaseDir 生效之后：缓存键要按当前库根解析，才能落到示例歌单的相对键上。
+  if (initResult.samplesCreated) {
+    await seedDemoAnalysis(dirPath)
+  }
   const mode = getFingerprintMode()
   const list = await FingerprintStore.loadList(mode)
   store.songFingerprintList = Array.isArray(list) ? list : []

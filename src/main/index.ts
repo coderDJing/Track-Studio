@@ -34,6 +34,7 @@ import {
 } from './menu/macMenu'
 import { prepareAndOpenMainWindow } from './bootstrap/prepareDatabase'
 import { setupAutoUpdate } from './bootstrap/autoUpdate'
+import { runDemoAnalysisSeedGeneration } from './services/demoAnalysisSeedGenerate'
 import {
   applyThemeFromSettings,
   broadcastSystemThemeIfNeeded,
@@ -580,6 +581,18 @@ if (is.dev && String(process.env.FRKB_DEV_FORCE_LIBRARY_SETUP || '').trim() === 
 
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('frkb.coderDjing')
+  // 打包前的示例分析生成模式：跑完真实分析后退出，不创建任何窗口。
+  const demoSeedDir = String(process.env.FRKB_DEMO_ANALYSIS_SEED_DIR || '').trim()
+  if (demoSeedDir) {
+    try {
+      await runDemoAnalysisSeedGeneration(demoSeedDir)
+      app.exit(0)
+    } catch (error) {
+      log.error('[demo-seed] 生成随包示例分析失败', error)
+      app.exit(1)
+    }
+    return
+  }
   try {
     if (!protocol.isProtocolRegistered(PREVIEW_PROTOCOL)) {
       protocol.registerStreamProtocol(PREVIEW_PROTOCOL, async (request, callback) => {

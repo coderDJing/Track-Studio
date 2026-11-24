@@ -37,8 +37,9 @@ function resolveDemoMusicPath(fileName: string) {
 export async function initDatabaseStructure(
   dirPath: string,
   options: { createSamples?: boolean } = {}
-): Promise<void> {
+): Promise<{ samplesCreated: boolean }> {
   const createSamples = options.createSamples === true
+  let samplesCreated = false
   // 优先进行核心库中文→英文的重命名/归一化，避免先创建英文目录造成并存
   try {
     await ensureEnglishCoreLibraries(dirPath)
@@ -102,12 +103,14 @@ export async function initDatabaseStructure(
           'Oden & Fatzo, Poppy Baskcomb - Tell Me What You Want (Extended Mix).mp3'
         )
       )
+      samplesCreated = true
     }
     if (fs.pathExistsSync(filterLibrarySonglistSongDemo2)) {
       await fs.copy(
         filterLibrarySonglistSongDemo2,
         path.join(filterLibraryPath, 'House', 'War - Low Rider (Kyle Watson Remix).mp3')
       )
+      samplesCreated = true
     }
 
     await fs.ensureDir(path.join(curatedLibraryPath, 'House Nice'))
@@ -123,6 +126,7 @@ export async function initDatabaseStructure(
           'Armand Van Helden - I Want Your Soul (AVH Rework).mp3'
         )
       )
+      samplesCreated = true
     }
 
     const filterParent = findLibraryNodeByPath(
@@ -159,4 +163,6 @@ export async function initDatabaseStructure(
       )
     }
   }
+
+  return { samplesCreated }
 }

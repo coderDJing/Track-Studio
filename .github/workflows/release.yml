@@ -277,6 +277,31 @@ jobs:
           FRKB_LASTFM_API_KEY: ${{ secrets.FRKB_LASTFM_API_KEY }}
         run: pnpm build
 
+      # 示例曲分析种子按 8 个算法/波形版本常量 + 示例音频哈希做指纹：
+      # 指纹没变直接复用已发布资产，只有算法变化才下载运行时并重跑 3 首分析。
+      - name: Restore demo analysis seed (Windows)
+        id: demo_seed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/demo-analysis-seed-store.mjs restore
+
+      - name: Ensure demo analysis runtime (Windows)
+        if: steps.demo_seed.outputs.restored != 'true'
+        run: node scripts/ensure-demucs-runtime.mjs --platform win32-x64 --profiles cpu --sync-remote-assets
+
+      - name: Generate bundled demo analysis seed (Windows)
+        if: steps.demo_seed.outputs.restored != 'true'
+        run: node scripts/generate-demo-analysis-seed.mjs
+
+      - name: Verify demo analysis seed (Windows)
+        run: node scripts/demo-analysis-seed-fingerprint.mjs --verify resources/demoAnalysis/demo-analysis-seed.sqlite
+
+      - name: Publish demo analysis seed asset (Windows)
+        if: steps.demo_seed.outputs.restored != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/demo-analysis-seed-store.mjs publish
+
       - name: Build Windows installer frontend
         run: pnpm installer-ui:build
 
@@ -608,6 +633,32 @@ jobs:
           CLOUD_SYNC_API_SECRET_KEY: ${{ secrets.CLOUD_SYNC_API_SECRET_KEY }}
           FRKB_LASTFM_API_KEY: ${{ secrets.FRKB_LASTFM_API_KEY }}
         run: pnpm build
+
+      # 与 Windows 共用同一份带指纹的种子资产；命中时无需下载运行时。
+      - name: Restore demo analysis seed (macOS)
+        id: demo_seed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/demo-analysis-seed-store.mjs restore
+
+      # macOS runner 架构不固定，运行时必须与宿主 Electron 架构一致。
+      - name: Ensure demo analysis runtime (macOS)
+        if: steps.demo_seed.outputs.restored != 'true'
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            arm64) platform='darwin-arm64' ;;
+            x86_64) platform='darwin-x64' ;;
+            *) echo "::error::Unsupported macOS runner arch: $(uname -m)"; exit 1 ;;
+          esac
+          node scripts/ensure-demucs-runtime.mjs --platform "$platform" --profiles cpu --sync-remote-assets
+
+      - name: Generate bundled demo analysis seed (macOS)
+        if: steps.demo_seed.outputs.restored != 'true'
+        run: node scripts/generate-demo-analysis-seed.mjs
+
+      - name: Verify demo analysis seed (macOS)
+        run: node scripts/demo-analysis-seed-fingerprint.mjs --verify resources/demoAnalysis/demo-analysis-seed.sqlite
 
       - name: Prepare macOS signing credentials
         id: mac_signing

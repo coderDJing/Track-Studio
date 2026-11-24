@@ -85,6 +85,10 @@ rust_package/native/ffmpeg/**/*.a
 rust_package/native/ffmpeg/**/*.dylib
 rust_package/native/ffmpeg/**/bin/
 
+# 随包示例曲分析种子（发版时按算法指纹生成/复用，不入库）
+resources/demoAnalysis/demo-analysis-seed.sqlite
+resources/demoAnalysis/demo-analysis-seed.fingerprint
+
 # Local screenshots from the Windows small-window regression
 /drafts/windows-small-window-regression-20261026/screenshots/*.png
 /drafts/windows-small-window-regression-20261026/fix-verification/screenshots/*.png
