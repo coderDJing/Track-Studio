@@ -6,7 +6,7 @@ import {
 } from '../../shared/dynamicBeatGridTypes'
 import { createDynamicBeatGridWindowPlan } from '../../shared/dynamicBeatGridAnalysis'
 import type { BeatThisWindowSession, BeatThisWindowSessionOptions } from './beatThisAnalyzer'
-import { resolveWindowRequestTimeoutMs } from './beatThisWindowProtocol'
+import { resolveWindowRequestTimeoutMs, MIN_WINDOW_DURATION_SEC } from './beatThisWindowProtocol'
 
 export type DynamicGridWindowSource = 'coarse' | 'refined'
 
@@ -760,12 +760,32 @@ export const scanDynamicBeatGrid = async (
         })
 
         const remainingMs = Math.max(1, deadlineAt - now())
+        // 解码可能略短于计划（末段常常如此）。窗口不能声称超过实际拥有的音频，
+        // 否则 Python 侧会因「窗口超出 chunk 时长」直接拒绝整个请求。
+        const plannedWindows = chunk.windows.map((window) => {
+          const localStartSec = roundSec(window.startAudioSec - chunk.startAudioSec)
+          const availableSec = roundSec(decodedDurationSec - localStartSec)
+          return {
+            ...window,
+            durationSec: Math.min(window.durationSec, availableSec)
+          }
+        })
+        const tooShort = plannedWindows.find(
+          (window) => window.durationSec < MIN_WINDOW_DURATION_SEC
+        )
+        if (tooShort) {
+          throw new DynamicGridScanError(
+            'decode-inconsistent',
+            `decoded chunk leaves window ${tooShort.windowId} shorter than ` +
+              `${MIN_WINDOW_DURATION_SEC}s (${tooShort.durationSec.toFixed(3)}s)`
+          )
+        }
         const evidence = await session.analyzeWindows({
           pcmData: decoded.pcmData,
           sampleRate,
           channels,
           chunkStartAudioSec: chunk.startAudioSec,
-          windows: chunk.windows.map((window) => ({
+          windows: plannedWindows.map((window) => ({
             windowId: window.windowId,
             localStartSec: roundSec(window.startAudioSec - chunk.startAudioSec),
             durationSec: window.durationSec
@@ -780,7 +800,7 @@ export const scanDynamicBeatGrid = async (
           lastProgressAt,
           maxNoProgressMs
         })
-        assertEvidenceMatchesPlan({ evidence, chunk })
+        assertEvidenceMatchesPlan({ evidence, chunk: { ...chunk, windows: plannedWindows } })
         sidecarPid = session.pid ?? sidecarPid
         for (const item of evidence) {
           evidenceById.set(item.windowId, item)
@@ -789,7 +809,7 @@ export const scanDynamicBeatGrid = async (
         lastProgressAt = now()
         coveredAudioSec = Math.max(
           coveredAudioSec,
-          chunk.windows.reduce(
+          plannedWindows.reduce(
             (end, window) => Math.max(end, window.startAudioSec + window.durationSec),
             0
           )

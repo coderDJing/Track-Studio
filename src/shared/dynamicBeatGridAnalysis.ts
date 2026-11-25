@@ -26,6 +26,7 @@ import {
   auditDynamicBeatGridRuntime,
   type DynamicRuntimeAudit
 } from './dynamicBeatGridRuntimeAudit'
+import { resolveSongBeatGridDriftQuality } from './beatGridQuality'
 
 const TIME_EPSILON_SEC = 1e-6
 
@@ -285,8 +286,17 @@ const auditFailureReason = (params: {
   if (audit.ordinalMismatchCount > 0) {
     return `runtime-ordinal-mismatch:${audit.ordinalMismatchCount}`
   }
-  if (audit.downbeatMismatchCount > 0) {
-    return `runtime-downbeat-mismatch:${audit.downbeatMismatchCount}`
+  // downbeat 相位错配按占比判定：个别 downbeat 对不上是检测噪声，占比过高才说明
+  // 小节线整体错位。
+  const downbeatMismatchRatio =
+    audit.downbeatComparisonCount > 0
+      ? audit.downbeatMismatchCount / audit.downbeatComparisonCount
+      : 0
+  if (downbeatMismatchRatio > policy.maxDownbeatMismatchRatio) {
+    return (
+      `runtime-downbeat-mismatch:${audit.downbeatMismatchCount}` +
+      `/${audit.downbeatComparisonCount}`
+    )
   }
   if (audit.boundaryMismatchCount > 0) {
     return `runtime-boundary-mismatch:${audit.boundaryMismatchCount}`
@@ -317,22 +327,38 @@ const success = (params: {
 }): DynamicGridOutcome => {
   const { fits, points, map, durationAudioSec, evidenceMetrics, audit, minBpm, maxBpm, policy } =
     params
+  const metrics = buildMetrics({
+    evidenceMetrics,
+    fits,
+    points,
+    audit,
+    durationAudioSec,
+    minBpm,
+    maxBpm,
+    policy
+  })
+  // fit 与 clip 一一对应（调用方已校验 clip 数量），所以 fit 序号就是 clip 序号。
+  const quality = resolveSongBeatGridDriftQuality({
+    unexplainedBeatRatio: metrics.unexplainedBeatRatio,
+    segments: fits.map((fit, clipIndex) => ({
+      clipIndex,
+      residualP95Ms: fit.residualP95Ms,
+      residualMaxMs: fit.residualMaxMs
+    })),
+    rejectThresholds: {
+      p95ResidualMs: policy.p95ResidualMs,
+      maxResidualMs: policy.maxResidualMs,
+      maxUnexplainedBeatRatio: policy.maxUnexplainedBeatRatio
+    }
+  })
   return {
     status: fits.length === 1 ? 'fixed' : 'dynamic',
     coordinate: 'audio',
     beatGridMap: map,
     durationAudioSec,
     policyVersion: policy.version,
-    metrics: buildMetrics({
-      evidenceMetrics,
-      fits,
-      points,
-      audit,
-      durationAudioSec,
-      minBpm,
-      maxBpm,
-      policy
-    })
+    metrics,
+    ...(quality ? { quality } : {})
   }
 }
 
@@ -396,10 +422,18 @@ export const analyzeDynamicBeatGridEvidence = (params: {
       reason: `insufficient-downbeat-evidence:${sequence.downbeatObservedCount}<${policy.minDownbeatEvidenceCount}`
     }
   }
-  if (sequence.metrics.downbeatConflictCount > 0) {
+  // downbeat 相位冲突按占比判定：个别 downbeat 相位对不上是检测噪声，
+  // 占比过高才说明整条网格的小节线是错的。零容忍会把正常曲目判死。
+  const downbeatConflictRatio =
+    sequence.metrics.downbeatObservedCount > 0
+      ? sequence.metrics.downbeatConflictCount / sequence.metrics.downbeatObservedCount
+      : 0
+  if (downbeatConflictRatio > policy.maxDownbeatConflictRatio) {
     return {
       status: 'unresolved',
-      reason: `downbeat-phase-conflict:${sequence.metrics.downbeatConflictCount}`
+      reason:
+        `downbeat-phase-conflict:${sequence.metrics.downbeatConflictCount}` +
+        `/${sequence.metrics.downbeatObservedCount}`
     }
   }
 

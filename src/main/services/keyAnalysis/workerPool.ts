@@ -21,6 +21,7 @@ import { createDynamicSidecarTracker } from './dynamicSidecarTracker'
 import { normalizeDynamicGridPublicProgress } from '../../../shared/dynamicGridProgress'
 import { createWorkerPersistGuard } from './persistGuard'
 import type { AudioIdentity } from './persistGuard'
+import { isDynamicGridSuccessOutcome } from './dynamicGridIntegration'
 import {
   isNoBpmBeatGridResultError,
   isValidBpm,
@@ -423,7 +424,10 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
           ...(expectedDurationSec === undefined
             ? {}
             : { expectedAudioDurationSec: expectedDurationSec }),
-          ...(expectedAudioIdentity ? { expectedAudioIdentity } : {})
+          ...(expectedAudioIdentity ? { expectedAudioIdentity } : {}),
+          ...(partialResult.beatGridDriftMs === undefined
+            ? {}
+            : { beatGridDriftMs: partialResult.beatGridDriftMs })
         }
       )
       bpmPersisted = shouldPersist()
@@ -435,6 +439,14 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
       // 只有真正的 Normal 模型 no-bpm 才落 no-bpm；Dynamic 失败不进入这里。
       await deps.persistence.persistNoBpm(job.filePath, { shouldPersist })
       bpmPersisted = shouldPersist()
+    } else if (
+      shouldPersist() &&
+      isDynamicJob &&
+      dynamicGridOutcome &&
+      !isDynamicGridSuccessOutcome(dynamicGridOutcome)
+    ) {
+      // 动态拟合失败：不写网格、也不写 no-bpm，只给已有的（非人工）网格打降级标记。
+      await deps.persistence.persistDegradedBeatGridQuality(job.filePath, { shouldPersist })
     }
 
     if (!shouldPersist()) return
@@ -673,6 +685,13 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
         if (!isDynamicJob && isNoBpmBeatGridResultError(payloadResult.bpmError)) {
           // 只有真正的 Normal 模型 no-bpm 才落 no-bpm；Dynamic 失败不进入这里。
           await deps.persistence.persistNoBpm(job.filePath, { shouldPersist })
+        } else if (
+          isDynamicJob &&
+          dynamicGridOutcome &&
+          !isDynamicGridSuccessOutcome(dynamicGridOutcome)
+        ) {
+          // 动态拟合失败：不写网格、也不写 no-bpm，只给已有的（非人工）网格打降级标记。
+          await deps.persistence.persistDegradedBeatGridQuality(job.filePath, { shouldPersist })
         } else if (!dynamicOutcomeMissing && !payloadResult.bpmError) {
           const bpmValue = payloadResult.bpm
           if (isValidBpm(bpmValue)) {
@@ -689,7 +708,10 @@ export const createKeyAnalysisWorkerPool = (deps: KeyAnalysisWorkerPoolDeps) => 
                 ...(expectedDurationSec === undefined
                   ? {}
                   : { expectedAudioDurationSec: expectedDurationSec }),
-                ...(expectedAudioIdentity ? { expectedAudioIdentity } : {})
+                ...(expectedAudioIdentity ? { expectedAudioIdentity } : {}),
+                ...(payloadResult.beatGridDriftMs === undefined
+                  ? {}
+                  : { beatGridDriftMs: payloadResult.beatGridDriftMs })
               }
             )
           }

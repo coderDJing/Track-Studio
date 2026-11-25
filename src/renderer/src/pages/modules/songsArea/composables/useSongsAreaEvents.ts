@@ -10,6 +10,7 @@ import { areSongMemoryCuesEqual, normalizeSongMemoryCues } from '@shared/memoryC
 import { normalizeSongEnergyScore } from '@shared/songEnergy'
 import { normalizeSongStructureAnalysis, type SongStructureAnalysis } from '@shared/songStructure'
 import { normalizeSongBeatGridMapV2 } from '@shared/songBeatGridMapV2'
+import { isSameSongBeatGridQuality, normalizeSongBeatGridQuality } from '@shared/beatGridQuality'
 import libraryUtils from '@renderer/utils/libraryUtils'
 import { markGlobalSongSearchDirty } from '@renderer/utils/globalSongSearchEvents'
 import type { OpenSongListOptions } from './useSongsLoader'
@@ -558,6 +559,7 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
     filePath?: string
     timeBasisOffsetMs?: number
     beatGridMap?: ISongInfo['beatGridMap'] | null
+    beatGridQuality?: ISongInfo['beatGridQuality'] | null
   }
 
   type PreparedSongGridPatch = {
@@ -568,6 +570,8 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
     hasBeatGridMapPayload: boolean
     nextBeatGridMap: ISongInfo['beatGridMap'] | null
     shouldClearBeatGridMap: boolean
+    hasBeatGridQualityPayload: boolean
+    nextBeatGridQuality: ISongInfo['beatGridQuality']
   }
 
   const prepareSongGridPatch = (
@@ -578,7 +582,11 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
     const hasTimeBasisOffsetMs =
       typeof payload?.timeBasisOffsetMs === 'number' && Number.isFinite(payload.timeBasisOffsetMs)
     const hasBeatGridMapPayload = Object.prototype.hasOwnProperty.call(payload, 'beatGridMap')
-    if (!hasTimeBasisOffsetMs && !hasBeatGridMapPayload) return null
+    const hasBeatGridQualityPayload = Object.prototype.hasOwnProperty.call(
+      payload,
+      'beatGridQuality'
+    )
+    if (!hasTimeBasisOffsetMs && !hasBeatGridMapPayload && !hasBeatGridQualityPayload) return null
     const nextBeatGridMap = normalizeSongBeatGridMapV2(payload?.beatGridMap, {
       allowSingleClip: true
     })
@@ -589,7 +597,9 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
       hasTimeBasisOffsetMs,
       hasBeatGridMapPayload,
       nextBeatGridMap,
-      shouldClearBeatGridMap: hasBeatGridMapPayload && payload?.beatGridMap === null
+      shouldClearBeatGridMap: hasBeatGridMapPayload && payload?.beatGridMap === null,
+      hasBeatGridQualityPayload,
+      nextBeatGridQuality: normalizeSongBeatGridQuality(payload?.beatGridQuality)
     }
   }
 
@@ -608,6 +618,15 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
     if (patch.hasTimeBasisOffsetMs && nextSong.timeBasisOffsetMs !== patch.timeBasisOffsetMs) {
       nextSong.timeBasisOffsetMs = patch.timeBasisOffsetMs
       touched = true
+    }
+    if (patch.hasBeatGridQualityPayload) {
+      const nextQuality = patch.nextBeatGridQuality
+      const currentQuality = normalizeSongBeatGridQuality(nextSong.beatGridQuality)
+      if (!isSameSongBeatGridQuality(currentQuality, nextQuality)) {
+        if (nextQuality) nextSong.beatGridQuality = nextQuality
+        else delete nextSong.beatGridQuality
+        touched = true
+      }
     }
     const resolved = touched ? nextSong : song
     return attachNeteaseLocalPathIfMissing(resolved, patch.eventFilePath)
@@ -656,7 +675,8 @@ export function useSongsAreaEvents(params: UseSongsAreaEventsParams) {
       new Set(
         preparedPatches.flatMap((patch) => [
           patch.hasTimeBasisOffsetMs ? 'timeBasisOffsetMs' : '',
-          patch.hasBeatGridMapPayload ? 'beatGridMap' : ''
+          patch.hasBeatGridMapPayload ? 'beatGridMap' : '',
+          patch.hasBeatGridQualityPayload ? 'beatGridQuality' : ''
         ])
       )
     ).filter(Boolean)

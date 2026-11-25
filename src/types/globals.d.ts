@@ -5,6 +5,7 @@ import { IPicture } from 'music-metadata'
 import type { RekordboxSourceKind, RekordboxSourceLibraryType } from '../shared/rekordboxSources'
 import type { SongStructureAnalysis } from '../shared/songStructure'
 import type { SongBeatGridMapV2 } from '../shared/songBeatGridMapV2'
+import type { SongBeatGridQuality } from '../shared/beatGridQuality'
 import type { PlaybackRangeMode, PlaybackRangeSectionMatchMode } from '../shared/playbackRange'
 import type { AnalysisBpmRangePresetId } from '../shared/analysisBpmRange'
 import type { AnalysisGridMode } from '../shared/analysisGridMode'
@@ -70,6 +71,8 @@ interface ISongInfo {
   beatGridResultShape?: 'fixed' | 'dynamic'
   /** Dynamic 网格 policy 版本，用于追踪与重算。 */
   beatGridPolicyVersion?: string
+  /** 网格质量标记：只在网格有问题时出现，正常网格不带这个字段。 */
+  beatGridQuality?: SongBeatGridQuality
   rekordboxGridEntries?: IRekordboxBeatGridEntry[]
   energyScore?: number
   energyAlgorithmVersion?: number

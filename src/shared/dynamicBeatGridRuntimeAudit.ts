@@ -19,6 +19,8 @@ export type DynamicRuntimeAudit = {
   headTailInvalidCount: number
   ordinalMismatchCount: number
   downbeatMismatchCount: number
+  /** downbeat 对比的总数，作为相位错配占比的分母。 */
+  downbeatComparisonCount: number
   boundaryMismatchCount: number
   boundaryErrorMaxMs: number
   residualP50Ms: number
@@ -124,10 +126,12 @@ export const auditDynamicBeatGridRuntime = (params: {
       const distanceSec = firstMatchedPoint
         ? firstMatchedPoint.timeSec - line.sec
         : Number.POSITIVE_INFINITY
+      // 允许的尾段外推以「拍数预算」为准：节拍稀疏的前奏/尾奏会自然产生
+      // 一段连续外推，那是正常音乐结构，不是检测器丢拍。
       if (
         !firstMatchedPoint ||
         distanceSec <= 0 ||
-        distanceSec > periodSec * 1.5 ||
+        distanceSec > periodSec * policy.maxHeadTailExtrapolatedBeats ||
         periodSec <= 0
       ) {
         headTailInvalidCount += 1
@@ -143,7 +147,7 @@ export const auditDynamicBeatGridRuntime = (params: {
       if (
         !lastMatchedPoint ||
         distanceSec <= 0 ||
-        distanceSec > periodSec * 1.5 ||
+        distanceSec > periodSec * policy.maxHeadTailExtrapolatedBeats ||
         periodSec <= 0
       ) {
         headTailInvalidCount += 1
@@ -164,9 +168,13 @@ export const auditDynamicBeatGridRuntime = (params: {
   }
 
   let downbeatMismatchCount = 0
+  let downbeatComparisonCount = 0
   for (const pair of matchedPairs) {
     const lineIsDownbeat = lines[pair.lineIndex].level === 'downbeat'
-    if (lineIsDownbeat !== points[pair.pointIndex].isDownbeat) downbeatMismatchCount += 1
+    const pointIsDownbeat = points[pair.pointIndex].isDownbeat
+    // 只有「线或证据认为是 downbeat」的对比才计入分母。
+    if (lineIsDownbeat || pointIsDownbeat) downbeatComparisonCount += 1
+    if (lineIsDownbeat !== pointIsDownbeat) downbeatMismatchCount += 1
   }
 
   const pairByLineIndex = new Map<number, DynamicRuntimeMatchedPair>()
@@ -216,6 +224,7 @@ export const auditDynamicBeatGridRuntime = (params: {
       headTailInvalidCount,
       ordinalMismatchCount,
       downbeatMismatchCount,
+      downbeatComparisonCount,
       boundaryMismatchCount,
       boundaryErrorMaxMs,
       residualP50Ms: median(residualsMs),

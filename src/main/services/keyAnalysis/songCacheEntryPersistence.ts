@@ -13,6 +13,7 @@ import {
   type SongStructureAnalysis
 } from '../../../shared/songStructure'
 import { applyGridAnalysisMetadata } from './gridAnalysisMetadata'
+import { normalizeSongBeatGridQuality } from '../../../shared/beatGridQuality'
 
 export type EnsureSongCacheEntryPayload = {
   keyText?: string
@@ -23,6 +24,8 @@ export type EnsureSongCacheEntryPayload = {
   beatGridAnalysisMode?: 'normal' | 'dynamic'
   beatGridResultShape?: 'fixed' | 'dynamic'
   beatGridPolicyVersion?: string
+  /** 网格质量标记；null 表示显式清掉旧的标记。 */
+  beatGridQuality?: ISongInfo['beatGridQuality'] | null
   energyScore?: number
   energyAlgorithmVersion?: number
   energyAnalysis?: SongEnergyAnalysisV5
@@ -103,6 +106,13 @@ export const ensureSongCacheEntry = async (
       shape: payload.beatGridResultShape,
       policyVersion: payload.beatGridPolicyVersion
     })
+  }
+  // 质量标记单独处理：applyGridAnalysisMetadata 会把没传的质量标记清掉，
+  // 所以这里在它之后写，避免互相覆盖。
+  if (Object.prototype.hasOwnProperty.call(payload, 'beatGridQuality')) {
+    const quality = normalizeSongBeatGridQuality(payload.beatGridQuality)
+    if (quality) info.beatGridQuality = quality
+    else delete info.beatGridQuality
   }
   if (payload.energyScore !== undefined) {
     info.energyScore = payload.energyScore

@@ -417,23 +417,45 @@ export const fitSegmentedDynamicBeatGrid = (params: {
   let fallbackRanges: SegmentRange[] | null = null
   let fallbackReason = 'no-valid-segmentation'
 
+  // 重试阶梯分两段：
+  // 1) 收紧阶梯——门槛从宽松到严格。DP 在更严的门槛下会给出更多、更贴合的段，
+  //    用来救「段数最少但段不合格」的情况。
+  // 2) 放宽阶梯——收紧到极限仍然找不到分割时兜底。段内离群点偏多会让原始 RMS
+  //    虚高，但剔掉离群点后其实合格，这时候需要更宽松的门槛先把分割找出来，
+  //    再交给后面的拆分循环去精修。
+  const limits: number[] = []
   for (let attempt = 0; attempt < policy.segmentRmsRetryCount; attempt += 1) {
-    const rmsLimitMs = Math.max(
-      policy.segmentMinRmsMs,
-      policy.segmentMaxRmsMs * policy.segmentRmsRetryFactor ** attempt
+    limits.push(
+      Math.max(
+        policy.segmentMinRmsMs,
+        policy.segmentMaxRmsMs * policy.segmentRmsRetryFactor ** attempt
+      )
     )
+  }
+  const tightenCount = limits.length
+  for (let attempt = 1; attempt <= policy.segmentRmsRetryCount; attempt += 1) {
+    limits.push(policy.segmentMaxRmsMs / policy.segmentRmsRetryFactor ** attempt)
+  }
+
+  for (let index = 0; index < limits.length; index += 1) {
     const solution = buildDpRanges({
       points,
       prefix,
       policy,
       minBpm,
       maxBpm,
-      rmsLimitMs
+      rmsLimitMs: limits[index]
     })
     if (solution.status === 'clip-limit') {
       return { status: 'unsupported', reason: `clip-limit:${solution.count}>${policy.maxClips}` }
     }
-    if (solution.status === 'none') break
+    if (solution.status === 'none') {
+      if (index < tightenCount) {
+        // 收紧阶梯里后一次更严，找不到分割只会更少 —— 直接跳到放宽阶梯。
+        index = tightenCount - 1
+      }
+      continue
+    }
     const evaluated = evaluateRanges({
       points,
       prefix,
@@ -451,8 +473,11 @@ export const fitSegmentedDynamicBeatGrid = (params: {
       }
       return { status: 'ok', fits, clipCount: fits.length }
     }
-    fallbackRanges = solution.ranges
-    fallbackReason = `segment-fit-failed:${evaluated.reason}`
+    // 收紧阶梯的分割更贴合；放宽阶梯只在收紧阶梯一个分割都没找到时用作兜底。
+    if (index < tightenCount || !fallbackRanges) {
+      fallbackRanges = solution.ranges
+      fallbackReason = `segment-fit-failed:${evaluated.reason}`
+    }
   }
 
   if (!fallbackRanges) return { status: 'unresolved', reason: fallbackReason }

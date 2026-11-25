@@ -64,6 +64,7 @@ const createHarness = (options?: { isCurrentGridRequest?: (job: KeyAnalysisJob) 
       persistKey: vi.fn(),
       persistBpm: vi.fn(),
       persistNoBpm: vi.fn(),
+      persistDegradedBeatGridQuality: vi.fn(),
       persistEnergy: vi.fn(),
       persistWaveform: vi.fn(),
       persistSongStructure: vi.fn(),

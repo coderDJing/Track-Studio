@@ -74,6 +74,8 @@ const createHarness = (events = new EventEmitter()) => {
       persistKey: vi.fn<PoolDeps['persistence']['persistKey']>(),
       persistBpm: vi.fn<PoolDeps['persistence']['persistBpm']>(),
       persistNoBpm: vi.fn<PoolDeps['persistence']['persistNoBpm']>(),
+      persistDegradedBeatGridQuality:
+        vi.fn<PoolDeps['persistence']['persistDegradedBeatGridQuality']>(),
       persistEnergy: vi.fn<PoolDeps['persistence']['persistEnergy']>(),
       persistWaveform: vi.fn<PoolDeps['persistence']['persistWaveform']>(),
       persistSongStructure: vi.fn<PoolDeps['persistence']['persistSongStructure']>(),

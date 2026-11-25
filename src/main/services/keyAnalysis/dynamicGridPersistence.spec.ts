@@ -116,8 +116,9 @@ const loadSongInfo = async (filePath: string) => {
 }
 
 const listenEvents = () => {
-  const events: Array<{ beatGridMap?: unknown }> = []
-  const handler = (payload: { beatGridMap?: unknown }) => events.push(payload)
+  const events: Array<{ beatGridMap?: unknown; beatGridQuality?: unknown }> = []
+  const handler = (payload: { beatGridMap?: unknown; beatGridQuality?: unknown }) =>
+    events.push(payload)
   songGridEvents.on('grid-updated', handler)
   return {
     events,
@@ -157,6 +158,66 @@ describe('persistDynamicGridDefinition', () => {
     expect(info?.beatGridAnalysisMode).toBe('dynamic')
     expect(info?.beatGridResultShape).toBe('dynamic')
     expect(info?.beatGridPolicyVersion).toBe('dynamic-test-policy')
+  })
+
+  it('persists the grid quality marker and exposes it on the event', async () => {
+    const { filePath, stat } = await setupFile()
+    await seedSong({ filePath, stat, info: buildInfo({ map: createMap('analysis', 120, 0) }) })
+    const expectedGrid = buildDynamicGridExpectedSnapshot(await loadSongInfo(filePath))
+    const nextMap = createMap('analysis', 128, 0.25)
+    const quality = {
+      status: 'unsure' as const,
+      reason: 'drift' as const,
+      version: 'beat-grid-quality-test',
+      clipIndex: 2,
+      sinceSec: 42.5
+    }
+    const listener = listenEvents()
+
+    const result = await persistDynamicGridDefinition({
+      filePath,
+      expectedAudioIdentity: stat,
+      listRoot: mockState.listRoot,
+      externalContext: null,
+      beatGridMap: nextMap,
+      timeBasisOffsetMs: 120,
+      beatGridAlgorithmVersion: 1,
+      gridMetadata: { ...metadata, quality },
+      expectedGrid,
+      shouldPersist: () => true
+    })
+    listener.stop()
+
+    expect(result).toEqual({ status: 'written' })
+    const info = await loadSongInfo(filePath)
+    expect(info?.beatGridQuality).toEqual(quality)
+    expect(listener.events).toHaveLength(1)
+    expect(listener.events[0].beatGridQuality).toEqual(quality)
+  })
+
+  it('clears the grid quality marker when the new grid has none', async () => {
+    const { filePath, stat } = await setupFile()
+    await seedSong({ filePath, stat, info: buildInfo({ map: createMap('analysis', 120, 0) }) })
+    const expectedGrid = buildDynamicGridExpectedSnapshot(await loadSongInfo(filePath))
+    const listener = listenEvents()
+
+    const result = await persistDynamicGridDefinition({
+      filePath,
+      expectedAudioIdentity: stat,
+      listRoot: mockState.listRoot,
+      externalContext: null,
+      beatGridMap: createMap('analysis', 128, 0.25),
+      timeBasisOffsetMs: 120,
+      beatGridAlgorithmVersion: 1,
+      gridMetadata: { ...metadata, quality: undefined },
+      expectedGrid,
+      shouldPersist: () => true
+    })
+    listener.stop()
+
+    expect(result).toEqual({ status: 'written' })
+    const info = await loadSongInfo(filePath)
+    expect(info?.beatGridQuality).toBeUndefined()
   })
 
   it('reads the latest row in the transaction and protects a manual edit after the first read', async () => {

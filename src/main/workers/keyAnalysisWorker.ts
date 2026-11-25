@@ -83,6 +83,11 @@ type KeyResultPayload = {
   downbeatBeatOffset?: number
   timeBasisOffsetMs?: number
   bpmError?: string
+  /**
+   * 固定网格的速度漂移估计（ms，按 128 BPM 归一）。超过阈值说明这首的速度会飘，
+   * 单一速度的固定网格在某些位置对不齐。
+   */
+  beatGridDriftMs?: number
   songStructureError?: string
   energyError?: string
   songStructure?: SongStructureAnalysisV23
@@ -551,6 +556,7 @@ const analyzeKeyForFileInternal = async (
           result.firstBeatMs = beatThisResult.firstBeatMs
           result.downbeatBeatOffset = beatThisResult.downbeatBeatOffset
           result.timeBasisOffsetMs = options.analyzedTimeBasisOffsetMs
+          result.beatGridDriftMs = beatThisResult.beatThisEstimatedDrift128Ms
           result.bpmError = undefined
           reportDiagnosticPhase?.('bpm:beat-this-done')
         } catch (error) {
@@ -595,6 +601,7 @@ const analyzeKeyForFileInternal = async (
           downbeatBeatOffset: result.downbeatBeatOffset,
           timeBasisOffsetMs: result.timeBasisOffsetMs,
           bpmError: result.bpmError,
+          beatGridDriftMs: result.beatGridDriftMs,
           dynamicGridOutcome: result.dynamicGridOutcome
         }
       })

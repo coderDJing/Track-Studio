@@ -225,6 +225,8 @@ type KeyAnalysisWorkerPartialResult = {
   timeBasisOffsetMs?: number
   /** Dynamic 全曲网格结果；Normal 任务不携带。 */
   dynamicGridOutcome?: DynamicGridOutcome
+  /** 固定网格的速度漂移估计（ms）；超过阈值表示单一速度撑不住。 */
+  beatGridDriftMs?: number
   bpmError?: string
   songStructureError?: string
   energyError?: string

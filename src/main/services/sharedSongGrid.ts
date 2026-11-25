@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { ISongInfo } from '../../types/globals'
 import type { SongBeatGridMapV2 } from '../../shared/songBeatGridMapV2'
+import type { SongBeatGridQuality } from '../../shared/beatGridQuality'
 import * as LibraryCacheDb from '../libraryCacheDb'
 import { stripBeatThisDebugInfo } from '../libraryCacheDb/pathResolvers'
 import { findSongListRoot } from './cacheMaintenance'
@@ -28,6 +29,8 @@ export type SharedSongGridDefinition = {
   beatGridSource?: 'manual' | 'analysis' | 'rekordbox' | 'serato' | 'traktor'
   beatGridMap?: SongBeatGridMapV2 | null
   beatGridAlgorithmVersion?: number
+  /** 网格质量标记：只在网格有问题时出现。null 表示显式清掉旧的标记。 */
+  beatGridQuality?: SongBeatGridQuality | null
   externalBeatGridPreference?: 'frkb-manual'
 }
 

@@ -36,6 +36,8 @@ export type DynamicEvidenceMetrics = {
   downbeatObservedCount: number
   downbeatConflictCount: number
   octaveConflictCount: number
+  /** 参与八度歧义判定的相邻窗口对数量，作为占比的分母。 */
+  octaveConflictPairCount: number
 }
 
 export type DynamicEvidenceSequence = {
@@ -82,6 +84,8 @@ type SeamMetrics = {
   matchedCount: number
   residualsMs: number[]
   octaveConflictCount: number
+  /** 实际参与比对的相邻窗口对数量，用作八度歧义占比的分母。 */
+  pairCount: number
 }
 
 const isFiniteNumber = (value: unknown): value is number =>
@@ -327,6 +331,7 @@ const collectSeamMetrics = (
   let comparisonCount = 0
   let matchedCount = 0
   let octaveConflictCount = 0
+  let pairCount = 0
   const residualsMs: number[] = []
 
   for (let index = 1; index < windows.length; index += 1) {
@@ -362,12 +367,13 @@ const collectSeamMetrics = (
     comparisonCount += leftBeats.length
     matchedCount += match.matchedCount
     residualsMs.push(...match.residualsMs)
+    pairCount += 1
     if (match.matchedCount / leftBeats.length < policy.minOverlapMatchRate) {
       if (detectOctaveConflict(leftBeats, rightBeats, toleranceSec)) octaveConflictCount += 1
     }
   }
 
-  return { comparisonCount, matchedCount, residualsMs, octaveConflictCount }
+  return { comparisonCount, matchedCount, residualsMs, octaveConflictCount, pairCount }
 }
 
 const buildClusters = (
@@ -525,8 +531,16 @@ export const mergeDynamicBeatGridWindowEvidence = (params: {
   }
 
   const seamMetrics = collectSeamMetrics(windows, policy)
-  if (seamMetrics.octaveConflictCount > 0) {
-    return { status: 'unresolved', reason: `octave-ambiguity:${seamMetrics.octaveConflictCount}` }
+  // 八度歧义按占比判定：少量相邻窗口对出歧义是噪声，占比过高才说明整条网格的
+  // 拍点归属本身不可靠。零容忍会把大量正常曲目直接判死。
+  if (seamMetrics.pairCount > 0) {
+    const octaveConflictRatio = seamMetrics.octaveConflictCount / seamMetrics.pairCount
+    if (octaveConflictRatio > policy.maxOctaveConflictRatio) {
+      return {
+        status: 'unresolved',
+        reason: `octave-ambiguity:${seamMetrics.octaveConflictCount}/${seamMetrics.pairCount}`
+      }
+    }
   }
   const overlapMatchRate = seamMetrics.comparisonCount
     ? seamMetrics.matchedCount / seamMetrics.comparisonCount
@@ -593,8 +607,14 @@ export const mergeDynamicBeatGridWindowEvidence = (params: {
     ordinals.push(ordinals[ordinals.length - 1] + increment)
   }
 
-  if (gapAnomalyCount > 0) {
-    return { status: 'unresolved', reason: `ambiguous-beat-ordinal-gap:${gapAnomalyCount}` }
+  // 节拍间隔无法干净地解析成 1 或 2 拍时记一笔 anomaly。按占比判定：
+  // 个别间隔模糊是检测噪声，占比过高才说明整条网格的拍号计数不可信。
+  const ambiguousGapRatio = intervals.length > 0 ? gapAnomalyCount / intervals.length : 0
+  if (ambiguousGapRatio > policy.maxAmbiguousGapRatio) {
+    return {
+      status: 'unresolved',
+      reason: `ambiguous-beat-ordinal-gap:${gapAnomalyCount}/${intervals.length}`
+    }
   }
 
   const downbeat = resolveDownbeatPhase(clusters, ordinals)
@@ -626,7 +646,8 @@ export const mergeDynamicBeatGridWindowEvidence = (params: {
     overlapResidualMaxMs: seamMetrics.residualsMs.length ? Math.max(...seamMetrics.residualsMs) : 0,
     downbeatObservedCount: downbeat.observedCount,
     downbeatConflictCount: downbeat.conflictCount,
-    octaveConflictCount: seamMetrics.octaveConflictCount
+    octaveConflictCount: seamMetrics.octaveConflictCount,
+    octaveConflictPairCount: seamMetrics.pairCount
   }
 
   return {

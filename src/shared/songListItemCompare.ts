@@ -134,6 +134,8 @@ export function createSongListItemComparator(
       normalizeComparableText(right.beatGridResultShape) &&
     normalizeComparableText(left.beatGridPolicyVersion) ===
       normalizeComparableText(right.beatGridPolicyVersion) &&
+    normalizeComparableJson(left.beatGridQuality) ===
+      normalizeComparableJson(right.beatGridQuality) &&
     normalizeComparableNumber(left.energyScore) === normalizeComparableNumber(right.energyScore) &&
     normalizeComparableNumber(left.energyAlgorithmVersion) ===
       normalizeComparableNumber(right.energyAlgorithmVersion) &&
@@ -252,6 +254,12 @@ export function createSongListItemComparator(
     pushIfTextDiff('beatGridAnalysisMode')
     pushIfTextDiff('beatGridResultShape')
     pushIfTextDiff('beatGridPolicyVersion')
+    if (
+      normalizeComparableJson(left.beatGridQuality) !==
+      normalizeComparableJson(right.beatGridQuality)
+    ) {
+      fields.push('beatGridQuality')
+    }
     pushIfNumberDiff('energyScore')
     pushIfNumberDiff('energyAlgorithmVersion')
     pushIfTextDiff('energySourceGridSignature')

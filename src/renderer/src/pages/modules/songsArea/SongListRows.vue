@@ -22,6 +22,8 @@ import { useWaveformPreview } from './SongListRows/useWaveformPreview'
 import CoverPreviewOverlay from './SongListRows/CoverPreviewOverlay.vue'
 import CoverThumbnailImage from './SongListRows/CoverThumbnailImage.vue'
 import CuratedArtistCellContent from './SongListRows/CuratedArtistCellContent.vue'
+import BeatGridQualityBadge from './SongListRows/BeatGridQualityBadge.vue'
+import { hasBeatGridQualityBadge as hasBeatGridQualityBadgeForCell } from '@renderer/utils/beatGridQualityDisplay'
 import PlaylistSearchText from './SongListRows/PlaylistSearchText.vue'
 import RowAnalysisBar from './SongListRows/RowAnalysisBar.vue'
 import WaveformPreviewCell from './SongListRows/WaveformPreviewCell.vue'
@@ -300,6 +302,9 @@ const {
 })
 const hasCuratedArtistBadge = (song: ISongInfo, colKey: string) =>
   colKey === 'artist' && getCuratedArtistBadgeText(song, colKey).length > 0
+// 徽标自带气泡：和 curated artist 徽标一个做法，抑制单元格自己的溢出气泡，避免两个气泡叠在一起。
+const hasBeatGridQualityBadge = (song: ISongInfo, colKey: string) =>
+  hasBeatGridQualityBadgeForCell(song, colKey)
 
 const {
   rowsRoot,
@@ -851,10 +856,12 @@ onUnmounted(() => {
                     :value="getCellValue(item.song, col.key)"
                     :query="props.searchQuery"
                   />
+                  <BeatGridQualityBadge v-if="col.key === 'bpm'" :song="item.song" />
                   <bubbleBox
                     v-if="
                       hoveredCellKey === getCellKey(item.song, col.key) &&
-                      !hasCuratedArtistBadge(item.song, col.key)
+                      !hasCuratedArtistBadge(item.song, col.key) &&
+                      !hasBeatGridQualityBadge(item.song, col.key)
                     "
                     :dom="cellRefMap[getCellKey(item.song, col.key)] || undefined"
                     :title="getCellTitle(item.song, col.key)"

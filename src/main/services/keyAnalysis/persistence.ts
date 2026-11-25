@@ -68,6 +68,10 @@ import {
 } from './gridAnalysisMetadata'
 import { isSameAudioIdentity, normalizeAudioIdentity } from './persistGuard'
 import type { DynamicGridOutcome } from '../../../shared/dynamicBeatGridTypes'
+import {
+  createSongBeatGridDegradedQuality,
+  resolveSongBeatGridFixedDriftQuality
+} from '../../../shared/beatGridQuality'
 import { persistDynamicGridOutcome } from './dynamicGridPersistence'
 
 type KeyAnalysisPersistenceDeps = {
@@ -236,6 +240,8 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
       dynamicGridOutcome?: DynamicGridOutcome
       expectedAudioDurationSec?: number
       expectedAudioIdentity?: { size: number; mtimeMs: number }
+      /** 固定网格的速度漂移估计（ms，按 128 BPM 归一）。 */
+      beatGridDriftMs?: number
     }
   ) => {
     const shouldPersist = () => options?.shouldPersist?.() !== false
@@ -305,7 +311,16 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
       })
       if (!beatGridMap) throw new Error('invalid downbeat phase from Beat This! analyzer')
 
-      const gridMetadata: GridAnalysisMetadata = { mode: 'normal', shape: 'fixed' }
+      // Normal 路径：速度本身会飘时，单一速度的固定网格必然在某些位置对不齐，
+      // 标一个「待检查」。阈值与仓库既有的漂移刻度一致。
+      const fixedGridQuality = resolveSongBeatGridFixedDriftQuality({
+        estimatedDrift128Ms: options?.beatGridDriftMs
+      })
+      const gridMetadata: GridAnalysisMetadata = {
+        mode: 'normal',
+        shape: 'fixed',
+        ...(fixedGridQuality ? { quality: fixedGridQuality } : {})
+      }
       const listRoot = await findSongListRoot(path.dirname(filePath))
       if (!shouldPersist()) return
       const externalContext = listRoot
@@ -428,14 +443,16 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
           )
         : null
       if (!shouldPersist()) return
-      emitSongGridUpdated(
-        sharedGrid ?? {
+      // 正常分析写的是一份全新网格：质量判定按本次判定结果写入。
+      emitSongGridUpdated({
+        ...(sharedGrid ?? {
           filePath,
           beatGridAlgorithmVersion: normalizedBeatGridAlgorithmVersion,
           beatGridMap,
           externalBeatGridPreference: existingSongCacheEntry?.info.externalBeatGridPreference
-        }
-      )
+        }),
+        beatGridQuality: fixedGridQuality ?? null
+      })
 
       if (listRoot) {
         await ensureSongCacheEntry(
@@ -446,7 +463,8 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
             beatGridMap,
             beatGridAnalysisMode: gridMetadata.mode,
             beatGridResultShape: gridMetadata.shape,
-            beatGridPolicyVersion: gridMetadata.policyVersion
+            beatGridPolicyVersion: gridMetadata.policyVersion,
+            beatGridQuality: fixedGridQuality ?? null
           },
           { size: stat.size, mtimeMs: stat.mtimeMs },
           { shouldPersist }
@@ -592,7 +610,8 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
       emitSongGridUpdated({
         filePath,
         beatGridAlgorithmVersion: CURRENT_BEAT_GRID_ALGORITHM_VERSION,
-        beatGridMap: null
+        beatGridMap: null,
+        beatGridQuality: null
       })
     } catch (error) {
       if (!shouldPersist()) return
@@ -616,6 +635,81 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
         hasWaveform: existing?.hasWaveform
       })
       log.error('[闲时分析] persistNoBpm 失败，已写入内存记录', {
+        filePath,
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
+  /**
+   * 动态网格拟合失败时的降级标记：网格没能精确生成，但曲子上已有（非人工的）
+   * 网格，所以只给它打一个「待检查」，不改动网格本身。
+   *
+   * 没有网格、或网格是人工编辑的，一律不动：人工网格不该被分析结论标记，
+   * 动态失败也绝不写成 no-bpm（无法确认网格 ≠ 没有节拍）。
+   */
+  const persistDegradedBeatGridQuality = async (
+    filePath: string,
+    options: { shouldPersist?: () => boolean } = {}
+  ) => {
+    const shouldPersist = () => options.shouldPersist?.() !== false
+    if (!shouldPersist()) return
+    try {
+      const stat = await fs.stat(filePath)
+      if (!shouldPersist()) return
+      const listRoot = await findSongListRoot(path.dirname(filePath))
+      if (!shouldPersist()) return
+      const quality = createSongBeatGridDegradedQuality()
+      const applyQuality = (
+        info: ISongInfo | null | undefined
+      ): { info: ISongInfo; map: SongBeatGridMapV2 } | null => {
+        const currentMap = normalizeSongBeatGridMapV2(info?.beatGridMap, { allowSingleClip: true })
+        if (!currentMap) return null
+        if (currentMap.source === 'manual') return null
+        const next = applyLiteDefaults(info ? { ...info } : buildLiteSongInfo(filePath), filePath)
+        stripBeatThisDebugInfo(next)
+        next.beatGridQuality = quality
+        return { info: next, map: currentMap }
+      }
+      // 网格本身没变，沿用它自己的算法版本，别把版本号改写成当前的。
+      const emitDegraded = (applied: { info: ISongInfo; map: SongBeatGridMapV2 }) => {
+        emitSongGridUpdated({
+          filePath,
+          beatGridMap: applied.map,
+          beatGridAlgorithmVersion: applied.info.beatGridAlgorithmVersion,
+          beatGridQuality: quality
+        })
+      }
+
+      if (listRoot) {
+        const entry = await LibraryCacheDb.loadSongCacheEntry(listRoot, filePath)
+        if (!shouldPersist()) return
+        const applied = applyQuality(entry?.info)
+        if (!applied) return
+        if (!shouldPersist()) return
+        await LibraryCacheDb.upsertSongCacheEntry(listRoot, filePath, {
+          size: stat.size,
+          mtimeMs: stat.mtimeMs,
+          info: applied.info
+        })
+        emitDegraded(applied)
+      } else {
+        const externalContext = LibraryCacheDb.resolveExternalAnalysisContext(filePath)
+        if (!externalContext) return
+        const cached = await LibraryCacheDb.loadExternalAnalysisCacheEntry(externalContext, {
+          size: stat.size,
+          mtimeMs: stat.mtimeMs
+        })
+        if (!shouldPersist()) return
+        const applied = applyQuality(cached?.info)
+        if (!applied) return
+        if (!shouldPersist()) return
+        await LibraryCacheDb.upsertExternalAnalysisCacheEntry(externalContext, stat, applied.info)
+        emitDegraded(applied)
+      }
+    } catch (error) {
+      if (!shouldPersist()) return
+      log.error('[闲时分析] 写入网格降级标记失败', {
         filePath,
         error: error instanceof Error ? error.message : String(error)
       })
@@ -1065,6 +1159,7 @@ export const createKeyAnalysisPersistence = (deps: KeyAnalysisPersistenceDeps) =
     persistEnergy,
     persistBpm,
     persistNoBpm,
+    persistDegradedBeatGridQuality,
     persistWaveform,
     persistSongStructure,
     prepareJob,

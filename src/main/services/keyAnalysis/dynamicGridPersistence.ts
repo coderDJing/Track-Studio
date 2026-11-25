@@ -4,6 +4,7 @@ import path from 'node:path'
 import type { ISongInfo } from '../../../types/globals'
 import type { SongBeatGridMapV2 } from '../../../shared/songBeatGridMapV2'
 import { normalizeSongBeatGridMapV2 } from '../../../shared/songBeatGridMapV2'
+import type { SongBeatGridQuality } from '../../../shared/beatGridQuality'
 import type { DynamicGridOutcome } from '../../../shared/dynamicBeatGridTypes'
 import * as LibraryCacheDb from '../../libraryCacheDb'
 import { stripBeatThisDebugInfo } from '../../libraryCacheDb/pathResolvers'
@@ -66,6 +67,24 @@ const normalizeTimeBasisOffsetMs = (value: unknown) => {
 
 const readGridSignature = (info: ISongInfo | null | undefined) =>
   normalizeSongBeatGridMapV2(info?.beatGridMap, { allowSingleClip: true })?.signature ?? null
+
+/**
+ * 把分析期判定的 clip 序号换成 timeline 坐标的时间点。
+ *
+ * 网格段落在 audio / timeline 之间顺序不变，所以直接取 timeline map 里同一个
+ * clip 的起点即可。没有 clip 序号（整曲性问题）就没有时间点。
+ */
+const resolvePersistedGridQuality = (
+  quality: SongBeatGridQuality | undefined,
+  timelineMap: SongBeatGridMapV2
+): SongBeatGridQuality | undefined => {
+  if (!quality) return undefined
+  const clipIndex = quality.clipIndex
+  if (clipIndex === undefined) return quality
+  const clip = timelineMap.clips[clipIndex]
+  if (!clip) return quality
+  return { ...quality, sinceSec: Number(clip.startSec.toFixed(3)) }
+}
 
 export const buildDynamicGridExpectedSnapshot = (
   info: ISongInfo | null | undefined
@@ -277,7 +296,9 @@ export const persistDynamicGridDefinition = async (
       filePath,
       beatGridMap,
       beatGridAlgorithmVersion,
-      timeBasisOffsetMs
+      timeBasisOffsetMs,
+      // 始终带上这个键：这次没有质量判定就是 null，表示把旧标记清掉。
+      beatGridQuality: gridMetadata.quality ?? null
     })
     return { status: 'written' }
   }
@@ -334,6 +355,7 @@ export const persistDynamicGridOutcome = async (
   if (!definition.ok) {
     throw new Error(`dynamic grid rejected: ${definition.reason}`)
   }
+  const gridQuality = resolvePersistedGridQuality(outcome.quality, definition.value.map)
   const listRoot = await findSongListRoot(path.dirname(filePath))
   if (!shouldPersist()) return { status: 'skipped', reason: 'generation' }
   const externalContext = listRoot ? null : LibraryCacheDb.resolveExternalAnalysisContext(filePath)
@@ -363,7 +385,8 @@ export const persistDynamicGridOutcome = async (
     gridMetadata: {
       mode: 'dynamic',
       shape: outcome.status,
-      policyVersion: outcome.policyVersion
+      policyVersion: outcome.policyVersion,
+      ...(gridQuality ? { quality: gridQuality } : {})
     },
     expectedGrid: buildDynamicGridExpectedSnapshot(baseEntry?.info),
     shouldPersist
