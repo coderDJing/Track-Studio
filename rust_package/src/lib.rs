@@ -58,6 +58,7 @@ mod pioneer_cues;
 mod pioneer_export;
 mod playlist_scan;
 mod qm_key;
+mod key_detector;
 mod windows_device_probe;
 pub use crate::windows_device_probe::*;
 
@@ -479,32 +480,40 @@ pub fn compute_mixxx_waveform_with_rate(
   )
 }
 
-/// 基于 PCM 计算调性（Mixxx Queen Mary）
-#[napi]
-pub fn analyze_key_from_pcm(
+/// 用调性检测器判调；`neural` 为 true 时优先走神经网络，过短音频再退回模板匹配。
+fn detect_key(
   pcm_data: Buffer,
   sample_rate: u32,
   channels: u8,
   fast_analysis: bool,
+  neural: bool,
 ) -> KeyAnalysisResult {
-  let pcm_bytes = pcm_data.as_ref();
-  let pcm_f32 = match try_cast_slice::<u8, f32>(pcm_bytes) {
-    Ok(slice) => Cow::Borrowed(slice),
-    Err(_) => {
-      if pcm_bytes.len() % 4 != 0 {
-        return KeyAnalysisResult {
-          key_text: "o".to_string(),
-          error: Some("PCM buffer length is not aligned".to_string()),
-        };
+  let pcm_f32 = match key_pcm_to_f32(&pcm_data) {
+    Ok(value) => value,
+    Err(error) => {
+      return KeyAnalysisResult {
+        key_text: "o".to_string(),
+        error: Some(error),
       }
-      let mut out = Vec::with_capacity(pcm_bytes.len() / 4);
-      for chunk in pcm_bytes.chunks_exact(4) {
-        out.push(f32::from_le_bytes(chunk.try_into().unwrap()));
-      }
-      Cow::Owned(out)
     }
   };
 
+  let detected = if neural {
+    key_detector::analyze_dnn(pcm_f32.as_ref(), sample_rate, channels, fast_analysis)
+  } else {
+    None
+  };
+  let detected = detected.or_else(|| {
+    key_detector::analyze_template(pcm_f32.as_ref(), sample_rate, channels, fast_analysis)
+  });
+  if let Some(key) = detected {
+    return KeyAnalysisResult {
+      key_text: key_id_to_id3_text(key.to_key_id()),
+      error: None,
+    };
+  }
+
+  // 过短或静音音频交给原 Queen Mary 检测器兜底。
   match qm_key::analyze_key_id_from_pcm(pcm_f32.as_ref(), sample_rate, channels, fast_analysis) {
     Ok(key_id) => KeyAnalysisResult {
       key_text: key_id_to_id3_text(key_id),
@@ -515,6 +524,28 @@ pub fn analyze_key_from_pcm(
       error: Some(error),
     },
   }
+}
+
+/// 基于 PCM 计算调性（默认：模板匹配，低+中频整曲 chroma 平均 + 单次 Pearson）
+#[napi]
+pub fn analyze_key_from_pcm(
+  pcm_data: Buffer,
+  sample_rate: u32,
+  channels: u8,
+  fast_analysis: bool,
+) -> KeyAnalysisResult {
+  detect_key(pcm_data, sample_rate, channels, fast_analysis, false)
+}
+
+/// 基于 PCM 计算调性（神经网络：卷积网络对 24 个调性分类评分）
+#[napi(js_name = "analyzeKeyFromPcmNeural")]
+pub fn analyze_key_from_pcm_neural(
+  pcm_data: Buffer,
+  sample_rate: u32,
+  channels: u8,
+  fast_analysis: bool,
+) -> KeyAnalysisResult {
+  detect_key(pcm_data, sample_rate, channels, fast_analysis, true)
 }
 
 fn key_id_to_id3_text(key_id: i32) -> String {
@@ -529,6 +560,24 @@ fn key_id_to_id3_text(key_id: i32) -> String {
     0
   };
   ID3_KEYS[index].to_string()
+}
+
+/// 把 PCM Buffer 转成 f32 切片（零拷贝优先）。
+fn key_pcm_to_f32(pcm_data: &Buffer) -> StdResult<Cow<'_, [f32]>, String> {
+  let pcm_bytes = pcm_data.as_ref();
+  match try_cast_slice::<u8, f32>(pcm_bytes) {
+    Ok(slice) => Ok(Cow::Borrowed(slice)),
+    Err(_) => {
+      if pcm_bytes.len() % 4 != 0 {
+        return Err("PCM buffer length is not aligned".to_string());
+      }
+      let mut out = Vec::with_capacity(pcm_bytes.len() / 4);
+      for chunk in pcm_bytes.chunks_exact(4) {
+        out.push(f32::from_le_bytes(chunk.try_into().unwrap()));
+      }
+      Ok(Cow::Owned(out))
+    }
+  }
 }
 
 /// 解码音频为 PCM Float32Array

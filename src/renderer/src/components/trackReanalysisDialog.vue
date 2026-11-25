@@ -24,6 +24,11 @@ import {
   buildAnalysisGridModeOptions,
   isAnalysisGridSubmitBlocked
 } from '@renderer/utils/analysisGridModeUi'
+import { normalizeKeyDetectorMode, type KeyDetectorMode } from '@shared/keyDetectorMode'
+import {
+  KEY_DETECTOR_MODE_HINT_KEYS,
+  buildKeyDetectorModeOptions
+} from '@renderer/utils/keyDetectorModeUi'
 import {
   applyTrackReanalysisSelectionDependencies,
   hasAnyTrackReanalysisUserSelection,
@@ -38,6 +43,7 @@ type TrackAnalysisDialogResult = {
   selection: TrackReanalysisUserSelection
   analysisBpmRangeId?: AnalysisBpmRangePresetId
   analysisGridMode?: AnalysisGridMode
+  keyDetectorMode?: KeyDetectorMode
 }
 
 const props = defineProps<{
@@ -47,6 +53,7 @@ const props = defineProps<{
   purpose?: TrackAnalysisDialogPurpose
   initialBpmRangeId?: AnalysisBpmRangePresetId
   initialGridMode?: AnalysisGridMode
+  initialKeyDetectorMode?: KeyDetectorMode
   confirmCallback?: (value: TrackAnalysisDialogResult) => void
   cancelCallback?: () => void
 }>()
@@ -80,6 +87,16 @@ const beatGridLocked = computed(() =>
   isTrackReanalysisBeatGridLocked(selection.value, props.canSelectStructureAlone)
 )
 const showBpmRange = computed(() => selection.value.beatGrid === true)
+const showKeySettings = computed(() => selection.value.key === true)
+const selectedKeyDetectorMode = ref<KeyDetectorMode>(
+  normalizeKeyDetectorMode(props.initialKeyDetectorMode)
+)
+const keyDetectorModeOptions = computed(() => buildKeyDetectorModeOptions())
+const keyDetectorModeHint = computed(() =>
+  selectedKeyDetectorMode.value === 'neural'
+    ? t(KEY_DETECTOR_MODE_HINT_KEYS.neuralScope)
+    : t(KEY_DETECTOR_MODE_HINT_KEYS.settings)
+)
 const gridSubmitBlocked = computed(() =>
   isAnalysisGridSubmitBlocked({
     beatGridSelected: showBpmRange.value,
@@ -148,7 +165,8 @@ const confirm = async () => {
     props.confirmCallback?.({
       selection: next,
       analysisBpmRangeId: next.beatGrid ? selectedBpmRangeId.value : undefined,
-      analysisGridMode: next.beatGrid ? selectedGridMode.value : undefined
+      analysisGridMode: next.beatGrid ? selectedGridMode.value : undefined,
+      keyDetectorMode: next.key ? selectedKeyDetectorMode.value : undefined
     })
   )
 }
@@ -194,6 +212,37 @@ onUnmounted(() => {
           <singleCheckbox id="reanalysis-option-key" v-model="selection.key">
             {{ t('tracks.reanalysisOptionKey') }}
           </singleCheckbox>
+
+          <!-- 调性算法只在勾选调性时展开，样式与网格参数一致。 -->
+          <div
+            class="track-reanalysis-dialog__grid-settings"
+            :class="{ 'is-open': showKeySettings }"
+            :inert="!showKeySettings"
+          >
+            <div class="track-reanalysis-dialog__grid-settings-inner">
+              <div class="track-reanalysis-dialog__grid-settings-rows">
+                <div class="track-reanalysis-dialog__spread">
+                  <span class="track-reanalysis-dialog__field-label">
+                    {{ t('settings.keyDetectorMode.label') }}
+                  </span>
+                  <bubbleBoxTrigger
+                    tag="div"
+                    class="track-reanalysis-dialog__field-control"
+                    :title="keyDetectorModeHint"
+                  >
+                    <BaseSelect
+                      v-model="selectedKeyDetectorMode"
+                      :options="keyDetectorModeOptions"
+                      :disabled="!showKeySettings"
+                      :show-bubble="false"
+                      :width="132"
+                      :max-height="200"
+                    />
+                  </bubbleBoxTrigger>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div class="track-reanalysis-dialog__grid-group">
             <bubbleBoxTrigger

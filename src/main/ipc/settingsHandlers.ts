@@ -26,6 +26,7 @@ import {
   isAnalysisGridModeSupported,
   normalizeAnalysisGridMode
 } from '../../shared/analysisGridMode'
+import { normalizeKeyDetectorMode } from '../../shared/keyDetectorMode'
 import { normalizeTrackReanalysisSelection } from '../../shared/trackReanalysisSelection'
 import {
   normalizeCloudSyncAutoEnabled,
@@ -77,6 +78,7 @@ export function registerSettingsHandlers(deps: Dependencies) {
           cloudSyncUserKey: store.settingConfig.cloudSyncUserKey,
           analysisBpmRange: normalizeAnalysisBpmRangeId(setting?.analysisBpmRange),
           analysisGridMode: normalizeAnalysisGridMode(setting?.analysisGridMode),
+          keyDetectorMode: normalizeKeyDetectorMode(setting?.keyDetectorMode),
           trackAnalysisSelection: normalizeTrackReanalysisSelection(
             setting?.trackAnalysisSelection
           ),

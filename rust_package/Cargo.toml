@@ -29,6 +29,8 @@ futures = "0.3"
 parking_lot = "0.12"
 crossbeam-channel = "0.5"
 cpal = "0.18"
+rustfft = "6"
+matrixmultiply = { version = "0.3", features = ["std"] }
 
 [build-dependencies]
 cc = "1.0.98"

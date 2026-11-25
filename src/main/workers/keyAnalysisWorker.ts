@@ -37,6 +37,8 @@ import type { SongEnergyAnalysisV5 } from '../../shared/songEnergy'
 import type { KeyAnalysisDiagnosticPhase } from '../services/keyAnalysis/types'
 import type { AnalysisGridMode } from '../../shared/analysisGridMode'
 import { normalizeAnalysisGridMode } from '../../shared/analysisGridMode'
+import type { KeyDetectorMode } from '../../shared/keyDetectorMode'
+import { normalizeKeyDetectorMode } from '../../shared/keyDetectorMode'
 import type { DynamicGridOutcome } from '../../shared/dynamicBeatGridTypes'
 import { convertDynamicTimelineGridMapToAudio } from '../../shared/dynamicBeatGridCoordinates'
 import {
@@ -68,6 +70,7 @@ type KeyJob = {
   needsStructure?: boolean
   analysisBpmRange?: AnalysisBpmRange
   analysisGridMode?: AnalysisGridMode
+  keyDetectorMode?: KeyDetectorMode
   audioDurationSec?: number
   cachedBpm?: number
   cachedBeatGridMap?: SongBeatGridMapV2
@@ -235,6 +238,12 @@ const loadRust = () => {
       channels: number,
       fastAnalysis: boolean
     ) => { keyText: string; error?: string }
+    analyzeKeyFromPcmNeural?: (
+      pcmData: Buffer,
+      sampleRate: number,
+      channels: number,
+      fastAnalysis: boolean
+    ) => { keyText: string; error?: string }
     computeMixxxWaveform?: (
       pcmData: Buffer,
       sampleRate: number,
@@ -325,6 +334,7 @@ const analyzeKeyForFile = (
     analyzedTimeBasisOffsetMs?: number
     analysisBpmRange?: AnalysisBpmRange
     analysisGridMode?: AnalysisGridMode
+    keyDetectorMode?: KeyDetectorMode
     audioDurationSec?: number
   },
   reportProgress: (progress: Omit<KeyProgressPayload, 'elapsedMs'>) => void,
@@ -348,6 +358,7 @@ const analyzeKeyForFileInternal = async (
     analyzedTimeBasisOffsetMs?: number
     analysisBpmRange?: AnalysisBpmRange
     analysisGridMode?: AnalysisGridMode
+    keyDetectorMode?: KeyDetectorMode
     audioDurationSec?: number
   },
   reportProgress: (progress: Omit<KeyProgressPayload, 'elapsedMs'>) => void,
@@ -360,6 +371,7 @@ const analyzeKeyForFileInternal = async (
   const needsEnergy = Boolean(options.needsEnergy)
   const needsStructure = Boolean(options.needsStructure)
   const analysisGridMode = normalizeAnalysisGridMode(options.analysisGridMode, 'normal')
+  const useNeuralKeyDetector = normalizeKeyDetectorMode(options.keyDetectorMode) === 'neural'
   // Dynamic 不做 120s 预解码：窗口扫描由有界 scanner 负责。
   const isDynamicGrid = needsBpm && analysisGridMode === 'dynamic'
   let dynamicTimelineDefinition: DynamicGridTimelineDefinition | null = null
@@ -469,16 +481,18 @@ const analyzeKeyForFileInternal = async (
         if (!decoded) {
           throw new Error('Rust PCM decode missing for key analysis')
         }
-        const analyzeKey = resolveRustBinding().analyzeKeyFromPcm
+        const analyzeKey = useNeuralKeyDetector
+          ? resolveRustBinding().analyzeKeyFromPcmNeural
+          : resolveRustBinding().analyzeKeyFromPcm
         if (typeof analyzeKey !== 'function') {
-          throw new Error('analyzeKeyFromPcm not available')
+          throw new Error(
+            useNeuralKeyDetector
+              ? 'analyzeKeyFromPcmNeural not available'
+              : 'analyzeKeyFromPcm not available'
+          )
         }
-        const keyOnly = analyzeKey(
-          decoded.pcmData,
-          decoded.sampleRate,
-          decoded.channels,
-          options.fastAnalysis
-        )
+        // 调性一律整曲分析：60 秒截断会让模板匹配掉约 15pp、神经网络掉约 6.5pp。
+        const keyOnly = analyzeKey(decoded.pcmData, decoded.sampleRate, decoded.channels, false)
         result.keyText = keyOnly.keyText
         result.keyError = keyOnly.error
         reportDiagnosticPhase?.('key:native-done')
@@ -933,6 +947,7 @@ parentPort?.on('message', async (job: KeyJob) => {
         analyzedTimeBasisOffsetMs: job.analyzedTimeBasisOffsetMs,
         analysisBpmRange: job.analysisBpmRange,
         analysisGridMode: job.analysisGridMode,
+        keyDetectorMode: job.keyDetectorMode,
         audioDurationSec: job.audioDurationSec
       },
       reportProgress,

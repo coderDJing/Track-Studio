@@ -254,6 +254,12 @@ fn main() {
 
   napi_build::setup();
 
+  // 神经网络调性检测的权重文件。
+  println!(
+    "cargo:rerun-if-changed={}",
+    manifest_dir.join("native/key_detector/dnn_weights.bin").display()
+  );
+
   let dts_dir = manifest_dir.join("types");
   let dts_path = dts_dir.join("index.d.ts");
   let dts_template_path = manifest_dir.join("index.d.ts.template");

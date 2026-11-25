@@ -302,6 +302,13 @@ export declare function analyzeKeyFromPcm(
   channels: number,
   fastAnalysis: boolean
 ): KeyAnalysisResult
+/** 神经网络检测器。 */
+export declare function analyzeKeyFromPcmNeural(
+  pcmData: Buffer,
+  sampleRate: number,
+  channels: number,
+  fastAnalysis: boolean
+): KeyAnalysisResult
 export declare function dumpPioneerExportDebug(
   exportPdbPath: string,
   maxRows?: number | undefined | null

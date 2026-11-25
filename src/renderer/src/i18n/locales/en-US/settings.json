@@ -18,6 +18,13 @@
       "dynamicScopeHint": "Dynamic scans the whole track and may produce a segmented grid; it is noticeably slower and still experimental. Structure analysis does not run with a Dynamic grid task in this release; energy analysis still follows your selection.",
       "productionDisabled": "Dynamic parameters are not calibrated against real audio yet, so this build does not support it."
     },
+    "keyDetectorMode": {
+      "label": "Key detection algorithm",
+      "template": "Template matching",
+      "neural": "Neural network",
+      "settingsHint": "Template matching averages the whole-track chroma and makes a single decision; fast and the default. The neural network is usually more accurate on electronic music but noticeably slower per track.",
+      "neuralScopeHint": "The neural network builds a constant-Q spectrogram per frame and runs a CNN, so analysis takes noticeably longer. Changes affect newly queued and reanalyzed tracks only."
+    },
     "showPlaylistTrackCount": "Show track count after playlist name",
     "curatedArtistTracking": {
       "title": "Curated artist tracking",

@@ -3,6 +3,7 @@ import { attachAppContext } from '@renderer/utils/appContext'
 import TrackReanalysisDialog from './trackReanalysisDialog.vue'
 import type { AnalysisBpmRangePresetId } from '@shared/analysisBpmRange'
 import type { AnalysisGridMode } from '@shared/analysisGridMode'
+import type { KeyDetectorMode } from '@shared/keyDetectorMode'
 import type { TrackReanalysisUserSelection } from '@shared/trackReanalysisSelection'
 
 export type TrackAnalysisDialogPurpose = 'reanalysis' | 'missing'
@@ -11,6 +12,7 @@ export type TrackAnalysisDialogResult = {
   selection: TrackReanalysisUserSelection
   analysisBpmRangeId?: AnalysisBpmRangePresetId
   analysisGridMode?: AnalysisGridMode
+  keyDetectorMode?: KeyDetectorMode
 }
 
 type TrackReanalysisDialogOptions = {
@@ -20,6 +22,7 @@ type TrackReanalysisDialogOptions = {
   purpose?: TrackAnalysisDialogPurpose
   initialBpmRangeId?: AnalysisBpmRangePresetId
   initialGridMode?: AnalysisGridMode
+  initialKeyDetectorMode?: KeyDetectorMode
 }
 
 export default (options: TrackReanalysisDialogOptions) =>

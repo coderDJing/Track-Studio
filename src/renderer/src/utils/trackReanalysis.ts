@@ -11,6 +11,7 @@ import {
 } from '@shared/trackReanalysisSelection'
 import { normalizeAnalysisBpmRangeId } from '@shared/analysisBpmRange'
 import { normalizeAnalysisGridMode, type AnalysisGridMode } from '@shared/analysisGridMode'
+import { normalizeKeyDetectorMode, type KeyDetectorMode } from '@shared/keyDetectorMode'
 import {
   isCurrentRendererWindowsPathPlatform,
   normalizeFilePathForComparison
@@ -24,7 +25,8 @@ const persistTrackAnalysisDialogSettings = async (
   purpose: TrackAnalysisDialogPurpose,
   selection: TrackReanalysisUserSelection,
   analysisBpmRangeId?: string,
-  analysisGridMode?: AnalysisGridMode
+  analysisGridMode?: AnalysisGridMode,
+  keyDetectorMode?: KeyDetectorMode
 ) => {
   const runtime = useRuntimeStore()
   if (purpose === 'missing') {
@@ -37,6 +39,9 @@ const persistTrackAnalysisDialogSettings = async (
   }
   if (analysisGridMode) {
     runtime.setting.analysisGridMode = normalizeAnalysisGridMode(analysisGridMode)
+  }
+  if (keyDetectorMode) {
+    runtime.setting.keyDetectorMode = normalizeKeyDetectorMode(keyDetectorMode)
   }
   await window.electron.ipcRenderer.invoke(
     'setSetting',
@@ -77,7 +82,8 @@ export const promptTrackAnalysisSelection = async (options: {
       isCurrentRendererWindowsPathPlatform()
     ),
     initialBpmRangeId: normalizeAnalysisBpmRangeId(runtime.setting.analysisBpmRange),
-    initialGridMode: normalizeAnalysisGridMode(runtime.setting.analysisGridMode)
+    initialGridMode: normalizeAnalysisGridMode(runtime.setting.analysisGridMode),
+    initialKeyDetectorMode: normalizeKeyDetectorMode(runtime.setting.keyDetectorMode)
   })
   if (!result) return null
 
@@ -85,13 +91,15 @@ export const promptTrackAnalysisSelection = async (options: {
     options.purpose,
     result.selection,
     result.analysisBpmRangeId,
-    result.analysisGridMode
+    result.analysisGridMode,
+    result.keyDetectorMode
   )
   return {
     files,
     selection: result.selection,
     analysisBpmRangeId: result.analysisBpmRangeId,
-    analysisGridMode: result.analysisGridMode
+    analysisGridMode: result.analysisGridMode,
+    keyDetectorMode: result.keyDetectorMode
   }
 }
 

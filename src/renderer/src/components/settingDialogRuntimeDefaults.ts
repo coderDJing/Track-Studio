@@ -2,6 +2,7 @@ import type { IPlayerGlobalShortcuts, ISettingConfig } from 'src/types/globals'
 import { sanitizePlayerGlobalShortcuts } from '@shared/playerGlobalShortcuts'
 import { normalizeAnalysisBpmRangeId } from '@shared/analysisBpmRange'
 import { normalizeAnalysisGridMode } from '@shared/analysisGridMode'
+import { normalizeKeyDetectorMode } from '@shared/keyDetectorMode'
 import { normalizeTrackReanalysisSelection } from '@shared/trackReanalysisSelection'
 import {
   DEFAULT_BROWSER_PLAYER_RIGHT_TRACK_INFO,
@@ -32,6 +33,7 @@ export const ensurePlayerGlobalShortcuts = (
 export const ensureSettingDialogRuntimeDefaults = (runtime: SettingDialogRuntime) => {
   runtime.setting.analysisBpmRange = normalizeAnalysisBpmRangeId(runtime.setting.analysisBpmRange)
   runtime.setting.analysisGridMode = normalizeAnalysisGridMode(runtime.setting.analysisGridMode)
+  runtime.setting.keyDetectorMode = normalizeKeyDetectorMode(runtime.setting.keyDetectorMode)
   runtime.setting.trackAnalysisSelection = normalizeTrackReanalysisSelection(
     runtime.setting.trackAnalysisSelection
   )

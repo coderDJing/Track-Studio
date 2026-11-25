@@ -20,6 +20,7 @@ import {
   DEFAULT_ANALYSIS_GRID_MODE,
   normalizeAnalysisGridMode
 } from '../../shared/analysisGridMode'
+import { DEFAULT_KEY_DETECTOR_MODE, normalizeKeyDetectorMode } from '../../shared/keyDetectorMode'
 import {
   DEFAULT_BROWSER_PLAYER_RIGHT_TRACK_INFO,
   normalizeBrowserPlayerRightTrackInfo
@@ -103,6 +104,7 @@ const defaultSettings = {
   showIdleAnalysisStatus: false,
   analysisBpmRange: DEFAULT_ANALYSIS_BPM_RANGE_ID,
   analysisGridMode: DEFAULT_ANALYSIS_GRID_MODE,
+  keyDetectorMode: DEFAULT_KEY_DETECTOR_MODE,
   trackAnalysisSelection: {
     key: true,
     beatGrid: true,
@@ -208,6 +210,7 @@ export function loadInitialSettings(options: LoadSettingsOptions): ISettingConfi
     settingFileExisted ? LEGACY_ANALYSIS_BPM_RANGE.id : DEFAULT_ANALYSIS_BPM_RANGE_ID
   )
   finalSettings.analysisGridMode = normalizeAnalysisGridMode(loadedSettings.analysisGridMode)
+  finalSettings.keyDetectorMode = normalizeKeyDetectorMode(loadedSettings.keyDetectorMode)
   finalSettings.trackAnalysisSelection = normalizeTrackReanalysisSelection(
     loadedSettings.trackAnalysisSelection
   )

@@ -18,6 +18,13 @@
       "dynamicScopeHint": "Dynamic 会扫描全曲并输出分段网格，可能明显更慢，结果仍属实验性质。本期段落分析不会随 Dynamic 网格任务一起执行；能量分析仍按勾选执行。",
       "productionDisabled": "Dynamic 参数尚未经真实音频标定，当前版本不可用。"
     },
+    "keyDetectorMode": {
+      "label": "调性检测算法",
+      "template": "模板匹配",
+      "neural": "神经网络",
+      "settingsHint": "模板匹配在整曲平均谱后做单次判决，速度快，默认。神经网络对电子舞曲通常更准，但每首会明显更慢。",
+      "neuralScopeHint": "神经网络逐帧构建常数 Q 频谱并跑卷积网络，分析耗时明显增加；修改后只影响新入队和重新分析的曲目。"
+    },
     "showPlaylistTrackCount": "在歌单名称后显示曲目数量",
     "curatedArtistTracking": {
       "title": "精选表演者联动",

@@ -7,6 +7,7 @@ import type { SongStructureAnalysis } from '../../../shared/songStructure'
 import type { SongBeatGridMapV2 } from '../../../shared/songBeatGridMapV2'
 import type { AnalysisBpmRange } from '../../../shared/analysisBpmRange'
 import type { AnalysisGridMode } from '../../../shared/analysisGridMode'
+import type { KeyDetectorMode } from '../../../shared/keyDetectorMode'
 import type { DynamicGridOutcome } from '../../../shared/dynamicBeatGridTypes'
 import type { DynamicGridProgress } from './dynamicGridIntegration'
 import type { SongEnergyAnalysisV5 } from '../../../shared/songEnergy'
@@ -129,6 +130,8 @@ export type KeyAnalysisJob = {
   analysisBpmRange?: AnalysisBpmRange
   /** 入队时冻结的网格分析模式；已执行任务不允许修改。 */
   analysisGridMode?: AnalysisGridMode
+  /** 入队时冻结的调性检测算法；已执行任务不允许修改。 */
+  keyDetectorMode?: KeyDetectorMode
   /** 每路径网格请求代次；旧任务不得覆盖更新代次的结果。 */
   gridRequestGeneration?: number
   forceAnalysis?: boolean

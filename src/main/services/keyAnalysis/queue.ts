@@ -37,6 +37,7 @@ import {
   resolveAnalysisGridMode,
   isAnalysisGridModeSupported
 } from '../../../shared/analysisGridMode'
+import { normalizeKeyDetectorMode } from '../../../shared/keyDetectorMode'
 import { resolveAnalysisBpmRange } from '../../../shared/analysisBpmRange'
 import {
   BACKGROUND_MAX_INFLIGHT,
@@ -453,6 +454,7 @@ export class KeyAnalysisQueue {
         options.analysisBpmRangeId ?? store.settingConfig.analysisBpmRange
       ),
       analysisGridMode,
+      keyDetectorMode: normalizeKeyDetectorMode(store.settingConfig?.keyDetectorMode),
       gridRequestGeneration: this.nextGridRequestGeneration(normalizedPath),
       forceAnalysis: options.forceAnalysis === true,
       analysisTargets: normalizeKeyAnalysisTargets(options.analysisTargets),

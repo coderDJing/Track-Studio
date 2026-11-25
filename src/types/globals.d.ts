@@ -9,6 +9,7 @@ import type { SongBeatGridQuality } from '../shared/beatGridQuality'
 import type { PlaybackRangeMode, PlaybackRangeSectionMatchMode } from '../shared/playbackRange'
 import type { AnalysisBpmRangePresetId } from '../shared/analysisBpmRange'
 import type { AnalysisGridMode } from '../shared/analysisGridMode'
+import type { KeyDetectorMode } from '../shared/keyDetectorMode'
 import type { TrackReanalysisUserSelection } from '../shared/trackReanalysisSelection'
 import type { BrowserPlayerRightTrackInfoField } from '../shared/browserPlayerRightTrackInfo'
 import type { SongEnergyAnalysisV5 } from '../shared/songEnergy'
@@ -712,6 +713,8 @@ interface ISettingConfig {
   analysisBpmRange?: AnalysisBpmRangePresetId
   // 网格分析模式：normal（现有 120 秒固定网格，默认）/ dynamic（全曲分段网格，实验）。
   analysisGridMode?: AnalysisGridMode
+  // 调性检测算法：template（模板匹配，默认）/ neural（神经网络）。
+  keyDetectorMode?: KeyDetectorMode
   // 首次/补缺分析弹窗勾选（Key、网格、波形、能量、段落）。
   trackAnalysisSelection?: TrackReanalysisUserSelection
   // 重新分析弹窗勾选（Key、网格、波形、能量、段落）。
