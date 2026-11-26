@@ -1,0 +1,68 @@
+{
+  "collectionHealth": {
+    "entry": "曲库体检",
+    "title": "曲库体检 · {library}",
+    "subtitle": "共 {total} 首，已识别 {done} 首",
+    "loading": "正在读取曲库…",
+    "startFailed": "体检启动失败，请检查数据库后重试",
+    "waitingIdle": "等待空闲时继续识别",
+    "scanning": "正在识别音频",
+    "refresh": "重新体检",
+    "busy": "处理中…",
+    "footerNote": "体检只检查当前库；其他库里的同一首歌不参与比对",
+    "unknownArtist": "未知艺人",
+    "edit": "编辑",
+    "ignore": "忽略",
+    "restoreIgnore": "取消忽略",
+    "ignoredCount": "已忽略 {count} 项",
+    "empty": "没有发现问题",
+    "unifyAlbumProgress": "正在统一专辑标签",
+    "checks": {
+      "lowBitrate": "低码率",
+      "noCover": "无封面",
+      "albumTags": "专辑标签混乱",
+      "duplicates": "重复音频"
+    },
+    "lowBitrate": {
+      "threshold": "码率阈值",
+      "thresholdOption": "低于 {kbps} kbps",
+      "bitrateValue": "{kbps} kbps",
+      "hint": "只列出并允许忽略，不会自动转码",
+      "empty": "没有低于阈值的曲目"
+    },
+    "noCover": {
+      "autoFill": "自动找封面（{count} 首）",
+      "autoFillOne": "自动找封面",
+      "hint": "联网匹配会读取标签和音频指纹；手动封面请在编辑里设置",
+      "empty": "所有曲目都已有封面"
+    },
+    "album": {
+      "hint": "“统一为这条”只写专辑标签，不改文件名和音频内容",
+      "empty": "专辑标签没有发现混乱",
+      "trackCount": "{count} 首",
+      "artistConflict": "艺人标签不一致",
+      "artistConflictHint": "同一专辑下出现了多种艺人写法，逐首检查后用编辑修改",
+      "emptyAlbum": "(空专辑名)",
+      "unifyToThis": "统一为这条",
+      "ignoreVariant": "忽略这组（{count} 首）",
+      "unifyTitle": "统一专辑标签",
+      "unifyConfirm": "将 {count} 首曲目的专辑标签写为“{album}”？",
+      "unifyHint": "只改标签，不动文件名；单首失败不会影响其他曲目",
+      "unifyFailed": "{count} 首写入失败"
+    },
+    "duplicates": {
+      "hint": "相似度识别只在后台空闲时进行，可关闭弹窗暂停",
+      "empty": "没有发现疑似重复的音频",
+      "groupTitle": "疑似重复 · {count} 首",
+      "keepHint": "选择要保留的一首",
+      "markNotDuplicate": "标记非重复",
+      "markConfirm": "把这一组 {count} 首标记为非重复？",
+      "markHint": "标记后不再把这一组视为重复，后续体检也不会再提示",
+      "removeTitle": "清理重复音频",
+      "removeConfirm": "保留“{name}”，把其余 {count} 首移入回收站？",
+      "removeHint": "移入回收站后仍可恢复",
+      "removeFailed": "{count} 首移入回收站失败",
+      "keepAndRemove": "保留选中，移除其余 {count} 首"
+    }
+  }
+}

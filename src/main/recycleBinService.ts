@@ -32,6 +32,7 @@ import {
 } from './curatedLibrarySync/paths'
 import { notifyLibraryFsChanged } from './libraryTreeWatcher'
 import { invalidateKeyAnalysisCache } from './services/keyAnalysisQueue'
+import { removeIgnoresForAbsolutePaths } from './services/collectionHealth/store'
 import { listMixtapeItemsByFilePath, replaceMixtapeFilePath } from './mixtapeDb'
 import { replaceMixtapeStemAssetFilePath } from './mixtapeStemDb'
 import { updateSetItemFilePathReferences } from './setListDb'
@@ -566,6 +567,11 @@ export async function moveFileToRecycleBin(
     }
     if (deferredCacheContext) {
       void enqueueRecycleBinCacheTransfer(cacheTransferParams, deferredCacheContext)
+    }
+    try {
+      removeIgnoresForAbsolutePaths([srcPath])
+    } catch (error) {
+      log.error('[recycleBin] clear collection health ignores failed', { srcPath, error })
     }
     return {
       status: 'moved',

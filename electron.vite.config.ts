@@ -47,6 +47,7 @@ export default defineConfig({
             __dirname,
             'src/main/workers/acoustIdFingerprintWorker.ts'
           ),
+          collectionHealthWorker: resolve(__dirname, 'src/main/workers/collectionHealthWorker.ts'),
           songListScanWorker: resolve(__dirname, 'src/main/workers/songListScanWorker.ts'),
           coverExtractionWorker: resolve(__dirname, 'src/main/workers/coverExtractionWorker.ts'),
           songCacheReadWorker: resolve(__dirname, 'src/main/workers/songCacheReadWorker.ts'),
@@ -93,6 +94,9 @@ export default defineConfig({
             }
             if (chunk.name === 'acoustIdFingerprintWorker') {
               return 'workers/acoustIdFingerprintWorker.js'
+            }
+            if (chunk.name === 'collectionHealthWorker') {
+              return 'workers/collectionHealthWorker.js'
             }
             if (chunk.name === 'songListScanWorker') {
               return 'workers/songListScanWorker.js'

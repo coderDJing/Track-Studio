@@ -887,6 +887,39 @@ export function applyLibraryDbSchema(instance: SqliteDatabase, userVersion: numb
       `ALTER TABLE playlist_view_snapshot ADD COLUMN missing_waveform_json TEXT NOT NULL DEFAULT '[]'`
     )
   }
+  // 曲库体检：忽略记录属于用户状态，走 analysis-remap 跟随库迁移/合并；
+  // 指纹缓存只服务判重，同样按 (list_root, file_path) 落库以便合并时重映射。
+  instance.exec(`
+    CREATE TABLE IF NOT EXISTS collection_health_ignored (
+      list_root TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      check_name TEXT NOT NULL,
+      created_at_ms INTEGER NOT NULL,
+      PRIMARY KEY (list_root, file_path, check_name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_collection_health_ignored_root
+      ON collection_health_ignored(list_root);
+    CREATE TABLE IF NOT EXISTS collection_health_probes (
+      list_root TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      mtime_ms INTEGER NOT NULL,
+      has_cover INTEGER NOT NULL,
+      fingerprint TEXT,
+      updated_at_ms INTEGER NOT NULL,
+      PRIMARY KEY (list_root, file_path)
+    );
+    CREATE INDEX IF NOT EXISTS idx_collection_health_probes_root
+      ON collection_health_probes(list_root);
+    -- “标记非重复”按指纹对记录：文件移动/改名后指纹不变，压制关系继续有效；
+    -- 内容变化会生成新指纹，旧压制自然失效。
+    CREATE TABLE IF NOT EXISTS collection_health_duplicate_mutes (
+      fingerprint_a TEXT NOT NULL,
+      fingerprint_b TEXT NOT NULL,
+      created_at_ms INTEGER NOT NULL,
+      PRIMARY KEY (fingerprint_a, fingerprint_b)
+    );
+  `)
   applyCuratedLibrarySyncSchema(instance)
   // 网易云音乐库：独立表族，幂等 DDL，不升 user_version（旧版本忽略这几张表即可）
   applyNeteaseSchema(instance)

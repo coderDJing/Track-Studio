@@ -1,0 +1,68 @@
+{
+  "collectionHealth": {
+    "entry": "Collection health",
+    "title": "Collection health · {library}",
+    "subtitle": "{total} tracks, {done} scanned",
+    "loading": "Reading library…",
+    "startFailed": "Failed to start the health check. Please retry",
+    "waitingIdle": "Waiting for idle time",
+    "scanning": "Scanning audio",
+    "refresh": "Rescan",
+    "busy": "Working…",
+    "footerNote": "Checks apply to this library only; copies in other libraries are ignored",
+    "unknownArtist": "Unknown artist",
+    "edit": "Edit",
+    "ignore": "Ignore",
+    "restoreIgnore": "Restore",
+    "ignoredCount": "{count} ignored",
+    "empty": "No issues found",
+    "unifyAlbumProgress": "Unifying album tags",
+    "checks": {
+      "lowBitrate": "Low bitrate",
+      "noCover": "Missing cover",
+      "albumTags": "Album tag issues",
+      "duplicates": "Duplicate audio"
+    },
+    "lowBitrate": {
+      "threshold": "Bitrate threshold",
+      "thresholdOption": "Below {kbps} kbps",
+      "bitrateValue": "{kbps} kbps",
+      "hint": "Listed for review only; no transcode is performed",
+      "empty": "No tracks below the threshold"
+    },
+    "noCover": {
+      "autoFill": "Find covers ({count})",
+      "autoFillOne": "Find cover",
+      "hint": "Online lookup uses tags and audio fingerprints; set a manual cover via Edit",
+      "empty": "Every track has a cover"
+    },
+    "album": {
+      "hint": "\"Unify to this\" writes the album tag only; file names and audio stay unchanged",
+      "empty": "No album tag issues",
+      "trackCount": "{count} tracks",
+      "artistConflict": "Artist tags differ",
+      "artistConflictHint": "This album has multiple artist spellings; review each track with Edit",
+      "emptyAlbum": "(empty album)",
+      "unifyToThis": "Unify to this",
+      "ignoreVariant": "Ignore group ({count})",
+      "unifyTitle": "Unify album tags",
+      "unifyConfirm": "Write the album tag \"{album}\" to {count} tracks?",
+      "unifyHint": "Tags only; a failed track won't affect the rest",
+      "unifyFailed": "{count} tracks failed to update"
+    },
+    "duplicates": {
+      "hint": "Similarity detection runs only when the app is idle; closing this dialog pauses it",
+      "empty": "No duplicate audio found",
+      "groupTitle": "Possible duplicates · {count} tracks",
+      "keepHint": "Pick one to keep",
+      "markNotDuplicate": "Not duplicates",
+      "markConfirm": "Mark these {count} tracks as not duplicates?",
+      "markHint": "This group won't be treated as duplicates again in future checks",
+      "removeTitle": "Remove duplicate audio",
+      "removeConfirm": "Keep \"{name}\" and move the other {count} tracks to the recycle bin?",
+      "removeHint": "Tracks moved to the recycle bin can be restored",
+      "removeFailed": "{count} tracks failed to move to the recycle bin",
+      "keepAndRemove": "Keep selected, remove other {count}"
+    }
+  }
+}

@@ -91,6 +91,36 @@ function mergeFingerprintRows(sourceDb: SqliteDatabase, targetDb: SqliteDatabase
   return merged
 }
 
+// “标记非重复”按指纹对存储，指纹是内容身份，跨库合并可以直接取并集。
+function mergeCollectionHealthDuplicateMuteRows(
+  sourceDb: SqliteDatabase,
+  targetDb: SqliteDatabase
+): number {
+  if (
+    !hasTable(sourceDb, 'collection_health_duplicate_mutes') ||
+    !hasTable(targetDb, 'collection_health_duplicate_mutes')
+  ) {
+    return 0
+  }
+  const rows = sourceDb
+    .prepare(
+      'SELECT fingerprint_a, fingerprint_b, created_at_ms FROM collection_health_duplicate_mutes'
+    )
+    .all() as Array<Record<string, unknown>>
+  const insert = targetDb.prepare(
+    'INSERT OR IGNORE INTO collection_health_duplicate_mutes (fingerprint_a, fingerprint_b, created_at_ms) VALUES (?, ?, ?)'
+  )
+  let merged = 0
+  for (const row of rows) {
+    const a = typeof row.fingerprint_a === 'string' ? row.fingerprint_a : ''
+    const b = typeof row.fingerprint_b === 'string' ? row.fingerprint_b : ''
+    if (!a || !b) continue
+    const result = insert.run(a, b, Number(row.created_at_ms) || Date.now())
+    merged += Number(result.changes || 0)
+  }
+  return merged
+}
+
 // Every persistent SQLite table must be registered here. New tables are rejected during
 // preflight until their owner explicitly chooses a safe merge strategy; they are never skipped.
 export const LIBRARY_MERGE_TABLE_PARTICIPANTS: readonly LibraryMergeTableParticipant[] = [
@@ -108,6 +138,15 @@ export const LIBRARY_MERGE_TABLE_PARTICIPANTS: readonly LibraryMergeTablePartici
   // Despite its historic name, song_cache carries the persistent song metadata and completed
   // analysis results that FRKB must retain after a merge.
   { table: 'song_cache', strategy: 'analysis-remap' },
+  // 曲库体检的忽略记录是用户状态，指纹是派生缓存；两者都按 (list_root, file_path) 落库，
+  // 合并时沿文件身份重映射，源库文件未进入目标库则行自然丢弃。
+  { table: 'collection_health_ignored', strategy: 'analysis-remap' },
+  { table: 'collection_health_probes', strategy: 'analysis-remap' },
+  {
+    table: 'collection_health_duplicate_mutes',
+    strategy: 'union',
+    unionRows: mergeCollectionHealthDuplicateMuteRows
+  },
   { table: 'cover_index', strategy: 'discardable' },
   { table: 'waveform_cache', strategy: 'discardable' },
   { table: 'compact_visual_waveform_cache', strategy: 'discardable' },

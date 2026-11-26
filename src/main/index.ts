@@ -95,6 +95,7 @@ import { registerRekordboxXmlExportHandlers } from './ipc/rekordboxXmlExportHand
 import { registerHorizontalBrowseTransportHandlers } from './ipc/horizontalBrowseTransportHandlers'
 import { stopHorizontalBrowseTransportSnapshotBroadcaster } from './ipc/horizontalBrowseTransportSnapshotBroadcaster'
 import { registerDevSongListTraceHandlers } from './ipc/devSongListTraceHandlers'
+import { registerCollectionHealthHandlers } from './ipc/collectionHealthHandlers'
 import { registerHotCueHandlers } from './ipc/hotCueHandlers'
 import { registerMemoryCueHandlers } from './ipc/memoryCueHandlers'
 import { maybeShowWhatsNew, registerWhatsNewHandlers } from './services/whatsNew'
@@ -387,6 +388,7 @@ registerHorizontalBrowseTransportHandlers()
 registerHotCueHandlers()
 registerMemoryCueHandlers()
 registerDevSongListTraceHandlers()
+registerCollectionHealthHandlers()
 
 // 歌单视图快照的后台核对入口。用注册钩子接 watcher，而不是让 watcher 直接 import 服务：
 // 服务要 import mainWindow 推刷新事件，而 mainWindow/index 又 import 了 watcher，直连会成环。

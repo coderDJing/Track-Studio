@@ -181,6 +181,10 @@ export function useLibraryBatchActions(options: {
   }
 
   const buildMenuArr = (item: Icon) => {
+    const healthMenu =
+      item.name === 'FilterLibrary' || item.name === 'CuratedLibrary' || item.name === 'SetLibrary'
+        ? [[{ menuName: 'collectionHealth.entry' }]]
+        : []
     const similarMenu =
       item.name === 'FilterLibrary' ||
       item.name === 'CuratedLibrary' ||
@@ -200,12 +204,12 @@ export function useLibraryBatchActions(options: {
       return [[{ menuName: 'recycleBin.emptyRecycleBin' }], ...commonMenus]
     }
     if (item.name === 'SetLibrary') {
-      return [[{ menuName: 'library.importSetPackage' }], ...similarMenu]
+      return [...healthMenu, [{ menuName: 'library.importSetPackage' }], ...similarMenu]
     }
     if (item.name === 'MixtapeLibrary') {
       return similarMenu
     }
-    return commonMenus
+    return [...healthMenu, ...commonMenus]
   }
 
   const handleAnalyzeMissingForLibrary = async (libraryName: string) => {
@@ -311,6 +315,12 @@ export function useLibraryBatchActions(options: {
     const result = await rightClickMenu({ menuArr, clickEvent: event })
     if (result === 'cancel') return
     switch (result.menuName) {
+      case 'collectionHealth.entry': {
+        const { default: showCollectionHealthDialog } =
+          await import('@renderer/components/collectionHealthDialog')
+        void showCollectionHealthDialog({ libraryName: item.name })
+        break
+      }
       case 'tracks.analyzeMissingTracks':
         await handleAnalyzeMissingForLibrary(item.name)
         break
