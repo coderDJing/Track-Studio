@@ -27,6 +27,7 @@ export const toTrackHit = (track: LibraryTrack): CollectionHealthTrackHit => ({
   duration: track.duration || undefined,
   bitrate: track.bitrate ?? undefined,
   songListName: track.songListName,
+  songListPath: track.songListPath,
   songListUuid: track.songListUuid
 })
 

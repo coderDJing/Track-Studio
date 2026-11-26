@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { t } from '@renderer/utils/translate'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
+import CollectionHealthPlaylistCell from './CollectionHealthPlaylistCell.vue'
 import type {
   CollectionHealthAlbumGroup,
   CollectionHealthAlbumVariant,
@@ -18,6 +19,8 @@ const emits = defineEmits<{
   (e: 'unify', group: CollectionHealthAlbumGroup, variant: CollectionHealthAlbumVariant): void
   (e: 'ignore', group: CollectionHealthAlbumGroup, variant: CollectionHealthAlbumVariant): void
   (e: 'edit', hit: CollectionHealthTrackHit): void
+  (e: 'remove', hit: CollectionHealthTrackHit): void
+  (e: 'locate', hit: CollectionHealthTrackHit): void
   (e: 'restore', hit: CollectionHealthTrackHit): void
 }>()
 
@@ -149,11 +152,17 @@ const totalHits = computed(() => props.groups.length)
                     </bubbleBoxTrigger>
                     <span class="variant-track-sub">
                       {{ hit.artist || t('collectionHealth.unknownArtist') }}
-                      <template v-if="hit.songListName"> · {{ hit.songListName }}</template>
                     </span>
                   </div>
+                  <CollectionHealthPlaylistCell :name="hit.songListName" :path="hit.songListPath" />
+                  <button type="button" class="mini-button" @click="emits('locate', hit)">
+                    {{ t('collectionHealth.locate') }}
+                  </button>
                   <button type="button" class="mini-button" @click="emits('edit', hit)">
                     {{ t('collectionHealth.edit') }}
+                  </button>
+                  <button type="button" class="mini-button muted" @click="emits('remove', hit)">
+                    {{ t('collectionHealth.removeTrack') }}
                   </button>
                 </div>
               </div>
@@ -182,6 +191,7 @@ const totalHits = computed(() => props.groups.length)
                   hit.album || t('collectionHealth.album.emptyAlbum')
                 }}</span>
               </div>
+              <CollectionHealthPlaylistCell :name="hit.songListName" :path="hit.songListPath" />
               <button type="button" class="mini-button" @click="emits('restore', hit)">
                 {{ t('collectionHealth.restoreIgnore') }}
               </button>

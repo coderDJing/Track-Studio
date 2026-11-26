@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { t } from '@renderer/utils/translate'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
+import CollectionHealthPlaylistCell from './CollectionHealthPlaylistCell.vue'
 import type { CollectionHealthCheck, CollectionHealthTrackHit } from '@shared/collectionHealth'
 
 const props = defineProps<{
@@ -17,6 +18,8 @@ const emits = defineEmits<{
   (e: 'ignore', hit: CollectionHealthTrackHit): void
   (e: 'restore', hit: CollectionHealthTrackHit): void
   (e: 'edit', hit: CollectionHealthTrackHit): void
+  (e: 'remove', hit: CollectionHealthTrackHit): void
+  (e: 'locate', hit: CollectionHealthTrackHit): void
   (e: 'autofill', hits: CollectionHealthTrackHit[]): void
 }>()
 
@@ -71,16 +74,6 @@ const emptyText = computed(() => {
               </bubbleBoxTrigger>
               <span class="track-dot">·</span>
               <bubbleBoxTrigger
-                v-if="hit.songListName"
-                tag="span"
-                class="track-playlist"
-                :title="hit.songListName"
-                :max-width="280"
-                only-when-overflow
-              >
-                {{ hit.songListName }}
-              </bubbleBoxTrigger>
-              <bubbleBoxTrigger
                 tag="span"
                 class="track-file"
                 :title="hit.fileName"
@@ -91,6 +84,7 @@ const emptyText = computed(() => {
               </bubbleBoxTrigger>
             </div>
           </div>
+          <CollectionHealthPlaylistCell :name="hit.songListName" :path="hit.songListPath" />
           <div class="track-meta">
             <span v-if="showBitrate && hit.bitrate" class="bitrate-chip">
               {{ t('collectionHealth.lowBitrate.bitrateValue', { kbps: hit.bitrate }) }}
@@ -106,8 +100,14 @@ const emptyText = computed(() => {
             >
               {{ t('collectionHealth.noCover.autoFillOne') }}
             </button>
+            <button type="button" class="mini-button" @click="emits('locate', hit)">
+              {{ t('collectionHealth.locate') }}
+            </button>
             <button type="button" class="mini-button" @click="emits('edit', hit)">
               {{ t('collectionHealth.edit') }}
+            </button>
+            <button type="button" class="mini-button muted" @click="emits('remove', hit)">
+              {{ t('collectionHealth.removeTrack') }}
             </button>
             <button type="button" class="mini-button muted" @click="emits('ignore', hit)">
               {{ t('collectionHealth.ignore') }}
@@ -133,10 +133,8 @@ const emptyText = computed(() => {
               >
                 {{ displayName(hit) }}
               </bubbleBoxTrigger>
-              <div class="track-sub">
-                <span v-if="hit.songListName" class="track-playlist">{{ hit.songListName }}</span>
-              </div>
             </div>
+            <CollectionHealthPlaylistCell :name="hit.songListName" :path="hit.songListPath" />
             <button type="button" class="mini-button" @click="emits('restore', hit)">
               {{ t('collectionHealth.restoreIgnore') }}
             </button>
@@ -206,7 +204,6 @@ const emptyText = computed(() => {
   overflow: hidden;
 }
 .track-artist,
-.track-playlist,
 .track-file {
   min-width: 0;
   overflow: hidden;

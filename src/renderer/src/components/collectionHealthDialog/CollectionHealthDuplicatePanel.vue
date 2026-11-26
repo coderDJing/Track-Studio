@@ -3,6 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 import { t } from '@renderer/utils/translate'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
+import CollectionHealthPlaylistCell from './CollectionHealthPlaylistCell.vue'
 import type {
   CollectionHealthDuplicateGroup,
   CollectionHealthDuplicateTrack,
@@ -23,6 +24,7 @@ const emits = defineEmits<{
   (e: 'mark', group: CollectionHealthDuplicateGroup): void
   (e: 'ignore', hit: CollectionHealthDuplicateTrack): void
   (e: 'edit', hit: CollectionHealthTrackHit): void
+  (e: 'locate', hit: CollectionHealthTrackHit): void
   (e: 'restore', hit: CollectionHealthTrackHit): void
 }>()
 
@@ -67,7 +69,8 @@ const toTrackHit = (track: CollectionHealthDuplicateTrack): CollectionHealthTrac
   duration: track.duration,
   bitrate: track.bitrate,
   songListName: track.songListName,
-  songListUuid: ''
+  songListPath: track.songListPath,
+  songListUuid: track.songListUuid
 })
 </script>
 
@@ -115,10 +118,6 @@ const toTrackHit = (track: CollectionHealthDuplicateTrack): CollectionHealthTrac
                 </bubbleBoxTrigger>
                 <div class="duplicate-sub">
                   <span>{{ track.artist || t('collectionHealth.unknownArtist') }}</span>
-                  <template v-if="track.songListName">
-                    <span class="dot">·</span>
-                    <span>{{ track.songListName }}</span>
-                  </template>
                   <span class="dot">·</span>
                   <bubbleBoxTrigger
                     tag="span"
@@ -131,6 +130,7 @@ const toTrackHit = (track: CollectionHealthDuplicateTrack): CollectionHealthTrac
                   </bubbleBoxTrigger>
                 </div>
               </div>
+              <CollectionHealthPlaylistCell :name="track.songListName" :path="track.songListPath" />
               <div class="duplicate-meta">
                 <span v-if="track.bitrate" class="meta-chip">{{ track.bitrate }} kbps</span>
                 <span v-if="formatSize(track.size)" class="meta-chip">{{
@@ -139,6 +139,13 @@ const toTrackHit = (track: CollectionHealthDuplicateTrack): CollectionHealthTrac
                 <span v-if="track.duration" class="meta-duration">{{ track.duration }}</span>
               </div>
               <div class="duplicate-actions" @click.stop>
+                <button
+                  type="button"
+                  class="mini-button"
+                  @click="emits('locate', toTrackHit(track))"
+                >
+                  {{ t('collectionHealth.locate') }}
+                </button>
                 <button type="button" class="mini-button" @click="emits('edit', toTrackHit(track))">
                   {{ t('collectionHealth.edit') }}
                 </button>
@@ -193,6 +200,7 @@ const toTrackHit = (track: CollectionHealthDuplicateTrack): CollectionHealthTrac
                   <span>{{ hit.artist || t('collectionHealth.unknownArtist') }}</span>
                 </div>
               </div>
+              <CollectionHealthPlaylistCell :name="hit.songListName" :path="hit.songListPath" />
               <button type="button" class="mini-button" @click="emits('restore', hit)">
                 {{ t('collectionHealth.restoreIgnore') }}
               </button>

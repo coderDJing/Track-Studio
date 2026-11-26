@@ -21,6 +21,7 @@ export type LibraryTrack = {
   size: number
   mtimeMs: number
   songListName: string
+  songListPath: string
   songListUuid: string
 }
 
@@ -30,7 +31,8 @@ export function getCollectionHealthLibraryRoot(libraryName: CoreLibraryName): st
   return path.join(dbRoot, 'library', getCoreFsDirName(libraryName))
 }
 
-type PlaylistMeta = { uuid: string; dirName: string }
+/** displayPath 是库内的文件夹层级（含歌单自身），用来区分文件夹中的同名歌单。 */
+type PlaylistMeta = { uuid: string; dirName: string; displayPath: string }
 
 const normalizeRelativeKey = (value: string): string => value.replace(/\\/g, '/').toLowerCase()
 
@@ -49,17 +51,23 @@ const buildPlaylistMeta = () => {
     else childrenByParent.set(row.parentUuid, [row])
   }
   const pathByUuid = new Map<string, string>()
+  const segmentsByUuid = new Map<string, string[]>()
   const root = rows.find((row) => row.parentUuid === null && row.nodeType === 'root')
   if (!root) return { byListRoot, byAbsPath }
   pathByUuid.set(root.uuid, root.dirName)
+  segmentsByUuid.set(root.uuid, [])
   const queue: LibraryNodeRow[] = [root]
   for (let i = 0; i < queue.length; i += 1) {
     const current = queue[i]
     const basePath = pathByUuid.get(current.uuid)
     if (!basePath) continue
+    const baseSegments = segmentsByUuid.get(current.uuid) || []
     for (const child of childrenByParent.get(current.uuid) || []) {
       const childPath = path.join(basePath, child.dirName)
       if (!pathByUuid.has(child.uuid)) pathByUuid.set(child.uuid, childPath)
+      // 库节点是磁盘上的库根，不算用户可见的文件夹层级。
+      const childSegments = child.nodeType === 'library' ? [] : [...baseSegments, child.dirName]
+      if (!segmentsByUuid.has(child.uuid)) segmentsByUuid.set(child.uuid, childSegments)
       queue.push(child)
     }
   }
@@ -73,7 +81,12 @@ const buildPlaylistMeta = () => {
     }
     const relPath = pathByUuid.get(row.uuid)
     if (!relPath) continue
-    const meta: PlaylistMeta = { uuid: row.uuid, dirName: row.dirName }
+    const segments = segmentsByUuid.get(row.uuid) || []
+    const meta: PlaylistMeta = {
+      uuid: row.uuid,
+      dirName: row.dirName,
+      displayPath: segments.length ? segments.join(' / ') : row.dirName
+    }
     byListRoot.set(normalizeRelativeKey(relPath), meta)
     byAbsPath.set(mainFilePathKey(path.join(dbRoot, relPath)), meta)
   }
@@ -181,6 +194,7 @@ export async function enumerateLibraryTracks(
         size: Number(row.size) || 0,
         mtimeMs: Number(row.mtime_ms) || 0,
         songListName: playlist?.dirName || '',
+        songListPath: playlist?.displayPath || playlist?.dirName || '',
         songListUuid: playlist?.uuid || ''
       })
     }

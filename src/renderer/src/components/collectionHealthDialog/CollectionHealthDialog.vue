@@ -44,10 +44,12 @@ const {
   startScan,
   toggleIgnore,
   ignoreTracks,
+  locateTrack,
   editTrack,
   autoFillCovers,
   markGroupNotDuplicate,
   removeDuplicates,
+  removeTrack,
   unifyAlbum
 } = useCollectionHealthDialog(props)
 
@@ -111,7 +113,8 @@ const toTrackHit = (track: CollectionHealthDuplicateTrack): CollectionHealthTrac
   duration: track.duration,
   bitrate: track.bitrate,
   songListName: track.songListName,
-  songListUuid: ''
+  songListPath: track.songListPath,
+  songListUuid: track.songListUuid
 })
 
 const onAlbumIgnoreVariant = (
@@ -125,8 +128,18 @@ const onRemoveDuplicates = (group: CollectionHealthDuplicateGroup, keepFilePath:
   void removeDuplicates(group, keepFilePath)
 }
 
+const onRemoveTrack = (hit: CollectionHealthTrackHit) => {
+  void removeTrack(hit)
+}
+
 const closeDialog = () => {
   closeWithAnimation(() => emits('close'))
+}
+
+const onLocate = (hit: CollectionHealthTrackHit) => {
+  void locateTrack(hit).then((located) => {
+    if (located) closeDialog()
+  })
 }
 
 onMounted(() => {
@@ -223,7 +236,9 @@ onUnmounted(() => {
               :rows="lowBitrateRows"
               :ignored="ignoredTracks"
               show-bitrate
+              @locate="onLocate"
               @edit="editTrack"
+              @remove="onRemoveTrack"
               @ignore="onLowBitrateIgnore"
               @restore="onRestore('lowBitrate', $event)"
             />
@@ -233,7 +248,9 @@ onUnmounted(() => {
               :rows="noCoverRows"
               :ignored="ignoredTracks"
               show-auto-fill
+              @locate="onLocate"
               @edit="editTrack"
+              @remove="onRemoveTrack"
               @autofill="autoFillCovers"
               @ignore="onNoCoverIgnore"
               @restore="onRestore('noCover', $event)"
@@ -243,7 +260,9 @@ onUnmounted(() => {
               :groups="albumGroups"
               :ignored="ignoredTracks"
               @unify="unifyAlbum"
+              @locate="onLocate"
               @edit="editTrack"
+              @remove="onRemoveTrack"
               @ignore="onAlbumIgnoreVariant"
               @restore="onRestore('albumTags', $event)"
             />
@@ -253,6 +272,7 @@ onUnmounted(() => {
               :ignored="ignoredTracks"
               @remove="onRemoveDuplicates"
               @mark="markGroupNotDuplicate"
+              @locate="onLocate"
               @edit="editTrack"
               @ignore="onDuplicateIgnore"
               @restore="onRestore('duplicates', $event)"
@@ -305,7 +325,7 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 190px 1fr;
+  grid-template-columns: 190px minmax(0, 1fr);
 }
 .check-nav {
   display: flex;

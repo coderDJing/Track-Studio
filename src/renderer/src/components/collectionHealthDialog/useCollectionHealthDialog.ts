@@ -39,6 +39,14 @@ const refOf = (hit: { listRoot: string; filePath: string }) => ({
 const filePathKey = (value: string) =>
   normalizeFilePathForComparison(value, isCurrentRendererWindowsPathPlatform())
 
+type HealthLocateLibrary = 'FilterLibrary' | 'CuratedLibrary' | 'SetLibrary' | 'MixtapeLibrary'
+
+const isHealthLocateLibrary = (value: string): value is HealthLocateLibrary =>
+  value === 'FilterLibrary' ||
+  value === 'CuratedLibrary' ||
+  value === 'SetLibrary' ||
+  value === 'MixtapeLibrary'
+
 const readStoredThreshold = (): number => {
   try {
     const raw = Number(localStorage.getItem(LOW_BITRATE_STORAGE_KEY))
@@ -181,6 +189,32 @@ export function useCollectionHealthDialog(props: { libraryName: string }) {
     }
   }
 
+  const locateTrack = async (hit: CollectionHealthTrackHit): Promise<boolean> => {
+    const songListUUID = String(hit.songListUuid || '').trim()
+    if (!songListUUID || !isHealthLocateLibrary(props.libraryName)) {
+      await confirm({
+        title: t('collectionHealth.locateFailedTitle'),
+        content: [
+          t('collectionHealth.locateFailedNoPlaylist', { name: hit.title || hit.fileName })
+        ],
+        confirmShow: false
+      })
+      return false
+    }
+    runtime.lastSongListUUIDByLibrary[props.libraryName] = songListUUID
+    runtime.libraryAreaSelected = props.libraryName
+    if (runtime.songsArea.songListUUID !== songListUUID) {
+      runtime.songsArea.songListUUID = songListUUID
+    }
+    emitter.emit('songsArea/focus-song', {
+      songListUUID,
+      filePath: hit.filePath,
+      autoPlay: false,
+      flash: true
+    })
+    return true
+  }
+
   const editTrack = async (hit: CollectionHealthTrackHit) => {
     const result = await showEditMetadataDialog({ filePath: hit.filePath })
     if (result === 'cancel') return
@@ -301,6 +335,43 @@ export function useCollectionHealthDialog(props: { libraryName: string }) {
     }
   }
 
+  const removeTrack = async (hit: CollectionHealthTrackHit) => {
+    if (!requestId.value) return
+    const result = await confirm({
+      title: t('collectionHealth.removeTrackTitle'),
+      content: [
+        t('collectionHealth.removeTrackConfirm', { name: hit.title || hit.fileName }),
+        t('collectionHealth.removeTrackHint')
+      ],
+      textAlign: 'left'
+    })
+    if (result !== 'confirm') return
+    actionBusy.value = true
+    try {
+      const response = (await window.electron.ipcRenderer.invoke(
+        'collection-health:remove-tracks',
+        { requestId: requestId.value, tracks: [refOf(hit)] }
+      )) as CollectionHealthActionResponse | null
+      setSnapshot(response?.snapshot ?? null)
+      if (response?.failed?.length) {
+        await confirm({
+          title: t('common.error'),
+          content: [
+            t('collectionHealth.removeTrackFailed', { count: response.failed.length }),
+            ...response.failed.slice(0, 5).map((item) => `${item.filePath}: ${item.error}`)
+          ],
+          confirmShow: false,
+          textAlign: 'left',
+          canCopyText: true
+        })
+      }
+    } catch (error) {
+      console.error('[collection-health] remove track failed', error)
+    } finally {
+      actionBusy.value = false
+    }
+  }
+
   const unifyAlbum = async (
     group: CollectionHealthAlbumGroup,
     variant: CollectionHealthAlbumVariant
@@ -373,10 +444,12 @@ export function useCollectionHealthDialog(props: { libraryName: string }) {
     startScan,
     toggleIgnore,
     ignoreTracks,
+    locateTrack,
     editTrack,
     autoFillCovers,
     markGroupNotDuplicate,
     removeDuplicates,
+    removeTrack,
     unifyAlbum
   }
 }

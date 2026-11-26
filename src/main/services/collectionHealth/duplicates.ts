@@ -34,7 +34,9 @@ const toDuplicateTrack = (track: LibraryTrack): CollectionHealthDuplicateTrack =
   duration: track.duration || undefined,
   bitrate: track.bitrate ?? undefined,
   size: track.size,
-  songListName: track.songListName
+  songListName: track.songListName,
+  songListPath: track.songListPath,
+  songListUuid: track.songListUuid
 })
 
 /**

@@ -4,6 +4,7 @@ import { isLibraryMergeMutationLocked } from '../services/libraryMerge/runtime'
 import {
   getCollectionHealthSnapshot,
   markDuplicateGroupNotDuplicate,
+  removeCollectionHealthTracks,
   removeDuplicateTracks,
   setCollectionHealthIgnore,
   setCollectionHealthSnapshotSender,
@@ -16,6 +17,7 @@ import type {
   CollectionHealthIgnoreToggleRequest,
   CollectionHealthMarkDuplicateFalseRequest,
   CollectionHealthRemoveDuplicatesRequest,
+  CollectionHealthRemoveTracksRequest,
   CollectionHealthStartRequest,
   CollectionHealthUnifyAlbumRequest,
   CollectionHealthTrackRef
@@ -127,6 +129,21 @@ export function registerCollectionHealthHandlers() {
         requestId: payload.requestId,
         keep: payload.keep,
         remove
+      })
+    }
+  )
+
+  ipcMain.handle(
+    'collection-health:remove-tracks',
+    async (_e, payload?: CollectionHealthRemoveTracksRequest) => {
+      if (!payload || typeof payload.requestId !== 'number') return null
+      if (isLibraryMergeMutationLocked()) return null
+      if (!Array.isArray(payload.tracks)) return null
+      const tracks = payload.tracks.filter(isValidRef)
+      if (!tracks.length) return null
+      return await removeCollectionHealthTracks({
+        requestId: payload.requestId,
+        tracks
       })
     }
   )

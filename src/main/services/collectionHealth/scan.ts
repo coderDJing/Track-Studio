@@ -516,21 +516,20 @@ const removeTrackFromSession = (current: Session, runtimeKey: string) => {
   current.tracks = current.tracks.filter((item) => item !== track)
 }
 
-export async function removeDuplicateTracks(params: {
-  requestId: number
-  keep: CollectionHealthTrackRef
-  remove: CollectionHealthTrackRef[]
-}): Promise<CollectionHealthActionResponse | null> {
-  const current = touchSession()
-  if (!current || current.requestId !== params.requestId) return null
-  const keepTrack = resolveRef(current, params.keep)
-  if (!keepTrack) return null
+const moveTracksToRecycleBin = async (
+  current: Session,
+  refs: CollectionHealthTrackRef[],
+  skipTrack?: LibraryTrack
+): Promise<CollectionHealthActionFailure[]> => {
   const failed: CollectionHealthActionFailure[] = []
   const listRootByDirCache = new Map<string, string | null>()
-  for (const ref of params.remove) {
+  const seen = new Set<string>()
+  for (const ref of refs) {
     const track = resolveRef(current, ref)
-    if (!track) continue
-    if (track === keepTrack) continue
+    if (!track || track === skipTrack) continue
+    const runtimeKey = trackRuntimeKey(track)
+    if (seen.has(runtimeKey)) continue
+    seen.add(runtimeKey)
     try {
       const result = await moveFileToRecycleBin(track.absFilePath, {
         sourceType: 'unknown',
@@ -540,7 +539,7 @@ export async function removeDuplicateTracks(params: {
         failed.push({ filePath: track.absFilePath, error: result.error || 'recycle-bin-failed' })
         continue
       }
-      removeTrackFromSession(current, trackRuntimeKey(track))
+      removeTrackFromSession(current, runtimeKey)
     } catch (error) {
       failed.push({
         filePath: track.absFilePath,
@@ -548,6 +547,35 @@ export async function removeDuplicateTracks(params: {
       })
     }
   }
+  return failed
+}
+
+export async function removeDuplicateTracks(params: {
+  requestId: number
+  keep: CollectionHealthTrackRef
+  remove: CollectionHealthTrackRef[]
+}): Promise<CollectionHealthActionResponse | null> {
+  const current = touchSession()
+  if (!current || current.requestId !== params.requestId) return null
+  const keepTrack = resolveRef(current, params.keep)
+  if (!keepTrack) return null
+  const failed = await moveTracksToRecycleBin(current, params.remove, keepTrack)
+  recomputeFastChecks(current)
+  current.noCoverDirty = true
+  recomputeDuplicates(current)
+  scheduleEmit(current, true)
+  if (!latestSnapshot) return null
+  return { snapshot: latestSnapshot, failed }
+}
+
+/** 任意检查项下的单曲移入回收站：先移文件，再把曲目从会话中摘除并重算。 */
+export async function removeCollectionHealthTracks(params: {
+  requestId: number
+  tracks: CollectionHealthTrackRef[]
+}): Promise<CollectionHealthActionResponse | null> {
+  const current = touchSession()
+  if (!current || current.requestId !== params.requestId) return null
+  const failed = await moveTracksToRecycleBin(current, params.tracks)
   recomputeFastChecks(current)
   current.noCoverDirty = true
   recomputeDuplicates(current)

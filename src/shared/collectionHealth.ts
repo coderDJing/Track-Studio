@@ -22,6 +22,8 @@ export type CollectionHealthTrackHit = {
   duration?: string
   bitrate?: number
   songListName: string
+  /** 库根之下的完整层级（含歌单名），用于区分文件夹中的同名歌单。 */
+  songListPath: string
   songListUuid: string
 }
 
@@ -52,6 +54,9 @@ export type CollectionHealthDuplicateTrack = {
   bitrate?: number
   size: number
   songListName: string
+  /** 库根之下的完整层级（含歌单名），用于区分文件夹中的同名歌单。 */
+  songListPath: string
+  songListUuid: string
 }
 
 export type CollectionHealthDuplicateGroup = {
@@ -112,6 +117,11 @@ export type CollectionHealthRemoveDuplicatesRequest = {
   requestId: number
   keep: CollectionHealthTrackRef
   remove: CollectionHealthTrackRef[]
+}
+
+export type CollectionHealthRemoveTracksRequest = {
+  requestId: number
+  tracks: CollectionHealthTrackRef[]
 }
 
 export type CollectionHealthUnifyAlbumRequest = {
