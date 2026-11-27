@@ -38,6 +38,7 @@ import LibraryMergeDialog from '@renderer/components/LibraryMergeDialog.vue'
 import { startLibraryRelocateFromMenu } from '@renderer/utils/libraryRelocateActions'
 import { useAnalysisRuntimeDownload } from '@renderer/composables/useAnalysisRuntimeDownload'
 import settingDialog from '@renderer/components/settingDialog.vue'
+import type { SettingId, SettingsPageId } from '@renderer/components/settingDialog/settingsCatalog'
 import settingIconAsset from '@renderer/assets/setting.svg?asset'
 import WindowVolumeDial from '@renderer/components/WindowVolumeDial.vue'
 import HorizontalBrowseMasterMeter from '@renderer/components/HorizontalBrowseMasterMeter.vue'
@@ -99,6 +100,8 @@ watch(
 )
 window.electron.ipcRenderer.on('layoutConfigReaded', handleLayoutConfigReaded)
 const activeDialog = ref('')
+const settingsInitialPage = ref<SettingsPageId | undefined>(undefined)
+const settingsInitialSettingId = ref<SettingId | undefined>(undefined)
 const libraryMergeDialogVisible = ref(false)
 const curatedLibraryMergeDialogVisible = ref(false)
 const openLibraryMergeDialog = () => {
@@ -580,9 +583,22 @@ const selectMainWindowBrowseMode = async (mode: MainWindowBrowseMode) => {
   await openDialog(resolveMainWindowBrowseModeMenuKey(mode))
 }
 
-const openSettingsDialog = () => {
+type SettingsDialogTarget = {
+  page?: SettingsPageId
+  settingId?: SettingId
+}
+
+const openSettingsDialog = (target?: SettingsDialogTarget) => {
   if (runtime.librarySetupActive) return
+  settingsInitialPage.value = target?.page
+  settingsInitialSettingId.value = target?.settingId
   activeDialog.value = 'settings'
+}
+
+const closeSettingsDialog = () => {
+  activeDialog.value = ''
+  settingsInitialPage.value = undefined
+  settingsInitialSettingId.value = undefined
 }
 
 const handleMainWindowVolumeChange = (value: number) => {
@@ -998,7 +1014,7 @@ onBeforeUnmount(() => {
           :title="t('common.setting')"
           :aria-label="t('common.setting')"
           type="button"
-          @click="openSettingsDialog"
+          @click="openSettingsDialog()"
         >
           <span class="topToolbarSettingIcon"></span>
         </bubbleBoxTrigger>
@@ -1039,7 +1055,12 @@ onBeforeUnmount(() => {
     @cancel="activeDialog = ''"
   />
   <CloudSyncDialogs v-model="activeDialog" />
-  <settingDialog v-if="activeDialog == 'settings'" @cancel="activeDialog = ''" />
+  <settingDialog
+    v-if="activeDialog == 'settings'"
+    :initial-page="settingsInitialPage"
+    :initial-setting-id="settingsInitialSettingId"
+    @cancel="closeSettingsDialog"
+  />
   <globalSongSearchDialog
     v-if="activeDialog == 'search.globalSong'"
     @cancel="activeDialog = ''"

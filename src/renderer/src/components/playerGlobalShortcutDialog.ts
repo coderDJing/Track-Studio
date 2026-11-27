@@ -5,7 +5,7 @@ import type { PlayerGlobalShortcutAction } from 'src/types/globals'
 
 export type PlayerGlobalShortcutDialogTarget = PlayerGlobalShortcutAction | 'seekPercentModifier'
 
-export default (target: PlayerGlobalShortcutDialogTarget) => {
+export default (target: PlayerGlobalShortcutDialogTarget): Promise<'success' | 'cancel'> => {
   return new Promise((resolve) => {
     const div = document.createElement('div')
     document.body.appendChild(div)

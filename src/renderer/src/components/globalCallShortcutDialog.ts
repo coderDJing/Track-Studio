@@ -2,8 +2,8 @@ import { createVNode, render } from 'vue'
 import globalCallShortcutDialog from './globalCallShortcutDialog.vue'
 import { attachAppContext } from '@renderer/utils/appContext'
 
-export default () => {
-  return new Promise((resolve, _reject) => {
+export default (): Promise<'success' | 'cancel'> => {
+  return new Promise((resolve) => {
     const div = document.createElement('div')
     document.body.appendChild(div)
 
