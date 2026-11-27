@@ -152,6 +152,9 @@ export const watchHorizontalBrowseDetailPlaybackPosition = (
           params.dragReleaseHandoff.consume('playback-sync', safeSeconds)
         ) {
           params.applyPreviewPlaybackPosition(safeSeconds, false)
+          if (dragPresentationReleaseActive) {
+            params.syncDragPresentationReleaseViewportStart(safeSeconds)
+          }
           return
         }
         if (

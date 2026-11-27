@@ -120,7 +120,7 @@ type UseMixtapeBeatAlignPreviewInteractionParams = {
   stopPreviewScrub: (anchorSec?: number) => Promise<boolean>
   seekPreviewAnchorSec: (anchorSec: number) => Promise<void>
   beginDragCanvasPresentation: () => DragPresentationStartResult
-  applyDragCanvasPresentationOffset: (offsetCssPx: number) => void
+  updateDragCanvasPresentation: () => void
   endDragCanvasPresentation: (viewportStartSec?: number) => DragPresentationEndResult
   drawWaveformNow: (drawOptions?: HorizontalBrowseRawWaveformDrawOptions) => void
   schedulePreviewDraw: (drawOptions?: HorizontalBrowseRawWaveformDrawOptions) => void
@@ -185,9 +185,7 @@ export const useMixtapeBeatAlignPreviewInteraction = (
     const deltaX = event.clientX - dragStartClientX
     const deltaSec = (deltaX / width) * visibleDuration
     params.previewStartSec.value = params.clampPreviewStart(dragStartSec - deltaSec)
-    params.applyDragCanvasPresentationOffset(
-      ((dragStartSec - params.previewStartSec.value) / visibleDuration) * width
-    )
+    params.updateDragCanvasPresentation()
 
     const anchorSec = params.resolvePreviewAnchorSec()
     const now = performance.now()

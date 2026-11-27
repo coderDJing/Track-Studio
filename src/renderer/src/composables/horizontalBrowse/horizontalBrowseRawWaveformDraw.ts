@@ -21,6 +21,7 @@ export type HorizontalBrowseLiveWaveformRenderPayload = {
   completeSeekTransition?: boolean
   preferPreviewStart?: boolean
   viewportOnly?: boolean
+  dragPresentation?: boolean
 }
 
 export type HorizontalBrowseRawWaveformDrawState = {
@@ -126,7 +127,9 @@ export const createHorizontalBrowseRawWaveformDraw = (params: DrawParams) => {
       visibleDuration,
       timeBasisOffsetSec
     )
-    const drawableRawData = effectiveRawIntersection ? effectiveRawData : null
+    // 整屏在曲头前时也是已覆盖的时间范围，Worker 需要继续推进这段空白。
+    const drawableRawData =
+      effectiveRawCoverage || effectiveRawIntersection ? effectiveRawData : null
     const canRenderWithoutRawCoverage = effectiveMixxxSelection.source === 'live'
     const shouldHoldPlaybackFrame =
       playbackViewportMoving && !stableWaveformSource && wasDisplayReady

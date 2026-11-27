@@ -1,9 +1,10 @@
-import type { MixxxWaveformData } from '@renderer/pages/modules/songPlayer/webAudioPlayer'
+import {
+  createHorizontalBrowseDetailLiveCanvasWaveformPainter,
+  ensureHorizontalBrowseDetailLiveCanvasScratch
+} from './horizontalBrowseDetailLiveCanvasWaveformPainter'
+import { clampNumber } from '@renderer/composables/horizontalBrowse/horizontalBrowseMath'
 import type { RawWaveformData } from '@renderer/composables/mixtape/types'
-import { createRawPlaceholderMixxxData } from '@renderer/components/beatGridWaveformPlaceholder'
-import { drawRgbWaveform } from '@renderer/components/rgbWaveformRenderer'
 import { resolveCanvasScaleMetrics } from '@renderer/utils/canvasScale'
-import { canCommitHorizontalBrowseBlankRawSegment } from '@renderer/composables/horizontalBrowse/horizontalBrowseRawWaveformCoverage'
 import { createHorizontalBrowseDetailLiveCanvasOverlayRenderer } from './horizontalBrowseDetailLiveCanvasOverlay'
 import { createHorizontalBrowseDetailLiveCanvasBufferManager } from './horizontalBrowseDetailLiveCanvasBuffers'
 import { createHorizontalBrowseDetailLiveCanvasRawStore } from './horizontalBrowseDetailLiveCanvasRawStore'
@@ -40,7 +41,14 @@ import type {
   HorizontalBrowseDetailLiveCanvasWorkerOutgoing
 } from './horizontalBrowseDetailLiveCanvas.types'
 
-const clampNumber = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+const {
+  drawRange,
+  ensureSegmentScratch,
+  renderSegmentToScratch,
+  copySegmentToCanvas,
+  renderViewportSegment
+} = createHorizontalBrowseDetailLiveCanvasWaveformPainter()
+
 const normalizeWaveformGain = (value: number) => {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) return 1
@@ -53,8 +61,6 @@ let lastFrame: FrameState | null = null
 let lastWaveformScrollShiftScaledPx: number | null = null
 let scrollScratchCanvas: OffscreenCanvas | null = null
 let scrollScratchCtx: OffscreenCanvasRenderingContext2D | null = null
-let segmentCanvas: OffscreenCanvas | null = null
-let segmentCtx: OffscreenCanvasRenderingContext2D | null = null
 let pendingRender: HorizontalBrowseDetailLiveCanvasRenderRequest | null = null
 let renderTimer: ReturnType<typeof setTimeout> | null = null
 let playbackAnimation: PlaybackAnimationState | null = null
@@ -62,8 +68,6 @@ let playbackAnimationToken = 0
 let playbackTimer: ReturnType<typeof setTimeout> | null = null
 let playbackRaf = 0
 let playbackInitialFullRenderLeadMs = PLAYBACK_INITIAL_FULL_RENDER_LEAD_DEFAULT_MS
-const COLUMN_SMOOTH_OVERSCAN_SCALED_PX = 2
-const VIEWPORT_RENDER_GUARD_RATIO = 0.35
 const postToMain = (message: HorizontalBrowseDetailLiveCanvasWorkerOutgoing) =>
   (
     self as typeof globalThis & {
@@ -178,31 +182,8 @@ const copyScrollSourceToTarget = (
   return true
 }
 
-const ensureScratchCanvas = (
-  currentCanvas: OffscreenCanvas | null,
-  currentCtx: OffscreenCanvasRenderingContext2D | null,
-  scaledWidth: number,
-  scaledHeight: number
-) => {
-  let nextCanvas = currentCanvas
-  let nextCtx = currentCtx
-  if (!nextCanvas) {
-    nextCanvas = new OffscreenCanvas(scaledWidth, scaledHeight)
-    nextCtx = nextCanvas.getContext('2d')
-  }
-  if (!nextCanvas || !nextCtx) return null
-  if (nextCanvas.width !== scaledWidth || nextCanvas.height !== scaledHeight) {
-    nextCanvas.width = scaledWidth
-    nextCanvas.height = scaledHeight
-  }
-  return {
-    canvas: nextCanvas,
-    ctx: nextCtx
-  }
-}
-
 const ensureScrollScratch = (scaledWidth: number, scaledHeight: number) => {
-  const scratch = ensureScratchCanvas(
+  const scratch = ensureHorizontalBrowseDetailLiveCanvasScratch(
     scrollScratchCanvas,
     scrollScratchCtx,
     scaledWidth,
@@ -211,14 +192,6 @@ const ensureScrollScratch = (scaledWidth: number, scaledHeight: number) => {
   if (!scratch) return null
   scrollScratchCanvas = scratch.canvas
   scrollScratchCtx = scratch.ctx
-  return scratch
-}
-
-const ensureSegmentScratch = (scaledWidth: number, scaledHeight: number) => {
-  const scratch = ensureScratchCanvas(segmentCanvas, segmentCtx, scaledWidth, scaledHeight)
-  if (!scratch) return null
-  segmentCanvas = scratch.canvas
-  segmentCtx = scratch.ctx
   return scratch
 }
 
@@ -252,200 +225,6 @@ const buildFrameState = (
   waveformGain: normalizeWaveformGain(request.waveformGain),
   playbackSyncRevision: Math.max(0, Math.floor(Number(request.playbackSyncRevision) || 0))
 })
-
-const createMixxxData = (rawData: RawWaveformData | null): MixxxWaveformData | null =>
-  rawData ? createRawPlaceholderMixxxData(rawData) : null
-
-const drawRange = (
-  targetCtx: OffscreenCanvasRenderingContext2D,
-  width: number,
-  height: number,
-  rangeStartSec: number,
-  rangeDurationSec: number,
-  state: FrameState
-) =>
-  drawRgbWaveform(targetCtx, {
-    width,
-    height,
-    timeBasisOffsetMs: state.timeBasisOffsetMs,
-    rangeStartSec,
-    rangeDurationSec,
-    mixxxData: createMixxxData(state.rawData),
-    rawData: state.rawData,
-    showBackground: state.showBackground,
-    maxSamplesPerPixel: state.maxSamplesPerPixel,
-    showDetailHighlights: state.showDetailHighlights,
-    showCenterLine: state.showCenterLine,
-    waveformLayout: state.waveformLayout,
-    waveformRenderStyle: state.waveformRenderStyle,
-    preferRawPeaksOnly: state.preferRawPeaksOnly,
-    smoothColumns: state.waveformRenderStyle === 'columns' && state.waveformLayout !== 'full',
-    themeVariant: state.themeVariant,
-    waveformGain: state.waveformGain
-  })
-
-const canCommitBlankRawSegment = (
-  state: FrameState,
-  rangeStartSec: number,
-  rangeDurationSec: number
-) => {
-  return canCommitHorizontalBrowseBlankRawSegment(
-    state.rawData,
-    rangeStartSec,
-    rangeDurationSec,
-    Math.max(0, Number(state.timeBasisOffsetMs) || 0) / 1000
-  )
-}
-
-const renderSegmentToScratch = (
-  metrics: CanvasMetrics,
-  state: FrameState,
-  segmentScaledX: number,
-  segmentScaledWidth: number
-) => {
-  const smoothingOverscanScaledPx =
-    state.waveformRenderStyle === 'columns' && state.waveformLayout !== 'full'
-      ? COLUMN_SMOOTH_OVERSCAN_SCALED_PX
-      : 0
-  const safeSegmentX = clampNumber(
-    Math.floor(segmentScaledX),
-    0,
-    Math.max(0, metrics.scaledWidth - 1)
-  )
-  const safeSegmentWidth = clampNumber(
-    Math.ceil(segmentScaledWidth),
-    1,
-    Math.max(1, metrics.scaledWidth - safeSegmentX)
-  )
-  const drawSegmentX = clampNumber(
-    safeSegmentX - smoothingOverscanScaledPx,
-    0,
-    Math.max(0, metrics.scaledWidth - 1)
-  )
-  const drawSegmentEndX = clampNumber(
-    safeSegmentX + safeSegmentWidth + smoothingOverscanScaledPx,
-    drawSegmentX + 1,
-    metrics.scaledWidth
-  )
-  const drawSegmentWidth = Math.max(1, drawSegmentEndX - drawSegmentX)
-  const sourceX = safeSegmentX - drawSegmentX
-  const segment = ensureSegmentScratch(drawSegmentWidth, metrics.scaledHeight)
-  if (!segment) return false
-
-  const segmentStartSec =
-    state.rangeStartSec + (drawSegmentX / metrics.scaledWidth) * state.rangeDurationSec
-  const segmentDurationSec = (drawSegmentWidth / metrics.scaledWidth) * state.rangeDurationSec
-
-  segment.ctx.setTransform(1, 0, 0, 1, 0, 0)
-  segment.ctx.clearRect(0, 0, segment.canvas.width, segment.canvas.height)
-  segment.ctx.imageSmoothingEnabled = false
-  const rendered = drawRange(
-    segment.ctx,
-    drawSegmentWidth,
-    metrics.scaledHeight,
-    segmentStartSec,
-    segmentDurationSec,
-    state
-  )
-  const blankSegment =
-    !rendered && canCommitBlankRawSegment(state, segmentStartSec, segmentDurationSec)
-  if ((!rendered && !blankSegment) || !segment.canvas) return false
-
-  return {
-    canvas: segment.canvas,
-    safeSegmentX,
-    safeSegmentWidth,
-    sourceX
-  }
-}
-
-const copySegmentToCanvas = (
-  targetCtx: OffscreenCanvasRenderingContext2D,
-  metrics: CanvasMetrics,
-  segment: Exclude<ReturnType<typeof renderSegmentToScratch>, false>
-) => {
-  const destX = clampNumber(segment.safeSegmentX, 0, Math.max(0, metrics.scaledWidth - 1))
-  const copyWidth = Math.max(1, Math.min(segment.safeSegmentWidth, metrics.scaledWidth - destX))
-  targetCtx.setTransform(1, 0, 0, 1, 0, 0)
-  targetCtx.imageSmoothingEnabled = false
-  targetCtx.clearRect(destX, 0, copyWidth, metrics.scaledHeight)
-  targetCtx.drawImage(
-    segment.canvas,
-    segment.sourceX,
-    0,
-    copyWidth,
-    metrics.scaledHeight,
-    destX,
-    0,
-    copyWidth,
-    metrics.scaledHeight
-  )
-}
-
-const drawSegment = (
-  targetCtx: OffscreenCanvasRenderingContext2D,
-  metrics: CanvasMetrics,
-  state: FrameState,
-  segmentScaledX: number,
-  segmentScaledWidth: number
-) => {
-  const segment = renderSegmentToScratch(metrics, state, segmentScaledX, segmentScaledWidth)
-  if (!segment) return false
-  copySegmentToCanvas(targetCtx, metrics, segment)
-  return true
-}
-
-const renderViewportSegment = (
-  request: HorizontalBrowseDetailLiveCanvasRenderRequest,
-  metrics: CanvasMetrics,
-  state: FrameState
-) => {
-  if (!ctx) return false
-  const viewportWidth = Math.max(1, Number(request.viewportWidth) || metrics.cssWidth)
-  if (Math.abs(viewportWidth - metrics.cssWidth) <= 0.5) {
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.imageSmoothingEnabled = false
-    ctx.clearRect(0, 0, metrics.scaledWidth, metrics.scaledHeight)
-    return drawRange(
-      ctx,
-      metrics.scaledWidth,
-      metrics.scaledHeight,
-      state.rangeStartSec,
-      state.rangeDurationSec,
-      state
-    )
-  }
-  const viewportRangeStartSec = Number(request.viewportRangeStartSec)
-  const viewportRangeDurationSec = Number(request.viewportRangeDurationSec)
-  if (
-    !Number.isFinite(viewportRangeStartSec) ||
-    !Number.isFinite(viewportRangeDurationSec) ||
-    viewportRangeDurationSec <= 0
-  ) {
-    return false
-  }
-  const rawSegmentX =
-    ((viewportRangeStartSec - state.rangeStartSec) / Math.max(0.0001, state.rangeDurationSec)) *
-    metrics.scaledWidth
-  const rawSegmentWidth =
-    (viewportRangeDurationSec / Math.max(0.0001, state.rangeDurationSec)) * metrics.scaledWidth
-  const guardScaledPx = Math.min(
-    metrics.scaledWidth,
-    Math.max(metrics.scaleX * 32, rawSegmentWidth * VIEWPORT_RENDER_GUARD_RATIO)
-  )
-  const segmentX = Math.max(0, rawSegmentX - guardScaledPx)
-  const segmentWidth = Math.min(metrics.scaledWidth - segmentX, rawSegmentWidth + guardScaledPx * 2)
-  const clearX = clampNumber(Math.floor(segmentX) - 2, 0, Math.max(0, metrics.scaledWidth - 1))
-  const clearEndX = clampNumber(
-    Math.ceil(segmentX + segmentWidth) + 2,
-    clearX + 1,
-    metrics.scaledWidth
-  )
-  ctx.setTransform(1, 0, 0, 1, 0, 0)
-  ctx.imageSmoothingEnabled = false
-  ctx.clearRect(clearX, 0, clearEndX - clearX, metrics.scaledHeight)
-  return drawSegment(ctx, metrics, state, segmentX, segmentWidth)
-}
 
 const canReusePreviousFrame = (
   current: FrameState,
@@ -661,7 +440,7 @@ const renderFullFrame = (
   if (!reused) {
     state.rangeStartSec = resolveStableColumnRangeStartSec(request, metrics, state)
     if (request.renderViewportOnly === true) {
-      reused = renderViewportSegment(request, metrics, state)
+      reused = renderViewportSegment(ctx, request, metrics, state)
     } else {
       const fullFrame = ensureSegmentScratch(metrics.scaledWidth, metrics.scaledHeight)
       if (fullFrame) {
@@ -867,7 +646,7 @@ const drawWaveformTile = (
     rangeStartSec: tile.rangeStartSec,
     rangeDurationSec: tile.rangeDurationSec
   }
-  const rendered = drawRange(
+  return drawRange(
     target.ctx,
     tile.scaledWidth,
     tile.scaledHeight,
@@ -875,8 +654,6 @@ const drawWaveformTile = (
     tile.rangeDurationSec,
     tileState
   )
-  // 空白但落在已加载 raw 范围内的块算成功：那里本就没有波形，不能因此判定可见区未就绪。
-  return rendered || canCommitBlankRawSegment(tileState, tile.rangeStartSec, tile.rangeDurationSec)
 }
 
 // 每块自己的 FrameState：除时间范围与尺寸外，全部字段与整帧路径一致。

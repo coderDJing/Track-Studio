@@ -27,8 +27,11 @@ type PointerInteractionOptions = {
   resolveWaveformCurrentSeconds: () => number
   clampPreviewStart: (seconds: number) => number
   beginDragCanvasPresentation: () => DragPresentationStartResult
-  applyDragCanvasPresentationOffset: (offsetCssPx: number) => void
-  endDragCanvasPresentation: (viewportStartSec?: number) => DragPresentationEndResult
+  updateDragCanvasPresentation: () => void
+  endDragCanvasPresentation: (
+    viewportStartSec?: number,
+    linkedRelease?: boolean
+  ) => DragPresentationEndResult
   clearDragReleaseHandoff: () => void
   beginDragReleaseHandoff: (anchorSec: number) => void
   scrubPreview: {
@@ -60,20 +63,18 @@ export const createHorizontalBrowseWaveformPointerInteraction = (
   let dragStartSec = 0
   let activeDragPointerId: number | null = null
   let linkedDragPresentationActive = false
-  let linkedDragStartSec = 0
 
   const finishLinkedDragPresentation = (committed = false) => {
     if (!linkedDragPresentationActive) return
     const finalAnchorSec = options.resolvePreviewAnchorSec()
     const finalPreviewStartSec = options.previewStartSec.value
     linkedDragPresentationActive = false
-    linkedDragStartSec = 0
     if (committed) {
       options.beginDragReleaseHandoff(finalAnchorSec)
     } else {
       options.clearDragReleaseHandoff()
     }
-    const dragRelease = options.endDragCanvasPresentation(finalPreviewStartSec)
+    const dragRelease = options.endDragCanvasPresentation(finalPreviewStartSec, committed)
     options.maybeContinueWaveformSource(finalAnchorSec)
     // 正常联结松手会由共享 presentation commit 统一触发最终帧；这里抢先绘制会让被动轨
     // 比主动轨更早 promote 一张过渡帧，随后又被共享提交帧替换，形成可见的单轨闪动。
@@ -103,20 +104,16 @@ export const createHorizontalBrowseWaveformPointerInteraction = (
           const dragPresentation = options.beginDragCanvasPresentation()
           linkedDragPresentationActive = true
           const visualStartSec = dragPresentation.viewportStartSec
-          linkedDragStartSec =
+          options.previewStartSec.value =
             visualStartSec !== null && Number.isFinite(visualStartSec)
               ? options.clampPreviewStart(visualStartSec)
               : options.previewStartSec.value
-          options.previewStartSec.value = linkedDragStartSec
         }
         const nextPreviewStartSec = options.clampPreviewStart(
           anchorSec - visibleDuration * HORIZONTAL_BROWSE_DETAIL_PLAYHEAD_RATIO
         )
         options.previewStartSec.value = nextPreviewStartSec
-        const presentationOffset =
-          ((linkedDragStartSec - nextPreviewStartSec) / visibleDuration) *
-          Math.max(1, wrap.clientWidth)
-        options.applyDragCanvasPresentationOffset(presentationOffset)
+        options.updateDragCanvasPresentation()
       },
       { flush: 'post' }
     )
@@ -135,10 +132,7 @@ export const createHorizontalBrowseWaveformPointerInteraction = (
     const deltaX = event.clientX - dragStartClientX
     const deltaSec = (deltaX / Math.max(1, wrap.clientWidth)) * visibleDuration
     options.previewStartSec.value = options.clampPreviewStart(dragStartSec - deltaSec)
-    const presentationOffset =
-      ((dragStartSec - options.previewStartSec.value) / visibleDuration) *
-      Math.max(1, wrap.clientWidth)
-    options.applyDragCanvasPresentationOffset(presentationOffset)
+    options.updateDragCanvasPresentation()
     options.scrubPreview.update(options.resolvePreviewAnchorSec())
   }
 
@@ -152,7 +146,10 @@ export const createHorizontalBrowseWaveformPointerInteraction = (
     } else {
       options.clearDragReleaseHandoff()
     }
-    const dragRelease = options.endDragCanvasPresentation(finalPreviewStartSec)
+    const dragRelease = options.endDragCanvasPresentation(
+      finalPreviewStartSec,
+      committed && options.linkedDragActive?.() === true
+    )
     options.dragging.value = false
     activeDragPointerId = null
     options.scrubPreview.stop({ flushPending: committed && refreshWaveform })

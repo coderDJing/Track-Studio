@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { resolvePlaybackSeconds } from './horizontalBrowseDetailLiveCanvasPlayback'
+import {
+  buildPlaybackRenderRequest,
+  resolvePlaybackSeconds
+} from './horizontalBrowseDetailLiveCanvasPlayback'
+import type { PlaybackAnimationState } from './horizontalBrowseDetailLiveCanvasRenderState'
 
 describe('detail waveform worker loop playback', () => {
   const request = {
@@ -25,5 +29,63 @@ describe('detail waveform worker loop playback', () => {
       10.923,
       9
     )
+  })
+
+  it('keeps playback frames reusable and pixel aligned after a viewport-only redraw', () => {
+    const animation: PlaybackAnimationState = {
+      token: 1,
+      baseSeconds: 40,
+      startedAtMs: 1000,
+      lastRenderedAtMs: 1000,
+      scrollReuseSuppressedFrames: 0,
+      request: {
+        ...request,
+        loopRange: null,
+        renderToken: 1,
+        renderViewportOnly: true,
+        presentationOffsetMode: 'free',
+        width: 1000,
+        height: 100,
+        pixelRatio: 2,
+        bpm: 120,
+        firstBeatMs: 0,
+        downbeatBeatOffset: 0,
+        timeBasisOffsetMs: 0,
+        rangeStartSec: 34,
+        rangeDurationSec: 12,
+        maxSamplesPerPixel: 32,
+        showDetailHighlights: false,
+        showCenterLine: false,
+        showBackground: false,
+        showBeatGrid: true,
+        allowScrollReuse: true,
+        phaseAwareScrollReuse: false,
+        waveformLayout: 'top-half',
+        waveformRenderStyle: 'raw-curve',
+        preferRawPeaksOnly: false,
+        showTimelinePlaceholder: false,
+        themeVariant: 'dark',
+        rawSlot: 'live',
+        direction: 'up',
+        cueSeconds: null,
+        hotCues: [],
+        memoryCues: [],
+        cueAccentColor: '#fff',
+        playbackSeconds: 40,
+        playbackSyncRevision: 1,
+        waveformGain: 1
+      }
+    }
+
+    expect(buildPlaybackRenderRequest(animation, false, 1000)).toMatchObject({
+      renderViewportOnly: false,
+      presentationOffsetMode: 'device-pixel',
+      allowScrollReuse: false
+    })
+    expect(buildPlaybackRenderRequest(animation, true, 1016)).toMatchObject({
+      renderViewportOnly: false,
+      presentationOffsetMode: 'device-pixel',
+      allowScrollReuse: true
+    })
   })
 })

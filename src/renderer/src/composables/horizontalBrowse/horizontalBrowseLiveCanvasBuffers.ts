@@ -9,10 +9,9 @@ import {
   resolveHorizontalBrowseCanvasTranslateX,
   resolveHorizontalBrowseRenderedCanvasViewportStartSec
 } from '@renderer/composables/horizontalBrowse/horizontalBrowseRenderedCanvasViewport'
-import { isHorizontalBrowseWaveformTileRenderingEnabled } from '@renderer/composables/horizontalBrowse/horizontalBrowseWaveformTileFlag'
 import { HORIZONTAL_BROWSE_WAVEFORM_TILE_SLOT_COUNT } from '@renderer/composables/horizontalBrowse/horizontalBrowseWaveformTileLayout'
 
-const normalizeBufferIndex = (value: unknown, fallback: number) => {
+const normalizeBufferIndex = (value: unknown, fallback: 0 | 1) => {
   const numeric = Math.floor(Number(value))
   return numeric === 0 || numeric === 1 ? numeric : fallback
 }
@@ -35,47 +34,48 @@ export const createHorizontalBrowseLiveCanvasBuffers = () => {
     ref<Array<HTMLCanvasElement | null>>([]),
     ref<Array<HTMLCanvasElement | null>>([])
   ]
-  let activeIndex = 0
-  let presentationTargetIndex: number | null = null
+  let activeIndex: 0 | 1 = 0
+  let activeTiled = false
+  let presentationTarget: { index: number; tiled: boolean } | null = null
 
-  const tileRenderingEnabled = () => isHorizontalBrowseWaveformTileRenderingEnabled()
   const resolveTileContainer = (index: number) =>
     waveformTileContainerRefs[normalizeBufferIndex(index, activeIndex)]?.value ?? null
   const resolveTileCanvases = (index: number) =>
     waveformTileCanvasRefs[normalizeBufferIndex(index, activeIndex)]?.value ?? []
   /** 波形侧的位移 / 几何目标：分块路径下是块容器，旧路径下是单张超宽 canvas。 */
-  const resolveWaveformSurfaceTarget = (index: number): HTMLElement | null =>
-    tileRenderingEnabled() ? resolveTileContainer(index) : resolveWaveformCanvas(index)
+  const resolveWaveformSurfaceTarget = (index: number, tiled: boolean): HTMLElement | null =>
+    tiled ? resolveTileContainer(index) : resolveWaveformCanvas(index)
 
   const waveformCanvases = () => [waveformCanvasRef.value, waveformCanvasBackRef.value]
   const overlayCanvases = () => [overlayCanvasRef.value, overlayCanvasBackRef.value]
-  const resolveWaveformCanvas = (index = activeIndex) =>
+  const resolveWaveformCanvas = (index: number = activeIndex) =>
     waveformCanvases()[normalizeBufferIndex(index, activeIndex)] ?? null
-  const resolveOverlayCanvas = (index = activeIndex) =>
+  const resolveOverlayCanvas = (index: number = activeIndex) =>
     overlayCanvases()[normalizeBufferIndex(index, activeIndex)] ?? null
   const activeWaveformCanvas = () => resolveWaveformCanvas(activeIndex)
   const activeOverlayCanvas = () => resolveOverlayCanvas(activeIndex)
   // presentation 目标：分块路径返回块容器，旧路径返回单张 canvas。二者的 left / width /
   // transform 语义一致，故 presentation controller 无需区分。
-  const presentationWaveformCanvas = (): HTMLElement | null =>
-    resolveWaveformSurfaceTarget(presentationTargetIndex ?? activeIndex)
+  const presentationWaveformCanvas = () =>
+    resolveWaveformSurfaceTarget(
+      presentationTarget?.index ?? activeIndex,
+      presentationTarget?.tiled ?? activeTiled
+    )
   const presentationOverlayCanvas = () =>
-    presentationTargetIndex === null
-      ? activeOverlayCanvas()
-      : resolveOverlayCanvas(presentationTargetIndex)
+    resolveOverlayCanvas(presentationTarget?.index ?? activeIndex)
   const inactiveIndex = () => (activeIndex === 0 ? 1 : 0)
 
   const syncVisibility = () => {
-    // 分块路径下，可见面切换发生在块容器层（整个块集合一起翻转），块本身不参与 opacity。
+    // 同一个缓冲区的瓦片和整帧画布可能都留有像素，只显示当前提交的渲染面。
     waveformTileContainerRefs.forEach((containerRef, index) => {
       const container = containerRef.value
       if (!container) return
-      container.style.opacity = index === activeIndex ? '1' : '0'
+      container.style.opacity = index === activeIndex && activeTiled ? '1' : '0'
       container.style.zIndex = index === activeIndex ? '2' : '1'
     })
     waveformCanvases().forEach((canvas, index) => {
       if (!canvas) return
-      canvas.style.opacity = index === activeIndex ? '1' : '0'
+      canvas.style.opacity = index === activeIndex && !activeTiled ? '1' : '0'
       canvas.style.zIndex = index === activeIndex ? '2' : '1'
     })
     overlayCanvases().forEach((canvas, index) => {
@@ -85,32 +85,32 @@ export const createHorizontalBrowseLiveCanvasBuffers = () => {
     })
   }
 
-  const activate = (index: number) => {
+  const activate = (index: number, tiled: boolean) => {
     activeIndex = normalizeBufferIndex(index, activeIndex)
+    activeTiled = tiled
     syncVisibility()
   }
 
-  const setGeometry = (left: number, width: number, height: number, overlayHeight: number) => {
-    syncVisibility()
-    // 块容器几何与旧单张 canvas 完全一致，overlay 两侧路径共用（overlay 不分块）。
-    if (tileRenderingEnabled()) {
-      waveformTileContainerRefs.forEach((containerRef) => {
-        setHorizontalBrowseWaveformTileContainerGeometry(containerRef.value, left, width, height)
-      })
+  const setGeometry = (
+    index: number,
+    tiled: boolean,
+    left: number,
+    width: number,
+    height: number,
+    overlayHeight: number
+  ) => {
+    if (tiled) {
+      setHorizontalBrowseWaveformTileContainerGeometry(
+        resolveTileContainer(index),
+        left,
+        width,
+        height
+      )
     }
     setHorizontalBrowseLiveCanvasGeometry(
-      tileRenderingEnabled() ? null : waveformCanvasRef.value,
+      tiled ? null : resolveWaveformCanvas(index),
       gridCanvasRef.value,
-      overlayCanvasRef.value,
-      left,
-      width,
-      height,
-      overlayHeight
-    )
-    setHorizontalBrowseLiveCanvasGeometry(
-      tileRenderingEnabled() ? null : waveformCanvasBackRef.value,
-      null,
-      overlayCanvasBackRef.value,
+      resolveOverlayCanvas(index),
       left,
       width,
       height,
@@ -149,24 +149,24 @@ export const createHorizontalBrowseLiveCanvasBuffers = () => {
     )
   }
 
-  const withPresentationTarget = <T>(index: number, callback: () => T) => {
-    presentationTargetIndex = normalizeBufferIndex(index, activeIndex)
+  const withPresentationTarget = <T>(index: number, tiled: boolean, callback: () => T) => {
+    presentationTarget = { index: normalizeBufferIndex(index, activeIndex), tiled }
     try {
       return callback()
     } finally {
-      presentationTargetIndex = null
+      presentationTarget = null
     }
   }
 
   const resolveActiveTranslateX = () =>
-    resolveHorizontalBrowseCanvasTranslateX(resolveWaveformSurfaceTarget(activeIndex))
+    resolveHorizontalBrowseCanvasTranslateX(resolveWaveformSurfaceTarget(activeIndex, activeTiled))
 
   const resolveActiveViewportStartSec = (
     rangeStartSec: number | null,
     rangeDurationSec: number | null
   ) =>
     resolveHorizontalBrowseRenderedCanvasViewportStartSec({
-      canvas: resolveWaveformSurfaceTarget(activeIndex),
+      canvas: resolveWaveformSurfaceTarget(activeIndex, activeTiled),
       rangeStartSec,
       rangeDurationSec
     })
@@ -188,6 +188,7 @@ export const createHorizontalBrowseLiveCanvasBuffers = () => {
     tileCanvases,
     applyTileLayout,
     activeIndex: () => activeIndex,
+    isActiveTiled: () => activeTiled,
     inactiveIndex,
     activate,
     syncVisibility,

@@ -127,8 +127,10 @@ const {
   playbackRate: () => props.playbackRate,
   seekRevision: () => props.seekRevision
 })
-const presentationLinkedDragActive = computed(
-  () => Boolean(props.linkedDragActive) || props.presentationState?.owner === 'linked-drag'
+const presentationLinkedDragActive = computed(() =>
+  props.presentationState
+    ? props.presentationState.owner === 'linked-drag'
+    : props.linkedDragActive === true
 )
 const presentationLinkedDragAnchorSec = computed(() => {
   const stateAnchor = Number(props.presentationState?.anchorSec)
@@ -259,6 +261,7 @@ const {
   waveformSurfaceRef,
   waveformCanvasRef,
   waveformCanvasBackRef,
+  resolveActiveCanvasBufferIndex,
   waveformTileContainerRefs,
   waveformTileCanvasRefs,
   overlaySurfaceRef,
@@ -291,7 +294,7 @@ const {
   replaceLiveWaveformRaw,
   drawWaveformNow,
   beginDragCanvasPresentation,
-  applyDragCanvasPresentationOffset,
+  updateDragCanvasPresentation,
   endDragCanvasPresentation,
   syncDragPresentationReleaseViewportStart,
   consumeDragPresentationReleaseRequiresFreshFrame,
@@ -760,9 +763,6 @@ const { handleSharedZoomState, handlePresentationState } =
     applyPresentationSeekTarget
   })
 
-const resolveLiveTempoPreviewActiveBufferIndex = (): 0 | 1 =>
-  waveformCanvasBackRef.value?.style.opacity === '1' ? 1 : 0
-
 const resolveLiveTempoPreviewScalers = (bufferIndex: 0 | 1) =>
   bufferIndex === 1
     ? [waveformTempoScalerBackRef.value, overlayTempoScalerBackRef.value]
@@ -771,7 +771,7 @@ const resolveLiveTempoPreviewScalers = (bufferIndex: 0 | 1) =>
 const liveTempoPreviewController = createHorizontalBrowseLiveTempoPreviewController({
   livePlaybackRate: liveTempoPreviewPlaybackRate,
   initialTimeScale: presentationState.getLastAppliedPreviewTimeScale(),
-  activeBufferIndex: resolveLiveTempoPreviewActiveBufferIndex,
+  activeBufferIndex: resolveActiveCanvasBufferIndex,
   scalers: resolveLiveTempoPreviewScalers,
   getLastAppliedTimeScale: presentationState.getLastAppliedPreviewTimeScale,
   resolveIncomingTimeScale: resolveIncomingPreviewTimeScale,
@@ -803,7 +803,7 @@ const { stopDragging, handlePointerDown, handleWheel } =
     resolveWaveformCurrentSeconds,
     clampPreviewStart,
     beginDragCanvasPresentation,
-    applyDragCanvasPresentationOffset,
+    updateDragCanvasPresentation,
     endDragCanvasPresentation,
     clearDragReleaseHandoff: dragReleaseHandoff.clear,
     beginDragReleaseHandoff: dragReleaseHandoff.begin,
@@ -897,6 +897,7 @@ useHorizontalBrowseRawWaveformDetailLifecycle({
     linkedGridVisualPending: () => presentationLinkedGridVisualPending.value,
     dragging,
     compactVisualWaveformActive,
+    resolveStableWaveformSource: resolveCanvasStableWaveformSource,
     dragPresentationReleaseActive,
     resolveCurrentSeconds: resolveWaveformCurrentSeconds,
     resolvePlaybackRate: resolveWaveformPlaybackRate,

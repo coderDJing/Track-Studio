@@ -2,6 +2,8 @@ import type { HorizontalBrowseDirection } from './horizontalBrowseRawWaveformCan
 
 type PendingActivation = {
   commit: () => void
+  playbackFrame: boolean
+  isCurrent: () => boolean
 }
 
 const LINKED_ACTIVATION_FALLBACK_MS = 120
@@ -20,10 +22,15 @@ const clearScheduledFlush = () => {
   fallbackTimer = null
 }
 
+const resolveCurrentActivation = (direction: HorizontalBrowseDirection) => {
+  const activation = pendingActivations[direction]
+  return activation?.isCurrent() ? activation : undefined
+}
+
 const flushPendingActivations = () => {
   clearScheduledFlush()
-  const up = pendingActivations.up
-  const down = pendingActivations.down
+  const up = resolveCurrentActivation('up')
+  const down = resolveCurrentActivation('down')
   delete pendingActivations.up
   delete pendingActivations.down
   // 两个回调必须在同一个 JS 任务内完成，浏览器才不会绘制只切换了一轨的中间帧。
@@ -31,13 +38,25 @@ const flushPendingActivations = () => {
   down?.commit()
 }
 
+const resolvePairedPlaybackFrame = () => {
+  const up = resolveCurrentActivation('up')
+  const down = resolveCurrentActivation('down')
+  return up && down && up.playbackFrame === down.playbackFrame ? up.playbackFrame : undefined
+}
+
 const schedulePairedFlush = () => {
   if (firstAnimationFrame || secondAnimationFrame) return
   firstAnimationFrame = requestAnimationFrame(() => {
     firstAnimationFrame = 0
+    const playbackFrame = resolvePairedPlaybackFrame()
+    if (playbackFrame === undefined) return
+    if (playbackFrame) {
+      flushPendingActivations()
+      return
+    }
     secondAnimationFrame = requestAnimationFrame(() => {
       secondAnimationFrame = 0
-      flushPendingActivations()
+      if (resolvePairedPlaybackFrame() !== undefined) flushPendingActivations()
     })
   })
 }
@@ -49,14 +68,11 @@ const scheduleFallbackFlush = () => {
 
 export const queueHorizontalBrowseLinkedCanvasActivation = (
   direction: HorizontalBrowseDirection,
-  commit: () => void
+  activation: PendingActivation
 ) => {
   // 同一轨在联结松手后可能连续产出过渡帧和校正帧；只保留绘制前最后一帧。
-  pendingActivations[direction] = { commit }
-  if (pendingActivations.up && pendingActivations.down) {
-    schedulePairedFlush()
-    return
-  }
+  pendingActivations[direction] = activation
+  if (resolvePairedPlaybackFrame() !== undefined) schedulePairedFlush()
   scheduleFallbackFlush()
 }
 

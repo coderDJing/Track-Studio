@@ -1,10 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { createHorizontalBrowseLiveCanvasBuffers } from './horizontalBrowseLiveCanvasBuffers'
-import { setHorizontalBrowseWaveformTileRenderingEnabled } from './horizontalBrowseWaveformTileFlag'
-
-// flag 关闭时分块路径必须完全惰性：几何只写旧的单张超宽 canvas，位移目标仍是那张 canvas，
-// 块容器一行 style 都不能被碰。这是「flag 关闭即完全走现有路径，可随时回退」的机器可验证形式。
-// 见 drafts/大波形分块瓦片渲染设计.md 的分阶段实施要求。
 
 const createStubElement = <T>() => {
   const style: Record<string, string> = {
@@ -45,22 +40,17 @@ const attachBuffers = () => {
     waveformFront,
     waveformBack,
     overlayFront,
+    overlayBack,
     tileContainerFront,
     tileContainerBack,
     tileFront
   }
 }
 
-describe('horizontalBrowseLiveCanvasBuffers flag 关闭时分块路径惰性', () => {
-  // 默认开启，因此需要显式关闭来验证回退路径。
-  afterEach(() => {
-    setHorizontalBrowseWaveformTileRenderingEnabled(true)
-  })
-
-  it('flag 关闭时 setGeometry 只写旧超宽 canvas，不碰块容器', () => {
-    setHorizontalBrowseWaveformTileRenderingEnabled(false)
+describe('horizontalBrowseLiveCanvasBuffers', () => {
+  it('整帧渲染将几何写入目标画布', () => {
     const { buffers, waveformFront, tileContainerFront, tileContainerBack } = attachBuffers()
-    buffers.setGeometry(-2896, 6756, 96, 120)
+    buffers.setGeometry(0, false, -2896, 6756, 96, 120)
     expect(waveformFront.style.width).toBe('6756px')
     expect(waveformFront.style.left).toBe('-2896px')
     // 块容器完全没有被写入任何几何。
@@ -69,18 +59,16 @@ describe('horizontalBrowseLiveCanvasBuffers flag 关闭时分块路径惰性', (
     expect(tileContainerBack.style.width).toBeUndefined()
   })
 
-  it('flag 关闭时位移目标是旧超宽 canvas', () => {
-    setHorizontalBrowseWaveformTileRenderingEnabled(false)
+  it('整帧渲染将位移应用到整帧画布', () => {
     const { buffers, waveformFront, tileContainerFront } = attachBuffers()
     buffers.applyPresentationOffset(-123.5, true)
     expect(waveformFront.style.transform).toBe('translate3d(-123.5px, 0, 0)')
     expect(tileContainerFront.style.transform).toBeUndefined()
   })
 
-  it('flag 开启时几何写到块容器，旧超宽 canvas 不再被摆放', () => {
-    setHorizontalBrowseWaveformTileRenderingEnabled(true)
+  it('瓦片渲染将几何写入块容器及网格', () => {
     const { buffers, waveformFront, overlayFront, tileContainerFront } = attachBuffers()
-    buffers.setGeometry(-2896, 6756, 96, 120)
+    buffers.setGeometry(0, true, -2896, 6756, 96, 120)
     expect(tileContainerFront.style.width).toBe('6756px')
     expect(tileContainerFront.style.left).toBe('-2896px')
     expect(tileContainerFront.style.height).toBe('96px')
@@ -89,16 +77,15 @@ describe('horizontalBrowseLiveCanvasBuffers flag 关闭时分块路径惰性', (
     expect(overlayFront.style.width).toBe('6756px')
   })
 
-  it('flag 开启时位移挂在块容器上，不落到每块（避免边界亚像素错位）', () => {
-    setHorizontalBrowseWaveformTileRenderingEnabled(true)
+  it('通过块容器统一移动瓦片，保持块边界对齐', () => {
     const { buffers, tileContainerFront, tileFront } = attachBuffers()
+    buffers.activate(0, true)
     buffers.applyPresentationOffset(-123.5, true)
     expect(tileContainerFront.style.transform).toBe('translate3d(-123.5px, 0, 0)')
     expect(tileFront.style.transform).toBeUndefined()
   })
 
   it('applyTileLayout 摆放用到的块并隐藏本轮不用的块', () => {
-    setHorizontalBrowseWaveformTileRenderingEnabled(true)
     const buffers = createHorizontalBrowseLiveCanvasBuffers()
     const usedTile = createStubElement<HTMLCanvasElement>()
     const unusedTile = createStubElement<HTMLCanvasElement>()
@@ -112,14 +99,42 @@ describe('horizontalBrowseLiveCanvasBuffers flag 关闭时分块路径惰性', (
     expect(unusedTile.style.visibility).toBe('hidden')
   })
 
-  it('flag 开启时可见面切换发生在块容器层', () => {
-    setHorizontalBrowseWaveformTileRenderingEnabled(true)
-    const { buffers, tileContainerFront, tileContainerBack } = attachBuffers()
-    buffers.activate(1)
-    expect(tileContainerBack.style.opacity).toBe('1')
-    expect(tileContainerFront.style.opacity).toBe('0')
-    buffers.activate(0)
-    expect(tileContainerFront.style.opacity).toBe('1')
-    expect(tileContainerBack.style.opacity).toBe('0')
+  it('瓦片和整帧交接时仅显示已提交的波形和对应网格', () => {
+    const {
+      buffers,
+      waveformFront,
+      waveformBack,
+      tileContainerFront,
+      tileContainerBack,
+      overlayFront,
+      overlayBack
+    } = attachBuffers()
+    const opacity = () =>
+      [
+        waveformFront,
+        waveformBack,
+        tileContainerFront,
+        tileContainerBack,
+        overlayFront,
+        overlayBack
+      ].map((element) => element.style.opacity)
+
+    buffers.setGeometry(1, true, -2896, 6756, 96, 120)
+    buffers.activate(1, true)
+    expect(opacity()).toEqual(['0', '0', '0', '1', '0', '1'])
+
+    buffers.setGeometry(0, false, 0, 964, 96, 120)
+    buffers.withPresentationTarget(0, false, () => buffers.applyPresentationOffset(-0.25, true))
+    expect(opacity()).toEqual(['0', '0', '0', '1', '0', '1'])
+    expect(tileContainerBack.style.left).toBe('-2896px')
+    expect(overlayBack.style.left).toBe('-2896px')
+    expect(waveformFront.style.transform).toBe('translate3d(-0.25px, 0, 0)')
+
+    buffers.activate(0, false)
+    expect(opacity()).toEqual(['1', '0', '0', '0', '1', '0'])
+    expect(buffers.resolveActiveTranslateX()).toBe(-0.25)
+
+    buffers.activate(1, true)
+    expect(opacity()).toEqual(['0', '0', '0', '1', '0', '1'])
   })
 })

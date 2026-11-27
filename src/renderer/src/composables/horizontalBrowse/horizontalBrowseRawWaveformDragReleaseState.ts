@@ -83,12 +83,14 @@ export const createHorizontalBrowseRawWaveformDragReleaseState = (
   const syncViewportStart = (seconds: number) => {
     if (!pending || viewportSynced) return
     const safeSeconds = Number(seconds) || 0
-    if (baseSeconds !== null && Math.abs(safeSeconds - baseSeconds) <= 0.0001) return
     const nextViewportStartSec = options.resolvePlaybackAlignedStart(safeSeconds)
     if (!Number.isFinite(nextViewportStartSec)) return
-    if (viewportStartSec !== null && Math.abs(viewportStartSec - nextViewportStartSec) <= 0.0001) {
-      return
-    }
+    const clockMoved = baseSeconds === null || Math.abs(safeSeconds - baseSeconds) > 0.0001
+    const matchesReleaseViewport =
+      viewportStartSec !== null && Math.abs(viewportStartSec - nextViewportStartSec) <= 0.0001
+    // 暂停拖动松手时，两边位置可能已对齐，但仍需请求一帧来结束拖动交接。
+    const needsPausedReleaseFrame = !options.playing.value && matchesReleaseViewport
+    if (!needsPausedReleaseFrame && (!clockMoved || matchesReleaseViewport)) return
     viewportStartSec = nextViewportStartSec
     viewportSynced = true
     options.drawWaveformNow({ preferPreviewStart: true })
@@ -102,7 +104,11 @@ export const createHorizontalBrowseRawWaveformDragReleaseState = (
       visibleDurationSec: options.resolveVisibleDurationSec()
     })
 
-  const canComplete = (payload: LiveCanvasRenderedPayload) => {
+  const canComplete = (payload: LiveCanvasRenderedPayload, queuedForPlayback: boolean) => {
+    // 起播帧已按本次松手后的播放时钟绘制。回报送达时，播放头可能已向前走了数帧。
+    if (pending && queuedForPlayback && options.playing.value && !options.dragging.value) {
+      return true
+    }
     const expectedStartSec =
       options.playing.value && !options.dragging.value
         ? options.resolvePlaybackAlignedStart(Number(options.currentSeconds()) || 0)

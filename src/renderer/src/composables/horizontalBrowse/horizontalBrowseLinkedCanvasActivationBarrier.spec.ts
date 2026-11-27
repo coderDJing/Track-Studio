@@ -13,6 +13,13 @@ const flushAnimationFrame = () => {
   callbacks.forEach((callback) => callback(performance.now()))
 }
 
+const queueActivation = (
+  direction: 'up' | 'down',
+  commit: () => void,
+  playbackFrame = false,
+  isCurrent = () => true
+) => queueHorizontalBrowseLinkedCanvasActivation(direction, { commit, playbackFrame, isCurrent })
+
 beforeEach(() => {
   vi.useFakeTimers()
   nextRafId = 1
@@ -36,11 +43,11 @@ afterEach(() => {
 describe('queueHorizontalBrowseLinkedCanvasActivation', () => {
   it('两轨都就绪后在同一任务内提交，并吸收绘制前的同轨校正帧', () => {
     const committed: string[] = []
-    queueHorizontalBrowseLinkedCanvasActivation('down', () => committed.push('down-old'))
-    queueHorizontalBrowseLinkedCanvasActivation('up', () => committed.push('up'))
+    queueActivation('down', () => committed.push('down-old'))
+    queueActivation('up', () => committed.push('up'))
 
     flushAnimationFrame()
-    queueHorizontalBrowseLinkedCanvasActivation('down', () => committed.push('down-latest'))
+    queueActivation('down', () => committed.push('down-latest'))
     expect(committed).toEqual([])
 
     flushAnimationFrame()
@@ -50,12 +57,47 @@ describe('queueHorizontalBrowseLinkedCanvasActivation', () => {
 
   it('只有一轨可用时通过超时提交，避免永久等待', () => {
     const commit = vi.fn()
-    queueHorizontalBrowseLinkedCanvasActivation('down', commit)
+    queueActivation('down', commit)
 
     vi.advanceTimersByTime(119)
     expect(commit).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(1)
     expect(commit).toHaveBeenCalledOnce()
+  })
+
+  it('两轨的起播帧均已就绪后在下一帧同时提交', () => {
+    const paused = vi.fn()
+    const up = vi.fn()
+    const down = vi.fn()
+    queueActivation('down', paused)
+    queueActivation('up', up, true)
+    flushAnimationFrame()
+    expect(up).not.toHaveBeenCalled()
+
+    queueActivation('down', down, true)
+    flushAnimationFrame()
+    expect(up).toHaveBeenCalledOnce()
+    expect(down).toHaveBeenCalledOnce()
+    expect(paused).not.toHaveBeenCalled()
+  })
+
+  it('一轨正在等校正帧时保留另一轨的候选帧，直到两轨都可提交', () => {
+    const previousUp = vi.fn()
+    const correctedUp = vi.fn()
+    const down = vi.fn()
+    let previousUpIsCurrent = true
+    queueActivation('up', previousUp, true, () => previousUpIsCurrent)
+    queueActivation('down', down, true)
+
+    previousUpIsCurrent = false
+    flushAnimationFrame()
+    expect(down).not.toHaveBeenCalled()
+
+    queueActivation('up', correctedUp, true)
+    flushAnimationFrame()
+    expect(previousUp).not.toHaveBeenCalled()
+    expect(correctedUp).toHaveBeenCalledOnce()
+    expect(down).toHaveBeenCalledOnce()
   })
 })

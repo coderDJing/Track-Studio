@@ -7,6 +7,7 @@ type PlaybackToggleWatchParams = {
   linkedGridVisualPending: () => boolean
   dragging: Ref<boolean>
   compactVisualWaveformActive: Ref<boolean>
+  resolveStableWaveformSource: () => boolean
   dragPresentationReleaseActive: Ref<boolean>
   resolveCurrentSeconds: () => number
   resolvePlaybackRate: () => number
@@ -51,6 +52,9 @@ export const watchHorizontalBrowseRawWaveformPlaybackToggle = (params: PlaybackT
           if (params.dragPresentationReleaseActive.value) {
             params.suppressStablePlaybackReanchor()
             params.holdStablePlaybackToggleRender()
+            if (!params.resolveStableWaveformSource()) {
+              params.applyPreviewPlaybackPosition(toggleAnchorSec)
+            }
             return
           }
           params.suppressStablePlaybackReanchor()

@@ -33,7 +33,7 @@ const createHarness = () => {
       resolveWaveformCurrentSeconds: () => previewStartSec.value + 5,
       clampPreviewStart: (seconds) => seconds,
       beginDragCanvasPresentation: () => ({ viewportStartSec: previewStartSec.value }),
-      applyDragCanvasPresentationOffset: vi.fn(),
+      updateDragCanvasPresentation: vi.fn(),
       endDragCanvasPresentation,
       clearDragReleaseHandoff,
       beginDragReleaseHandoff,
@@ -89,7 +89,7 @@ describe('createHorizontalBrowseWaveformPointerInteraction', () => {
     expect(harness.beginDragReleaseHandoff).toHaveBeenCalledWith(20)
     expect(harness.clearDragReleaseHandoff).not.toHaveBeenCalled()
     expect(harness.callOrder).toEqual(['handoff', 'end-presentation'])
-    expect(harness.endDragCanvasPresentation).toHaveBeenCalledWith(15)
+    expect(harness.endDragCanvasPresentation).toHaveBeenCalledWith(15, true)
     expect(harness.drawWaveformNow).not.toHaveBeenCalled()
     harness.scope.stop()
   })

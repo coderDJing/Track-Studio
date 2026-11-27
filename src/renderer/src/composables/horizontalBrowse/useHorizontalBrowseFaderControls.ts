@@ -16,7 +16,7 @@ const DUAL_DECKS: DeckKey[] = ['top', 'bottom']
 type UseHorizontalBrowseFaderControlsParams = {
   topDeckSong: Ref<ISongInfo | null>
   bottomDeckSong: Ref<ISongInfo | null>
-  setting: ISettingConfig
+  setting: Pick<ISettingConfig, 'horizontalBrowseFaderControlsExpanded'>
   deckSyncState: {
     leaderDeck?: string
   }
@@ -122,9 +122,8 @@ export const useHorizontalBrowseFaderControls = (
 
   const deactivateDualTransportSync = () => {
     if (
-      !dualTransportSyncEnabled.value &&
-      !dualTransportSyncActivating.value &&
-      !dualTransportSyncDeactivating.value
+      dualTransportSyncDeactivating.value ||
+      (!dualTransportSyncEnabled.value && !dualTransportSyncActivating.value)
     ) {
       return
     }
@@ -136,10 +135,11 @@ export const useHorizontalBrowseFaderControls = (
     let deactivationTask: Promise<void> | null = null
     deactivationTask = (async () => {
       try {
-        await Promise.allSettled([
-          params.nativeTransport.setSyncEnabled('top', false),
-          params.nativeTransport.setSyncEnabled('bottom', false)
-        ])
+        const leader = resolveDualTransportLeader()
+        const follower = leader === 'top' ? 'bottom' : 'top'
+        // 每次关闭都会发布快照。先解除从轨，避免主轨关闭后的中间快照触发从轨相位重锚。
+        await params.nativeTransport.setSyncEnabled(follower, false).catch(() => {})
+        await params.nativeTransport.setSyncEnabled(leader, false).catch(() => {})
         params.syncDeckRenderState()
         await nextTick()
         params.clearLinkedPresentation?.(buildClearLinkedPresentationPlaybackStates())

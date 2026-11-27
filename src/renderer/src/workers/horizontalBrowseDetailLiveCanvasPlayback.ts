@@ -95,6 +95,11 @@ export const buildPlaybackRenderRequest = (
   return {
     ...animation.request,
     playbackSeconds,
+    // 播放 Worker 的画布就是完整视口，保留当前帧供下一次增量滚动。
+    renderViewportOnly: false,
+    // 位图按设备像素滚动，合成层也用同一精度，避免小数位移在合成时造成单帧模糊。
+    presentationOffsetMode:
+      animation.request.presentationOffsetMode === 'none' ? 'none' : 'device-pixel',
     allowScrollReuse,
     phaseAwareScrollReuse: allowScrollReuse && animation.request.phaseAwareScrollReuse === true,
     rangeStartSec,
