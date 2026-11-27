@@ -40,9 +40,9 @@ import {
   deleteNeteaseLocalFiles,
   downloadNeteaseTracks,
   mapExistingNeteaseSongsToLocalFiles,
-  mapNeteaseSongsToLocalFiles,
-  removeNeteasePlaylistTracks
-} from '@renderer/utils/neteaseActions'
+  mapNeteaseSongsToLocalFiles
+} from '@renderer/utils/neteaseLocalFiles'
+import { removeNeteasePlaylistTracks } from '@renderer/utils/neteaseActions'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { RECORDING_LIBRARY_UUID } from '@shared/recordingLibrary'
 import {

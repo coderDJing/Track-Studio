@@ -46,7 +46,7 @@ import emitter from '@renderer/utils/mitt'
 import {
   hydrateNeteaseSongAnalysis,
   mapNeteaseSongsToLocalFiles
-} from '@renderer/utils/neteaseActions'
+} from '@renderer/utils/neteaseLocalFiles'
 import { createHorizontalBrowseDeckAssigner } from '@renderer/composables/horizontalBrowse/horizontalBrowseDeckAssignment'
 import type { HorizontalBrowseDeckAssignTransportOptions } from '@renderer/composables/horizontalBrowse/horizontalBrowseDeckAssignment'
 import { useHorizontalBrowseTransportController } from '@renderer/composables/horizontalBrowse/useHorizontalBrowseTransportController'

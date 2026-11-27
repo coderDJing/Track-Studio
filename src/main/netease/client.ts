@@ -221,10 +221,18 @@ export class NeteaseClient {
       } catch (error) {
         lastError = error
         // 登录失效 / 资源不存在 / 被限流这几种，重试只会把 30 秒拖成 90 秒
-        if (error instanceof NeteaseApiError && error.definitive) throw error
+        if (error instanceof NeteaseApiError && error.definitive) {
+          log.warn(
+            `[netease-diag] weapi 不可重试失败 path=${path} status=${error.status} code=${error.code} message=${error.message}`
+          )
+          throw error
+        }
         await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)))
       }
     }
+    log.warn(
+      `[netease-diag] weapi 重试耗尽 path=${path} message=${lastError instanceof Error ? lastError.message : String(lastError)}`
+    )
     throw lastError instanceof Error ? lastError : new Error(String(lastError))
   }
 
@@ -271,6 +279,7 @@ export class NeteaseClient {
     })
     const out: NeteasePlaylist[] = []
     const rows = asArr(result.playlist)
+    let missingCreator = 0
     for (let index = 0; index < rows.length; index += 1) {
       const row = asObj(rows[index])
       if (!row) continue
@@ -281,6 +290,7 @@ export class NeteaseClient {
       let kind: NeteasePlaylistKind = 'subscribed'
       if (specialType === 5) kind = 'liked'
       else if (creatorId && creatorId === String(userId)) kind = 'created'
+      else if (!creatorId) missingCreator += 1
       out.push({
         playlistId,
         kind,
@@ -288,6 +298,11 @@ export class NeteaseClient {
         coverUrl: asStr(row.coverImgUrl),
         trackCount: asNum(row.trackCount)
       })
+    }
+    if (missingCreator > 0) {
+      log.warn(
+        `[netease-diag] playlist 列表有 ${missingCreator} 张缺少 creator.userId，自建/收藏分类可能不准`
+      )
     }
     return out
   }

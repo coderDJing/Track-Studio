@@ -28,9 +28,14 @@ export class NeteaseApiError extends Error {
     return this.status === 403 || this.status === 404 || this.code === 404
   }
 
+  /** 业务码 401：服务端认为当前身份无权读取（隐私歌单等），重试无用，也不代表登录失效 */
+  get noPermission(): boolean {
+    return this.code === 401
+  }
+
   /** 重试没有意义的错误，立即上抛 */
   get definitive(): boolean {
-    return this.loginExpired || this.unavailable || isFatalCode(this.code)
+    return this.loginExpired || this.unavailable || this.noPermission || isFatalCode(this.code)
   }
 }
 

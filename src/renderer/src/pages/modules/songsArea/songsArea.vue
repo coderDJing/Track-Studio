@@ -708,7 +708,7 @@ const songDblClick = async (song: ISongInfo, event?: MouseEvent) => {
     normalizedSong.neteasePendingDownload ||
     (normalizedSong.filePath || '').startsWith('netease-pending:')
   ) {
-    const { fulfillNeteasePendingSetSong } = await import('@renderer/utils/neteaseActions')
+    const { fulfillNeteasePendingSetSong } = await import('@renderer/utils/neteaseLocalFiles')
     const ready = await fulfillNeteasePendingSetSong(normalizedSong)
     if (!ready) return
     normalizedSong = ready

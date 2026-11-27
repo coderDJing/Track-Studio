@@ -15,9 +15,9 @@ import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/f
 import { RendererFilePathMap, RendererFilePathSet } from '@renderer/utils/filePathComparison'
 import {
   appendNeteaseSongsToSet,
-  copyNeteaseSongsToLibrary,
   mapNeteaseSongsToLocalFiles
-} from '@renderer/utils/neteaseActions'
+} from '@renderer/utils/neteaseLocalFiles'
+import { copyNeteaseSongsToLibrary } from '@renderer/utils/neteaseActions'
 import { NETEASE_DOWNLOADED_UUID, isNeteasePlaylistUuid } from '@shared/netease'
 
 export type MoveSongsLibraryName =

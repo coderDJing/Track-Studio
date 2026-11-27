@@ -356,6 +356,12 @@ const showTrackCount = computed(
     runtime.setting.showPlaylistTrackCount &&
     trackCount.value !== null
 )
+// 网易云歌单上次同步读取失败：即使关了「显示曲目数」也要露出警示
+const syncUnreadable = computed(() => dirData.value?.syncState === 'unreadable')
+const showCountBadge = computed(() => showTrackCount.value || syncUnreadable.value)
+const countBadgeText = computed(() =>
+  showTrackCount.value && trackCount.value !== null ? String(trackCount.value) : '!'
+)
 const nameTextRef = ref<HTMLElement | null>(null)
 const nameTextHovered = ref(false)
 const onlyShowBubbleWhenOverflow = computed(
@@ -502,7 +508,7 @@ onUnmounted(() => {
           :class="[
             'nameText',
             {
-              'nameText--with-count': showTrackCount,
+              'nameText--with-count': showCountBadge,
               'nameText--with-mixtape-action': dirData.type === 'mixtapeList'
             }
           ]"
@@ -516,7 +522,7 @@ onUnmounted(() => {
           :title="nameForDisplay"
           :only-when-overflow="onlyShowBubbleWhenOverflow"
         />
-        <span v-if="dirData.type === 'mixtapeList' || showTrackCount" class="rowActions">
+        <span v-if="dirData.type === 'mixtapeList' || showCountBadge" class="rowActions">
           <bubbleBoxTrigger
             v-if="dirData.type === 'mixtapeList'"
             tag="span"
@@ -547,13 +553,13 @@ onUnmounted(() => {
             {{ t('mixtape.recordButton') }}
           </bubbleBoxTrigger>
           <bubbleBoxTrigger
-            v-if="showTrackCount"
+            v-if="showCountBadge"
             tag="span"
             class="countBadge"
-            :class="{ isPlaying: isPlaying }"
-            :title="t('tracks.title')"
+            :class="{ isPlaying: isPlaying, 'is-unreadable': syncUnreadable }"
+            :title="syncUnreadable ? t('netease.unreadablePlaylistHint') : t('tracks.title')"
           >
-            {{ trackCount }}
+            {{ countBadgeText }}
           </bubbleBoxTrigger>
         </span>
       </div>
@@ -765,6 +771,11 @@ onUnmounted(() => {
 .isPlaying.countBadge {
   background-color: var(--accent);
   color: #ffffff !important;
+}
+
+.countBadge.is-unreadable {
+  background-color: color-mix(in srgb, var(--warning-text) 20%, transparent);
+  color: var(--warning-text);
 }
 .isPlaying {
   color: var(--accent) !important;

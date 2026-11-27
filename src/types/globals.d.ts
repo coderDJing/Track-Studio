@@ -28,6 +28,8 @@ interface IDir {
    * 有值时曲目数统计一律以它为准，不再走磁盘扫描。
    */
   trackCount?: number
+  /** 网易云歌单上次同步是否读取失败（隐私/无权限），渲染层据此给出警示 */
+  syncState?: 'ok' | 'unreadable'
 }
 
 type md5 = {

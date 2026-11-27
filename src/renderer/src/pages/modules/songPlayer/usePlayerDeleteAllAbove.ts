@@ -16,10 +16,8 @@ import { canRemoveTracksFromNeteasePlaylist } from '@renderer/utils/neteasePlayl
 import { resolvePlaybackDeleteAllAboveTarget } from '@shared/playbackDeleteAllAbove'
 import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 import { showDeleteSummaryIfNeeded } from '@renderer/pages/modules/songsArea/composables/songItemContextMenuSummaries'
-import {
-  deleteNeteaseLocalFiles,
-  removeNeteasePlaylistTracks
-} from '@renderer/utils/neteaseActions'
+import { deleteNeteaseLocalFiles } from '@renderer/utils/neteaseLocalFiles'
+import { removeNeteasePlaylistTracks } from '@renderer/utils/neteaseActions'
 
 type DeleteSummary = {
   total?: number

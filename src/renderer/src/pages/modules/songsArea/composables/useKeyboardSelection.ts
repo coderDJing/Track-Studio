@@ -16,10 +16,8 @@ import {
   isNeteasePreviewUrl
 } from '@shared/netease'
 import { canRemoveTracksFromNeteasePlaylist } from '@renderer/utils/neteasePlaylistContext'
-import {
-  deleteNeteaseLocalFiles,
-  removeNeteasePlaylistTracks
-} from '@renderer/utils/neteaseActions'
+import { deleteNeteaseLocalFiles } from '@renderer/utils/neteaseLocalFiles'
+import { removeNeteasePlaylistTracks } from '@renderer/utils/neteaseActions'
 import { isNeteaseStoreCopyOnlySource } from '@renderer/utils/libraryTransfer'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { createRepeatSingleClickDeselect } from './repeatSingleClickDeselect'

@@ -19,7 +19,7 @@ import {
   formatNeteaseImportEstimate,
   loadNeteaseImportEstimate,
   type NeteaseImportEstimate
-} from '@renderer/utils/neteaseActions'
+} from '@renderer/utils/neteaseLocalFiles'
 import { useDialogTransition } from '@renderer/composables/useDialogTransition'
 const hintIcon = hintIconAsset
 

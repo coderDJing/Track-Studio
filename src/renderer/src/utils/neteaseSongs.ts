@@ -252,7 +252,13 @@ export function mapNeteaseDownloadedRowToSongInfo(row: NeteaseDownloadedRowPaylo
 type NeteaseGroupPayload = {
   id: string
   title: string
-  items: Array<{ playlistId: string; title: string; trackCount: number; coverUrl: string }>
+  items: Array<{
+    playlistId: string
+    title: string
+    trackCount: number
+    coverUrl: string
+    syncState?: 'ok' | 'unreadable'
+  }>
 }
 
 /** 歌单曲目数：0 也是有意义的值，只把非数值挡成 undefined，避免树上出现 NaN */
@@ -260,6 +266,10 @@ const toTrackCount = (value: unknown): number | undefined => {
   const count = Number(value)
   return Number.isFinite(count) && count >= 0 ? Math.floor(count) : undefined
 }
+
+/** 只有读取失败需要落到节点上；'ok' 留空，避免树上多一份无用字段 */
+const toSyncState = (value: unknown): 'unreadable' | undefined =>
+  value === 'unreadable' ? 'unreadable' : undefined
 
 /**
  * 登录/同步成功后，把服务器返回的分组结构贴到树里的 NeteaseLibrary 节点上。
@@ -313,7 +323,8 @@ export function applyNeteaseGroupsToTree(
         type: 'songList',
         dirName: localizeNeteaseGroupTitle('liked', group.title || group.items[0].title),
         order: order++,
-        trackCount: toTrackCount(group.items[0].trackCount)
+        trackCount: toTrackCount(group.items[0].trackCount),
+        syncState: toSyncState(group.items[0].syncState)
       })
       continue
     }
@@ -327,7 +338,8 @@ export function applyNeteaseGroupsToTree(
         type: 'songList' as const,
         dirName: item.title,
         order: index,
-        trackCount: toTrackCount(item.trackCount)
+        trackCount: toTrackCount(item.trackCount),
+        syncState: toSyncState(item.syncState)
       }))
     })
   }

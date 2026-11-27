@@ -35,7 +35,7 @@ import {
   formatNeteaseDownloadedSummary,
   loadNeteaseDownloadedSummary,
   type NeteaseDownloadedSummary
-} from '@renderer/utils/neteaseActions'
+} from '@renderer/utils/neteaseLocalFiles'
 import { emptyRecycleBinWithOptimisticUpdate } from '@renderer/utils/recycleBinActions'
 import emitter from '@renderer/utils/mitt'
 import {

@@ -14,11 +14,11 @@ import {
   getPlaylistTracks,
   listDownloaded,
   reconcileStoreFromDisk,
-  syncCatalog,
   removeTracksFromPlaylist,
   getPlaylistDeletePreview,
   deletePlaylistFromLibrary
 } from './library'
+import { syncCatalog } from './catalogSync'
 import { ensureTracksDownloaded, estimatePlaylistImportSize, importNeteasePlaylist } from './import'
 import {
   appendNeteaseTracksToSet,
@@ -86,9 +86,15 @@ export function registerNeteaseHandlers(getWindow: () => BrowserWindow | null): 
     }
     try {
       const account = await neteaseClient.fetchAccount()
+      if (!account) {
+        log.warn('[netease-diag] 登录态查询：cookie 存在但账号信息为空')
+      }
       return { loggedIn: Boolean(account), account }
     } catch (error) {
-      log.warn('[netease] 读取账号失败', error)
+      log.warn(
+        `[netease-diag] 读取账号失败 status=${error instanceof NeteaseApiError ? error.status : '-'} code=${error instanceof NeteaseApiError ? error.code : '-'}`,
+        error
+      )
       return { loggedIn: false, account: null }
     }
   })
@@ -103,6 +109,9 @@ export function registerNeteaseHandlers(getWindow: () => BrowserWindow | null): 
     if (!unikey) throw new Error('缺少 unikey')
     const state = await neteaseClient.checkQr(unikey)
     if (state.code === 803 && state.account) {
+      log.info(
+        `[netease-diag] 扫码登录成功 userId=${state.account.userId} nickname=${state.account.nickname}`
+      )
       await saveSession({
         cookie: neteaseClient.exportCookies(),
         userId: state.account.userId,

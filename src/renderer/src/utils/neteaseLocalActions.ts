@@ -1,7 +1,7 @@
 import type { ISongInfo } from '../../../types/globals'
 import type { AudioConvertDialogResult } from '@renderer/components/audioConvertDialog.types'
 import { startBpmFix } from '@renderer/utils/bpmFixActions'
-import { mapNeteaseSongsToLocalFiles } from '@renderer/utils/neteaseActions'
+import { mapNeteaseSongsToLocalFiles } from '@renderer/utils/neteaseLocalFiles'
 import {
   isNeteasePendingPath,
   isNeteasePreviewUrl,

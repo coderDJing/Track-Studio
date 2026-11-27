@@ -14,6 +14,36 @@ import type { SqliteDatabase } from '../libraryDb'
  *   netease_track          曲目元数据（与歌单无关，跨歌单复用一行）
  *   netease_file           本地文件（一首歌一行；有没有这一行 = 是否已下载）
  */
+const listTableColumns = (instance: SqliteDatabase, tableName: string): Set<string> => {
+  const normalized = String(tableName || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_]/g, '')
+  if (!normalized) return new Set()
+  try {
+    const rows = instance.prepare<{ name?: string }>(`PRAGMA table_info(${normalized})`).all()
+    const columns = new Set<string>()
+    for (const row of rows) {
+      const name = String(row?.name || '').trim()
+      if (name) columns.add(name)
+    }
+    return columns
+  } catch {
+    return new Set()
+  }
+}
+
+const addColumnIfMissing = (
+  instance: SqliteDatabase,
+  tableName: string,
+  columnName: string,
+  ddl: string
+): void => {
+  if (listTableColumns(instance, tableName).has(columnName)) return
+  try {
+    instance.exec(ddl)
+  } catch {}
+}
+
 export function applyNeteaseSchema(instance: SqliteDatabase): void {
   instance.exec(`
     CREATE TABLE IF NOT EXISTS netease_account (
@@ -35,6 +65,7 @@ export function applyNeteaseSchema(instance: SqliteDatabase): void {
       cover_url    TEXT NOT NULL DEFAULT '',
       track_count  INTEGER NOT NULL DEFAULT 0,
       sort_index   INTEGER NOT NULL DEFAULT 0,
+      sync_state   TEXT NOT NULL DEFAULT 'ok',
       PRIMARY KEY (list_root, user_id, playlist_id)
     );
 
@@ -81,4 +112,11 @@ export function applyNeteaseSchema(instance: SqliteDatabase): void {
       PRIMARY KEY (list_root, song_id)
     );
   `)
+  // 旧库的 netease_playlist 没有这一列；'unreadable' 表示上次同步时这张歌单读取失败（隐私/无权限）
+  addColumnIfMissing(
+    instance,
+    'netease_playlist',
+    'sync_state',
+    `ALTER TABLE netease_playlist ADD COLUMN sync_state TEXT NOT NULL DEFAULT 'ok'`
+  )
 }

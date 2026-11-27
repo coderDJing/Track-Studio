@@ -152,7 +152,7 @@ export const promptAndQueueManualKeyAnalysisBatch = async (
     return { batchId: '', queued: 0, canceled: false, empty: true }
   }
   const filteredFiles = options?.filterQueueFiles ? await options.filterQueueFiles(files) : files
-  const { ensureNeteaseLocalFilePaths } = await import('@renderer/utils/neteaseActions')
+  const { ensureNeteaseLocalFilePaths } = await import('@renderer/utils/neteaseLocalFiles')
   const queueFiles = await ensureNeteaseLocalFilePaths(filteredFiles)
   if (!queueFiles.length) {
     return { batchId: '', queued: 0, canceled: false, empty: true }

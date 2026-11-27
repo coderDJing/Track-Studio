@@ -50,7 +50,7 @@ import {
   fulfillNeteasePendingSetSong,
   isNeteasePendingSetSong,
   queueNeteaseAwarePlayingAnalysis
-} from '@renderer/utils/neteaseActions'
+} from '@renderer/utils/neteaseLocalFiles'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
 import { sendPlayerWaveformTrace } from './playerWaveformTrace'
 import { usePlaybackRangeController } from './usePlaybackRangeController'

@@ -7,7 +7,7 @@ import {
   NETEASE_PLAYLIST_PREFIX,
   getNeteasePlaylistId
 } from '@shared/netease'
-import type { NeteaseTreeGroup } from './library'
+import type { NeteaseTreeGroup } from './catalogSync'
 
 /**
  * 把网易云虚拟子树挂到 `getLibrary()` 的返回值上。
@@ -32,6 +32,8 @@ type TreeNode = {
   order?: number | null
   /** 渲染层曲目数徽标直接读它：虚拟节点没有磁盘目录，扫不出来 */
   trackCount?: number
+  /** 上次同步时这张歌单是否读取失败（隐私/无权限），渲染层据此显示警示 */
+  syncState?: 'ok' | 'unreadable'
 }
 
 export function getNeteaseGroupsFromDb(): NeteaseTreeGroup[] {
@@ -62,8 +64,9 @@ export function getNeteaseGroupsFromDb(): NeteaseTreeGroup[] {
       cover_url: string
       track_count: number
       sort_index: number
+      sync_state: string
     }>(
-      `SELECT playlist_id, kind, title, cover_url, track_count, sort_index
+      `SELECT playlist_id, kind, title, cover_url, track_count, sort_index, sync_state
          FROM netease_playlist
         WHERE list_root = ?
           AND user_id = ?
@@ -79,7 +82,8 @@ export function getNeteaseGroupsFromDb(): NeteaseTreeGroup[] {
         playlistId: String(row.playlist_id),
         title: String(row.title || ''),
         trackCount: Number(row.track_count) || 0,
-        coverUrl: String(row.cover_url || '')
+        coverUrl: String(row.cover_url || ''),
+        syncState: row.sync_state === 'unreadable' ? ('unreadable' as const) : ('ok' as const)
       }))
     if (items.length) groups.push({ id, title, items })
   }
@@ -118,7 +122,8 @@ export function attachNeteaseSubtree(root: TreeNode | null): void {
         // 标题由 getNeteaseGroupsFromDb 给，别在这里再写一份字面量：两处一旦不同就会飘
         dirName: group.title,
         order: order++,
-        trackCount: group.items[0].trackCount
+        trackCount: group.items[0].trackCount,
+        syncState: group.items[0].syncState
       })
       continue
     }
@@ -132,7 +137,8 @@ export function attachNeteaseSubtree(root: TreeNode | null): void {
         type: 'songList',
         dirName: item.title,
         order: index,
-        trackCount: item.trackCount
+        trackCount: item.trackCount,
+        syncState: item.syncState
       }))
     }
     children.push(groupNode)

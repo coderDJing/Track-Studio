@@ -17,7 +17,7 @@ import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExte
 import { type MoveSongsToDirSummary, useSongMoveTransaction } from './useSongMoveTransaction'
 import { isWindowsPathPlatform, normalizeFilePathForComparison } from '@shared/filePathComparison'
 import { isNeteaseStoreCopyOnlySource } from '@renderer/utils/libraryTransfer'
-import { appendNeteaseSongsToSet } from '@renderer/utils/neteaseActions'
+import { appendNeteaseSongsToSet } from '@renderer/utils/neteaseLocalFiles'
 import { NETEASE_DOWNLOADED_UUID, isNeteasePlaylistUuid } from '@shared/netease'
 import { t } from '@renderer/utils/translate'
 

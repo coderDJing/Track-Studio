@@ -23,9 +23,9 @@ import {
   deleteNeteaseLocalFiles,
   downloadNeteaseTracks,
   mapExistingNeteaseSongsToLocalFiles,
-  mapNeteaseSongsToLocalFiles,
-  removeNeteasePlaylistTracks
-} from '@renderer/utils/neteaseActions'
+  mapNeteaseSongsToLocalFiles
+} from '@renderer/utils/neteaseLocalFiles'
+import { removeNeteasePlaylistTracks } from '@renderer/utils/neteaseActions'
 import {
   exportNeteaseTracksToRekordboxXml,
   showNeteaseSongInFolder,

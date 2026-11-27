@@ -19,7 +19,7 @@ import {
 } from '@shared/playbackRange'
 import { WebAudioPlayer } from './webAudioPlayer'
 import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExternalSource'
-import { queueNeteaseAwarePlayingAnalysis } from '@renderer/utils/neteaseActions'
+import { queueNeteaseAwarePlayingAnalysis } from '@renderer/utils/neteaseLocalFiles'
 
 type PlaybackRangeControllerOptions = {
   runtime: ReturnType<typeof useRuntimeStore>

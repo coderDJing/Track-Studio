@@ -19,11 +19,11 @@ import { isRekordboxExternalPlaybackSource } from '@renderer/utils/rekordboxExte
 import { isNeteaseStreamSong, parseNeteaseSongId } from '@renderer/utils/neteaseSongs'
 import {
   appendNeteaseSongsToSet,
-  copyNeteaseSongsToLibrary,
   fulfillNeteasePendingSetSong,
   isNeteasePendingSetSong,
   resolveNeteaseLocalPath
-} from '@renderer/utils/neteaseActions'
+} from '@renderer/utils/neteaseLocalFiles'
+import { copyNeteaseSongsToLibrary } from '@renderer/utils/neteaseActions'
 import {
   NETEASE_DOWNLOADED_UUID,
   isNeteasePlaylistUuid,

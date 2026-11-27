@@ -24,6 +24,14 @@ describe('NeteaseApiError', () => {
     expect(new NeteaseApiError('x', 403, 0).definitive).toBe(true)
   })
 
+  it('把业务码 401（隐私歌单/无权限）判为不可读取，既不是登录失效也不是网络抖动', () => {
+    const error = new NeteaseApiError('该歌单已被创建者设置为隐私', 200, 401)
+    expect(error.noPermission).toBe(true)
+    expect(error.unavailable).toBe(false)
+    expect(error.loginExpired).toBe(false)
+    expect(error.definitive).toBe(true)
+  })
+
   it('把 -460 / -462 / 521 视为不应重试的致命业务码', () => {
     expect(isFatalCode(-460)).toBe(true)
     expect(isFatalCode(-462)).toBe(true)
