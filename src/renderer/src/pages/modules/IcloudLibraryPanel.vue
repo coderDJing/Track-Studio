@@ -742,7 +742,6 @@ watch(songs, (value) => {
       runtime.playingData.playingSongListData = queue
   }
 })
-
 function keydown(event: KeyboardEvent) {
   if (event.target instanceof HTMLInputElement) return
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a') {
