@@ -1,6 +1,6 @@
 {
   "name": "frkb",
-  "version": "1.2.9-rc.202611271019",
+  "version": "1.2.9-rc.202611271523",
   "packageManager": "pnpm@9.15.9",
   "description": "Track Studio — Rapid Audio Organization Tool",
   "license": "PolyForm-Noncommercial-1.0.0",
@@ -197,7 +197,8 @@
       "!.prettierignore",
       "!lint-staged.config.mjs",
       "!*.log",
-      "!dev-run.log"
+      "!dev-run.log",
+      "!native{,/**/*}"
     ],
     "asarUnpack": [
       "node_modules/onnxruntime-common/**",
@@ -295,6 +296,10 @@
         {
           "from": "vendor/r3-stretch/darwin-universal",
           "to": "r3-stretch/darwin-universal"
+        },
+        {
+          "from": "resources/icloud-native",
+          "to": "icloud-native"
         }
       ],
       "x64ArchFiles": "{Contents/Frameworks/**/*,Contents/Resources/ffmpeg/darwin/{ffmpeg,ffprobe},Contents/Resources/app.asar.unpacked/node_modules/@parcel/watcher-darwin-arm64/**/*,Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3/**/*,Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3-multiple-ciphers/**/*,Contents/Resources/app.asar.unpacked/node_modules/serato-connect/node_modules/better-sqlite3-multiple-ciphers/**/*,Contents/Resources/app.asar.unpacked/node_modules/onnxruntime-node/bin/napi-v3/darwin/**/*,Contents/Resources/app.asar.unpacked/node_modules/rust_package/**/*}",
@@ -364,7 +369,7 @@
     "dev": "node scripts/run-frkb-dev.mjs",
     "dev:no-runtime": "node scripts/run-frkb-dev.mjs --no-runtime",
     "dev:release-runtime": "node scripts/run-frkb-dev.mjs --release-runtime",
-    "build": "node scripts/ensure-rust-package-native.mjs --mode package && electron-vite build && node scripts/check-song-list-scan-worker-deps.mjs && node scripts/check-key-analysis-worker-startup.mjs",
+    "build": "node scripts/ensure-icloud-native.mjs && node scripts/ensure-rust-package-native.mjs --mode package && electron-vite build && node scripts/check-song-list-scan-worker-deps.mjs && node scripts/check-key-analysis-worker-startup.mjs && node scripts/check-icloud-metadata.mjs",
     "rust-package:ensure": "node scripts/ensure-rust-package-native.mjs --mode dev",
     "rust-package:ensure:package": "node scripts/ensure-rust-package-native.mjs --mode package",
     "master-tempo:benchmark": "node scripts/ensure-rust-package-native.mjs --mode dev && node scripts/master-tempo-ab-benchmark.mjs",

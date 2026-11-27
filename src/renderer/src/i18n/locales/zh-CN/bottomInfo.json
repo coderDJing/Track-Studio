@@ -9,6 +9,7 @@
     "pendingAnalysisRight": "右 {count} 首待分析",
     "analyzePending": "分析",
     "locatePendingAnalysis": "定位第一首待分析歌曲",
+    "knownDurationOnly": "部分歌曲时长未知",
     "durationUnits": {
       "day": {
         "one": "{count}天",

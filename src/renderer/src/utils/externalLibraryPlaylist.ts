@@ -32,6 +32,7 @@ const parseDurationSec = (value: string) => {
 export const openExternalLibraryPlaylistForSelectedTracks = async (params: {
   tracks: ISongInfo[]
   kind?: ExternalLibraryKind
+  prepareTracks?: (tracks: ISongInfo[]) => Promise<ISongInfo[] | null>
 }): Promise<ExternalLibraryPlaylistWriteResult | null> => {
   const runtime = useRuntimeStore()
   const kind: ExternalLibraryKind = params.kind || 'serato'
@@ -96,7 +97,13 @@ export const openExternalLibraryPlaylistForSelectedTracks = async (params: {
     ? ensureSeratoTrackStorageDirConfigured()
     : ensureTraktorTrackStorageDirConfigured())
   if (!storageDir) return null
-  const storageTracks: RekordboxDesktopPlaylistTrackInput[] = params.tracks.map((track) => ({
+  let selectedTracks = params.tracks
+  if (params.prepareTracks) {
+    const prepared = await params.prepareTracks(params.tracks)
+    if (!prepared || prepared.length === 0) return null
+    selectedTracks = prepared
+  }
+  const storageTracks: RekordboxDesktopPlaylistTrackInput[] = selectedTracks.map((track) => ({
     filePath: track.filePath,
     displayName: String(track.title || track.fileName || '').trim(),
     artist: typeof track.artist === 'string' ? track.artist : '',
@@ -125,7 +132,7 @@ export const openExternalLibraryPlaylistForSelectedTracks = async (params: {
     .map((track) => String(track.filePath || '').trim())
     .filter(Boolean)
 
-  const trackMetadata: TraktorTrackMetadata[] = params.tracks.map((track, index) => ({
+  const trackMetadata: TraktorTrackMetadata[] = selectedTracks.map((track, index) => ({
     storedPath: String(copyResponse.summary.copiedTracks[index]?.filePath || '').trim(),
     title: track.title || undefined,
     artist: track.artist || undefined,

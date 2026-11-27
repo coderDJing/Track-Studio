@@ -94,7 +94,7 @@
     "currentLibraryPathHint": "The music library root currently in use. Handy for confirming paths or troubleshooting.",
     "openCurrentLibraryInExplorer": "Open in File Explorer",
     "explorerContextMenuLabel": "Play in Track Studio",
-    "enableExplorerContextMenu": "Explorer context menu: \"Play in Track Studio\"",
+    "enableExplorerContextMenu": "File Explorer context menu: \"Play in Track Studio\"",
     "clearDirtyData": {
       "title": "Clear Analysis Cache (Dev/Prerelease only)",
       "desc": "Keeps songs, playlists and your library tree, fingerprints, settings, and recycle bin records. Clears key, BPM, first-beat, bar-line and waveform caches, plus Mixtape recording data and caches.",

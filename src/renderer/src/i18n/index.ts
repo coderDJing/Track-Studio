@@ -1,13 +1,16 @@
 import { createI18n } from 'vue-i18n'
+import { withFileManagerLabels } from '@shared/fileManagerLabels'
 import zhCN from './locales/zh-CN/index'
 import enUS from './locales/en-US/index'
 
 // 支持的语言列表
 const SUPPORTED_LOCALES = ['zh-CN', 'en-US'] as const
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number]
+// The existing preload exposes the actual OS before any renderer entry starts.
+const platform = typeof window === 'undefined' ? '' : window.electron?.process?.platform || ''
 const messages = {
-  'zh-CN': zhCN,
-  'en-US': enUS
+  'zh-CN': withFileManagerLabels(zhCN, 'zh-CN', platform),
+  'en-US': withFileManagerLabels(enUS, 'en-US', platform)
 }
 
 // 创建i18n实例

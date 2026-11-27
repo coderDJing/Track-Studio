@@ -1,3 +1,4 @@
+import { getFileManagerLabel } from '@shared/fileManagerLabels'
 import { app, BrowserWindow, Menu } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import zhCNCloudSyncLocale from '../../renderer/src/i18n/locales/zh-CN/cloudSync.json'
@@ -49,6 +50,8 @@ const getCurrentLocaleId = (): 'zh-CN' | 'en-US' =>
 // 简单的字典查找（key 形如 a.b.c）
 const tMenu = (key: string): string => {
   const localeId = getCurrentLocaleId()
+  const fileManagerLabel = getFileManagerLabel(key, localeId, process.platform)
+  if (fileManagerLabel !== undefined) return fileManagerLabel
   const parts = key.split('.')
   let cur: unknown = MENU_MESSAGES[localeId]
   for (const p of parts) {

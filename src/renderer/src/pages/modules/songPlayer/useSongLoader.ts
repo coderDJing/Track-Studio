@@ -1,3 +1,4 @@
+import { isIcloudPlaybackUrl } from '@shared/icloudLibrary'
 import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 
 import { ref, onBeforeUnmount, shallowRef } from 'vue'
@@ -23,6 +24,7 @@ import { queueNeteaseAwarePlayingAnalysis } from '@renderer/utils/neteaseLocalFi
 import { resolveInitialPlaybackRangeStartSec } from '@shared/playbackRange'
 import { projectSongBeatGridMapV2ToFixedGrid } from '@shared/songBeatGridMapV2'
 import { loadRekordboxPlaybackRuntime } from '@renderer/utils/loadRekordboxPlaybackRuntime'
+import { loadIcloudPlayerWaveform } from '@renderer/utils/icloudWaveformPreview'
 
 type WaveformCacheResponse = {
   items?: Array<{
@@ -145,6 +147,14 @@ export function useSongLoader(params: {
     errorMessage?: string
   ) => {
     void _isPreload
+    if (isIcloudPlaybackUrl(filePath)) {
+      isLoadingBlob.value = false
+      runtime.isSwitchingSong = false
+      runtime.playerReady = false
+      audioPlayer.value?.pause()
+      emitter.emit('icloud/playback-error', { url: filePath })
+      return
+    }
     if (!filePath || errorDialogShowing) return
 
     errorDialogShowing = true
@@ -442,7 +452,9 @@ export function useSongLoader(params: {
     const playerInstance = audioPlayer.value
     if (!playerInstance) return
 
-    setCoverByIPC(filePath)
+    const cloudPlayback = isIcloudPlaybackUrl(filePath)
+    if (!cloudPlayback) setCoverByIPC(filePath)
+    // Transport visibility is independent from optional analyzed waveform data.
     waveformShow.value = true
     resolveBpmValue()
     playerInstance.setPioneerPreviewWaveformData(null)
@@ -477,6 +489,15 @@ export function useSongLoader(params: {
         playerInstance.loadFile(filePath)
 
         startPlaybackWhenReady(playerInstance, filePath, requestId)
+        // 播放票只出声。波形用已经落在本机的列表预览，不排队曲库分析，也不把票地址当本地文件去读。
+        if (cloudPlayback) {
+          void loadIcloudPlayerWaveform(runtime.playingData.playingSong).then((data) => {
+            if (!data || requestId !== currentLoadRequestId.value) return
+            if (!sameRendererFilePath(runtime.playingData.playingSong?.filePath, filePath)) return
+            playerInstance.setCompactVisualWaveformData(data)
+          })
+          return
+        }
 
         if (externalWaveformSource) {
           void fetchPioneerPreviewWaveform(

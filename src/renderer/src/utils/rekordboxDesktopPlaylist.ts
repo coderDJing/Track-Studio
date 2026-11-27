@@ -305,6 +305,7 @@ export const openRekordboxDesktopPlaylistForSelectedTracks = async (params: {
   playlistName?: string
   deletePayload?: RekordboxDesktopDeletePayload
   forceKeepSourceTracks?: boolean
+  prepareTracks?: (tracks: ISongInfo[]) => Promise<ISongInfo[] | null>
 }): Promise<RekordboxDesktopPlaylistWriteResult | null> => {
   if (!Array.isArray(params.tracks) || params.tracks.length === 0) {
     await confirm({
@@ -336,7 +337,13 @@ export const openRekordboxDesktopPlaylistForSelectedTracks = async (params: {
   if (retentionChoice === 'cancel') return null
   const deleteSourceAfterWrite = retentionChoice === 'reset'
 
-  const originalTracks = sortByPlaylistTrackNumber(params.tracks).map((track) =>
+  let selectedTracks = params.tracks
+  if (params.prepareTracks) {
+    const prepared = await params.prepareTracks(params.tracks)
+    if (!prepared || prepared.length === 0) return null
+    selectedTracks = prepared
+  }
+  const originalTracks = sortByPlaylistTrackNumber(selectedTracks).map((track) =>
     buildTrackInput(track)
   )
   if (!(await ensureRekordboxDesktopWriteAvailable('write'))) {

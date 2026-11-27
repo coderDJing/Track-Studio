@@ -122,3 +122,9 @@ export const subscribePioneerPreviewWaveformDone = (handler: PioneerPreviewWavef
     unbindWaveformIpcListenersIfIdle()
   }
 }
+
+export const notifyWaveformUpdated = (filePath: string) => {
+  const path = String(filePath || '').trim()
+  if (!path) return
+  globalHandleWaveformUpdated(null, { filePath: path })
+}

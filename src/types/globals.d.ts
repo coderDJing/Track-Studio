@@ -48,6 +48,8 @@ declare global {
 }
 
 interface ISongInfo {
+  icloudOrigin?: { relativePath: string; rootToken: string; key: string }
+
   filePath: string
   fileName: string
   fileFormat: string
@@ -700,6 +702,7 @@ interface ISettingConfig {
   // 从网易云自建歌单移除曲目时，对已下载本地文件的处理：每次询问 / 同时删除 / 保留
   neteaseRemovePlaylistLocalFiles?: 'ask' | 'delete' | 'keep'
   // 是否在左侧库栏显示网易云音乐图标；关掉后可在设置里重新打开。默认显示。
+  showIcloudLibraryIcon?: boolean
   showNeteaseLibraryIcon?: boolean
   globalCallShortcut: string
   enableWindowScreenshotShortcut?: boolean

@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, useTemplateRef } from 'vue'
+import { computed } from 'vue'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
+import SongListPaneChrome from './SongListPaneChrome.vue'
 import EmptyRecycleBinIcon from '@renderer/components/EmptyRecycleBinIcon.vue'
+import SongListSettingsToggle from './SongListSettingsToggle.vue'
 import singleCheckbox from '@renderer/components/singleCheckbox.vue'
 import { t } from '@renderer/utils/translate'
 import { useRuntimeStore, type SongsAreaPaneKey } from '@renderer/stores/runtime'
@@ -77,16 +79,10 @@ const emit = defineEmits<{
   (event: 'empty-recycle-bin'): void
   (event: 'cleanup-netease-orphans'): void
 }>()
-const searchInput = useTemplateRef<HTMLInputElement>('searchInput')
-const clearSearch = () => {
-  searchQuery.value = ''
-  searchInput.value?.focus()
-}
 </script>
 
 <template>
-  <div class="songs-pane-header">
-    <div class="songs-pane-header__title">{{ title }}</div>
+  <SongListPaneChrome v-model:query="searchQuery" :title="title" @close="emit('close')">
     <span v-if="props.neteaseSummaryText" class="songs-pane-header__netease-summary">{{
       props.neteaseSummaryText
     }}</span>
@@ -110,20 +106,11 @@ const clearSearch = () => {
     >
       <EmptyRecycleBinIcon />
     </bubbleBoxTrigger>
-    <bubbleBoxTrigger
+    <SongListSettingsToggle
       v-if="canCustomize"
-      class="songs-pane-header__key-filter"
-      :title="t(independentSettingsHint)"
-      @click.stop
-      @keydown.stop
-    >
-      <singleCheckbox v-model="independentSettings">
-        <span class="songs-pane-header__label-full">{{ t('tracks.independentListSettings') }}</span>
-        <span class="songs-pane-header__label-compact">{{
-          t('tracks.independentListSettingsCompact')
-        }}</span>
-      </singleCheckbox>
-    </bubbleBoxTrigger>
+      v-model="independentSettings"
+      :hint="t(independentSettingsHint)"
+    />
     <bubbleBoxTrigger
       v-if="runtime.mainWindowBrowseMode !== 'browser'"
       class="songs-pane-header__key-filter"
@@ -145,205 +132,6 @@ const clearSearch = () => {
         }}</span>
       </singleCheckbox>
     </bubbleBoxTrigger>
-    <div class="songs-pane-header__search" @click.stop @keydown.stop>
-      <svg viewBox="0 0 16 16" aria-hidden="true">
-        <circle cx="6.5" cy="6.5" r="4.25" />
-        <path d="m10 10 3.5 3.5" />
-      </svg>
-      <input
-        ref="searchInput"
-        v-model="searchQuery"
-        type="text"
-        :placeholder="t('tracks.playlistSearchPlaceholder')"
-        :aria-label="t('tracks.playlistSearchPlaceholder')"
-        autocomplete="off"
-        spellcheck="false"
-        @keydown.esc.prevent="clearSearch"
-      />
-      <bubbleBoxTrigger
-        v-if="searchQuery"
-        tag="button"
-        class="songs-pane-header__button songs-pane-header__clear"
-        type="button"
-        :title="t('tracks.clearPlaylistSearch')"
-        :aria-label="t('tracks.clearPlaylistSearch')"
-        @click.stop="clearSearch"
-      >
-        <span aria-hidden="true">×</span>
-      </bubbleBoxTrigger>
-    </div>
-    <bubbleBoxTrigger
-      tag="button"
-      class="songs-pane-header__button"
-      type="button"
-      :title="t('common.close')"
-      :aria-label="t('common.close')"
-      @click.stop="emit('close')"
-    >
-      <span aria-hidden="true">×</span>
-    </bubbleBoxTrigger>
-  </div>
+  </SongListPaneChrome>
 </template>
-
-<style scoped lang="scss">
-.songs-pane-header {
-  container: songs-pane-header / inline-size;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  min-width: 0;
-  padding: 0 10px;
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg) 90%, var(--text) 10%);
-  flex-shrink: 0;
-}
-
-.songs-pane-header__label-compact {
-  display: none;
-}
-
-@container songs-pane-header (max-width: 460px) {
-  .songs-pane-header__label-full {
-    display: none;
-  }
-
-  .songs-pane-header__label-compact {
-    display: inline;
-  }
-}
-
-.songs-pane-header__title {
-  flex: 1;
-  min-width: 0;
-  font-size: 12px;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.songs-pane-header__button {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  flex-shrink: 0;
-
-  &:hover {
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
-  }
-}
-
-/* 「查看已下载」的合计：跟标题同一行，弱化处理，不抢标题 */
-.songs-pane-header__netease-summary {
-  font-size: 12px;
-  color: var(--text-weak);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-/* 孤儿清理是文字按钮，宽度按内容走，不能沿用 24px 的图标尺寸 */
-.songs-pane-header__button--text {
-  width: auto;
-  padding: 0 8px;
-  font-size: 12px;
-  color: var(--text-weak);
-  border: 1px solid var(--border);
-
-  &:hover {
-    color: var(--text);
-    border-color: var(--accent);
-  }
-}
-
-.songs-pane-header__key-filter {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  font-size: 12px;
-  white-space: nowrap;
-
-  :deep(.checkBoxContainer) {
-    gap: 5px;
-  }
-
-  :deep(.checkBox) {
-    width: 12px;
-    height: 12px;
-    flex-shrink: 0;
-  }
-
-  :deep(.checkBox .box) {
-    width: 12px;
-    height: 12px;
-  }
-
-  :deep(.checkBox .box::after) {
-    width: 7px;
-    height: 4px;
-    top: 2px;
-    left: 2px;
-  }
-}
-
-.songs-pane-header__search {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  width: 190px;
-  max-width: 50%;
-  min-width: 0;
-  height: 25px;
-  padding: 0 5px;
-  box-sizing: border-box;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--bg);
-  color: var(--text);
-
-  &:focus-within {
-    border-color: var(--accent);
-  }
-
-  > svg {
-    width: 13px;
-    height: 13px;
-    flex-shrink: 0;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.5;
-    opacity: 0.65;
-  }
-
-  input {
-    width: 100%;
-    min-width: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    font-size: 12px;
-    user-select: text;
-    -webkit-user-select: text;
-
-    &::placeholder {
-      color: var(--text);
-      opacity: 0.55;
-    }
-  }
-}
-
-.songs-pane-header__clear {
-  width: 18px;
-  height: 18px;
-  border-radius: 3px;
-}
-</style>
+<style scoped lang="scss" src="./SongListPaneChrome.scss"></style>

@@ -484,6 +484,7 @@ export const useSongsAreaDragAndDrop = (options: UseSongsAreaDragAndDropOptions)
           'application/x-song-drag',
           JSON.stringify({
             type: 'song',
+            paths: [...runtime.draggingSongFilePaths],
             sourceLibraryName: runtime.libraryAreaSelected,
             sourceSongListUUID: options.songsAreaState.songListUUID,
             sourceMixtapeItemIds: itemIds
@@ -524,6 +525,7 @@ export const useSongsAreaDragAndDrop = (options: UseSongsAreaDragAndDropOptions)
         'application/x-song-drag',
         JSON.stringify({
           type: 'song',
+          paths: [...runtime.draggingSongFilePaths],
           sourceLibraryName: runtime.libraryAreaSelected,
           sourceSongListUUID: options.songsAreaState.songListUUID
         })

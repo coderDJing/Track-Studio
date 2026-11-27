@@ -71,6 +71,7 @@ const fixture = async () => {
     songsArea: { songListUUID: '' },
     externalDjLibrary: {}
   }) as unknown as Options['runtime']
+  const activated = vi.fn()
   const scope = effectScope()
   scopes.push(scope)
   const state = scope.run(() =>
@@ -80,7 +81,8 @@ const fixture = async () => {
       rekordboxDesktopIconAsset: 'desktop.svg',
       updateSelectedIcon: vi.fn(),
       waitForUiIdle: vi.fn().mockResolvedValue(undefined),
-      emitLibrarySelectedChange: vi.fn()
+      emitLibrarySelectedChange: vi.fn(),
+      onLibraryActivated: activated
     })
   )!
   await state.refreshRekordboxSourceIcons({ force: true })
@@ -100,7 +102,7 @@ const fixture = async () => {
     })
   const eject = (icon: PioneerDriveIcon) =>
     state.handlePioneerDriveContextmenu({ preventDefault: vi.fn() } as unknown as MouseEvent, icon)
-  return { state, runtime, device, one, other, select, eject }
+  return { state, runtime, device, one, other, select, eject, activated }
 }
 
 beforeEach(() => {
@@ -430,4 +432,42 @@ describe('ejecting a USB with both library formats', () => {
       expect(confirm).toHaveBeenCalledOnce()
     }
   )
+})
+
+describe('sibling library activation callbacks', () => {
+  it('activates valid USB navigation but ignores an invalid destination', async () => {
+    const { state, device, activated } = await fixture()
+    await state.clickPioneerDriveIcon({ ...device, path: '' })
+    expect(activated).not.toHaveBeenCalled()
+    await state.clickPioneerDriveIcon(device)
+    expect(activated).toHaveBeenCalledTimes(1)
+  })
+  it('activates an already selected cached desktop source without resetting its playlist', async () => {
+    invoke.mockImplementation(async (channel: string) => {
+      if (channel === 'rekordbox-desktop-library:probe')
+        return { available: true, sourceRootPath: 'D:/Pioneer', sourceKey: 'desktop' }
+      if (channel === 'rekordbox-desktop-library:source-revision') return { revision: 'same' }
+      if (channel === 'pioneer-device-library:list-removable-drives') return []
+      throw new Error(`Unexpected IPC: ${channel}`)
+    })
+    const { state, runtime, activated } = await fixture(),
+      icon = state.desktopLibraryIcon.value!
+    const key = buildRekordboxSourceCacheKey({
+      sourceKind: 'desktop',
+      sourceKey: icon.key,
+      rootPath: icon.rootPath,
+      libraryType: 'masterDb'
+    })
+    setCachedRekordboxSourceTree(key, [], { revision: 'same' })
+    Object.assign(runtime.pioneerDeviceLibrary, {
+      selectedSourceKind: 'desktop',
+      selectedSourceKey: icon.key,
+      selectedPlaylistId: 42
+    })
+    runtime.songsArea.songListUUID = 'kept-playlist'
+    await state.clickDesktopLibraryIcon()
+    expect(activated).toHaveBeenCalledTimes(1)
+    expect(runtime.songsArea.songListUUID).toBe('kept-playlist')
+    expect(runtime.pioneerDeviceLibrary.selectedPlaylistId).toBe(42)
+  })
 })

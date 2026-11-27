@@ -1,6 +1,12 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import type { ISongInfo } from '../../../../../../types/globals'
 
+export const isProvidedVerticalMetrics = (top: unknown, height: unknown) =>
+  typeof top === 'number' &&
+  Number.isFinite(top) &&
+  typeof height === 'number' &&
+  Number.isFinite(height)
+
 interface UseVirtualRowsOptions {
   songs: Ref<ISongInfo[] | undefined>
   scrollHostElement?: Ref<HTMLElement | null | undefined>
@@ -25,7 +31,10 @@ export function useVirtualRows({
   const viewportHeight = ref(0)
   const songsComputed = computed(() => songs.value ?? [])
   const totalHeight = computed(() => songsComputed.value.length * rowHeight.value)
-  const hasExternalVerticalMetrics = !!externalScrollTop && !!externalViewportHeight
+  // SongListRows always passes these refs, even when the parent did not sample
+  // OverlayScrollbars. Only numeric values mean external metrics are in use.
+  const usesExternalVerticalMetrics = () =>
+    isProvidedVerticalMetrics(externalScrollTop?.value, externalViewportHeight?.value)
 
   function measureRowHeight() {
     const root = rowsRoot.value
@@ -105,7 +114,7 @@ export function useVirtualRows({
 
   function applyCarrierSnapshot() {
     const carrier = detectScrollCarrier()
-    if (!hasExternalVerticalMetrics) {
+    if (!usesExternalVerticalMetrics()) {
       scrollTop.value = carrier.top
       viewportHeight.value = carrier.height
     }

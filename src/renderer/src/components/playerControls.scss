@@ -1,0 +1,129 @@
+.moreMenu {
+  width: 280px;
+  background-color: var(--bg-elev);
+  position: absolute;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  z-index: var(--z-popover);
+  bottom: 58px;
+  left: 250px;
+  font-size: 14px;
+  color: var(--text);
+
+  .menuButton {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 20px;
+    border-radius: 5px;
+
+    &:hover {
+      background-color: var(--accent);
+      color: #ffffff;
+    }
+  }
+
+  /* 右侧快捷键容器：始终将内容贴右，字母固定宽度，避免不同字符宽度造成图标水平抖动 */
+  .menuButton .shortcut {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  .menuButton .shortcut span {
+    display: inline-block;
+    width: 1.5ch; /* 约等于一个数字字符宽，足够容纳 Q/E/F 等 */
+    text-align: center; /* 居中，保证不同字符的视觉中心一致 */
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  }
+
+  .hasSubmenu {
+    position: relative;
+
+    &.submenuOpen {
+      background-color: var(--accent);
+      color: #ffffff;
+    }
+  }
+
+  .submenu {
+    position: absolute;
+    left: 100%;
+    bottom: 0;
+    width: 200px;
+    background-color: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 5px 5px;
+    z-index: var(--z-popover);
+  }
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s;
+}
+
+.fade-enter,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.playerControlsRoot {
+  width: 100%;
+}
+
+.playerControls {
+  display: flex;
+  width: 100%;
+  height: 44px;
+  align-items: center;
+  justify-content: space-between;
+
+  .buttonIcon {
+    height: 36px;
+    width: 36px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    &:hover {
+      filter: contrast(120%) drop-shadow(0px 0px 6px var(--text));
+    }
+  }
+
+  .miniWindowButton {
+    color: #cccccc;
+  }
+
+  .miniWindowIcon {
+    width: 18px;
+    height: 18px;
+    display: block;
+    background: currentColor;
+    -webkit-mask: url('../assets/miniPlayerPip.svg') center / contain no-repeat;
+    mask: url('../assets/miniPlayerPip.svg') center / contain no-repeat;
+  }
+}
+
+img {
+  width: 18px;
+  height: 18px;
+}
+
+/* 浅色主题下：去掉阴影，用纯黑作为 hover 高亮（适用于白色 PNG 图标） */
+.theme-light .playerControls {
+  .buttonIcon:hover {
+    filter: none;
+  }
+  .buttonIcon img {
+    filter: grayscale(1) brightness(0.58);
+  }
+  .buttonIcon:hover img {
+    filter: grayscale(1) brightness(0);
+  }
+  .miniWindowIcon {
+    background: #767676;
+  }
+  .miniWindowButton:hover .miniWindowIcon {
+    background: #000000;
+  }
+}

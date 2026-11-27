@@ -63,6 +63,8 @@ import {
 import ascendingOrderAsset from '@renderer/assets/ascending-order.svg?asset'
 import descendingOrderAsset from '@renderer/assets/descending-order.svg?asset'
 
+import SongListViewport from './SongListViewport.vue'
+import SongListState from './SongListState.vue'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-vue'
 
 // 类型定义，便于正确引用 OverlayScrollbarsComponent 实例
@@ -915,28 +917,10 @@ const { shouldShowEmptyState, emptyTitleText, emptyHintText } = useSongsAreaEmpt
 
       <div v-else-if="viewState === 'blank'" key="blank" class="songs-area-blank"></div>
 
-      <div v-else-if="viewState === 'loading'" key="loading" class="loading-wrapper">
-        <div class="loading"></div>
-      </div>
+      <SongListState v-else-if="viewState === 'loading'" key="loading" loading />
 
       <div v-else key="list" class="songs-area-shell" data-user-guide-target="songs-list-body">
-        <OverlayScrollbarsComponent
-          ref="songsAreaRef"
-          :options="{
-            scrollbars: {
-              autoHide: 'leave' as const,
-              autoHideDelay: 50,
-              clickScroll: true
-            } as const,
-            overflow: {
-              x: 'scroll',
-              y: 'scroll'
-            } as const
-          }"
-          element="div"
-          style="height: 100%; width: 100%; position: relative"
-          @click="handleOverlayClick"
-        >
+        <SongListViewport ref="songsAreaRef" @click="handleOverlayClick">
           <SongListHeader
             :columns="columnData"
             :t="t"
@@ -992,7 +976,7 @@ const { shouldShowEmptyState, emptyTitleText, emptyHintText } = useSongsAreaEmpt
               </Transition>
             </div>
           </Transition>
-        </OverlayScrollbarsComponent>
+        </SongListViewport>
 
         <SongsAreaFloatingActions
           :deck-targets="deckLocateTargets"
@@ -1021,21 +1005,13 @@ const { shouldShowEmptyState, emptyTitleText, emptyHintText } = useSongsAreaEmpt
         </Transition>
 
         <!-- Empty State Overlay: 鐙珛浜庢粴鍔ㄥ唴瀹癸紝濮嬬粓灞呬腑鍦ㄥ彲瑙嗗尯鍩?-->
-        <div
+        <SongListState
           v-if="shouldShowEmptyState"
-          class="songs-area-empty-overlay unselectable"
+          :title="emptyTitleText"
+          :hint="emptyHintText"
           data-user-guide-target="songs-source"
           @click.stop="handleEmptyOverlayClick"
-        >
-          <div class="empty-box">
-            <div class="title">
-              {{ emptyTitleText }}
-            </div>
-            <div class="hint">
-              {{ emptyHintText }}
-            </div>
-          </div>
-        </div>
+        />
       </div>
     </Transition>
 

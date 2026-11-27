@@ -92,3 +92,6 @@ resources/demoAnalysis/demo-analysis-seed.fingerprint
 # Local screenshots from the Windows small-window regression
 /drafts/windows-small-window-regression-20261026/screenshots/*.png
 /drafts/windows-small-window-regression-20261026/fix-verification/screenshots/*.png
+
+# Generated universal Foundation iCloud helper (built by dev/build).
+/resources/icloud-native/

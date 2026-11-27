@@ -1,3 +1,4 @@
+import type { ISongsAreaColumn } from 'src/types/globals'
 import { computed, onScopeDispose, ref, watch, type ComputedRef } from 'vue'
 import type {
   ISongsAreaPaneRuntimeState,
@@ -17,18 +18,26 @@ interface PlaylistColumnSettingsParams {
   columnMode: ComputedRef<SongsAreaColumnMode>
   shouldPersistToLocalStorage: () => boolean
   onSettingsChange: () => void
+  externalScope?: {
+    libraryUuid: ComputedRef<string>
+    canCustomize: ComputedRef<boolean>
+    project: (columns: ISongsAreaColumn[]) => ISongsAreaColumn[]
+    mergeShared: (columns: ISongsAreaColumn[], shared: ISongsAreaColumn[]) => ISongsAreaColumn[]
+  }
 }
 
 export const usePlaylistColumnSettings = (params: PlaylistColumnSettingsParams) => {
   const { runtime, songsAreaState, columnMode, onSettingsChange } = params
   const store = usePlaylistViewSettingsStore()
-  const libraryUuid = computed(() => runtime.libraryTree.uuid)
-  const canCustomize = computed(
-    () =>
-      !!libraryUuid.value &&
-      (Boolean(songsAreaState.djPlaylist) ||
-        isPlaylistViewNode(libraryUtils.getLibraryTreeByUUID(songsAreaState.songListUUID)))
-  )
+  const libraryUuid = params.externalScope?.libraryUuid ?? computed(() => runtime.libraryTree.uuid)
+  const canCustomize =
+    params.externalScope?.canCustomize ??
+    computed(
+      () =>
+        !!libraryUuid.value &&
+        (Boolean(songsAreaState.djPlaylist) ||
+          isPlaylistViewNode(libraryUtils.getLibraryTreeByUUID(songsAreaState.songListUUID)))
+    )
   const playlistSettings = computed(() =>
     canCustomize.value
       ? store.getPlaylist(
@@ -39,11 +48,12 @@ export const usePlaylistColumnSettings = (params: PlaylistColumnSettingsParams) 
       : undefined
   )
   const independentSettings = computed(() => playlistSettings.value?.enabled === true)
-  const effectiveColumns = computed(() =>
-    independentSettings.value
+  const effectiveColumns = computed(() => {
+    const columns = independentSettings.value
       ? playlistSettings.value!.columns
       : store.getSharedColumns(columnMode.value, runtime.setting.persistSongFilters)
-  )
+    return params.externalScope?.project(columns) ?? columns
+  })
   const columnData = ref(cloneSongColumns(effectiveColumns.value))
   let applyingSettings = false
   let restoringPlaylist = false
@@ -135,7 +145,13 @@ export const usePlaylistColumnSettings = (params: PlaylistColumnSettingsParams) 
       )
     } else {
       songsAreaState.columnCacheByMode[columnMode.value] = cloneSongColumns(columnData.value)
-      store.updateSharedColumns(columnMode.value, columnData.value)
+      store.updateSharedColumns(
+        columnMode.value,
+        params.externalScope?.mergeShared(
+          columnData.value,
+          store.getSharedColumns(columnMode.value, runtime.setting.persistSongFilters)
+        ) ?? columnData.value
+      )
     }
   }
 

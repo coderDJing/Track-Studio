@@ -1,3 +1,4 @@
+import { getFileManagerCopy } from '@shared/fileManagerLabels'
 import {
   app,
   shell,
@@ -321,10 +322,16 @@ const showWindowScreenshotNotification = (params: {
     params.kind === 'success'
       ? isEnglish
         ? outputPath
-          ? `Saved to:\n${outputPath}\nClick to reveal in Explorer.`
+          ? getFileManagerCopy('en-US', process.platform).screenshotSaved.replace(
+              '{path}',
+              () => outputPath
+            )
           : 'Saved successfully.'
         : outputPath
-          ? `已保存到：\n${outputPath}\n点击可打开所在位置。`
+          ? getFileManagerCopy('zh-CN', process.platform).screenshotSaved.replace(
+              '{path}',
+              () => outputPath
+            )
           : '截图已保存。'
       : isEnglish
         ? errorMessage || 'Unknown error.'

@@ -90,6 +90,7 @@ let settingConfig: ISettingConfig = {
   neteasePreviewCacheBytes: 10 * 1024 * 1024 * 1024,
   neteaseRemovePlaylistLocalFiles: 'ask' as const,
   // 左侧库栏是否显示网易云图标；关掉后可在设置里重新打开。默认显示。
+  showIcloudLibraryIcon: true,
   showNeteaseLibraryIcon: true
 } //设置config
 export default {

@@ -1,3 +1,4 @@
+import { isCloudListActive } from '@renderer/utils/activeSongListContext'
 import { onMounted, onUnmounted } from 'vue'
 import { RendererFilePathSet } from '@renderer/utils/filePathComparison'
 import hotkeys, { type KeyHandler } from 'hotkeys-js'
@@ -298,6 +299,7 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
   }
 
   async function handleDeleteKey() {
+    if (isCloudListActive()) return
     const activeSongsAreaState = songsAreaState
     const selectedKeys = [...activeSongsAreaState.selectedSongFilePath]
     if (!selectedKeys.length) return false
@@ -444,7 +446,7 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
       shouldDelete = res === 'confirm'
     }
 
-    if (shouldDelete) {
+    if (shouldDelete && !isCloudListActive()) {
       const selectedSnapshot = [...activeSongsAreaState.songInfoArr]
       const resolvedSelectedPaths = resolveSelectedFilePathsForState(
         activeSongsAreaState,
@@ -617,6 +619,7 @@ export function useKeyboardSelection(params: UseKeyboardSelectionParams) {
       if (boundWindowHotkeys.has(keys)) return
       boundWindowHotkeys.add(keys)
       hotkeys(keys, 'windowGlobal', (event, keyEvent) => {
+        if (isCloudListActive()) return false
         const activeHandlers = windowKeyboardOwners.get(runtime.songsArea)
         return activeHandlers?.get(keys)?.(event, keyEvent)
       })

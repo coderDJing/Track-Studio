@@ -379,9 +379,10 @@ const hideLegacyNeteaseFileNameColumn = (
 export const normalizeSongColumns = (
   value: unknown,
   mode: SongsAreaColumnMode,
-  persistFilters: boolean
+  persistFilters: boolean,
+  defaultsOverride?: ISongsAreaColumn[]
 ): ISongsAreaColumn[] => {
-  const defaults = buildSongsAreaDefaultColumns(mode)
+  const defaults = defaultsOverride ?? buildSongsAreaDefaultColumns(mode)
   const byKey = new Map(defaults.map((column) => [column.key, column]))
   const seen = new Set<string>()
   const columns: ISongsAreaColumn[] = []

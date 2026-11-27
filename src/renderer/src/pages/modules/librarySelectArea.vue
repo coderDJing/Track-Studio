@@ -50,6 +50,12 @@ import { useRekordboxSourceIcons } from './librarySelectArea/useRekordboxSourceI
 import RekordboxRuntimeMissingEntry from './librarySelectArea/RekordboxRuntimeMissingEntry.vue'
 import { useExternalDjSourceIcons } from './librarySelectArea/useExternalDjSourceIcons'
 import { useLibraryBatchActions } from './librarySelectArea/useLibraryBatchActions'
+import IcloudLibraryEntry from './IcloudLibraryEntry.vue'
+import {
+  useIcloudLibraryRail,
+  leaveIcloudLibrary,
+  selectIcloudSiblingLibrary
+} from './librarySelectArea/useIcloudLibraryRail'
 import { resolveActivePlaybackSongListUUIDs } from '@renderer/utils/playbackSongListSources'
 import { scrollIntoContainerView } from '@renderer/utils/scrollIntoContainerView'
 const props = defineProps<{ containScroll?: boolean }>()
@@ -253,7 +259,7 @@ const updateSelectedIcon = (item: HoverableIcon | undefined) => {
 }
 
 const selectLibraryIcon = (item: Icon) => {
-  runtime.libraryAreaSelected = item.name
+  selectIcloudSiblingLibrary(runtime, item.name)
 }
 
 /**
@@ -269,7 +275,7 @@ const canEnterNeteaseImmediately = (): boolean =>
   neteaseLoggedIn.value === true || hasNeteasePlaylistInTree()
 
 const enterNeteaseLibrary = () => {
-  runtime.libraryAreaSelected = 'NeteaseLibrary'
+  selectIcloudSiblingLibrary(runtime, 'NeteaseLibrary')
   // 只有树上还是空的才亮 loading；歌单已经出来后不要再插一条「正在同步」。
   if (!hasNeteasePlaylistInTree()) neteaseCatalogSyncing.value = true
   // 先让这一帧把蓝条和 loading 画出来，再发同步，避免第一次点击像卡住。
@@ -402,7 +408,8 @@ const {
   rekordboxDesktopIconAsset: rekordboxIconAsset,
   updateSelectedIcon,
   waitForUiIdle,
-  emitLibrarySelectedChange: (payload) => emit('librarySelectedChange', payload)
+  emitLibrarySelectedChange: (payload) => emit('librarySelectedChange', payload),
+  onLibraryActivated: leaveIcloudLibrary
 })
 const {
   sourceIcons: externalDjSourceIcons,
@@ -413,10 +420,13 @@ const {
   seratoIconAsset,
   traktorIconAsset,
   updateSelectedIcon,
-  emitLibrarySelectedChange: (payload) => emit('librarySelectedChange', payload)
+  emitLibrarySelectedChange: (payload) => emit('librarySelectedChange', payload),
+  onLibraryActivated: leaveIcloudLibrary
 })
+const icloudEntryVisible = useIcloudLibraryRail(runtime)
 const hasDynamicEntries = computed(
   () =>
+    icloudEntryVisible.value ||
     dynamicIconArr.value.length > 0 ||
     Boolean(desktopLibraryIcon.value) ||
     desktopRuntimeMissing.value ||
@@ -654,6 +664,7 @@ watch(
 watch(
   () => [
     hasDynamicEntries.value,
+    icloudEntryVisible.value,
     dynamicIconArr.value.map((item) => item.name).join('|'),
     desktopLibraryIcon.value?.key || '',
     externalDjSourceIcons.value.map((item) => item.key).join('|'),
@@ -760,6 +771,7 @@ watch(
           element="div"
           defer
         >
+          <IcloudLibraryEntry v-if="icloudEntryVisible" />
           <div
             v-for="item of dynamicIconArr"
             :key="item.name"
@@ -952,256 +964,4 @@ watch(
     </div>
   </div>
 </template>
-<style lang="scss" scoped>
-.librarySelectArea {
-  height: 100%;
-  width: 45px;
-  border-right: 1px solid var(--border);
-  background-color: var(--bg);
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-
-  .librarySelectAreaCore {
-    flex: 0 0 auto;
-  }
-
-  .librarySelectAreaDynamic {
-    flex: 1 1 auto;
-    min-height: 0;
-    position: relative;
-  }
-
-  .librarySelectAreaDynamic--with-divider {
-    min-height: 45px;
-  }
-
-  .librarySelectAreaDynamic--with-divider::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: color-mix(in srgb, var(--border) 88%, transparent);
-    pointer-events: none;
-    z-index: 2;
-  }
-
-  .librarySelectAreaDynamicScrollShell {
-    height: 100%;
-    position: relative;
-  }
-
-  .librarySelectAreaDynamicScroller {
-    height: 100%;
-    width: 100%;
-  }
-
-  .librarySelectAreaScrollFade {
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: 18px;
-    pointer-events: none;
-    z-index: 1;
-  }
-
-  .librarySelectAreaScrollFade--top {
-    top: 0;
-    background: linear-gradient(to bottom, var(--bg), transparent);
-  }
-
-  .librarySelectAreaScrollFade--bottom {
-    bottom: 0;
-    background: linear-gradient(to top, var(--bg), transparent);
-  }
-
-  .fade-enter-active,
-  .fade-leave-active {
-    transition: opacity 0.15s;
-  }
-
-  .fade-enter,
-  .fade-leave-to {
-    opacity: 0;
-  }
-
-  .iconBox {
-    width: 45px;
-    height: 45px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
-
-    .iconBoxAccent {
-      width: 2px;
-      height: 100%;
-      flex: 0 0 2px;
-    }
-
-    .iconBoxContent {
-      flex-grow: 1;
-      height: 100%;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      box-sizing: border-box;
-      position: relative;
-    }
-
-    .sidebar-icon {
-      width: 25px;
-      height: 25px;
-      display: inline-block;
-      position: relative;
-      opacity: var(--sidebar-icon-opacity);
-      background-color: currentColor;
-      color: var(--text);
-      mask-image: var(--icon-mask);
-      mask-repeat: no-repeat;
-      mask-position: center;
-      mask-size: contain;
-      -webkit-mask-image: var(--icon-mask);
-      -webkit-mask-repeat: no-repeat;
-      -webkit-mask-position: center;
-      -webkit-mask-size: contain;
-      transition:
-        opacity 0.15s ease,
-        color 0.15s ease;
-    }
-
-    .sidebar-icon.is-ejecting,
-    .sidebar-icon.is-importing {
-      opacity: 0.82;
-    }
-
-    .sidebar-icon.is-ejecting::after,
-    .sidebar-icon.is-importing::after {
-      content: '';
-      position: absolute;
-      width: 6px;
-      height: 6px;
-      right: -2px;
-      bottom: -1px;
-      border-radius: 999px;
-      background-color: var(--accent);
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 24%, transparent);
-      animation: usb-drive-eject-dot 1.15s ease-in-out infinite;
-      pointer-events: none;
-    }
-
-    &:hover .sidebar-icon {
-      opacity: 0.85;
-    }
-
-    .sidebar-icon.is-active {
-      opacity: 1;
-    }
-
-    .sidebar-icon.is-playing {
-      opacity: 1;
-      color: var(--accent);
-    }
-
-    &.iconBox--device.is-ejecting,
-    &.iconBox--device.is-importing {
-      cursor: progress;
-    }
-
-    &.iconBox--device-group {
-      height: 39px;
-    }
-  }
-
-  .deviceGroup {
-    --device-connector-x: 6px;
-    --device-connector-branch-width: 4px;
-    width: 45px;
-    display: flex;
-    justify-content: center;
-    padding: 4px 0;
-  }
-
-  .deviceGroupInner {
-    width: 45px;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 2px;
-  }
-
-  :deep(.librarySelectAreaDynamicScroller .os-viewport) {
-    overscroll-behavior: contain;
-  }
-
-  .deviceGroup--multi .deviceGroupInner::before {
-    content: '';
-    position: absolute;
-    top: 19.5px;
-    bottom: 19.5px;
-    left: var(--device-connector-x);
-    width: 1.5px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--border) 78%, transparent);
-    pointer-events: none;
-  }
-
-  .deviceGroup--multi .iconBox--device-group::before {
-    content: '';
-    position: absolute;
-    left: var(--device-connector-x);
-    top: 50%;
-    width: var(--device-connector-branch-width);
-    height: 1.5px;
-    transform: translateY(-50%);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--border) 78%, transparent);
-    pointer-events: none;
-  }
-
-  .deviceGroup--selected.deviceGroup--multi .deviceGroupInner::before,
-  .deviceGroup--selected.deviceGroup--multi .iconBox--device-group::before {
-    background: color-mix(in srgb, var(--accent) 52%, var(--border));
-  }
-
-  .bubbleBox {
-    height: 22px;
-    line-height: 22px;
-    text-align: center;
-    position: relative;
-    border-radius: 3px;
-    border: 1px solid var(--border);
-    font-size: 12px;
-    background-color: var(--bg-elev);
-    padding: 0 10px;
-  }
-
-  .bubbleBox::before {
-    content: '';
-    position: absolute;
-    width: 0;
-    height: 0;
-    top: 5px;
-    left: -5px;
-    border-top: 5px solid transparent;
-    border-bottom: 5px solid transparent;
-    border-right: 5px solid var(--border);
-  }
-
-  @keyframes usb-drive-eject-dot {
-    0%,
-    100% {
-      opacity: 0.45;
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 12%, transparent);
-    }
-
-    50% {
-      opacity: 1;
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 0%, transparent);
-    }
-  }
-}
-</style>
+<style lang="scss" scoped src="./librarySelectArea.scss"></style>

@@ -6,6 +6,7 @@ import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 import { t } from '@renderer/utils/translate'
 import { settingDialogContextKey, type SettingDialogContext } from './context'
 import { useNeteaseSettings } from './useNeteaseSettings'
+import IcloudLibrarySettings from './IcloudLibrarySettings.vue'
 import { useAcoustIdKey } from './useAcoustIdKey'
 import { useDjStorageDirs } from './useDjStorageDirs'
 import SettingsPage from './SettingsPage.vue'
@@ -54,6 +55,7 @@ const enableExplorerContextMenuModel = computed<boolean>({
 
 <template>
   <SettingsPage page="integrations">
+    <IcloudLibrarySettings />
     <SettingsGroup title-key="settings.groups.netease">
       <BooleanSettingRow
         id="neteaseLibraryIcon"

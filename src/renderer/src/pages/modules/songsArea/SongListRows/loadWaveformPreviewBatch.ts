@@ -1,4 +1,8 @@
 import type { WaveformListPreviewData } from '@shared/waveformSurfaceCache'
+import {
+  isIcloudWaveformPath,
+  loadIcloudWaveformPreviewBatch
+} from '@renderer/utils/icloudWaveformPreview'
 
 type WaveformPreviewItem = { filePath: string; data: WaveformListPreviewData | null }
 
@@ -6,8 +10,12 @@ export const loadWaveformPreviewBatch = async (
   filePaths: string[],
   resolveListRoot: (filePath: string) => string
 ): Promise<WaveformPreviewItem[] | null> => {
+  const cloudPaths = filePaths.filter(isIcloudWaveformPath)
+  const libraryPaths = filePaths.filter((filePath) => !isIcloudWaveformPath(filePath))
+  const cloudItems = cloudPaths.length ? await loadIcloudWaveformPreviewBatch(cloudPaths) : []
+  if (!libraryPaths.length) return cloudItems
   const groups = new Map<string, string[]>()
-  for (const filePath of filePaths) {
+  for (const filePath of libraryPaths) {
     const listRoot = resolveListRoot(filePath)
     const group = groups.get(listRoot) || []
     group.push(filePath)
@@ -25,8 +33,8 @@ export const loadWaveformPreviewBatch = async (
         return Array.isArray(response?.items) ? response.items : []
       })
     )
-    return responses.flat()
+    return [...cloudItems, ...responses.flat()]
   } catch {
-    return null
+    return cloudItems.length ? cloudItems : null
   }
 }

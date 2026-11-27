@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { localPlayerActionsAllowed } from '@renderer/utils/activeSongListContext'
+import { usePlayerTransportButtons } from './usePlayerTransportButtons'
 import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 
 import previousSongAsset from '@renderer/assets/previousSong.svg?asset'
@@ -34,13 +36,7 @@ import {
 } from '@renderer/utils/neteaseLocalActions'
 import { startBpmFix } from '@renderer/utils/bpmFixActions'
 import type { LibraryTransferActionMode } from '@renderer/utils/libraryTransfer'
-import {
-  getMusicSearchOpenFailedMessageKey,
-  openMusicSearch,
-  resolveMusicSearch,
-  type MusicSearchMode,
-  type MusicSearchProvider
-} from '@renderer/utils/musicSearch'
+import PlayerMusicSearchMenu from './PlayerMusicSearchMenu.vue'
 import { invokeMetadataAutoFill } from '@renderer/utils/metadataAutoFill'
 import { hasEffectiveAcoustIdKey } from '@renderer/utils/acoustid'
 import { openRekordboxDesktopPlaylistForSelectedTracks } from '@renderer/utils/rekordboxDesktopPlaylist'
@@ -149,54 +145,14 @@ const emits = defineEmits([
   'toggleMiniMoreMenu'
 ])
 
-const handlePause = () => {
-  emits('pause')
-}
-
-const handlePlay = () => {
-  emits('play')
-}
-
-let fastForwardInterval: NodeJS.Timeout
-const handleFastForwardMouseup = () => {
-  clearInterval(fastForwardInterval)
-  document.removeEventListener('mouseup', handleFastForwardMouseup)
-}
-const handleFastForward = () => {
-  emits('fastForward')
-  fastForwardInterval = setInterval(() => {
-    emits('fastForward')
-  }, 200)
-  document.addEventListener('mouseup', handleFastForwardMouseup)
-}
-
-let fastBackwardInterval: NodeJS.Timeout
-const handleFastBackwardMouseup = () => {
-  clearInterval(fastBackwardInterval)
-  document.removeEventListener('mouseup', handleFastBackwardMouseup)
-}
-const handleFastBackward = () => {
-  emits('fastBackward')
-  fastBackwardInterval = setInterval(() => {
-    emits('fastBackward')
-  }, 200)
-  document.addEventListener('mouseup', handleFastBackwardMouseup)
-}
-
-const handleNextSong = () => {
-  emits('nextSong')
-}
-
-const handlePreviousSong = () => {
-  emits('previousSong')
-}
-
-onUnmounted(() => {
-  clearInterval(fastForwardInterval)
-  clearInterval(fastBackwardInterval)
-  document.removeEventListener('mouseup', handleFastForwardMouseup)
-  document.removeEventListener('mouseup', handleFastBackwardMouseup)
-})
+const {
+  handlePause,
+  handlePlay,
+  handleFastForward,
+  handleFastBackward,
+  handleNextSong,
+  handlePreviousSong
+} = usePlayerTransportButtons(emits)
 
 const moreMenuShow = ref(false)
 const handelMoreClick = () => {
@@ -218,6 +174,7 @@ const nextSongRef = useTemplateRef('nextSongRef')
 const miniWindowRef = useTemplateRef('miniWindowRef')
 
 const handleMoreButtonClick = () => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   if (props.variant === 'mini') {
     emits('toggleMiniMoreMenu')
     return
@@ -226,14 +183,17 @@ const handleMoreButtonClick = () => {
 }
 
 const delSong = () => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   emits('delSong')
 }
 
 const moveToLikeLibrary = (actionMode: LibraryTransferActionMode = 'move') => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   emits('moveToLikeLibrary', runtime.playingData.playingSong, actionMode)
 }
 
 const moveToListLibrary = (actionMode: LibraryTransferActionMode = 'move') => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   emits('moveToListLibrary', runtime.playingData.playingSong, actionMode)
 }
 const copyToLikeLibrary = () => {
@@ -243,12 +203,15 @@ const copyToListLibrary = () => {
   moveToListLibrary('copy')
 }
 const moveToSetLibrary = () => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   emits('moveToSetLibrary', runtime.playingData.playingSong)
 }
 const moveToMixtapeLibrary = () => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   emits('moveToMixtapeLibrary', runtime.playingData.playingSong)
 }
 const exportTrack = () => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   emits('exportTrack')
 }
 const showInFileExplorer = () => {
@@ -311,6 +274,7 @@ const closeMoreMenu = () => {
 }
 
 const delAllAbove = () => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   closeMoreMenu()
   emits('delAllAbove')
 }
@@ -386,6 +350,7 @@ const syncRemovedPlaybackSourceItemIds = (removedItemIds: string[], sourceListUu
 }
 
 const handleAnalyzeCurrentSongFingerprint = async () => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   const filePath = runtime.playingData.playingSong?.filePath
   if (!filePath) {
     await confirm({
@@ -399,28 +364,6 @@ const handleAnalyzeCurrentSongFingerprint = async () => {
   await analyzeFingerprintsForPaths([filePath], { origin: 'player' })
 }
 
-const showMusicSearchHint = async (messageKey: string) => {
-  await confirm({
-    title: t('dialog.hint'),
-    content: [t(messageKey)],
-    confirmShow: false
-  })
-}
-
-const handleMusicSearch = async (provider: MusicSearchProvider, mode: MusicSearchMode) => {
-  const song = runtime.playingData.playingSong
-  if (!song) return
-  const resolution = resolveMusicSearch(provider, mode, song)
-  if (!resolution.query) {
-    await showMusicSearchHint(resolution.emptyMessageKey)
-    return
-  }
-  if (!(await openMusicSearch(provider, resolution.query))) {
-    await showMusicSearchHint(getMusicSearchOpenFailedMessageKey(provider))
-  }
-  closeMoreMenu()
-}
-
 const handleSimilarTracks = async () => {
   const song = runtime.playingData.playingSong
   if (!song) return
@@ -431,6 +374,7 @@ const handleSimilarTracks = async () => {
 }
 
 const handleAutoFillMetadata = async () => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   const filePath = runtime.playingData.playingSong?.filePath
   if (!filePath) return
   closeMoreMenu()
@@ -518,6 +462,7 @@ const applyMetadataChangesToPlayingSong = (items?: IMetadataAutoFillItemResult[]
 }
 
 const handleEditMetadata = async () => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   const filePath = runtime.playingData.playingSong?.filePath
   if (!filePath) return
   closeMoreMenu()
@@ -535,6 +480,7 @@ const handleEditMetadata = async () => {
 }
 
 const handleConvertFormat = async () => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   const song = runtime.playingData.playingSong
   if (!song) return
   closeMoreMenu()
@@ -556,6 +502,7 @@ const handleConvertFormat = async () => {
 }
 
 const handleBpmFix = async () => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   const song = runtime.playingData.playingSong
   if (!song) return
   closeMoreMenu()
@@ -574,6 +521,7 @@ const handleBpmFix = async () => {
 }
 
 const handleStemSeparation = async () => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   const song = runtime.playingData.playingSong
   if (!song) return
   closeMoreMenu()
@@ -588,6 +536,7 @@ const handleStemSeparation = async () => {
 }
 
 const handleClearTrackCache = async () => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   const song = runtime.playingData.playingSong
   if (!song) return
   closeMoreMenu()
@@ -600,6 +549,7 @@ const handleClearTrackCache = async () => {
 }
 
 const handleRekordboxDesktopPlaylist = async () => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   const song = runtime.playingData.playingSong
   if (!song) return
   const sourceListUuid = runtime.playingData.playingSongListUUID
@@ -636,6 +586,7 @@ const handleRekordboxDesktopPlaylist = async () => {
 }
 
 const handleExternalPlaylist = async (kind: 'serato' | 'traktor') => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   const song = runtime.playingData.playingSong
   if (!song) return
   if (runtime.isProgressing) {
@@ -676,6 +627,7 @@ const resolvePlaybackSourceLibraryName = ():
 }
 
 const handleRekordboxXmlExport = async () => {
+  if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) return
   const song = runtime.playingData.playingSong
   if (!song) return
   const sourceListUuid = runtime.playingData.playingSongListUUID
@@ -721,8 +673,6 @@ const handleRekordboxXmlExport = async () => {
     runtime.isProgressing = false
   }
 }
-
-const musicSearchSubmenu = ref<MusicSearchProvider | null>(null)
 
 const exportTrackLabel = computed(() =>
   isReadOnlyPlaybackSource.value ? t('tracks.exportTracksCopyOnly') : t('tracks.exportTracks')
@@ -911,7 +861,11 @@ onUnmounted(() => {
           <img :src="nextSong" draggable="false" />
         </div>
         <bubbleBox :dom="nextSongRef || undefined" :title="t('player.next')" shortcut="S / ↓" />
-        <div class="buttonIcon" @click.stop="handleMoreButtonClick()">
+        <div
+          v-if="localPlayerActionsAllowed(runtime.playingData.playingSong)"
+          class="buttonIcon"
+          @click.stop="handleMoreButtonClick()"
+        >
           <img :src="more" draggable="false" />
         </div>
       </template>
@@ -927,7 +881,14 @@ onUnmounted(() => {
       </template>
     </div>
     <transition name="fade">
-      <div v-if="moreMenuShow && !props.hidePlaybackControls" class="moreMenu unselectable">
+      <div
+        v-if="
+          moreMenuShow &&
+          !props.hidePlaybackControls &&
+          localPlayerActionsAllowed(runtime.playingData.playingSong)
+        "
+        class="moreMenu unselectable"
+      >
         <!-- 网易云歌单里的这一首：下载/删除本地文件，其余动作和歌单右键同一套 -->
         <div
           v-if="isStreamOnlySong"
@@ -1073,55 +1034,7 @@ onUnmounted(() => {
             <span>{{ t('tracks.showInFileExplorer') }}</span>
           </div>
         </div>
-        <div
-          style="padding: 5px 5px; border-bottom: 1px solid var(--border)"
-          @mouseleave="musicSearchSubmenu = null"
-        >
-          <div
-            class="menuButton hasSubmenu"
-            :class="{ submenuOpen: musicSearchSubmenu === 'netease' }"
-            @mouseenter="musicSearchSubmenu = 'netease'"
-          >
-            <span>{{ t('tracks.neteaseSearch') }}</span>
-            <span style="margin-left: 8px; opacity: 0.6">▸</span>
-            <div v-if="musicSearchSubmenu === 'netease'" class="submenu">
-              <div class="menuButton" @click.stop="handleMusicSearch('netease', 'titleArtist')">
-                <span>{{ t('tracks.neteaseSearchTitleArtist') }}</span>
-              </div>
-              <div class="menuButton" @click.stop="handleMusicSearch('netease', 'title')">
-                <span>{{ t('tracks.neteaseSearchTitle') }}</span>
-              </div>
-              <div class="menuButton" @click.stop="handleMusicSearch('netease', 'artist')">
-                <span>{{ t('tracks.neteaseSearchArtist') }}</span>
-              </div>
-              <div class="menuButton" @click.stop="handleMusicSearch('netease', 'album')">
-                <span>{{ t('tracks.neteaseSearchAlbum') }}</span>
-              </div>
-            </div>
-          </div>
-          <div
-            class="menuButton hasSubmenu"
-            :class="{ submenuOpen: musicSearchSubmenu === 'spotify' }"
-            @mouseenter="musicSearchSubmenu = 'spotify'"
-          >
-            <span>{{ t('tracks.spotifySearch') }}</span>
-            <span style="margin-left: 8px; opacity: 0.6">▸</span>
-            <div v-if="musicSearchSubmenu === 'spotify'" class="submenu">
-              <div class="menuButton" @click.stop="handleMusicSearch('spotify', 'titleArtist')">
-                <span>{{ t('tracks.spotifySearchTitleArtist') }}</span>
-              </div>
-              <div class="menuButton" @click.stop="handleMusicSearch('spotify', 'title')">
-                <span>{{ t('tracks.spotifySearchTitle') }}</span>
-              </div>
-              <div class="menuButton" @click.stop="handleMusicSearch('spotify', 'artist')">
-                <span>{{ t('tracks.spotifySearchArtist') }}</span>
-              </div>
-              <div class="menuButton" @click.stop="handleMusicSearch('spotify', 'album')">
-                <span>{{ t('tracks.spotifySearchAlbum') }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <PlayerMusicSearchMenu :song="runtime.playingData.playingSong" @close="closeMoreMenu" />
         <div style="padding: 5px 5px; border-bottom: 1px solid var(--border)">
           <div class="menuButton" @click="handleSimilarTracks()">
             <span>{{ t('similarTracks.menu') }}</span>
@@ -1170,134 +1083,4 @@ onUnmounted(() => {
     </transition>
   </div>
 </template>
-<style lang="scss" scoped>
-.moreMenu {
-  width: 280px;
-  background-color: var(--bg-elev);
-  position: absolute;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  z-index: var(--z-popover);
-  bottom: 58px;
-  left: 250px;
-  font-size: 14px;
-  color: var(--text);
-
-  .menuButton {
-    display: flex;
-    justify-content: space-between;
-    padding: 5px 20px;
-    border-radius: 5px;
-
-    &:hover {
-      background-color: var(--accent);
-      color: #ffffff;
-    }
-  }
-
-  /* 右侧快捷键容器：始终将内容贴右，字母固定宽度，避免不同字符宽度造成图标水平抖动 */
-  .menuButton .shortcut {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-  }
-  .menuButton .shortcut span {
-    display: inline-block;
-    width: 1.5ch; /* 约等于一个数字字符宽，足够容纳 Q/E/F 等 */
-    text-align: center; /* 居中，保证不同字符的视觉中心一致 */
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-  }
-
-  .hasSubmenu {
-    position: relative;
-
-    &.submenuOpen {
-      background-color: var(--accent);
-      color: #ffffff;
-    }
-  }
-
-  .submenu {
-    position: absolute;
-    left: 100%;
-    bottom: 0;
-    width: 200px;
-    background-color: var(--bg-elev);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: 5px 5px;
-    z-index: var(--z-popover);
-  }
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.15s;
-}
-
-.fade-enter,
-.fade-leave-to {
-  opacity: 0;
-}
-
-.playerControlsRoot {
-  width: 100%;
-}
-
-.playerControls {
-  display: flex;
-  width: 100%;
-  height: 44px;
-  align-items: center;
-  justify-content: space-between;
-
-  .buttonIcon {
-    height: 36px;
-    width: 36px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-
-    &:hover {
-      filter: contrast(120%) drop-shadow(0px 0px 6px var(--text));
-    }
-  }
-
-  .miniWindowButton {
-    color: #cccccc;
-  }
-
-  .miniWindowIcon {
-    width: 18px;
-    height: 18px;
-    display: block;
-    background: currentColor;
-    -webkit-mask: url('../assets/miniPlayerPip.svg') center / contain no-repeat;
-    mask: url('../assets/miniPlayerPip.svg') center / contain no-repeat;
-  }
-}
-
-img {
-  width: 18px;
-  height: 18px;
-}
-
-/* 浅色主题下：去掉阴影，用纯黑作为 hover 高亮（适用于白色 PNG 图标） */
-.theme-light .playerControls {
-  .buttonIcon:hover {
-    filter: none;
-  }
-  .buttonIcon img {
-    filter: grayscale(1) brightness(0.58);
-  }
-  .buttonIcon:hover img {
-    filter: grayscale(1) brightness(0);
-  }
-  .miniWindowIcon {
-    background: #767676;
-  }
-  .miniWindowButton:hover .miniWindowIcon {
-    background: #000000;
-  }
-}
-</style>
+<style scoped lang="scss" src="./playerControls.scss"></style>

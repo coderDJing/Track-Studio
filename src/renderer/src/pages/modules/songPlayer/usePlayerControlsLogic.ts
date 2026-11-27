@@ -1,3 +1,5 @@
+import { guardPlayerActions } from '@renderer/utils/activeSongListContext'
+import { usePlayerQueueNavigation } from './usePlayerQueueNavigation'
 import { buildPlayerSongSnapshot as buildSongSnapshot } from './playerSongSnapshot'
 import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 
@@ -298,121 +300,12 @@ export function usePlayerControlsLogic({
     }
   }
 
-  const fastForward = () => {
-    const player = audioPlayer.value
-    if (!player) return
-
-    if (runtime.isSwitchingSong || !runtime.playerReady) {
-      return
-    }
-
-    const duration = player.getDuration()
-    if (!duration || Number.isNaN(duration)) return
-
-    const skipAmount = runtime.setting.fastForwardTime
-
-    let hasNextSong = false
-    if (runtime.playingData.playingSong && runtime.playingData.playingSongListData?.length) {
-      const currentIndex = runtime.playingData.playingSongListData.findIndex((item) =>
-        sameRendererFilePath(item.filePath, runtime.playingData.playingSong?.filePath)
-      )
-      hasNextSong =
-        currentIndex !== -1 && currentIndex < runtime.playingData.playingSongListData.length - 1
-    }
-
-    const endTime = duration
-    const currentTime = player.getCurrentTime()
-    const targetTime = currentTime + skipAmount
-
-    const epsilon = 0.01
-
-    if (targetTime >= endTime - epsilon) {
-      if (runtime.setting.autoPlayNextSong && hasNextSong) {
-        runtime.playerReady = false
-        runtime.isSwitchingSong = true
-        nextSong()
-      } else {
-        player.seek(endTime, true)
-        player.pause()
-      }
-      return
-    }
-
-    player.skip(skipAmount, true)
-  }
-
-  const fastBackward = () => {
-    audioPlayer.value?.skip(runtime.setting.fastBackwardTime, true)
-  }
-
-  const findNextPlayableSong = (startIndex: number, direction: 1 | -1): ISongInfo | null => {
-    const songList = runtime.playingData.playingSongListData
-    for (let i = startIndex + direction; i >= 0 && i < songList.length; i += direction) {
-      const song = songList[i]
-      if (!song.fileMissing) {
-        return song
-      }
-    }
-    return null
-  }
-
-  const nextSong = async () => {
-    // 切歌开始，标记未就绪，阻止快进再次触发
-    runtime.playerReady = false
-    runtime.isSwitchingSong = true
-    if (!runtime.playingData.playingSong) return
-    const songList = runtime.playingData.playingSongListData
-    const currentIndex = songList.findIndex((item) =>
-      sameRendererFilePath(item.filePath, runtime.playingData.playingSong?.filePath)
-    )
-    if (currentIndex === -1 || currentIndex >= songList.length - 1) {
-      runtime.playerReady = true
-      runtime.isSwitchingSong = false
-      return
-    }
-    const nextSongData = findNextPlayableSong(currentIndex, 1)
-    if (!nextSongData) {
-      runtime.playerReady = true
-      runtime.isSwitchingSong = false
-      return
-    }
-    const nextSongFilePath = nextSongData.filePath
-    // 重要：在开始加载前先更新UI状态
-    isInternalSongChange.value = true // 标记内部切换
-    runtime.playingData.playingSong = nextSongData
-    requestLoadSong(nextSongFilePath)
-  }
-
-  const previousSong = async () => {
-    // 切歌开始，标记未就绪，阻止快进再次触发
-    runtime.playerReady = false
-    runtime.isSwitchingSong = true
-    if (!runtime.playingData.playingSong) return
-
-    const songList = runtime.playingData.playingSongListData
-    const currentIndex = songList.findIndex((item) =>
-      sameRendererFilePath(item.filePath, runtime.playingData.playingSong?.filePath)
-    )
-    if (currentIndex <= 0) {
-      // 如果是第一首，或者找不到，则不执行任何操作
-      runtime.playerReady = true
-      runtime.isSwitchingSong = false
-      return
-    }
-
-    const prevCandidate = findNextPlayableSong(currentIndex, -1)
-    if (!prevCandidate) {
-      runtime.playerReady = true
-      runtime.isSwitchingSong = false
-      return
-    }
-
-    const prevSongFilePath = prevCandidate.filePath
-    // 设置内部切换并请求加载
-    isInternalSongChange.value = true // 标记内部切换
-    runtime.playingData.playingSong = prevCandidate
-    requestLoadSong(prevSongFilePath)
-  }
+  const { fastForward, fastBackward, nextSong, previousSong } = usePlayerQueueNavigation({
+    runtime,
+    audioPlayer,
+    isInternalSongChange,
+    requestLoadSong
+  })
 
   const delSong = async () => {
     if (isFileOperationInProgress.value || !runtime.playingData.playingSong) {
@@ -1158,7 +1051,7 @@ export function usePlayerControlsLogic({
     }
   }
 
-  return {
+  return guardPlayerActions(runtime, {
     play,
     pause,
     togglePlayPause,
@@ -1174,5 +1067,5 @@ export function usePlayerControlsLogic({
     moveToMixtapeLibrary,
     exportTrack,
     handleMoveSong // 暴露给父组件的 selectSongListDialogConfirm 使用
-  }
+  })
 }

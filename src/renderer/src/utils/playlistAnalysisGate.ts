@@ -1,3 +1,4 @@
+import { isIcloudPlaybackUrl } from '@shared/icloudLibrary'
 import { isNeteasePendingPath, isNeteasePreviewUrl } from '@shared/netease'
 
 type PlaylistAnalysisGateRuntime = {
@@ -32,7 +33,8 @@ export const buildMainPlayerPlayingAnalysisPayload = (
   const trimmed = String(filePath || '').trim()
   if (!trimmed) return null
   // 预览地址和 SET 占位路径不是磁盘文件，不能送进分析队列
-  if (isNeteasePreviewUrl(trimmed) || isNeteasePendingPath(trimmed)) return null
+  if (isNeteasePreviewUrl(trimmed) || isNeteasePendingPath(trimmed) || isIcloudPlaybackUrl(trimmed))
+    return null
   const intent = resolveBrowserMainPlayerAnalysisIntent(runtime)
   return {
     analysisAuthority: 'frkb',

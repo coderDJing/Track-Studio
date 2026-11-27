@@ -28,6 +28,25 @@ const resolveDevInstanceId = (): string => {
 }
 
 const exactInvokeChannels = new Set([
+  'icloud:state',
+  'icloud:watch-directory',
+  'icloud:unwatch-directory',
+  'icloud:metadata',
+  'icloud:cover',
+  'icloud:waveform-preview',
+  'icloud:choose-folder',
+  'icloud:use-default-folder',
+  'icloud:choose-destination',
+  'icloud:authorize-destination',
+  'icloud:list',
+  'icloud:folders',
+  'icloud:prepare-play',
+  'icloud:prepare-local',
+  'icloud:evict-local',
+  'icloud:bind-analysis',
+  'icloud:cancel',
+  'icloud:reveal',
+  'icloud:copy',
   'optional-component:states',
   'optional-component:download',
   'audio:bpm-fix:prepare',
@@ -142,6 +161,9 @@ const exactSendChannels = new Set([
 const exactSendTransportChannels = new Set(['horizontal-browse-transport:set-playback-rate-live'])
 
 const exactListenChannels = new Set([
+  'icloud:copy-progress',
+  'icloud:download-progress',
+  'icloud:directory-changed',
   'optional-component:state',
   'audio:bpm-fix:updated',
   'audio:bpm-fix:files-changed',

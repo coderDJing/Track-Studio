@@ -89,6 +89,8 @@ import { markGlobalSongSearchDirty } from './services/globalSongSearch'
 import { registerPioneerDeviceLibraryHandlers } from './ipc/pioneerDeviceLibraryHandlers'
 import { registerRekordboxDesktopLibraryHandlers } from './ipc/rekordboxDesktopLibraryHandlers'
 import { registerExternalLibraryHandlers } from './ipc/externalLibraryHandlers'
+import { registerIcloudLibraryHandlers } from './ipc/icloudLibraryHandlers'
+import { icloudPlayback } from './services/icloudLibrary/playback'
 import { registerNeteaseHandlers } from './netease/ipc'
 import { handleNeteasePreview } from './netease/stream'
 import { registerRekordboxXmlExportHandlers } from './ipc/rekordboxXmlExportHandlers'
@@ -382,6 +384,7 @@ registerSpotifySearchHandlers()
 registerPioneerDeviceLibraryHandlers()
 registerRekordboxDesktopLibraryHandlers()
 registerExternalLibraryHandlers()
+registerIcloudLibraryHandlers()
 registerRekordboxXmlExportHandlers()
 registerNeteaseHandlers(() => mainWindow.instance)
 registerHorizontalBrowseTransportHandlers()
@@ -654,6 +657,9 @@ app.whenReady().then(async () => {
           if (!decodedPath) {
             callback({ statusCode: 400 })
             return
+          }
+          if (request.url.startsWith('frkb-preview://icloud/')) {
+            await icloudPlayback.validate(request.url, decodedPath)
           }
           const stat = await fs.stat(decodedPath)
           const size = stat.size

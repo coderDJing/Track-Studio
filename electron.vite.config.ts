@@ -34,8 +34,11 @@ export default defineConfig({
     },
     build: {
       rolldownOptions: {
+        // Keep tokenizer error identities shared with the existing metadata parser.
+        external: ['strtok3'],
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
+          icloudMetadataWorker: resolve(__dirname, 'src/main/workers/icloudMetadataWorker.ts'),
           audioDecodeWorker: resolve(__dirname, 'src/main/workers/audioDecodeWorker.ts'),
           keyAnalysisWorker: resolve(__dirname, 'src/main/workers/keyAnalysisWorker.ts'),
           bpmFixRuntimeWorker: resolve(__dirname, 'src/main/workers/bpmFixRuntimeWorker.ts'),
@@ -80,6 +83,7 @@ export default defineConfig({
         output: {
           format: 'cjs',
           entryFileNames: (chunk) => {
+            if (chunk.name === 'icloudMetadataWorker') return 'workers/icloudMetadataWorker.js'
             if (chunk.name === 'audioDecodeWorker') {
               return 'workers/audioDecodeWorker.js'
             }

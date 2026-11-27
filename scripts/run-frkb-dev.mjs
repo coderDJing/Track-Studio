@@ -111,6 +111,13 @@ if (rendererPort && !(await isRendererPortAvailable(rendererPort))) {
   exitWithRendererPortConflict(rendererPort, env)
 }
 
+const icloudNative = spawnSync(
+  process.execPath,
+  [path.resolve('./scripts/ensure-icloud-native.mjs')],
+  { stdio: 'inherit', env }
+)
+if (icloudNative.status !== 0) process.exit(icloudNative.status || 1)
+
 const rustPackageEnsureArgs = [
   path.resolve('./scripts/ensure-rust-package-native.mjs'),
   '--mode',

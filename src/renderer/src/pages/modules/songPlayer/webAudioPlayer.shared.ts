@@ -1,3 +1,4 @@
+import { isIcloudPlaybackUrl } from '@shared/icloudLibrary'
 import type { CompactVisualWaveformData } from '@shared/compactVisualWaveform'
 import { isNeteasePreviewUrl } from '@shared/netease'
 
@@ -150,7 +151,7 @@ const FORCE_PCM_EXTENSIONS = new Set([
 
 export const canPlayHtmlAudio = (filePath: string) => {
   // 网易云试听地址没有扩展名，但不能走本地解码：那会把 URL 当磁盘路径，播放一闪就停。
-  if (isNeteasePreviewUrl(filePath)) return true
+  if (isNeteasePreviewUrl(filePath) || isIcloudPlaybackUrl(filePath)) return true
   const ext = normalizeExtension(filePath)
   if (!ext) return false
   if (FORCE_PCM_EXTENSIONS.has(ext)) return false
@@ -171,6 +172,8 @@ export const toPreviewUrl = (filePath: string) => {
   const raw = (filePath || '').trim()
   if (!raw) return ''
   if (raw.startsWith('frkb-preview://')) return raw
+  // Logical iCloud keys are not local files; wrapping them as frkb-preview://local/ stalls playback.
+  if (raw.startsWith('icloud-song:')) return ''
   return `frkb-preview://local/?path=${encodeURIComponent(raw)}`
 }
 

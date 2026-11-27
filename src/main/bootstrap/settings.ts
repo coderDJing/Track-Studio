@@ -159,6 +159,7 @@ const defaultSettings = {
   acoustIdClientKey: '',
   autoFillSkipCompleted: true,
   userGuideDismissedSteps: [],
+  showIcloudLibraryIcon: true,
   showNeteaseLibraryIcon: true
 } as ISettingConfig
 

@@ -16,7 +16,8 @@ const EXTERNAL_ANALYSIS_DEVICE_TABLE = 'external_analysis_devices'
 const EXTERNAL_ANALYSIS_CACHE_TABLE = 'external_analysis_cache'
 const EXTERNAL_ANALYSIS_CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000
 
-export type ExternalAnalysisSourceKind = 'rekordbox-usb' | 'rekordbox-desktop' | 'external-playback'
+export type ExternalAnalysisSourceKind =
+  'rekordbox-usb' | 'rekordbox-desktop' | 'external-playback' | 'icloud'
 
 export type ExternalAnalysisContext = {
   sourceKind: ExternalAnalysisSourceKind
@@ -120,7 +121,10 @@ const normalizeSourceId = (value: unknown) =>
     .toLowerCase()
 
 const normalizeSourceKind = (value: unknown): ExternalAnalysisSourceKind | '' =>
-  value === 'rekordbox-usb' || value === 'rekordbox-desktop' || value === 'external-playback'
+  value === 'rekordbox-usb' ||
+  value === 'rekordbox-desktop' ||
+  value === 'external-playback' ||
+  value === 'icloud'
     ? value
     : ''
 
@@ -511,7 +515,8 @@ export async function loadExternalAnalysisWaveformCacheDataByFilePath(
           .get(normalizedFilePath)
     if (!row) return null
     const entryStat = { size: toNumber(row.size) || 0, mtimeMs: toNumber(row.mtime_ms) || 0 }
-    if (stat && !isSameStat(entryStat, stat)) return null
+    // iCloud 会改 mtime 但不改内容。大小一致就仍用已保存的波形。
+    if (stat && entryStat.size !== stat.size) return null
     return rowToWaveformData(row)
   } catch (error) {
     log.error('[sqlite] external analysis waveform cache load failed', error)

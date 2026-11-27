@@ -1,3 +1,5 @@
+import { isCloudListActive, isCloudSong } from '@renderer/utils/activeSongListContext'
+import { refreshIcloudState, openIcloudExport } from '@renderer/utils/icloudLibrary'
 import { sameRendererFilePath, RendererFilePathSet } from '@renderer/utils/filePathComparison'
 
 import { Ref, ref } from 'vue'
@@ -300,12 +302,38 @@ export function useSongItemContextMenu(
       menuArr.value = menuArr.value
         .map((group) => group.filter((item) => item.menuName !== 'bpmFix.menu'))
         .filter((group) => group.length > 0)
+    // Only disk-backed FRKB playlists participate; the main process revalidates UUID + paths.
+    const localNode = libraryUtils.getLibraryTreeByUUID(songsAreaState.songListUUID)
+    let localLibrary = localNode
+    const ancestry = new Set<string>()
+    while (localLibrary && localLibrary.type !== 'library' && !ancestry.has(localLibrary.uuid)) {
+      ancestry.add(localLibrary.uuid)
+      localLibrary = libraryUtils.getFatherLibraryTreeByUUID(localLibrary.uuid)
+    }
+    if (
+      !isRecycleBinView &&
+      !isExternalView &&
+      localNode?.type === 'songList' &&
+      ['FilterLibrary', 'CuratedLibrary'].includes(localLibrary?.dirName || '')
+    ) {
+      try {
+        if (runtime.setting.showIcloudLibraryIcon !== false && (await refreshIcloudState()).visible)
+          menuArr.value.push([{ menuName: 'icloud.exportCloud' }])
+      } catch {
+        /* iCloud capability probing must not block the existing local menu. */
+      }
+    }
     const result = await rightClickMenu({
       menuArr: menuArr.value,
       clickEvent: event
     })
 
-    if (result === 'cancel') return null
+    if (result === 'cancel' || isCloudListActive() || isCloudSong(song)) return null
+    if (result.menuName === 'icloud.exportCloud') {
+      const paths = resolveSelectedFilePaths()
+      openIcloudExport(songsAreaState.songListUUID, paths.length ? paths : [song.filePath])
+      return null
+    }
 
     if (result.menuName === 'netease.downloadToLocal') {
       const songId = song.neteaseSongId || ''

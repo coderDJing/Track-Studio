@@ -1,4 +1,5 @@
-import { normalizeCamelotKey, parseSelectedKeyFilter } from '@shared/keyDisplay'
+import { sortSongColumns } from '@renderer/utils/songListColumnSort'
+import { filterSongColumns } from '@renderer/utils/songListColumnFilters'
 import { computed, ref, toRaw, watch, type ShallowRef } from 'vue'
 import type { ISongInfo, ISongsAreaColumn } from '../../../../../../types/globals'
 import type {
@@ -6,19 +7,12 @@ import type {
   SongsAreaColumnMode,
   useRuntimeStore
 } from '@renderer/stores/runtime'
-import { getKeyDisplayText, getKeySortText, isHarmonicMixCompatible } from '@shared/keyDisplay'
+import { getKeySortText, isHarmonicMixCompatible } from '@shared/keyDisplay'
 import { useHarmonicReferenceKey } from '@renderer/composables/useHarmonicReferenceKey'
 import { RECYCLE_BIN_UUID } from '@shared/recycleBin'
 import { RECORDING_LIBRARY_UUID } from '@shared/recordingLibrary'
 import { getOriginalPlaylistDisplay } from '@renderer/utils/recycleBinDisplay'
-import { normalizeArtistName, splitArtistNames } from '@shared/artistNames'
-import { normalizeBpmDisplayScaled } from '@renderer/utils/bpm'
-import {
-  resolveSongBeatGridV2BpmFilterValues,
-  resolveSongBeatGridV2BpmSortValue
-} from '@shared/songBeatGridMapV2'
-import { matchTimestampByDateFilter } from '@shared/songAddedAt'
-import { matchComparableByFilter } from '@shared/filterCompare'
+import { resolveSongBeatGridV2BpmSortValue } from '@shared/songBeatGridMapV2'
 import libraryUtils from '@renderer/utils/libraryUtils'
 import { getSongListFieldRawValue } from '@renderer/utils/songListFieldDisplay'
 import { filterSongsByPlaylistSearch } from '@renderer/utils/playlistSongSearch'
@@ -101,66 +95,6 @@ export function useSongsAreaColumns(params: UseSongsAreaColumnsParams) {
     return song.filePath
   }
 
-  // --- 工具 ---
-  function sortArrayByProperty<T extends object>(
-    array: T[],
-    property: keyof T,
-    order: 'asc' | 'desc' = 'asc'
-  ): T[] {
-    const collator = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' })
-    return [...array].sort((a, b) => {
-      const valueA = String(a[property] || '')
-      const valueB = String(b[property] || '')
-      return order === 'asc' ? collator.compare(valueA, valueB) : collator.compare(valueB, valueA)
-    })
-  }
-
-  function parseDurationToSeconds(mmss: string): number {
-    if (!mmss || typeof mmss !== 'string') return NaN
-    const parts = mmss.split(':')
-    if (parts.length !== 2) return NaN
-    const m = Number(parts[0])
-    const s = Number(parts[1])
-    if (Number.isNaN(m) || Number.isNaN(s)) return NaN
-    return m * 60 + s
-  }
-
-  function parseNumberInput(input: unknown): number {
-    if (input === null || input === undefined) return NaN
-    if (typeof input === 'number') {
-      return Number.isFinite(input) ? input : NaN
-    }
-    const raw = String(input || '').trim()
-    if (!raw) return NaN
-    const cleaned = raw.replace(/[^0-9.]/g, '')
-    if (!cleaned) return NaN
-    const parts = cleaned.split('.')
-    const normalized = parts.length > 1 ? `${parts[0]}.${parts.slice(1).join('')}` : parts[0]
-    const num = Number(normalized)
-    return Number.isFinite(num) ? num : NaN
-  }
-
-  function parseComparableBpm(input: unknown): number | null {
-    const numeric = parseNumberInput(input)
-    if (Number.isNaN(numeric)) return null
-    return normalizeBpmDisplayScaled(numeric)
-  }
-
-  function parseComparableNumber(input: unknown): number | null {
-    const numeric = parseNumberInput(input)
-    return Number.isNaN(numeric) ? null : numeric
-  }
-
-  function parseExcludeKeywords(input: unknown): string[] {
-    if (input === null || input === undefined) return []
-    const raw = String(input)
-    if (!raw.trim()) return []
-    return raw
-      .split(/[,\n;\r，；、|]+/g)
-      .map((item) => item.trim().toLowerCase())
-      .filter(Boolean)
-  }
-
   // --- 根据列筛选过滤并按当前排序排序 ---
   const applyVisibleSongs = (songs: ISongInfo[]) => {
     const current = songsAreaState.songInfoArr
@@ -192,114 +126,10 @@ export function useSongsAreaColumns(params: UseSongsAreaColumnsParams) {
         isHarmonicMixCompatible(harmonicReferenceKey.value, String(song.key || ''))
       )
     }
-    for (const col of columnData.value) {
-      if (!col.filterActive) continue
-      const selectedKeys = col.key === 'key' ? parseSelectedKeyFilter(col.filterValue || '') : null
-      if (selectedKeys !== null) {
-        const selected = new Set(selectedKeys)
-        filtered = filtered.filter((song) =>
-          selected.has(normalizeCamelotKey(String(song.key || '')))
-        )
-        continue
-      }
-      if (col.filterType === 'text' && col.key) {
-        const keyword = String(col.filterValue || '').toLowerCase()
-        const excludeKeywords = parseExcludeKeywords(col.filterExcludeValue)
-        const hasInclude = keyword.trim().length > 0
-        const hasExclude = excludeKeywords.length > 0
-        const hasCuratedOnly = !!col.filterCuratedOnly
-        if (!hasInclude && !hasExclude && !hasCuratedOnly) continue
-        const isKeyColumn = col.key === 'key'
-        const isOriginalPlaylist = col.key === 'originalPlaylistPath'
-        const keyStyle = runtime.setting.keyDisplayStyle === 'Camelot' ? 'Camelot' : 'Classic'
-        if (hasInclude || hasExclude) {
-          filtered = filtered.filter((song) => {
-            const rawValue = isOriginalPlaylist
-              ? getOriginalPlaylistDisplay(song)
-              : String(getSongField(song, col.key) ?? '')
-            const displayValue = isKeyColumn ? getKeyDisplayText(rawValue, keyStyle) : rawValue
-            const value = displayValue.toLowerCase()
-            if (hasInclude && !value.includes(keyword)) return false
-            if (hasExclude && excludeKeywords.some((kw) => value.includes(kw))) return false
-            return true
-          })
-        }
-        if (hasCuratedOnly && col.key === 'artist') {
-          const curatedNames = new Set(
-            (runtime.curatedArtistFavorites || []).map((a) => normalizeArtistName(a.name))
-          )
-          filtered = filtered.filter((song) => {
-            const artistNames = splitArtistNames(song.artist)
-            return artistNames.some((name) => curatedNames.has(normalizeArtistName(name)))
-          })
-        }
-      } else if (
-        col.filterType === 'duration' &&
-        col.filterOp &&
-        (col.filterOp === 'between'
-          ? Boolean(col.filterDuration || col.filterDurationTo)
-          : Boolean(col.filterDuration))
-      ) {
-        const target = col.filterDuration ? parseDurationToSeconds(col.filterDuration) : null
-        const targetTo =
-          col.filterOp === 'between' && col.filterDurationTo
-            ? parseDurationToSeconds(col.filterDurationTo)
-            : null
-        filtered = filtered.filter((song) => {
-          const dur = parseDurationToSeconds(String(song.duration ?? ''))
-          if (Number.isNaN(dur)) return false
-          return matchComparableByFilter(
-            dur,
-            col.filterOp,
-            target !== null && Number.isNaN(target) ? null : target,
-            targetTo !== null && Number.isNaN(targetTo) ? null : targetTo
-          )
-        })
-      } else if (
-        col.filterType === 'bpm' &&
-        col.filterOp &&
-        (col.filterOp === 'between'
-          ? Boolean(col.filterNumber || col.filterNumberTo)
-          : Boolean(col.filterNumber))
-      ) {
-        const target = parseComparableBpm(col.filterNumber)
-        const targetTo = col.filterOp === 'between' ? parseComparableBpm(col.filterNumberTo) : null
-        filtered = filtered.filter((song) => {
-          const bpmValues = resolveSongBeatGridV2BpmFilterValues(song.beatGridMap, song.bpm)
-          if (!bpmValues.length) return false
-          return bpmValues.some((bpmValue) => {
-            const bpm = parseComparableBpm(bpmValue)
-            if (bpm === null) return false
-            return matchComparableByFilter(bpm, col.filterOp, target, targetTo)
-          })
-        })
-      } else if (
-        col.filterType === 'number' &&
-        col.filterOp &&
-        (col.filterOp === 'between'
-          ? Boolean(col.filterNumber || col.filterNumberTo)
-          : Boolean(col.filterNumber))
-      ) {
-        const target = parseComparableNumber(col.filterNumber)
-        const targetTo =
-          col.filterOp === 'between' ? parseComparableNumber(col.filterNumberTo) : null
-        filtered = filtered.filter((song) => {
-          const value = parseComparableNumber(getSongField(song, col.key))
-          if (value === null) return false
-          return matchComparableByFilter(value, col.filterOp, target, targetTo)
-        })
-      } else if (
-        col.filterType === 'date' &&
-        col.filterOp &&
-        (col.filterOp === 'between'
-          ? Boolean(col.filterDate || col.filterDateTo)
-          : Boolean(col.filterDate))
-      ) {
-        filtered = filtered.filter((song) =>
-          matchTimestampByDateFilter(song.addedAtMs, col.filterOp, col.filterDate, col.filterDateTo)
-        )
-      }
-    }
+    filtered = filterSongColumns(filtered, columnData.value, {
+      keyStyle: runtime.setting.keyDisplayStyle === 'Camelot' ? 'Camelot' : 'Classic',
+      curatedArtists: runtime.curatedArtistFavorites
+    })
 
     if (columnMode.value === 'mixtape') {
       applyVisibleSongs(filtered)
@@ -402,10 +232,10 @@ export function useSongsAreaColumns(params: UseSongsAreaColumnsParams) {
             : collator.compare(valueB, valueA)
         })
       } else {
-        filtered = sortArrayByProperty<ISongInfo>(
+        filtered = sortSongColumns(
           filtered,
-          sortedCol.key as keyof ISongInfo,
-          sortedCol.order!
+          [sortedCol],
+          runtime.setting.keyDisplayStyle === 'Camelot' ? 'Camelot' : 'Classic'
         )
       }
     }

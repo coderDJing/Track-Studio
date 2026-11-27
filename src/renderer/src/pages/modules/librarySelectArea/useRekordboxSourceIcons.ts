@@ -109,6 +109,7 @@ type UseRekordboxSourceIconsOptions = {
   updateSelectedIcon: (item: HoverableIcon | undefined) => void
   waitForUiIdle: (ms: number) => Promise<unknown>
   emitLibrarySelectedChange: (payload: { name: string }) => void
+  onLibraryActivated?: () => void
 }
 
 const SOURCE_ICON_AUTO_REFRESH_INTERVAL_MS = 60_000
@@ -540,6 +541,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
 
   const clickPioneerDriveIcon = async (item: PioneerDriveIcon) => {
     if (!item.path || isEjectingPioneerDriveIcon(item)) return
+    options.onLibraryActivated?.()
     clearExternalDjSelection()
     const sourceCacheKey = resolvePioneerDriveSourceCacheKey(item)
     const cachedTree = getCachedRekordboxSourceTree(sourceCacheKey)
@@ -593,7 +595,6 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
       void task
     }
   }
-
   const clickDesktopLibraryIcon = async () => {
     const icon = desktopLibraryIcon.value
     if (!icon?.rootPath) return
@@ -601,6 +602,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
       runtime.libraryAreaSelected === 'PioneerDeviceLibrary' &&
       runtime.pioneerDeviceLibrary.selectedSourceKind === 'desktop' &&
       runtime.pioneerDeviceLibrary.selectedSourceKey === icon.key
+    if (alreadyCurrent) options.onLibraryActivated?.()
     const sourceCacheKey = resolveDesktopLibrarySourceCacheKey(icon)
     const cachedTree = getCachedRekordboxSourceTree(sourceCacheKey)
     let revision = ''
@@ -614,6 +616,7 @@ export function useRekordboxSourceIcons(options: UseRekordboxSourceIconsOptions)
       })
       return
     }
+    if (!alreadyCurrent) options.onLibraryActivated?.()
     if (alreadyCurrent && cachedTree?.revision && cachedTree.revision === revision) return
     const preferredPlaylistId =
       runtime.pioneerDeviceLibrary.selectedSourceKind === 'desktop' &&

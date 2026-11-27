@@ -1,7 +1,8 @@
 ﻿<script setup lang="ts">
+import type { SongCoverProvider } from '@renderer/utils/icloudCovers'
 import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
 
-import { PropType, computed, onUnmounted, ref as vRef, toRef } from 'vue'
+import { watch, PropType, computed, onUnmounted, ref as vRef, toRef } from 'vue'
 import type { ISongInfo, ISongsAreaColumn } from '../../../../../types/globals'
 import type { SongsAreaPaneKey } from '@renderer/stores/runtime'
 import { t } from '@renderer/utils/translate'
@@ -33,6 +34,7 @@ import { getBottomDropPad } from './SongListRows/dropPadGeometry'
 import { getNeteaseDownloadStatus } from '@renderer/utils/neteaseDownloadStatus'
 
 const props = defineProps({
+  coverProvider: { type: Object as PropType<SongCoverProvider>, default: undefined },
   searchQuery: {
     type: String,
     default: ''
@@ -142,6 +144,7 @@ const emit = defineEmits<{
   (e: 'mixtape-reorder', payload: { sourceItemIds: string[]; targetIndex: number }): void
   (e: 'playlist-reorder', payload: { sourceItemIds: string[]; targetIndex: number }): void
   (e: 'rows-rendered', count: number): void
+  (e: 'visible-songs', songs: ISongInfo[]): void
 }>()
 
 const songsRef = toRef(props, 'songs')
@@ -359,7 +362,7 @@ const { onRowsClick, onRowsContextmenu, onRowsDblclick } = useSongRowEvents({
   shouldSuppressPointerAction
 })
 
-const { getCoverUrl, fetchCoverUrl, onImgError } = useCoverThumbnails({
+const defaultCovers = useCoverThumbnails({
   songs: songsRef,
   visibleSongsWithIndex,
   startIndex,
@@ -372,6 +375,27 @@ const { getCoverUrl, fetchCoverUrl, onImgError } = useCoverThumbnails({
   platform: computed(() => runtime.setting?.platform),
   enabled: enableCoverThumbnailsRef
 })
+
+const getCoverUrl = (path: string) =>
+  props.coverProvider ? props.coverProvider.getCoverUrl(path) : defaultCovers.getCoverUrl(path)
+const fetchCoverUrl = (path: string) =>
+  props.coverProvider ? props.coverProvider.fetchCoverUrl(path) : defaultCovers.fetchCoverUrl(path)
+const onImgError = (path: string) =>
+  props.coverProvider ? props.coverProvider.onImgError(path) : defaultCovers.onImgError(path)
+watch(
+  () => ({
+    provider: props.coverProvider,
+    songs: visibleSongsWithIndex.value
+      .filter((item) => item.idx >= actualStartIndex.value && item.idx < actualEndIndex.value)
+      .map((item) => item.song),
+    enabled: props.visibleColumns.some((col) => col.key === 'cover' && col.show)
+  }),
+  ({ provider, songs, enabled }) => {
+    provider?.setVisibleSongs(enabled ? songs : [])
+    emit('visible-songs', songs)
+  },
+  { immediate: true }
+)
 
 const { listViewportWidth } = useRowAnalysisViewport({
   rowsRoot,
@@ -843,30 +867,32 @@ onUnmounted(() => {
                   :style="{ width: `var(--songs-col-${col.key}, ${col.width}px)` }"
                   :data-key="getCellKey(item.song, col.key)"
                 >
-                  <CuratedArtistCellContent
-                    v-if="hasCuratedArtistBadge(item.song, col.key)"
-                    :value="getCellValue(item.song, col.key)"
-                    :search-query="props.searchQuery"
-                    :badge-text="getCuratedArtistBadgeText(item.song, col.key)"
-                    :badge-title="getCuratedArtistBadgeTitle(item.song, col.key)"
-                    :only-when-overflow="onlyWhenOverflowComputed"
-                  />
-                  <PlaylistSearchText
-                    v-else
-                    :value="getCellValue(item.song, col.key)"
-                    :query="props.searchQuery"
-                  />
-                  <BeatGridQualityBadge v-if="col.key === 'bpm'" :song="item.song" />
-                  <bubbleBox
-                    v-if="
-                      hoveredCellKey === getCellKey(item.song, col.key) &&
-                      !hasCuratedArtistBadge(item.song, col.key) &&
-                      !hasBeatGridQualityBadge(item.song, col.key)
-                    "
-                    :dom="cellRefMap[getCellKey(item.song, col.key)] || undefined"
-                    :title="getCellTitle(item.song, col.key)"
-                    :only-when-overflow="onlyWhenOverflowComputed"
-                  />
+                  <slot :name="`cell-${col.key}`" :song="item.song">
+                    <CuratedArtistCellContent
+                      v-if="hasCuratedArtistBadge(item.song, col.key)"
+                      :value="getCellValue(item.song, col.key)"
+                      :search-query="props.searchQuery"
+                      :badge-text="getCuratedArtistBadgeText(item.song, col.key)"
+                      :badge-title="getCuratedArtistBadgeTitle(item.song, col.key)"
+                      :only-when-overflow="onlyWhenOverflowComputed"
+                    />
+                    <PlaylistSearchText
+                      v-else
+                      :value="getCellValue(item.song, col.key)"
+                      :query="props.searchQuery"
+                    />
+                    <BeatGridQualityBadge v-if="col.key === 'bpm'" :song="item.song" />
+                    <bubbleBox
+                      v-if="
+                        hoveredCellKey === getCellKey(item.song, col.key) &&
+                        !hasCuratedArtistBadge(item.song, col.key) &&
+                        !hasBeatGridQualityBadge(item.song, col.key)
+                      "
+                      :dom="cellRefMap[getCellKey(item.song, col.key)] || undefined"
+                      :title="getCellTitle(item.song, col.key)"
+                      :only-when-overflow="onlyWhenOverflowComputed"
+                    />
+                  </slot>
                 </div>
               </template>
             </div>

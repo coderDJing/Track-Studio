@@ -5,10 +5,7 @@ export const WAVEFORM_PREVIEW_TRANSPORT_SUSPEND_EVENT = 'waveform-preview:transp
 export const WAVEFORM_PREVIEW_TRANSPORT_RESUME_EVENT = 'waveform-preview:transport-resume'
 
 export type ExclusivePlaybackOwner =
-  | 'stem-preview'
-  | 'waveform-preview'
-  | 'main-player'
-  | 'horizontal-browse'
+  'icloud-preview' | 'stem-preview' | 'waveform-preview' | 'main-player' | 'horizontal-browse'
 
 export type ExclusivePlaybackPauseOthersPayload = {
   owner: ExclusivePlaybackOwner
@@ -20,6 +17,7 @@ export type WaveformPreviewTransportGatePayload = {
 }
 
 const EXCLUSIVE_PLAYBACK_OWNERS = new Set<ExclusivePlaybackOwner>([
+  'icloud-preview',
   'stem-preview',
   'waveform-preview',
   'main-player',

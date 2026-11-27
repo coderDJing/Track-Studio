@@ -17,7 +17,13 @@ export default defineConfig({
             '**/CuratedLibrarySyncSettings.spec.ts',
             '**/trackReanalysisDialog.spec.ts',
             '**/setPackageImportDialog.spec.ts',
-            '**/rightClickMenu.spec.ts'
+            '**/rightClickMenu.spec.ts',
+            '**/IcloudLibraryFull.spec.ts',
+            '**/cloudPlayerRouting.spec.ts',
+            '**/SongListShared.spec.ts',
+            '**/IcloudLibraryPanel.spec.ts',
+            '**/BottomInfoAreaTotalRow.i18n.spec.ts',
+            '**/useWaveformPreviewPlayer.icloud.spec.ts'
           ]
         }
       },
@@ -30,7 +36,13 @@ export default defineConfig({
             '**/CuratedLibrarySyncSettings.spec.ts',
             '**/trackReanalysisDialog.spec.ts',
             '**/setPackageImportDialog.spec.ts',
-            '**/rightClickMenu.spec.ts'
+            '**/rightClickMenu.spec.ts',
+            '**/IcloudLibraryFull.spec.ts',
+            '**/cloudPlayerRouting.spec.ts',
+            '**/SongListShared.spec.ts',
+            '**/IcloudLibraryPanel.spec.ts',
+            '**/BottomInfoAreaTotalRow.i18n.spec.ts',
+            '**/useWaveformPreviewPlayer.icloud.spec.ts'
           ],
           environment: './tests/vueClientEnvironment.ts'
         }

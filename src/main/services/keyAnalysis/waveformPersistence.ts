@@ -51,7 +51,8 @@ export const createPersistWaveform = (params: CreateWaveformPersistenceParams) =
         energyAnalysis: existing?.energyAnalysis,
         energySourceGridSignature: existing?.energySourceGridSignature,
         songStructure: existing?.songStructure,
-        hasWaveform: listRoot ? Boolean(surfaceData) : true
+        // 没有曲库根时，必须真正写入外部分析缓存才算有波形。提前记成已有会让列表一直空着。
+        hasWaveform: listRoot ? Boolean(surfaceData) : false
       })
 
       if (listRoot) {
@@ -99,11 +100,13 @@ export const createPersistWaveform = (params: CreateWaveformPersistenceParams) =
               analysisOnly: true
             })
           }
-          await LibraryCacheDb.upsertExternalAnalysisWaveformCacheEntry(
+          const wrote = await LibraryCacheDb.upsertExternalAnalysisWaveformCacheEntry(
             externalContext,
             { size: stat.size, mtimeMs: stat.mtimeMs },
             waveformData
           )
+          const saved = params.doneByPath.get(normalizedPath)
+          if (wrote && saved) saved.hasWaveform = true
         }
       }
     } catch (error) {

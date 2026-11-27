@@ -40,6 +40,15 @@ describe('browser main player analysis gate', () => {
     })
   })
 
+  it('does not send guarded iCloud playback tickets to local file analysis', () => {
+    expect(
+      buildMainPlayerPlayingAnalysisPayload(
+        'frkb-preview://icloud/?path=%2Ffixture%2Fsong.mp3&ticket=selected',
+        createRuntime('edit')
+      )
+    ).toBeNull()
+  })
+
   it('ignores empty playback paths', () => {
     expect(buildMainPlayerPlayingAnalysisPayload('', createRuntime('browser'))).toBeNull()
   })

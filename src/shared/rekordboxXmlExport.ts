@@ -3,7 +3,7 @@ import type { ISongHotCue, ISongMemoryCue } from '../types/globals'
 export type RekordboxXmlExportMode = 'copy' | 'move'
 
 export type RekordboxXmlExportSourceLibraryName =
-  'FilterLibrary' | 'CuratedLibrary' | 'SetLibrary' | 'NeteaseLibrary'
+  'FilterLibrary' | 'CuratedLibrary' | 'SetLibrary' | 'NeteaseLibrary' | 'IcloudLibrary'
 
 export type RekordboxXmlExportTrackInput = {
   filePath: string

@@ -13,7 +13,8 @@ const SUPPORTED_SOURCE_LIBRARIES = new Set<RekordboxXmlExportSourceLibraryName>(
   'FilterLibrary',
   'CuratedLibrary',
   'SetLibrary',
-  'NeteaseLibrary'
+  'NeteaseLibrary',
+  'IcloudLibrary'
 ])
 
 const normalizeComparePath = (value: string) => {
@@ -133,6 +134,13 @@ export const validateRequestLibrary = (request: RekordboxXmlExportRequest) => {
       ok: false as const,
       code: 'MOVE_NOT_ALLOWED',
       message: '网易云曲目只能复制导出，不能移动缓存文件。'
+    }
+  }
+  if (request.sourceLibraryName === 'IcloudLibrary' && request.mode === 'move') {
+    return {
+      ok: false as const,
+      code: 'MOVE_NOT_ALLOWED',
+      message: 'iCloud 曲目只能复制导出，不能移动原文件。'
     }
   }
   return { ok: true as const }

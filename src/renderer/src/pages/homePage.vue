@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import librarySelectArea from './modules/librarySelectArea.vue'
+import IcloudLibraryPanel from './modules/IcloudLibraryPanel.vue'
+import IcloudFolderTree from './modules/IcloudFolderTree.vue'
+import { icloudOpen, icloudSongDragging } from '@renderer/utils/icloudLibrary'
 import libraryArea from './modules/libraryArea.vue'
 import pioneerDeviceLibraryArea from './modules/pioneerDeviceLibraryArea.vue'
 import songsArea from './modules/songsArea/songsArea.vue'
@@ -401,7 +404,9 @@ const isPioneerDeviceLibraryView = computed(
   () => runtime.libraryAreaSelected === 'PioneerDeviceLibrary'
 )
 const isLibraryPanelHidden = computed(
-  () => isExternalPlaylistView.value || isRecycleBinView.value || isRecordingLibraryView.value
+  () =>
+    !icloudOpen.value &&
+    (isExternalPlaylistView.value || isRecycleBinView.value || isRecordingLibraryView.value)
 )
 const showMainSongPlayer = computed(
   () => runtime.mainWindowBrowseMode === 'browser' && Boolean(runtime.playingData.playingSong)
@@ -806,29 +811,37 @@ const drop = async (e: DragEvent) => {
           :class="{ librarySwitching }"
           :style="'width:' + runtime.layoutConfig.libraryAreaWidth + 'px'"
         >
-          <pioneerDeviceLibraryArea
-            v-if="isPioneerDeviceLibraryView"
-            style="width: 100%; height: 100%"
-          />
-          <div v-else class="localLibraryTreePanel">
-            <div
-              v-for="item of runtime.libraryTree.children"
-              v-show="librarySelected == item.dirName"
+          <IcloudFolderTree v-if="icloudOpen" v-show="!icloudSongDragging" />
+          <template v-if="!icloudOpen || icloudSongDragging">
+            <pioneerDeviceLibraryArea
+              v-if="isPioneerDeviceLibraryView && !icloudOpen"
               style="width: 100%; height: 100%"
-            >
-              <libraryArea :uuid="item.uuid"></libraryArea>
-            </div>
+            />
+            <div v-else class="localLibraryTreePanel">
+              <div
+                v-for="item of runtime.libraryTree.children"
+                v-show="
+                  (icloudSongDragging &&
+                  !['FilterLibrary', 'CuratedLibrary'].includes(librarySelected)
+                    ? 'FilterLibrary'
+                    : librarySelected) === item.dirName
+                "
+                style="width: 100%; height: 100%"
+              >
+                <libraryArea :uuid="item.uuid"></libraryArea>
+              </div>
 
-            <div
-              v-if="runtime.libraryTreeLoading"
-              class="localLibraryTreeLoading"
-              role="status"
-              aria-live="polite"
-            >
-              <span class="localLibraryTreeLoadingSpinner" aria-hidden="true"></span>
-              <span>{{ t('common.loading') }}</span>
+              <div
+                v-if="runtime.libraryTreeLoading"
+                class="localLibraryTreeLoading"
+                role="status"
+                aria-live="polite"
+              >
+                <span class="localLibraryTreeLoadingSpinner" aria-hidden="true"></span>
+                <span>{{ t('common.loading') }}</span>
+              </div>
             </div>
-          </div>
+          </template>
         </div>
         <div
           v-show="!isLibraryPanelHidden"
@@ -852,12 +865,14 @@ const drop = async (e: DragEvent) => {
           @dragleave.stop="dragleave"
           @drop.stop.prevent="drop"
         >
+          <SongsAreaPreviewHost />
+          <IcloudLibraryPanel v-if="icloudOpen" />
           <div
+            v-else
             ref="splitSongsAreaRef"
             :class="isSongsAreaSplit ? 'splitSongsArea' : 'singleSongsAreaShell'"
             :style="isSongsAreaSplit ? splitSongsAreaStyle : undefined"
           >
-            <SongsAreaPreviewHost />
             <div
               v-for="{ pane, viewId } in visiblePaneViews"
               :key="viewId"
@@ -923,256 +938,4 @@ const drop = async (e: DragEvent) => {
     </div>
   </div>
 </template>
-<style lang="scss" scoped>
-.mainContent {
-  display: flex;
-  height: 100%;
-  min-width: 0;
-  overflow: hidden;
-  position: relative;
-  transition: height 0.22s cubic-bezier(0.22, 1, 0.36, 1);
-
-  &.mainContent--with-player {
-    height: calc(100% - 63px);
-  }
-}
-
-.mainPlayerShell {
-  height: 62px;
-  max-height: 0;
-  opacity: 0;
-  transform: translateY(8px);
-  border-top: 1px solid transparent;
-  position: relative;
-  overflow: hidden;
-  transform-origin: bottom center;
-  transition:
-    max-height 0.22s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.18s ease,
-    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 0.18s ease;
-  pointer-events: none;
-}
-
-.mainPlayerShell--visible {
-  max-height: 62px;
-  opacity: 1;
-  transform: translateY(0);
-  border-top-color: var(--border);
-  overflow: visible;
-  pointer-events: auto;
-  z-index: 2;
-}
-
-.libraryPanel {
-  height: 100%;
-
-  &.librarySwitching {
-    animation: librarySwitchFade 220ms ease;
-  }
-}
-
-.localLibraryTreePanel {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-
-.localLibraryTreeLoading {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: var(--text-weak);
-  font-size: 12px;
-  background-color: var(--bg);
-  pointer-events: all;
-}
-
-.localLibraryTreeLoadingSpinner {
-  width: 14px;
-  height: 14px;
-  box-sizing: border-box;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: localLibraryTreeLoadingSpin 0.75s linear infinite;
-}
-
-@keyframes localLibraryTreeLoadingSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.splitSongsArea {
-  display: flex;
-  height: 100%;
-  min-width: 0;
-  overflow: hidden;
-  position: relative;
-  --songs-area-split-left-width: 50%;
-  --songs-area-split-right-width: 50%;
-  --songs-area-split-divider-left: 50%;
-}
-
-.singleSongsAreaShell {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.splitSongsAreaPane {
-  flex: 0 0 auto;
-  min-width: 0;
-  box-sizing: border-box;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  background: color-mix(in srgb, var(--bg) 97%, var(--text) 3%);
-
-  &.is-active {
-    background: color-mix(in srgb, var(--bg) 92%, var(--accent) 8%);
-  }
-}
-
-.splitSongsAreaPane--left {
-  width: var(--songs-area-split-left-width);
-  flex-basis: var(--songs-area-split-left-width);
-  border-right: 1px solid var(--border);
-}
-
-.splitSongsAreaPane--right {
-  width: var(--songs-area-split-right-width);
-  flex-basis: var(--songs-area-split-right-width);
-}
-
-.splitSongsAreaDivider {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: var(--songs-area-split-divider-left);
-  width: 8px;
-  transform: translateX(-50%);
-  z-index: 10;
-  cursor: ew-resize;
-  background: transparent;
-  touch-action: none;
-}
-
-.splitSongsAreaDivider::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  height: 100%;
-  bottom: 0;
-  left: 50%;
-  width: 4px;
-  transform: translateX(-50%);
-  background-color: var(--accent);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  pointer-events: none;
-}
-
-.splitSongsAreaDivider.is-hovered::before,
-.splitSongsAreaDivider.is-resizing::before {
-  opacity: 1;
-}
-
-:global(body.songs-area-split-resizing),
-:global(body.songs-area-split-resizing *) {
-  cursor: ew-resize !important;
-  user-select: none !important;
-}
-
-@keyframes librarySwitchFade {
-  0% {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mainContent,
-  .mainPlayerShell {
-    transition: none;
-  }
-
-  .libraryPanel.librarySwitching {
-    animation: none;
-  }
-}
-
-.dragBar {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  width: 8px;
-  /* 触发区域宽度 */
-  cursor: ew-resize;
-  transform: translateX(-50%);
-  /* 将 8px 的触发区域居中在 left 位置 */
-  z-index: 10;
-  /* 确保它在其他内容之上 */
-  background-color: transparent;
-  /* 确保触发区域不可见 */
-}
-
-.dragBar::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 50%;
-  /* 相对于 dragBar 居中 */
-  transform: translateX(-50%);
-  /* 精确居中 */
-  width: 4px;
-  /* 宽度始终为 4px */
-  height: 100%;
-  background-color: var(--accent);
-  /* 指示器颜色 */
-  opacity: 0;
-  /* 初始透明度为 0 */
-  transition: opacity 0.2s ease;
-  /* 过渡效果应用在透明度上 */
-  pointer-events: none;
-  /* 伪元素不应捕获事件 */
-}
-
-/* 当 dragBar 悬停或拖动时，显示伪元素 */
-.dragBar.dragBarHovered::before {
-  opacity: 1;
-  /* 透明度变为 1 */
-}
-
-.songsAreaDragHoverBorder {
-  /* 移除默认边框样式 */
-  border-color: transparent !important;
-  position: relative !important;
-}
-
-/* 添加伪元素来创建永远位于顶层的边框 */
-.songsAreaDragHoverBorder::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 2px;
-  bottom: 0;
-  border: 1px solid var(--accent);
-  pointer-events: none;
-  /* 不影响鼠标事件 */
-  z-index: 2;
-  /* 确保在所有内容之上 */
-}
-</style>
+<style lang="scss" scoped src="./homePage.scss"></style>

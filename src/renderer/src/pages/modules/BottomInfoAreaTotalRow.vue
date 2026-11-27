@@ -3,6 +3,8 @@ import { rendererFilePathKey } from '@renderer/utils/filePathComparison'
 import libraryUtils from '@renderer/utils/libraryUtils'
 
 import { computed } from 'vue'
+import { icloudOpen } from '@renderer/utils/icloudLibrary'
+import { icloudListPresentation } from '@renderer/utils/icloudListPresentation'
 import bubbleBoxTrigger from '@renderer/components/bubbleBoxTrigger.vue'
 import { i18n } from '@renderer/i18n'
 import { type SongsAreaPaneKey, useRuntimeStore } from '@renderer/stores/runtime'
@@ -13,14 +15,23 @@ import { collectMissingAnalysisFilesFromSongs } from '@renderer/utils/manualKeyA
 import type { ISongInfo } from 'src/types/globals'
 
 const runtime = useRuntimeStore()
+const cloud = computed(() => (icloudOpen.value ? icloudListPresentation.value : null))
+const isSplitView = computed(() => !cloud.value && runtime.songsAreaPanels.splitEnabled)
+const displaySongs = computed(() => cloud.value?.songs || runtime.songsArea.songInfoArr)
+const knownDuration = (songs: ISongInfo[]) => {
+  const known = songs.filter((song) => song.duration)
+  if (!known.length) return '—'
+  const text = formatTotalDuration(sumDurations(known.map((song) => song.duration)))
+  return known.length < songs.length ? `${text} (${t('bottomInfo.knownDurationOnly')})` : text
+}
 
 const normalizeAnalysisPath = (value: string) => rendererFilePathKey(String(value || ''))
 
-const isPioneerView = computed(() => Boolean(runtime.songsArea.djPlaylist))
+const isPioneerView = computed(() => !cloud.value && Boolean(runtime.songsArea.djPlaylist))
 const currentLocale = computed(() => i18n.global.locale.value)
 const totalDurationLabel = computed(() => t('bottomInfo.totalDurationLabel'))
 const selectedSongCount = computed(
-  () => runtime.songsArea.selectedSongFilePath.filter(Boolean).length
+  () => (cloud.value?.selected || runtime.songsArea.selectedSongFilePath).filter(Boolean).length
 )
 const selectedSongsText = computed(() =>
   t('bottomInfo.selectedSongs', {
@@ -47,7 +58,7 @@ const collectPendingAnalysisFiles = (songInfoArr: ISongInfo[]): string[] =>
   )
 
 const pendingAnalysisFiles = computed(() =>
-  collectPendingAnalysisFiles(runtime.songsArea?.songInfoArr || [])
+  cloud.value ? [] : collectPendingAnalysisFiles(runtime.songsArea?.songInfoArr || [])
 )
 const pendingAnalysisCount = computed(() =>
   isPioneerView.value ? 0 : pendingAnalysisFiles.value.length
@@ -55,9 +66,11 @@ const pendingAnalysisCount = computed(() =>
 const manualPendingAnalysisPathSet = computed(
   () =>
     new Set(
-      runtime.manualKeyAnalysisPendingFilePaths
-        .map((filePath) => normalizeAnalysisPath(filePath))
-        .filter(Boolean)
+      cloud.value
+        ? []
+        : runtime.manualKeyAnalysisPendingFilePaths
+            .map((filePath) => normalizeAnalysisPath(filePath))
+            .filter(Boolean)
     )
 )
 const manualPendingAnalysisCount = computed(() => manualPendingAnalysisPathSet.value.size)
@@ -109,8 +122,9 @@ const displayPioneerPendingAnalysisCount = computed(() =>
     : pioneerPendingAnalysisCount.value
 )
 const hasTotalRowContent = computed(() => {
+  if (cloud.value) return cloud.value.total > 0
   if (manualPendingAnalysisCount.value > 0) return true
-  if (runtime.songsAreaPanels.splitEnabled) {
+  if (isSplitView.value) {
     return (
       runtime.songsAreaPanels.panes.left.songInfoArr.length > 0 ||
       runtime.songsAreaPanels.panes.right.songInfoArr.length > 0
@@ -161,8 +175,8 @@ const formatTotalDuration = (total: number) => {
   const seconds = total % 60
   const segments: string[] = []
   if (days > 0) segments.push(formatDurationUnit('day', days))
-  segments.push(formatDurationUnit('hour', hours))
-  segments.push(formatDurationUnit('minute', minutes))
+  if (days > 0 || hours > 0) segments.push(formatDurationUnit('hour', hours))
+  if (days > 0 || hours > 0 || minutes > 0) segments.push(formatDurationUnit('minute', minutes))
   segments.push(formatDurationUnit('second', seconds))
   return segments.join(currentLocale.value === 'zh-CN' ? '' : ' ')
 }
@@ -186,13 +200,17 @@ const selectedDuration = (songs: ISongInfo[], keys: string[], songListUUID: stri
   )
 }
 const selectedDurationText = computed(() =>
-  formatTotalDuration(
-    selectedDuration(
-      runtime.songsArea.songInfoArr,
-      runtime.songsArea.selectedSongFilePath,
-      runtime.songsArea.songListUUID
-    )
-  )
+  cloud.value
+    ? knownDuration(
+        cloud.value.songs.filter((song) => cloud.value!.selected.includes(song.filePath))
+      )
+    : formatTotalDuration(
+        selectedDuration(
+          runtime.songsArea.songInfoArr,
+          runtime.songsArea.selectedSongFilePath,
+          runtime.songsArea.songListUUID
+        )
+      )
 )
 const splitSelectedDurationText = (pane: 'left' | 'right') => {
   const state = runtime.songsAreaPanels.panes[pane]
@@ -201,13 +219,15 @@ const splitSelectedDurationText = (pane: 'left' | 'right') => {
   )
 }
 const playlistTotalDaysHoursSeconds = computed(() =>
-  formatTotalDuration(sumDurations(runtime.songsArea.songInfoArr.map((song) => song.duration)))
+  cloud.value
+    ? knownDuration(displaySongs.value)
+    : formatTotalDuration(sumDurations(displaySongs.value.map((song) => song.duration)))
 )
 </script>
 
 <template>
   <div v-if="hasTotalRowContent" class="total-row">
-    <template v-if="runtime.songsAreaPanels.splitEnabled">
+    <template v-if="isSplitView">
       <div v-if="splitLeftSelectedCount > 0" class="selected-count-text">
         {{
           t('bottomInfo.selectedSongsLeft', {
@@ -226,7 +246,7 @@ const playlistTotalDaysHoursSeconds = computed(() =>
       </div>
     </template>
     <div v-else-if="selectedSongCount > 0" class="selected-count-text">{{ selectedSongsText }}</div>
-    <template v-if="runtime.songsAreaPanels.splitEnabled && manualPendingAnalysisCount <= 0">
+    <template v-if="isSplitView && manualPendingAnalysisCount <= 0">
       <bubbleBoxTrigger
         v-if="splitLeftPendingCount > 0"
         tag="button"

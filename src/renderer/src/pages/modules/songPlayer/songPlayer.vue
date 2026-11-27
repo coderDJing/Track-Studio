@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PlayerSurface from './PlayerSurface.vue'
 import { bindBrowserPlayerEvents } from './bindBrowserPlayerEvents'
 import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 
@@ -102,6 +103,7 @@ const audioPlayer = shallowRef<WebAudioPlayer | null>(null)
 const AUDIO_FOLLOW_SYSTEM_ID = ''
 let pendingAudioOutputDeviceId = runtime.setting.audioOutputDeviceId || AUDIO_FOLLOW_SYSTEM_ID
 const waveformShow = ref(false)
+const analyzedWaveformAvailable = computed(() => waveformShow.value)
 const waveformContainerWidth = ref(0)
 const playerCurrentSeconds = ref(0)
 const playerWaveformRenderRevision = ref(0)
@@ -764,8 +766,8 @@ watch(
 </script>
 <template>
   <transition name="player-area-toggle">
-    <div
-      v-show="waveformShow"
+    <PlayerSurface
+      :visible="waveformShow"
       class="playerArea"
       data-user-guide-target="song-player"
       style="
@@ -848,7 +850,7 @@ watch(
         </transition>
       </div>
 
-      <div class="main-player-waveform-slot unselectable">
+      <div v-show="analyzedWaveformAvailable" class="main-player-waveform-slot unselectable">
         <div id="waveform" ref="waveform">
           <div id="time">0:00</div>
           <div id="duration">0:00</div>
@@ -872,7 +874,7 @@ watch(
             v-model:model-value-end="playbackRangeHandleEndPercent"
             :container-width="waveformContainerWidth"
             :enable-playback-range="playbackRangeHandlesVisible"
-            :waveform-show="waveformShow"
+            :waveform-show="analyzedWaveformAvailable"
             :locked="playbackRangeHandlesLocked"
             :locked-ranges="playbackRangeLockedRanges"
             @drag-end="handlePlaybackRangeDragEnd"
@@ -885,8 +887,8 @@ watch(
           @seek-play="handlePlayerStructureSectionClick"
         />
       </div>
-      <BpmTap :song="runtime.playingData.playingSong" :waveform-show="waveformShow" />
-    </div>
+      <BpmTap :song="runtime.playingData.playingSong" :waveform-show="analyzedWaveformAvailable" />
+    </PlayerSurface>
   </transition>
   <Teleport to="body">
     <selectSongListDialog

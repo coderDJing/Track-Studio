@@ -4,6 +4,12 @@ import type { ISongInfo } from 'src/types/globals'
 import type { HorizontalBrowseDeckKey } from '@renderer/composables/horizontalBrowse/horizontalBrowseNativeTransport'
 import { beginHorizontalBrowseDeckInteraction } from '@renderer/composables/horizontalBrowse/horizontalBrowseInteractionTimeline'
 import { useRuntimeStore } from '@renderer/stores/runtime'
+import {
+  icloudDeckFileNeedsLocalCopy,
+  icloudDeckQueueIndex,
+  materializeIcloudDeckSong,
+  notifyIcloudDeckLocalized
+} from '@renderer/utils/icloudPlayback'
 
 type DeckKey = HorizontalBrowseDeckKey
 type HorizontalBrowseEditBeatStep = 4 | 8 | 16 | 32 | 128
@@ -68,16 +74,35 @@ export const useHorizontalBrowseEditDeckNavigation = ({
     if (!filePath) return false
     const shouldResumePlayback = resolveDeckPlaying('top')
     const token = (editNavigationToken += 1)
-    beginHorizontalBrowseDeckInteraction('top', filePath)
-    void assignSongToDeck('top', { ...nextSong }).then(() => {
-      if (
-        shouldResumePlayback &&
-        editNavigationToken === token &&
-        sameRendererFilePath(resolveSongFilePath(topDeckSong.value), filePath) &&
-        !resolveDeckPlaying('top')
-      ) {
-        handleDeckPlayPauseToggle('top')
-      }
+    const fromPath = resolveSongFilePath(topDeckSong.value)
+    const assign = (song: ISongInfo, assignPath: string) => {
+      beginHorizontalBrowseDeckInteraction('top', assignPath)
+      void assignSongToDeck('top', { ...song }).then(() => {
+        if (
+          shouldResumePlayback &&
+          editNavigationToken === token &&
+          sameRendererFilePath(resolveSongFilePath(topDeckSong.value), assignPath) &&
+          !resolveDeckPlaying('top')
+        ) {
+          handleDeckPlayPauseToggle('top')
+        }
+      })
+    }
+    if (!icloudDeckFileNeedsLocalCopy(nextSong)) {
+      assign(nextSong, filePath)
+      return true
+    }
+    // 只下载这一首。取消、换歌或这次切歌被新的切歌盖掉时，不装轨。
+    void materializeIcloudDeckSong(nextSong).then((ready) => {
+      if (!ready || editNavigationToken !== token) return
+      if (resolveSongFilePath(topDeckSong.value) !== fromPath) return
+      const queue = runtime.horizontalBrowseDecks.topSongListData
+      const index = icloudDeckQueueIndex(queue, ready)
+      if (index >= 0) queue.splice(index, 1, ready)
+      const relative = ready.icloudOrigin?.relativePath || ''
+      const localPath = resolveSongFilePath(ready)
+      if (relative && localPath) notifyIcloudDeckLocalized(relative, localPath)
+      assign(ready, resolveSongFilePath(ready))
     })
     return true
   }

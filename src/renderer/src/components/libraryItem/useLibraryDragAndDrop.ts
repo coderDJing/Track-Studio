@@ -1,3 +1,4 @@
+import { ICLOUD_DRAG_MIME, dropIcloudOnPlaylist } from '@renderer/utils/icloudDrag'
 import { reactive, ref, watch, type Ref } from 'vue'
 import {
   handleDragStart,
@@ -153,6 +154,16 @@ export function useLibraryDragAndDrop({
 
   const dragover = (e: DragEvent) => {
     const dirData = getDirData()
+    if (e.dataTransfer?.types.includes(ICLOUD_DRAG_MIME)) {
+      e.stopPropagation()
+      const allowed =
+        dirData?.type === 'songList' &&
+        ['FilterLibrary', 'CuratedLibrary'].includes(props.libraryName)
+      if (allowed) e.preventDefault()
+      e.dataTransfer.dropEffect = allowed ? 'copy' : 'none'
+      dragState.dragApproach = allowed ? 'center' : ''
+      return
+    }
     if (!dirData) return
     if (runtime.libraryAreaSelected === 'RecycleBin') {
       if (e.dataTransfer) {
@@ -249,6 +260,11 @@ export function useLibraryDragAndDrop({
 
   const drop = async (e: DragEvent) => {
     const dirData = getDirData()
+    if (e.dataTransfer?.types.includes(ICLOUD_DRAG_MIME)) {
+      dragState.dragApproach = ''
+      await dropIcloudOnPlaylist(e, props.uuid, dirData?.type || '', props.libraryName)
+      return
+    }
     const fatherDirData = getFatherDirData()
     if (!dirData || !fatherDirData) {
       dragState.dragApproach = ''

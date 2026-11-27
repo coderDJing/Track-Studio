@@ -1,3 +1,4 @@
+import { isCloudListActive, localPlayerActionsAllowed } from '@renderer/utils/activeSongListContext'
 import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { onMounted, onUnmounted, Ref, ref } from 'vue'
 import hotkeys, { KeyHandler } from 'hotkeys-js'
@@ -109,13 +110,13 @@ export function usePlayerHotkeys(
         sourcePane === 'single' || sourcePane === 'left' || sourcePane === 'right' ? sourcePane : ''
     }
   }
-  const isPreviewMoveActive = () => previewMoveTarget.value !== null
+  const isPreviewMoveActive = () => !isCloudListActive() && previewMoveTarget.value !== null
   const isAnySelectSongListDialogVisible = () =>
     state.selectSongListDialogShow.value || runtime.selectSongListDialogShow
   const areHotkeysEnabled = () => state.hotkeysEnabled?.value !== false
   const emitPreviewMoveRequest = (targetLibraryName: 'FilterLibrary' | 'CuratedLibrary') => {
     const target = previewMoveTarget.value
-    if (!target) return false
+    if (!target || !localPlayerActionsAllowed(runtime.playingData.playingSong)) return false
     const payload: PreviewMoveRequestPayload = {
       song: { ...target.song },
       sourceLibraryName: target.sourceLibraryName,
@@ -215,6 +216,10 @@ export function usePlayerHotkeys(
     })
 
     const deleteHandler: KeyHandler = (event, handler) => {
+      if (!localPlayerActionsAllowed(runtime.playingData.playingSong)) {
+        event.preventDefault()
+        return
+      }
       event.preventDefault()
       if (!areHotkeysEnabled() || !state.waveformShow.value || isPreviewMoveActive()) {
         return
@@ -263,6 +268,10 @@ export function usePlayerHotkeys(
 
     hotkeys('q', scope, (event) => {
       event.preventDefault()
+      if (isCloudListActive()) {
+        if (areHotkeysEnabled() && !isAnySelectSongListDialogVisible()) actions.moveToListLibrary()
+        return
+      }
       if (
         !areHotkeysEnabled() ||
         (!state.waveformShow.value && !isPreviewMoveActive()) ||
@@ -279,6 +288,10 @@ export function usePlayerHotkeys(
 
     hotkeys('e', scope, (event) => {
       event.preventDefault()
+      if (isCloudListActive()) {
+        if (areHotkeysEnabled() && !isAnySelectSongListDialogVisible()) actions.moveToLikeLibrary()
+        return
+      }
       if (
         !areHotkeysEnabled() ||
         (!state.waveformShow.value && !isPreviewMoveActive()) ||

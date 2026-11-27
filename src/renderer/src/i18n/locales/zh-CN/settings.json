@@ -92,9 +92,9 @@
     },
     "currentLibraryPath": "当前音乐库所在路径",
     "currentLibraryPathHint": "这里显示当前正在使用的音乐库根目录，方便确认和排查。",
-    "openCurrentLibraryInExplorer": "在资源浏览器中打开",
+    "openCurrentLibraryInExplorer": "在文件资源管理器中打开",
     "explorerContextMenuLabel": "在 Track Studio 中播放",
-    "enableExplorerContextMenu": "资源管理器右键菜单“在 Track Studio 中播放”",
+    "enableExplorerContextMenu": "文件资源管理器右键菜单“在 Track Studio 中播放”",
     "clearDirtyData": {
       "title": "清理库分析与网格缓存（仅开发/预发布）",
       "desc": "保留歌曲、歌单与库树、指纹、设置、回收站记录；清空调性、BPM、首拍、小节线、波形缓存及 Mixtape 自动录制相关缓存。",

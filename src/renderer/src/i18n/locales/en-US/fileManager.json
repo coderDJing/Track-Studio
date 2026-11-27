@@ -1,0 +1,22 @@
+{
+  "fileManager": {
+    "mac": {
+      "show": "Show in Finder",
+      "open": "Open in Finder",
+      "showLog": "Show Log in Finder",
+      "name": "Finder",
+      "guideImport": "Import and export apply to folders on disk. You can open them in Finder.",
+      "guideFolders": "Create, import, export, rename, delete, and open the folder in Finder.",
+      "screenshotSaved": "Saved to:\n{path}\nClick to show in Finder."
+    },
+    "win": {
+      "show": "Show in File Explorer",
+      "open": "Open in File Explorer",
+      "showLog": "Show Log in File Explorer",
+      "name": "File Explorer",
+      "guideImport": "Import and export apply to folders on disk. You can open them in File Explorer.",
+      "guideFolders": "Create, import, export, rename, delete, and open the folder in File Explorer.",
+      "screenshotSaved": "Saved to:\n{path}\nClick to show in File Explorer."
+    }
+  }
+}

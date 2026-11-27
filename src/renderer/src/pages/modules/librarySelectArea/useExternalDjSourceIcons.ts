@@ -33,6 +33,7 @@ type Options = {
   traktorIconAsset: string
   updateSelectedIcon: (item: HoverableIcon | undefined) => void
   emitLibrarySelectedChange: (payload: { name: string }) => void
+  onLibraryActivated?: () => void
 }
 
 type ExternalLibraryTreeResult = {
@@ -195,6 +196,7 @@ export function useExternalDjSourceIcons(options: Options) {
   }
 
   const clickSourceIcon = async (item: ExternalDjSourceIcon) => {
+    options.onLibraryActivated?.()
     const requestToken = ++treeRequestToken
     const alreadyCurrent = isCurrentSource(item)
     const cacheKey = buildExternalSourceCacheKey(item)

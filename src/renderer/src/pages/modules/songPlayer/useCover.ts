@@ -1,3 +1,6 @@
+import { createIcloudCovers } from '@renderer/utils/icloudCovers'
+import { isIcloudPlaybackUrl, type IcloudPicture } from '@shared/icloudLibrary'
+import { icloudInvoke } from '@renderer/utils/icloudLibrary'
 import { sameRendererFilePath } from '@renderer/utils/filePathComparison'
 import { ref, onUnmounted } from 'vue'
 import rightClickMenu from '@renderer/components/rightClickMenu'
@@ -47,6 +50,23 @@ export const showSaveCoverContextMenu = async (
 
 export function useCover(runtime: ReturnType<typeof useRuntimeStore>) {
   const coverBlobUrl = ref('')
+  let cloudOwned = false,
+    coverPath = ''
+  const cloudCovers = createIcloudCovers({
+    resolve: (path) => {
+      const song = runtime.playingData.playingSong,
+        origin = song?.icloudOrigin
+      return song?.filePath && sameRendererFilePath(song.filePath, path) && origin
+        ? { relative: origin.relativePath, token: origin.rootToken }
+        : null
+    },
+    read: (path, token, id) =>
+      icloudInvoke<IcloudPicture | null>('icloud:cover', [path], token, id),
+    cancel: (id) => {
+      void icloudInvoke('icloud:cancel', id).catch(() => {})
+    }
+  })
+
   const songInfoShow = ref(false)
   const isShowingContextMenu = ref(false)
   const contextMenuCoverSnapshot = ref<CoverSaveSnapshot | null>(null)
@@ -70,9 +90,11 @@ export function useCover(runtime: ReturnType<typeof useRuntimeStore>) {
   }
 
   const disposeCoverUrl = () => {
-    if (coverBlobUrl.value && coverBlobUrl.value.startsWith('blob:')) {
+    if (!cloudOwned && coverBlobUrl.value && coverBlobUrl.value.startsWith('blob:')) {
       URL.revokeObjectURL(coverBlobUrl.value)
     }
+    cloudCovers.clear()
+    cloudOwned = false
     coverBlobUrl.value = ''
   }
 
@@ -99,6 +121,25 @@ export function useCover(runtime: ReturnType<typeof useRuntimeStore>) {
   }
 
   const setCoverByIPC = async (filePath: string) => {
+    if (!sameRendererFilePath(coverPath, filePath)) {
+      disposeCoverUrl()
+      coverPath = filePath
+    }
+    if (isIcloudPlaybackUrl(filePath)) {
+      const song = runtime.playingData.playingSong
+      if (!song || !sameRendererFilePath(song.filePath, filePath) || !song.icloudOrigin) return
+      cloudCovers.setVisibleSongs([song])
+      const url = await cloudCovers.fetchCoverUrl(filePath)
+      if (
+        sameRendererFilePath(coverPath, filePath) &&
+        sameRendererFilePath(runtime.playingData.playingSong?.filePath, filePath)
+      ) {
+        cloudOwned = true
+        coverBlobUrl.value = url || ''
+      }
+      return
+    }
+
     const preferLargerThumb = await fetchCoverFromCache(filePath, 512)
     if (preferLargerThumb) return
 
@@ -139,7 +180,8 @@ export function useCover(runtime: ReturnType<typeof useRuntimeStore>) {
       disposeCoverUrl()
       return false
     } catch (cacheError) {
-      disposeCoverUrl()
+      if (sameRendererFilePath(runtime.playingData.playingSong?.filePath, filePath))
+        disposeCoverUrl()
       return false
     }
   }

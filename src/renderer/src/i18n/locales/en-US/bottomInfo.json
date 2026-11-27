@@ -9,6 +9,7 @@
     "pendingAnalysisRight": "R: {count} pending",
     "analyzePending": "Analyze",
     "locatePendingAnalysis": "Locate the first track pending analysis",
+    "knownDurationOnly": "some track durations unknown",
     "durationUnits": {
       "day": {
         "one": "{count} day",

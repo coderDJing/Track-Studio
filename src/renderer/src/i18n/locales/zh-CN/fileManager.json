@@ -1,0 +1,22 @@
+{
+  "fileManager": {
+    "mac": {
+      "show": "在 Finder 中显示",
+      "open": "在 Finder 中打开",
+      "showLog": "在 Finder 中显示日志",
+      "name": "Finder",
+      "guideImport": "导入、导出针对磁盘文件夹。可在 Finder 中打开。",
+      "guideFolders": "可新建、导入、导出、重命名、删除，并在 Finder 中打开对应文件夹。",
+      "screenshotSaved": "已保存到：\n{path}\n点击可在 Finder 中显示。"
+    },
+    "win": {
+      "show": "在文件资源管理器中显示",
+      "open": "在文件资源管理器中打开",
+      "showLog": "在文件资源管理器中显示日志",
+      "name": "文件资源管理器",
+      "guideImport": "导入、导出针对磁盘文件夹。可在文件资源管理器中打开。",
+      "guideFolders": "可新建、导入、导出、重命名、删除，并在文件资源管理器中打开对应文件夹。",
+      "screenshotSaved": "已保存到：\n{path}\n点击可在文件资源管理器中显示。"
+    }
+  }
+}

@@ -5,6 +5,13 @@ import { useRuntimeStore } from '@renderer/stores/runtime'
 import { canPlayHtmlAudio } from '@renderer/pages/modules/songPlayer/webAudioPlayer'
 import { isNeteasePreviewUrl } from '@shared/netease'
 import emitter from '@renderer/utils/mitt'
+import { cancelCloudPlayback } from '@renderer/utils/icloudPlayback'
+import {
+  isIcloudWaveformPreviewSource,
+  resolveWaveformPreviewPlayUrl,
+  shouldSkipPcmWaveformPreview,
+  toSafePreviewUrl
+} from '@renderer/utils/icloudWaveformPreviewPlayback'
 import {
   resumeTransportAfterWaveformPreview,
   suspendTransportForWaveformPreview
@@ -71,6 +78,7 @@ const normalizeExtension = (filePath: string) => {
 }
 
 const shouldUsePcmPreview = (filePath: string) => {
+  if (isNeteasePreviewUrl(filePath) || shouldSkipPcmWaveformPreview(filePath)) return false
   const ext = normalizeExtension(filePath)
   if (FORCE_PCM_PREVIEW_EXTENSIONS.has(ext)) return true
   return !canPlayHtmlAudio(filePath)
@@ -87,13 +95,6 @@ const normalizeStopReason = (reason?: string): PreviewStopReason => {
     default:
       return 'cancel'
   }
-}
-
-const toPreviewUrl = (filePath: string) => {
-  const raw = (filePath || '').trim()
-  if (!raw) return ''
-  if (raw.startsWith('frkb-preview://')) return raw
-  return `frkb-preview://local/?path=${encodeURIComponent(raw)}`
 }
 
 const normalizePcmData = (pcmData: unknown): Float32Array => {
@@ -128,6 +129,13 @@ export function useWaveformPreviewPlayer() {
   let stopping = false
   let transportSuspensionSessionId = ''
   let transportSuspensionPromise: Promise<void> | null = null
+  let previewPreparePending = false
+
+  const cancelPendingPreviewPrepare = () => {
+    if (!previewPreparePending) return
+    previewPreparePending = false
+    cancelCloudPlayback()
+  }
 
   let pcmContext: AudioContext | null = null
   let pcmGainNode: GainNode | null = null
@@ -358,6 +366,7 @@ export function useWaveformPreviewPlayer() {
   const stopWaveformPreview = (reason: PreviewStopReason, options?: { resumeMain?: boolean }) => {
     if (!previewActive.value || stopping) return
     stopping = true
+    cancelPendingPreviewPrepare()
     const filePath = previewFilePath.value
     previewActive.value = false
     previewMode.value = 'html'
@@ -374,6 +383,15 @@ export function useWaveformPreviewPlayer() {
         audio.currentTime = 0
       } catch {}
       audio.muted = false
+      try {
+        audio.removeAttribute('src')
+      } catch {
+        audio.src = ''
+      }
+      try {
+        audio.load()
+      } catch {}
+      activeSrc.value = ''
     }
     stopPcmSource(true)
     emitPreviewState(false, filePath || null)
@@ -398,8 +416,8 @@ export function useWaveformPreviewPlayer() {
       stopWaveformPreview('error')
       return
     }
-    // 网易云试听不是磁盘文件，PCM 解码会立刻失败，表现为进度条和停止按钮一闪而过。
-    if (isNeteasePreviewUrl(filePath)) {
+    // 网易云/iCloud 逻辑键和 ticket 不是可解码的本地磁盘路径，PCM 回退会卡住或假播放。
+    if (isNeteasePreviewUrl(filePath) || shouldSkipPcmWaveformPreview(filePath)) {
       stopWaveformPreview('error')
       return
     }
@@ -587,15 +605,25 @@ export function useWaveformPreviewPlayer() {
     startProgressLoop()
   }
 
-  const startWaveformPreviewAudio = (filePath: string, startPercent: number, token: number) => {
+  const startWaveformPreviewAudio = (
+    identityPath: string,
+    playPath: string,
+    startPercent: number,
+    token: number
+  ) => {
     if (playToken.value !== token) return
-    if (!previewActive.value || !sameRendererFilePath(previewFilePath.value, filePath)) return
+    if (!previewActive.value || !sameRendererFilePath(previewFilePath.value, identityPath)) return
 
-    if (shouldUsePcmPreview(filePath)) {
+    if (shouldUsePcmPreview(playPath)) {
+      if (shouldSkipPcmWaveformPreview(playPath) || shouldSkipPcmWaveformPreview(identityPath)) {
+        stopWaveformPreview('error')
+        return
+      }
       stopProgressLoop()
-      void startPcmPreview(filePath, startPercent, token).catch(() => {
+      void startPcmPreview(playPath, startPercent, token).catch(() => {
         if (playToken.value !== token) return
-        if (!previewActive.value || !sameRendererFilePath(previewFilePath.value, filePath)) return
+        if (!previewActive.value || !sameRendererFilePath(previewFilePath.value, identityPath))
+          return
         stopWaveformPreview('error')
       })
       return
@@ -606,7 +634,7 @@ export function useWaveformPreviewPlayer() {
     if (!audio) return
     applySavedVolume()
 
-    const nextSrc = toPreviewUrl(filePath)
+    const nextSrc = toSafePreviewUrl(playPath)
     if (!nextSrc) {
       stopWaveformPreview('error')
       return
@@ -628,7 +656,7 @@ export function useWaveformPreviewPlayer() {
     if (playPromise && typeof playPromise.catch === 'function') {
       playPromise.catch(() => {
         if (playToken.value !== token) return
-        tryFallbackToPcmPreview(filePath, startPercent, token)
+        tryFallbackToPcmPreview(playPath, startPercent, token)
       })
     }
 
@@ -639,7 +667,7 @@ export function useWaveformPreviewPlayer() {
 
     const applySeek = () => {
       if (playToken.value !== token) return
-      playFromPercent(audio, token, filePath, startPercent)
+      playFromPercent(audio, token, playPath, startPercent)
       audio.muted = false
     }
 
@@ -655,6 +683,7 @@ export function useWaveformPreviewPlayer() {
     const filePath = typeof payload?.filePath === 'string' ? payload.filePath.trim() : ''
     if (!filePath) return
 
+    cancelPendingPreviewPrepare()
     const startPercent = clamp01(payload?.startPercent ?? 0)
     const wasPreviewActive = previewActive.value
     if (!wasPreviewActive) {
@@ -683,7 +712,26 @@ export function useWaveformPreviewPlayer() {
     pcmFallbackToken.value = -1
 
     void suspensionPromise
-      .then(() => startWaveformPreviewAudio(filePath, startPercent, token))
+      .then(async () => {
+        if (playToken.value !== token) return
+        if (!previewActive.value || !sameRendererFilePath(previewFilePath.value, filePath)) return
+        const song = previewSong.value || payload?.song
+        const mustPrepare = isIcloudWaveformPreviewSource(song, filePath)
+        if (mustPrepare) previewPreparePending = true
+        let playPath: string | null
+        try {
+          playPath = await resolveWaveformPreviewPlayUrl(song, filePath)
+        } finally {
+          if (mustPrepare) previewPreparePending = false
+        }
+        if (playToken.value !== token) return
+        if (!previewActive.value || !sameRendererFilePath(previewFilePath.value, filePath)) return
+        if (!playPath) {
+          stopWaveformPreview('error')
+          return
+        }
+        startWaveformPreviewAudio(filePath, playPath, startPercent, token)
+      })
       .catch(() => {
         if (playToken.value !== token) return
         if (!previewActive.value || !sameRendererFilePath(previewFilePath.value, filePath)) return

@@ -488,6 +488,7 @@ export const useRuntimeStore = defineStore('runtime', {
         showPlaylistTrackCount: true,
         lastSeenWhatsNewVersion: '',
         pendingWhatsNewForVersion: '',
+        showIcloudLibraryIcon: true,
         showNeteaseLibraryIcon: true
       }, //设置
       playerReady: false,
