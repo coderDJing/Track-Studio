@@ -29,7 +29,7 @@
     "rollbackDone": "已尽量完成回滚。",
     "rollbackBestEffort": "回滚未完全成功，请检查导出目录与日志。",
     "failureLibraryUnchanged": "音乐库未被程序逻辑修改。",
-    "failureLogHint": "可通过标题栏菜单打开日志继续排查：{path}",
+    "failureLogHint": "可通过标题栏菜单的「打开版本运行日志」继续排查：{path}",
     "unsupportedSource": "当前来源暂不支持导出到 Rekordbox XML。",
     "noTracksToExport": "没有可导出的曲目。"
   }

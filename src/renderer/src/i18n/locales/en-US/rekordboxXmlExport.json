@@ -29,7 +29,7 @@
     "rollbackDone": "Rollback finished as much as possible.",
     "rollbackBestEffort": "Rollback did not fully complete. Please inspect the export directory and the log.",
     "failureLibraryUnchanged": "Music library data was not modified by the app logic.",
-    "failureLogHint": "Open the log from the title-bar menu for more details: {path}",
+    "failureLogHint": "Use “Open Version Run Log” in the title-bar menu for more details: {path}",
     "unsupportedSource": "This source is not supported for Rekordbox XML export yet.",
     "noTracksToExport": "There are no tracks to export."
   }

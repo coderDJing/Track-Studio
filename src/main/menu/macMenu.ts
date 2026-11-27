@@ -14,7 +14,6 @@ import { PRODUCT_DISPLAY_NAME } from '@shared/productBrand'
 import store from '../store'
 import mainWindow from '../window/mainWindow'
 import { openLogFile, showLogInFolder } from '../log'
-import { isRcVersion } from '../services/rcDiagnostics'
 import { openLibraryMergeDialog } from '../ipc/libraryMergeHandlers'
 import { openLibraryRelocateDialog } from '../services/libraryRelocate/openDialog'
 import { isLibrarySetupActive, onLibrarySetupChanged } from '../librarySetupState'
@@ -293,16 +292,12 @@ const buildFullMenu = () => {
             await openLogFile()
           }
         },
-        ...(isRcVersion(app.getVersion())
-          ? [
-              {
-                label: tMenu('menu.showLogInFinder'),
-                click: async () => {
-                  await showLogInFolder()
-                }
-              }
-            ]
-          : []),
+        {
+          label: tMenu('menu.showLogInFinder'),
+          click: async () => {
+            await showLogInFolder()
+          }
+        },
         {
           label: tMenu('menu.thirdPartyNotices'),
           click: () =>
