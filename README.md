@@ -32,12 +32,13 @@ Already using FRKB? Track Studio keeps the same installation, settings, and musi
 - **Organize real files:** Build Filter, Curated, and SET playlists; move or merge libraries; restore deleted tracks from the recycle bin.
 - **Find and understand tracks:** Deduplicate by audio content, analyze BPM, key, energy, and sections, and fill metadata and cover art.
 - **Pull in NetEase Cloud Music:** Sign in inside the app and browse liked tracks, your own playlists, saved playlists, and saved albums. Download tracks at lossless or master quality, or copy them into Filter, Curated, SET, or Mixtape, with fingerprint matching to skip duplicates.
+- On macOS, **browse and audition audio files in iCloud Drive** and copy tracks between iCloud Drive and your local library.
 - **Choose compatible tracks:** Filter with a Camelot key wheel or match the current Master deck's key. Keep sorting, columns, and filters per playlist, and check the total duration of selected tracks.
 - **Repair BPM drift:** Analyze selected local tracks and correct drifting audio to a chosen steady BPM. Save a new version or overwrite the original after verification.
 - **Listen and edit:** Browse RGB waveforms, audition two decks side by side, record mixes, and edit a track’s audio without leaving the app.
 - **Work with DJ libraries:** Browse Rekordbox desktop and USB libraries, Serato crates, and Traktor collections. Edit playlists, cues, and beat grids on supported Rekordbox USB drives.
 - **Sync your collection:** Keep the Curated library’s folders, playlists, and audio aligned across devices; sync fingerprints and curated artists.
-- **Prepare mixes:** Arrange Mixtape timelines, adjust transitions, and prepare or export single-track Stems.
+- **Prepare mixes** on a two- or four-lane Mixtape timeline. Adjust transitions, generate editable chapter timestamps, and prepare or export single-track stems.
 
 See the [complete feature guide](./docs/en/features.md) for workflows, supported formats, and the full capability list.
 

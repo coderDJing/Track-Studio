@@ -213,7 +213,7 @@ const zhChapters: Omit<Chapter, 'cue' | 'color'>[] = [
     id: 'mixtape',
     kicker: 'SET 与 Mixtape',
     title: '把歌排成一场演出，再录出来',
-    lead: 'SET 歌单映射源曲目，可重复、可拖拽、有删除保护。Mixtape 时间线上对齐节拍、画增益与三频包络、加 Loop 和静音段，预听满意再导出。',
+    lead: '用 SET 歌单安排演出曲序。制作 Mixtape 时，时间线可在 2 轨和 4 轨之间切换，最多同时叠放四首歌。调整节拍、包络、Loop 和静音段，试听后导出。',
     surface: 'mixtape',
     surfaceCaption: 'Mixtape 自动录制：两条轨道交替排歌，包络逐段自动化',
     groups: [
@@ -234,6 +234,7 @@ const zhChapters: Omit<Chapter, 'cue' | 'color'>[] = [
             detail: '网格调整、统一波形预览与节拍器，播放与编辑后的网格保持一致'
           },
           { name: '自动化包络', detail: '增益、高中低频、音量逐点绘制，带静音段、Loop 叠层与撤销' },
+          { name: '章节文本', detail: '按每首歌实际开始出声的时间生成章节，编辑后即可复制' },
           { name: '录音库', detail: '录音进独立的录音库，完成后显示文件名、格式、时长和路径' }
         ]
       }
@@ -307,14 +308,14 @@ const zhChapters: Omit<Chapter, 'cue' | 'color'>[] = [
   },
   {
     id: 'sync',
-    kicker: '同步、网易云与发现',
+    kicker: '云端音乐与发现',
     title: '换台电脑，接着准备',
-    lead: '精选库的目录树、歌单和音频可以跨设备云同步，指纹和精选表演者也一起同步。登录网易云后，喜欢的歌和收藏的歌单直接进同一个侧边栏。全局搜歌跨界面一步定位，相似歌曲从多个来源推荐新歌。',
+    lead: '在 macOS 上，直接从侧边栏浏览和试听 iCloud Drive 里的音频文件。登录网易云即可浏览喜欢的歌和收藏的歌单，精选库、指纹和精选表演者也可跨设备同步。',
     surface: 'sync',
     surfaceCaption: '全局搜歌与云端同步完成摘要',
     groups: [
       {
-        title: '同步与网易云',
+        title: '曲库与同步',
         items: [
           {
             name: '精选库云同步',
@@ -322,6 +323,10 @@ const zhChapters: Omit<Chapter, 'cue' | 'color'>[] = [
           },
           { name: '指纹同步', detail: 'SHA256 指纹双向同步，含差异分析、分页拉取和分批上传' },
           { name: '精选表演者', detail: '多表演者曲目自动拆分联动，跨设备同步' },
+          {
+            name: 'iCloud Drive（macOS）',
+            detail: '浏览文件夹，播放时按需下载曲目，也可在 iCloud Drive 与本地曲库之间复制'
+          },
           {
             name: '网易云曲库',
             detail: '扫码登录后同步「我喜欢的音乐」、自建歌单与收藏歌单，按原分组浏览'
@@ -561,7 +566,7 @@ const enChapters: Omit<Chapter, 'cue' | 'color'>[] = [
     id: 'mixtape',
     kicker: 'SET & Mixtape',
     title: 'Program the set, then record it',
-    lead: 'SET playlists map source tracks, allow repeats and drag reorder, and protect sources from deletion. On the Mixtape timeline, align beats, draw gain and EQ envelopes, add loops and mutes, then export.',
+    lead: 'Use SET playlists to plan your running order. When making a Mixtape, switch between two and four timeline lanes to layer up to four songs. Align beats, edit envelopes, add loops or mutes, and preview before exporting.',
     surface: 'mixtape',
     surfaceCaption: 'Mixtape auto-recording: two alternating lanes with per-clip automation',
     groups: [
@@ -596,6 +601,11 @@ const enChapters: Omit<Chapter, 'cue' | 'color'>[] = [
           {
             name: 'Automation envelopes',
             detail: 'Gain, high, mid, low, and volume, with mutes, loops, and undo'
+          },
+          {
+            name: 'Chapter text',
+            detail:
+              'Generate timestamps from when each track first becomes audible, then edit and copy them'
           },
           {
             name: 'Recording Library',
@@ -698,14 +708,14 @@ const enChapters: Omit<Chapter, 'cue' | 'color'>[] = [
   },
   {
     id: 'sync',
-    kicker: 'Sync, NetEase & discovery',
+    kicker: 'Cloud music & discovery',
     title: 'Switch machines, keep preparing',
-    lead: 'The Curated folder tree, playlists, and audio sync across devices, along with fingerprints and curated artists. Sign in to NetEase Cloud Music and your liked tracks and saved playlists land in the same sidebar. Global search jumps anywhere; similar-track picks come from multiple sources.',
+    lead: 'On macOS, browse and audition audio files in iCloud Drive directly from the sidebar. Sign in to NetEase Cloud Music to browse liked tracks and saved playlists. Track Studio also syncs your Curated library, fingerprints, and curated artists across devices.',
     surface: 'sync',
     surfaceCaption: 'Global search and the cloud sync summary',
     groups: [
       {
-        title: 'Sync & NetEase',
+        title: 'Libraries & sync',
         items: [
           {
             name: 'Curated cloud sync',
@@ -718,6 +728,11 @@ const enChapters: Omit<Chapter, 'cue' | 'color'>[] = [
           {
             name: 'Curated artists',
             detail: 'Multi-artist tracks split and link, synced across devices'
+          },
+          {
+            name: 'iCloud Drive (macOS)',
+            detail:
+              'Browse folders, download tracks on playback, and copy between iCloud Drive and your local library'
           },
           {
             name: 'NetEase library',
@@ -770,7 +785,7 @@ export const zhContent: HomeContent = {
     titleTop: '终结混乱的',
     titleBottom: 'DJ 音频工作站',
     subtitle:
-      '从真实文件整理、网易云曲库、指纹去重、波形试听，到双轨横推、SET 编排、Mixtape 录制和 Stem 分离。演出前要做的事，在一个键盘优先的桌面应用里做完。',
+      '整理真实音频文件、按指纹去重，浏览网易云曲库和 iCloud Drive（macOS）。用双轨波形试听选曲，再编排 SET、制作四轨 Mixtape 或分离 Stem。',
     platforms: 'Windows 10+ · macOS 12+',
     formats: '支持多种音频格式',
     scrollHint: '往下滚，整页就是一首歌'
@@ -807,7 +822,7 @@ export const enContent: HomeContent = {
     titleTop: 'End the Chaos.',
     titleBottom: 'The Ultimate DJ Audio Workspace.',
     subtitle:
-      'Real file organization, a NetEase Cloud Music library, fingerprint dedup, and waveform auditioning, through dual-deck browsing, SET programming, Mixtape recording, and stem separation. Everything before a gig, in one keyboard-first desktop app.',
+      'Organize real audio files and find duplicates by fingerprint. Browse NetEase Cloud Music and iCloud Drive (macOS), audition on two decks, prepare SET playlists, build four-lane Mixtapes, and separate stems.',
     platforms: 'Windows 10+ · macOS 12+',
     formats: 'Multiple audio formats',
     scrollHint: 'Scroll down: this page plays like a track'

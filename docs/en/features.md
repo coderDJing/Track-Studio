@@ -1,6 +1,6 @@
 ---
 title: Features & Workflow Guide
-description: Explore Track Studio's real file management, NetEase Cloud Music library, fingerprint deduplication, dual-deck waveform auditioning, SET playlists, Mixtape, stem separation, external libraries, and sync.
+description: Explore Track Studio's real file management, library health checks, NetEase Cloud Music, iCloud Drive on macOS, dual-deck auditioning, four-lane Mixtapes, stems, and sync.
 ---
 
 # Track Studio Features
@@ -21,6 +21,7 @@ A detailed reference for Track Studio’s library, playback, analysis, and prepa
 - **Drag-and-drop import and movement**: Import files or folders, move tracks between playlists, and drag copies out to Explorer/Finder with Ctrl/Option.
 - **Safe recycle bin**: Deleted tracks and deduplicated items go to Track Studio's recycle bin and can be restored to their original playlists.
 - **Playlist cleanup tools**: Clear playlists with visible progress, batch rename playlist tracks, clean missing external-library records, and keep selection counts visible before bulk operations.
+- Open **Collection health** from a library's context menu to check for low bitrates, missing artwork, inconsistent album tags, and possible duplicate audio. Jump to a track in its playlist, edit tags, fill missing artwork, or move tracks to the recycle bin.
 - **Portable library state**: Library data can be moved with the music collection for use across devices.
 
 ## Deduplication, Analysis, And Metadata
@@ -28,8 +29,9 @@ A detailed reference for Track Studio’s library, playback, analysis, and prepa
 - **Song deduplication**: Detect duplicate tracks by content hash or whole-file hash. Content hash mode ignores metadata differences such as cover art, title, and artist.
 - **Playlist fingerprint deduplication**: Analyze a playlist and move duplicates to the recycle bin in one workflow.
 - **BPM and beat-grid analysis**: Analyze tempo and grid placement, tap BPM manually, restore system-analyzed BPM, and work with stricter grid candidate rules for difficult tracks.
+- A **grid quality badge** appears next to the BPM when a beat grid may need review. Hover over the badge for details and the affected timestamp.
 - **BPM drift repair**: Select local tracks and choose Repair BPM drift from the track menu. Analyze the full track, confirm the beat interpretation and target BPM, then correct the audio to a steady tempo. Save copies in the current playlist or overwrite originals after verification. Choose 24-bit WAV or a supported original format; lossy formats are re-encoded, and ambiguous beats require individual confirmation.
-- **Key analysis**: Display musical key in Classic notation such as `C#m` or Camelot notation such as `1A/1B`.
+- **Key analysis** uses fast template matching by default, with an optional neural-network method. Display results in Classic notation such as `C#m` or Camelot notation such as `1A/1B`.
 - **Energy and section analysis**: View and filter tracks by overall energy, dancefloor energy, danceability, and other measures; use analyzed sections for range playback.
 - **Locate unanalyzed tracks**: Jump from the bottom status bar to the first track that still needs analysis.
 - **Visible analysis progress**: Track-level analysis status is surfaced in the song list instead of leaving background work invisible.
@@ -109,12 +111,21 @@ A detailed reference for Track Studio’s library, playback, analysis, and prepa
 - **Playlist sync**: Liked tracks, playlists you created, saved playlists, and saved albums sync into the sidebar with their original grouping. The NetEase library keeps its own list settings and never changes your local playlists.
 - **Audition and download**: Stream tracks that are not downloaded yet, with a separate preview-cache cap you can clear at any time. Download locally at the quality set in Settings: lossless, master, exhigh (MP3 320k), or standard (MP3 128k). Master requires a membership and falls back to the best quality available for that track.
 - **Copy and import**: Copy NetEase tracks into Filter, Curated, SET, or Mixtape. Tracks are downloaded first, and optional fingerprint matching skips duplicates already in your library.
-- **Playlist editing**: Remove tracks from playlists you created and from Liked tracks; saved playlists and albums stay read-only. Removal only changes the playlist relationship, and downloaded files are kept.
+- **Playlist management** lets you remove tracks from playlists you created or Liked tracks, delete a playlist you created, or unfollow a saved playlist. You can keep local downloads or move downloads exclusive to the affected playlist to the recycle bin.
+- Sync skips playlists it cannot read and reports them in the sync summary.
 - **Downloaded management**: Downloaded tracks get their own group with size totals, local-file deletion to the recycle bin, and cleanup for tracks no longer in any playlist.
+
+## iCloud Drive (macOS Only)
+
+- Open **iCloud** in the sidebar to browse iCloud Drive folders and supported audio files. Play tracks in Browse mode. Cloud-only files download on demand when played or copied.
+- Copy tracks from iCloud Drive to a local playlist or copy local tracks to a folder in iCloud Drive. macOS handles uploads.
+- Use **Remove Download** on an uploaded file to free local disk space and keep it in iCloud Drive.
 
 ## Mixtape And Stem Workflow
 
 - **Mixtape timeline workspace**: Arrange tracks on a timeline, preview transitions, edit beat alignment, and export a timeline-accurate result.
+- Switch between **two and four timeline lanes**. Four lanes let you layer up to four tracks at once.
+- Choose **Chapters** from the timeline menu to generate timestamps based on when each track first becomes audible. The first entry starts at `0:00`. Edit the chapter text before copying it.
 - **Cross-window track drag-in**: Drag songs from the main library directly into the Mixtape workspace.
 - **Add to Mixtape from playlists**: Add tracks to Mixtape auto-recording from ordinary playlist context menus.
 - **Beat alignment tools**: Adjust grids, preview alignment on unified waveform controls, use metronome tools, and keep timeline playback aligned with edited grid data.
@@ -148,6 +159,7 @@ A detailed reference for Track Studio’s library, playback, analysis, and prepa
 
 ## Interface And Personalization
 
+- **Settings search and categories** let you search by name, description, or English and Chinese aliases. Select a result to jump to the matching setting. The Common page groups frequently used settings and the five most recently changed items.
 - **Custom accent color**: Choose a preset in Settings or use the color picker to set your own theme accent.
 - **Internationalization**: Built-in Simplified Chinese and English language packs.
 - **Unified download and update card**: Component downloads and app updates share one card in the bottom-right corner; macOS uses the same update UI as Windows.
