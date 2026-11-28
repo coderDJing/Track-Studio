@@ -5,7 +5,7 @@ import type {
 } from './types'
 import { runRekordboxDesktopHelper } from './helper'
 import { hasRekordboxDesktopPresence } from './presence'
-import { rekordboxRuntimeEvents } from '../rekordboxRuntimeDownload'
+import { rekordboxRuntimeEvents } from '../rekordboxRuntimeEvents'
 import type {
   RekordboxDesktopWriteAvailability,
   RekordboxDesktopWriteAvailabilityStatus

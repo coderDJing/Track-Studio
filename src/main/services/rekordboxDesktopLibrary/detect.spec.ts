@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { rekordboxRuntimeEvents } from '../rekordboxRuntimeDownload'
+import { rekordboxRuntimeEvents } from '../rekordboxRuntimeEvents'
 
 const { runHelper, hasPresence } = vi.hoisted(() => ({
   runHelper: vi.fn(),
@@ -7,10 +7,6 @@ const { runHelper, hasPresence } = vi.hoisted(() => ({
 }))
 vi.mock('./helper', () => ({ runRekordboxDesktopHelper: runHelper }))
 vi.mock('./presence', () => ({ hasRekordboxDesktopPresence: hasPresence }))
-vi.mock('../rekordboxRuntimeDownload', async () => {
-  const { EventEmitter } = await import('node:events')
-  return { rekordboxRuntimeEvents: new EventEmitter() }
-})
 
 const available = { available: true, dbPath: 'D:/PIONEER/Master/master.db' }
 const unavailable = {

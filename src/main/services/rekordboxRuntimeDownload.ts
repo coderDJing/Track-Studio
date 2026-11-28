@@ -3,7 +3,6 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import childProcess from 'node:child_process'
-import { EventEmitter } from 'node:events'
 import { app } from 'electron'
 import { log } from '../log'
 import { publishOptionalComponentState } from './optionalComponentEvents'
@@ -11,8 +10,6 @@ import { buildPortablePythonLaunch } from './rekordboxRuntimePythonLaunch'
 import {
   DEFAULT_REKORDBOX_RUNTIME_MANIFEST_URL,
   REKORDBOX_RUNTIME_DOWNLOAD_DIR_NAME,
-  REKORDBOX_RUNTIME_INSTALL_DIR_NAME,
-  isRekordboxRuntimePlatformKey,
   normalizeRekordboxRuntimeRelativePath,
   parseRekordboxRuntimeManifest,
   resolveRekordboxRuntimePlatformKey,
@@ -28,16 +25,28 @@ import {
   validateArchiveEntriesForPlatform,
   type RekordboxRuntimeArchiveEntry
 } from './rekordboxRuntimeArchive'
+import { rekordboxRuntimeEvents } from './rekordboxRuntimeEvents'
+import {
+  REKORDBOX_RUNTIME_INSTALL_META_FILE_NAME,
+  REKORDBOX_RUNTIME_INSTALL_META_SCHEMA_VERSION,
+  probeInstalledRekordboxRuntime,
+  readInstalledRekordboxRuntimeMeta,
+  resolveRekordboxRuntimeInstallRoot,
+  type RekordboxRuntimeInstalledInfo,
+  type RekordboxRuntimeInstalledMeta
+} from './rekordboxRuntimeInstalled'
+
+export { rekordboxRuntimeEvents }
+export type { RekordboxRuntimeInstalledInfo }
+export {
+  probeInstalledRekordboxDesktopRuntime,
+  resolveInstalledRekordboxDesktopRuntimeRootPath
+} from './rekordboxRuntimeInstalled'
 
 export const REKORDBOX_DESKTOP_RUNTIME_COMPONENT_ID = 'rekordbox-desktop-runtime'
 
-/** 下载/安装完成后通知 helper 丢弃旧解释器（含损坏进程）与 probe 缓存。 */
-export const rekordboxRuntimeEvents = new EventEmitter()
-
-const INSTALL_META_FILE_NAME = '.frkb-runtime-install.json'
-const INSTALL_META_SCHEMA_VERSION = 1
 const PYTHON_IMPORT_PROBE_TIMEOUT_MS = 90_000
-const SHA256_PATTERN = /^[a-f0-9]{64}$/
+type InstalledMeta = RekordboxRuntimeInstalledMeta
 
 export type RekordboxRuntimePythonProbe = {
   ok: boolean
@@ -49,24 +58,6 @@ export type RekordboxRuntimeDownloadProgress = {
   downloadedBytes: number
   totalBytes: number
   percent: number
-}
-
-export type RekordboxRuntimeInstalledInfo = {
-  platform: RekordboxRuntimePlatformKey
-  version: string
-  archiveSha256: string
-  platformRootPath: string
-  pythonPath: string
-}
-
-type InstalledMeta = {
-  schemaVersion: number
-  platform: RekordboxRuntimePlatformKey
-  version: string
-  pythonRelativePath: string
-  archiveSha256: string
-  installedAt: string
-  sentinels: Array<{ path: string; sha256: string; size: number }>
 }
 
 export type RekordboxRuntimeInstallerDeps = {
@@ -274,54 +265,6 @@ const publishState = (patch: {
   }
 }
 
-const readInstalledMeta = (metaPath: string): InstalledMeta | null => {
-  try {
-    const raw = fs.readFileSync(metaPath, 'utf8')
-    const parsed = JSON.parse(raw) as Partial<InstalledMeta>
-    if (!parsed || parsed.schemaVersion !== INSTALL_META_SCHEMA_VERSION) return null
-    if (!isRekordboxRuntimePlatformKey(parsed.platform)) return null
-    if (typeof parsed.version !== 'string' || !parsed.version) return null
-    const pythonRelativePath = normalizeRekordboxRuntimeRelativePath(parsed.pythonRelativePath)
-    if (!pythonRelativePath) return null
-    if (typeof parsed.archiveSha256 !== 'string' || !SHA256_PATTERN.test(parsed.archiveSha256)) {
-      return null
-    }
-    if (!Array.isArray(parsed.sentinels)) return null
-    const sentinels: InstalledMeta['sentinels'] = []
-    for (const item of parsed.sentinels) {
-      if (!item || typeof item !== 'object') return null
-      const entryPath = normalizeRekordboxRuntimeRelativePath(item.path)
-      const sha256 = String(item.sha256 || '').toLowerCase()
-      if (!entryPath || !SHA256_PATTERN.test(sha256)) return null
-      if (typeof item.size !== 'number' || !Number.isFinite(item.size) || item.size < 0) return null
-      sentinels.push({ path: entryPath, sha256, size: item.size })
-    }
-    return {
-      schemaVersion: INSTALL_META_SCHEMA_VERSION,
-      platform: parsed.platform,
-      version: parsed.version,
-      pythonRelativePath,
-      archiveSha256: parsed.archiveSha256,
-      installedAt: typeof parsed.installedAt === 'string' ? parsed.installedAt : '',
-      sentinels
-    }
-  } catch {
-    return null
-  }
-}
-
-const isSentinelCurrent = (
-  platformRootPath: string,
-  sentinel: InstalledMeta['sentinels'][number]
-) => {
-  try {
-    const stat = fs.statSync(path.join(platformRootPath, ...sentinel.path.split('/')))
-    return stat.isFile() && stat.size === sentinel.size
-  } catch {
-    return false
-  }
-}
-
 export const createRekordboxRuntimeInstaller = (
   overrides: Partial<RekordboxRuntimeInstallerDeps> = {}
 ): RekordboxDesktopRuntimeInstaller => {
@@ -334,37 +277,15 @@ export const createRekordboxRuntimeInstaller = (
    */
 
   const resolveInstalledRootPath = () =>
-    path.join(deps.resolveUserDataPath(), REKORDBOX_RUNTIME_INSTALL_DIR_NAME)
+    resolveRekordboxRuntimeInstallRoot(deps.resolveUserDataPath())
 
   const resolveInstalledPlatformRootPath = () => {
     const platformKey = currentPlatformKey()
     return platformKey ? path.join(resolveInstalledRootPath(), platformKey) : ''
   }
 
-  const probeInstalled = (): RekordboxRuntimeInstalledInfo | null => {
-    const platformKey = currentPlatformKey()
-    if (!platformKey) return null
-    const platformRootPath = path.join(resolveInstalledRootPath(), platformKey)
-    const meta = readInstalledMeta(path.join(platformRootPath, INSTALL_META_FILE_NAME))
-    if (!meta || meta.platform !== platformKey) return null
-    const pythonPath = path.join(platformRootPath, ...meta.pythonRelativePath.split('/'))
-    const sentinelsCurrent =
-      meta.sentinels.length > 0 &&
-      meta.sentinels.every((sentinel) => isSentinelCurrent(platformRootPath, sentinel))
-    if (!sentinelsCurrent) return null
-    try {
-      if (!fs.statSync(pythonPath).isFile()) return null
-    } catch {
-      return null
-    }
-    return {
-      platform: platformKey,
-      version: meta.version,
-      archiveSha256: meta.archiveSha256,
-      platformRootPath,
-      pythonPath
-    }
-  }
+  const probeInstalled = (): RekordboxRuntimeInstalledInfo | null =>
+    probeInstalledRekordboxRuntime(deps.resolveUserDataPath())
 
   const resolveInstalledPythonPath = () => probeInstalled()?.pythonPath ?? null
 
@@ -418,7 +339,9 @@ export const createRekordboxRuntimeInstaller = (
   const verifyInstalledIntegrity = async (
     info: RekordboxRuntimeInstalledInfo
   ): Promise<boolean> => {
-    const meta = readInstalledMeta(path.join(info.platformRootPath, INSTALL_META_FILE_NAME))
+    const meta = readInstalledRekordboxRuntimeMeta(
+      path.join(info.platformRootPath, REKORDBOX_RUNTIME_INSTALL_META_FILE_NAME)
+    )
     if (!meta || meta.archiveSha256 !== info.archiveSha256) return false
     if (!(await verifySentinelsAt(info.platformRootPath, meta))) return false
     const probe = await deps.validatePython(info.pythonPath).catch(() => ({ ok: false }))
@@ -514,7 +437,7 @@ export const createRekordboxRuntimeInstaller = (
       }
 
       const meta: InstalledMeta = {
-        schemaVersion: INSTALL_META_SCHEMA_VERSION,
+        schemaVersion: REKORDBOX_RUNTIME_INSTALL_META_SCHEMA_VERSION,
         platform: platformKey,
         version: asset.version,
         pythonRelativePath: asset.pythonRelativePath,
@@ -527,7 +450,7 @@ export const createRekordboxRuntimeInstaller = (
         }))
       }
       await fsp.writeFile(
-        path.join(stagingPlatformRootPath, INSTALL_META_FILE_NAME),
+        path.join(stagingPlatformRootPath, REKORDBOX_RUNTIME_INSTALL_META_FILE_NAME),
         `${JSON.stringify(meta, null, 2)}\n`,
         'utf8'
       )
@@ -637,15 +560,8 @@ const getDefaultInstaller = (): RekordboxDesktopRuntimeInstaller => {
   return defaultInstaller
 }
 
-export const resolveInstalledRekordboxDesktopRuntimeRootPath = (): string =>
-  getDefaultInstaller().resolveInstalledRootPath()
-
 export const resolveInstalledRekordboxDesktopRuntimePlatformRootPath = (): string =>
   getDefaultInstaller().resolveInstalledPlatformRootPath()
-
-/** 纯本地检查：不访问网络、不触发下载。 */
-export const probeInstalledRekordboxDesktopRuntime = (): RekordboxRuntimeInstalledInfo | null =>
-  getDefaultInstaller().probeInstalled()
 
 export const resolveInstalledRekordboxDesktopRuntimePythonPath = (): string | null =>
   getDefaultInstaller().resolveInstalledPythonPath()

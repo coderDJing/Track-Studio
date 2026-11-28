@@ -1,23 +1,25 @@
 import type { AnalysisRuntimeFeature } from '../../shared/analysisRuntimeFeatures'
+import { resetBeatThisRuntimeResolution } from '../workers/beatThisRuntime'
 import {
-  clearInstalledStemRuntimes,
-  downloadPreferredStemRuntime,
-  getPreferredStemRuntimeDownloadInfo,
   getStemRuntimeDownloadState,
   stemRuntimeDownloadEvents,
   type MixtapeStemRuntimeDownloadInfo,
   type MixtapeStemRuntimeDownloadState
-} from './mixtapeStemRuntimeDownload'
-import { resetBeatThisRuntimeResolution } from '../workers/beatThisRuntime'
+} from './mixtapeStemRuntimeDownloadState'
 
 type AnalysisRuntimeDownloadInfo = MixtapeStemRuntimeDownloadInfo
 export type AnalysisRuntimeDownloadState = MixtapeStemRuntimeDownloadState
 
 export const analysisRuntimeDownloadEvents = stemRuntimeDownloadEvents
 
+const loadStemRuntimeDownload = () => import('./mixtapeStemRuntimeDownload')
+
 export const getPreferredAnalysisRuntimeDownloadInfo = async (
   feature: AnalysisRuntimeFeature = 'analysis'
-): Promise<AnalysisRuntimeDownloadInfo> => await getPreferredStemRuntimeDownloadInfo(feature)
+): Promise<AnalysisRuntimeDownloadInfo> => {
+  const { getPreferredStemRuntimeDownloadInfo } = await loadStemRuntimeDownload()
+  return await getPreferredStemRuntimeDownloadInfo(feature)
+}
 
 export const getAnalysisRuntimeDownloadState = (): AnalysisRuntimeDownloadState =>
   getStemRuntimeDownloadState()
@@ -25,6 +27,7 @@ export const getAnalysisRuntimeDownloadState = (): AnalysisRuntimeDownloadState 
 export const downloadPreferredAnalysisRuntime = async (
   feature: AnalysisRuntimeFeature = 'analysis'
 ): Promise<boolean> => {
+  const { downloadPreferredStemRuntime } = await loadStemRuntimeDownload()
   const downloaded = await downloadPreferredStemRuntime(feature)
   if (downloaded) {
     resetBeatThisRuntimeResolution()
@@ -40,6 +43,7 @@ export const isAnalysisRuntimeAvailable = async (
 }
 
 export const clearInstalledAnalysisRuntimes = async () => {
+  const { clearInstalledStemRuntimes } = await loadStemRuntimeDownload()
   const result = await clearInstalledStemRuntimes()
   resetBeatThisRuntimeResolution()
   return result

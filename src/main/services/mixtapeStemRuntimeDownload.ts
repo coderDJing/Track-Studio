@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import { EventEmitter } from 'node:events'
 import { app } from 'electron'
 import {
   ProxyAgent,
@@ -32,6 +31,15 @@ import { probeWindowsGpuAdapters } from './mixtapeStemSeparationProbe'
 import { probeDemucsDevices } from './mixtapeStemSeparationProbe'
 import { invalidateStemDeviceProbeCache } from './mixtapeStemSeparationProbe'
 import { installRuntimeFromManifestEntry } from './mixtapeStemRuntimeDownloadInstall'
+import {
+  assignStemRuntimeDownloadState,
+  emitStemRuntimeDownloadState,
+  getStemRuntimeDownloadState,
+  updateRuntimeDownloadState,
+  type MixtapeStemRuntimeDownloadInfo,
+  type MixtapeStemRuntimeDownloadState,
+  type StemRuntimeProfileName as RuntimeProfileName
+} from './mixtapeStemRuntimeDownloadState'
 import type { AnalysisRuntimeFeature } from '../../shared/analysisRuntimeFeatures'
 import {
   clearAnalysisRuntimeCapabilityCache,
@@ -39,11 +47,13 @@ import {
   hasAnalysisRuntimeFeatureSupport
 } from './analysisRuntimeCapabilities'
 
+export { getStemRuntimeDownloadState }
+
 const DEFAULT_DEMUCS_RUNTIME_RELEASE_TAG = 'demucs-runtime-assets'
 const DEFAULT_DEMUCS_RUNTIME_RC_RELEASE_TAG = 'demucs-runtime-assets-rc'
 const FAILED_RUNTIME_RETRY_COOLDOWN_MS = 5 * 60 * 1000
 
-type RuntimeProfileName = 'cuda' | 'xpu' | 'directml' | 'cpu' | 'mps' | 'rocm'
+export type { MixtapeStemRuntimeDownloadInfo, MixtapeStemRuntimeDownloadState }
 
 export type RuntimeAssetEntry = {
   platform: string
@@ -76,38 +86,6 @@ type RuntimeAssetManifest = {
   assets: RuntimeAssetEntry[]
 }
 
-export type MixtapeStemRuntimeDownloadState = {
-  status: 'idle' | 'available' | 'downloading' | 'extracting' | 'ready' | 'failed'
-  profile: RuntimeProfileName | ''
-  runtimeKey: string
-  version: string
-  percent: number
-  downloadedBytes: number
-  totalBytes: number
-  archiveSize: number
-  title: string
-  message: string
-  error: string
-  updatedAt: number
-}
-
-export type MixtapeStemRuntimeDownloadInfo = {
-  supported: boolean
-  downloadable: boolean
-  alreadyAvailable: boolean
-  localRuntimePresent: boolean
-  profile: RuntimeProfileName | ''
-  runtimeKey: string
-  version: string
-  archiveSize: number
-  title: string
-  reason: string
-  manifestUrl: string
-  releaseTag: string
-  error: string
-  state: MixtapeStemRuntimeDownloadState
-}
-
 let runtimeManifestPromise: Promise<RuntimeAssetManifest | null> | null = null
 const runtimeEnsurePromiseByProfile = new Map<
   string,
@@ -117,21 +95,6 @@ let runtimeDownloadProxyDispatcher: ProxyAgent | undefined
 let runtimeDownloadProxyInitialized = false
 let runtimeManifestLastError = ''
 let failedRuntimeFeature: AnalysisRuntimeFeature | undefined
-let runtimeDownloadState: MixtapeStemRuntimeDownloadState = {
-  status: 'idle',
-  profile: '',
-  runtimeKey: '',
-  version: '',
-  percent: 0,
-  downloadedBytes: 0,
-  totalBytes: 0,
-  archiveSize: 0,
-  title: '',
-  message: '',
-  error: '',
-  updatedAt: Date.now()
-}
-export const stemRuntimeDownloadEvents = new EventEmitter()
 
 const isPrereleaseVersion = (value: string) => /-/.test(String(value || '').trim())
 
@@ -282,37 +245,13 @@ export const computeDemucsAssetSha256 = async (filePath: string): Promise<string
   })
 }
 
-const emitRuntimeDownloadState = () => {
-  try {
-    stemRuntimeDownloadEvents.emit('state', {
-      ...runtimeDownloadState
-    })
-  } catch {}
-}
-
-const updateRuntimeDownloadState = (
-  patch: Partial<MixtapeStemRuntimeDownloadState>
-): MixtapeStemRuntimeDownloadState => {
-  runtimeDownloadState = {
-    ...runtimeDownloadState,
-    ...patch,
-    updatedAt: Date.now()
-  }
-  emitRuntimeDownloadState()
-  return runtimeDownloadState
-}
-
-export const getStemRuntimeDownloadState = (): MixtapeStemRuntimeDownloadState => ({
-  ...runtimeDownloadState
-})
-
 const resetStemRuntimeDownloadState = () => {
   runtimeEnsurePromiseByProfile.clear()
   runtimeManifestPromise = null
   runtimeManifestLastError = ''
   failedRuntimeFeature = undefined
   clearAnalysisRuntimeCapabilityCache()
-  runtimeDownloadState = {
+  assignStemRuntimeDownloadState({
     status: 'idle',
     profile: '',
     runtimeKey: '',
@@ -325,9 +264,9 @@ const resetStemRuntimeDownloadState = () => {
     message: '',
     error: '',
     updatedAt: Date.now()
-  }
+  })
   invalidateStemDeviceProbeCache()
-  emitRuntimeDownloadState()
+  emitStemRuntimeDownloadState()
 }
 
 export const clearInstalledStemRuntimes = async (): Promise<{
@@ -940,15 +879,6 @@ export const getPreferredStemRuntimeDownloadInfo = async (
         : localRuntime.localFilesPresent
           ? 'local runtime unusable'
           : ''
-  log.info('[analysis-runtime-probe]', {
-    event: 'preferred-status',
-    feature,
-    reason: reason || 'downloadable',
-    alreadyAvailable,
-    localRuntimePresent: alreadyAvailable || localRuntime.localFilesPresent,
-    downloadable: !alreadyAvailable && (feature !== 'bpm-fix' || entry.bpmFixReady === true),
-    runtimeKey: alreadyAvailable ? localRuntime.runtimeKey : entry.runtimeKey
-  })
   return {
     supported: true,
     downloadable: !alreadyAvailable && (feature !== 'bpm-fix' || entry.bpmFixReady === true),

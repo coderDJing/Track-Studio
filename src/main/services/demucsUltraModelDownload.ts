@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events'
 import fs from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
@@ -11,6 +10,7 @@ import {
 } from './mixtapeStemRuntimeDownloadInstall'
 import { normalizeText } from './mixtapeStemSeparationShared'
 import { buildGithubReleaseDownloadUrl } from '../../shared/productBrand'
+import { demucsUltraModelDownloadEvents } from './demucsUltraModelDownloadEvents'
 
 const ULTRA_MODEL_NAME = 'htdemucs_ft'
 const ULTRA_MODEL_PROFILE = 'ultra'
@@ -94,7 +94,7 @@ let modelDownloadState: DemucsUltraModelDownloadState = {
   updatedAt: Date.now()
 }
 
-export const demucsUltraModelDownloadEvents = new EventEmitter()
+export { demucsUltraModelDownloadEvents }
 
 const buildModelManifestUrl = (releaseTag: string) =>
   buildGithubReleaseDownloadUrl(releaseTag, MODEL_MANIFEST_FILE_NAME)

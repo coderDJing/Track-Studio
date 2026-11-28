@@ -14,7 +14,6 @@ import {
 } from '../../shared/mixtapeStemProfiles'
 import { computeLibraryStemSourceSignature } from './libraryStemAssetStorage'
 import { isAnalysisRuntimeAvailable } from './analysisRuntimeDownload'
-import { isDemucsUltraModelInstalled } from './demucsUltraModelDownload'
 import type {
   MixtapeStemComputeDevice,
   MixtapeStemRuntimeStage
@@ -235,13 +234,16 @@ export async function enqueueLibraryStemJob(params: {
       errorMessage: '分析运行时尚未下载'
     })
   }
-  if (parseMixtapeStemModel(model).profile === 'ultra' && !(await isDemucsUltraModelInstalled())) {
-    return createLibraryStemSnapshot({
-      ...snapshot,
-      status: 'failed',
-      errorCode: 'STEM_ULTRA_MODEL_NOT_INSTALLED',
-      errorMessage: '超高质量模型尚未下载'
-    })
+  if (parseMixtapeStemModel(model).profile === 'ultra') {
+    const { isDemucsUltraModelInstalled } = await import('./demucsUltraModelDownload')
+    if (!(await isDemucsUltraModelInstalled())) {
+      return createLibraryStemSnapshot({
+        ...snapshot,
+        status: 'failed',
+        errorCode: 'STEM_ULTRA_MODEL_NOT_INSTALLED',
+        errorMessage: '超高质量模型尚未下载'
+      })
+    }
   }
   if (snapshot.status === 'ready' && !params?.force) {
     notifyLibraryStemStatus(snapshot)

@@ -47,16 +47,18 @@ export const hasAnalysisRuntimeFeatureSupport = (
           maxStderrLen: 4000
         }).then((probe) => {
           const ok = !probe.timedOut && probe.status === 0
-          log[ok ? 'info' : 'warn']('[analysis-runtime-probe]', {
-            event: 'feature-probe',
-            feature,
-            pythonPath: resolveLoggedRuntimePath(pythonPath),
-            elapsedMs: Date.now() - startedAt,
-            exit: probe.status,
-            timedOut: probe.timedOut,
-            ok,
-            error: ok ? '' : truncateProbeLogText(probe.error || probe.stderr || probe.stdout, 400)
-          })
+          if (!ok) {
+            const errorText = truncateProbeLogText(probe.error || probe.stderr || probe.stdout, 400)
+            log.warn('[analysis-runtime-probe]', {
+              event: 'feature-probe',
+              feature,
+              pythonPath: resolveLoggedRuntimePath(pythonPath),
+              elapsedMs: Date.now() - startedAt,
+              exit: probe.status,
+              timedOut: probe.timedOut,
+              ...(errorText ? { error: errorText } : {})
+            })
+          }
           return ok
         })
   cache.set(key, { expiresAt: Date.now() + ANALYSIS_RUNTIME_FEATURE_PROBE_CACHE_TTL_MS, result })

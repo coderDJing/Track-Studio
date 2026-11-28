@@ -123,6 +123,10 @@ const firstErrorText = (record: ProbeJsonRecord | undefined, keys: string[]) => 
   return ''
 }
 
+/** XPU/CPU 包里本来就没有 DirectML；DirectML 不支持复数 FFT 时改走 CPU。都不是运行时故障。 */
+const isOptionalDirectmlNote = (text: string) =>
+  /no module named ['"]?torch_directml['"]?/i.test(text) || /complexfloat/i.test(text)
+
 export const parseDemucsDeviceProbeOutput = (
   result: DemucsDeviceProbeProcessResult,
   timeoutMs: number
@@ -142,12 +146,17 @@ export const parseDemucsDeviceProbeOutput = (
     ? records.some((record) => record.import_ok === true)
     : !legacyImportError && !result.timedOut && result.status === 0 && records.length > 0
   const importError = asText(merged.import_error, 400) || legacyImportError
+  const directmlNote = [
+    firstErrorText(merged, ['directml_error']),
+    firstErrorText(merged, ['directml_import_error'])
+  ]
+    .filter((text) => text && !(importOk && isOptionalDirectmlNote(text)))
+    .join('; ')
   const deviceError = [
     firstErrorText(merged, ['cuda_error']),
     firstErrorText(merged, ['mps_error']),
     firstErrorText(merged, ['xpu_error']),
-    firstErrorText(merged, ['directml_error']),
-    firstErrorText(merged, ['directml_import_error']),
+    directmlNote,
     firstErrorText(merged, ['device_error'])
   ]
     .filter(Boolean)

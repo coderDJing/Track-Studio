@@ -26,7 +26,6 @@ import {
 } from '../mixtapeStemDb'
 import { findSongListRoot } from './cacheMaintenance'
 import { computeLibraryStemSourceSignature, getLibraryRootAbs } from './libraryStemAssetStorage'
-import { runStemSeparation } from './mixtapeStemSeparationRun'
 import {
   configureLibraryStemSeparationService,
   createLibraryStemSnapshot,
@@ -676,6 +675,7 @@ const processQueueJob = async (job: MixtapeStemQueueJob, signal?: AbortSignal) =
     })
   )
   try {
+    const { runStemSeparation } = await import('./mixtapeStemSeparationRun')
     const separation = await runStemSeparation({
       filePath: job.filePath,
       sourceSignature: job.sourceSignature,

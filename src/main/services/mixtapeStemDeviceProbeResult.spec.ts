@@ -38,6 +38,45 @@ describe('parseDemucsDeviceProbeOutput', () => {
     })
   })
 
+  it('does not record a missing DirectML package or its complex FFT limit as a runtime error', () => {
+    const missingDirectml = parseDemucsDeviceProbeOutput(
+      {
+        status: 0,
+        timedOut: false,
+        stdout: [
+          JSON.stringify({ stage: 'import', import_ok: true, torch_version: '2.10.0+xpu' }),
+          JSON.stringify({
+            stage: 'final',
+            import_ok: true,
+            xpu: true,
+            directml_import_error: "No module named 'torch_directml'"
+          })
+        ].join('\n'),
+        stderr: ''
+      },
+      60_000
+    )
+    expect(missingDirectml.runtimeUsable).toBe(true)
+    expect(missingDirectml.probeError).toBe('')
+    expect(missingDirectml.deviceError).toBe('')
+    const unsupportedComplex = parseDemucsDeviceProbeOutput(
+      {
+        status: 0,
+        timedOut: false,
+        stdout: JSON.stringify({
+          stage: 'final',
+          import_ok: true,
+          directml_error:
+            '[F1128 23:40:04.000000000 dml_util.cc:118] Invalid or unsupported data type ComplexFloat.'
+        }),
+        stderr: ''
+      },
+      60_000
+    )
+    expect(unsupportedComplex.runtimeUsable).toBe(true)
+    expect(unsupportedComplex.probeError).toBe('')
+  })
+
   it('treats a real torch import failure as unusable, not just a missing download target', () => {
     const parsed = parseDemucsDeviceProbeOutput(
       {

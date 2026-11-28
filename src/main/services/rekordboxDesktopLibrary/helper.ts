@@ -6,9 +6,9 @@ import { log } from '../../log'
 import { registerChildProcess, terminateChildProcess } from '../childProcessRegistry'
 import {
   probeInstalledRekordboxDesktopRuntime,
-  rekordboxRuntimeEvents,
   resolveInstalledRekordboxDesktopRuntimeRootPath
-} from '../rekordboxRuntimeDownload'
+} from '../rekordboxRuntimeInstalled'
+import { rekordboxRuntimeEvents } from '../rekordboxRuntimeEvents'
 import { buildPortablePythonLaunch } from '../rekordboxRuntimePythonLaunch'
 import { resolveRekordboxRuntimePlatformKey } from '../../../shared/rekordboxRuntimeDownload'
 import type {

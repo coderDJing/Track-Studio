@@ -150,10 +150,7 @@ const probeDemucsDevicesForRuntime = async (params: {
         env
       })
       xpuDemucsCompatible = xpuCompatibility.ok
-      if (!xpuCompatibility.ok) {
-        xpuAvailable = false
-        probeError = probeError || normalizeText(xpuCompatibility.error, 400)
-      }
+      if (!xpuCompatibility.ok) xpuAvailable = false
     }
     if (runtimeUsable && directmlAvailable) {
       const directmlCompatibility = await probeDirectmlDemucsCompatibility({
@@ -162,31 +159,31 @@ const probeDemucsDevicesForRuntime = async (params: {
         directmlDevice: directmlDevice || 'privateuseone:0'
       })
       directmlDemucsCompatible = directmlCompatibility.ok
-      if (!directmlCompatibility.ok) {
-        directmlAvailable = false
-        probeError = probeError || normalizeText(directmlCompatibility.error, 400)
-      }
+      if (!directmlCompatibility.ok) directmlAvailable = false
     }
-    log[runtimeUsable ? 'info' : 'warn']('[analysis-runtime-probe]', {
-      event: 'device-probe',
-      runtimeKey: normalizeText(params.runtimeCandidate.key, 64) || 'runtime',
-      pythonPath: resolveLoggedRuntimePath(params.runtimeCandidate.pythonPath),
-      elapsedMs: Date.now() - startedAt,
-      exit: result.status,
-      timedOut: result.timedOut,
-      importOk,
-      runtimeUsable,
-      probeInconclusive,
-      devices: [
-        cudaAvailable ? 'cuda' : null,
-        mpsAvailable ? 'mps' : null,
-        xpuAvailable ? 'xpu' : null,
-        directmlAvailable ? 'directml' : null,
-        runtimeUsable ? 'cpu' : null
-      ].filter(Boolean),
-      error: truncateProbeLogText(probeError),
-      stderr: truncateProbeLogText(result.stderr, 400)
-    })
+    if (!runtimeUsable || probeInconclusive || probeError) {
+      const stderrText = truncateProbeLogText(result.stderr, 400)
+      log.warn('[analysis-runtime-probe]', {
+        event: 'device-probe',
+        runtimeKey: normalizeText(params.runtimeCandidate.key, 64) || 'runtime',
+        pythonPath: resolveLoggedRuntimePath(params.runtimeCandidate.pythonPath),
+        elapsedMs: Date.now() - startedAt,
+        exit: result.status,
+        timedOut: result.timedOut,
+        importOk,
+        runtimeUsable,
+        probeInconclusive,
+        devices: [
+          cudaAvailable ? 'cuda' : null,
+          mpsAvailable ? 'mps' : null,
+          xpuAvailable ? 'xpu' : null,
+          directmlAvailable ? 'directml' : null,
+          runtimeUsable ? 'cpu' : null
+        ].filter(Boolean),
+        ...(probeError ? { error: truncateProbeLogText(probeError) } : {}),
+        ...(stderrText ? { stderr: stderrText } : {})
+      })
+    }
   } catch (error) {
     probeError = normalizeText(error instanceof Error ? error.message : String(error || ''), 400)
     probeInconclusive = !importOk
@@ -266,14 +263,6 @@ const probeDemucsDevices = async (ffmpegPath: string): Promise<MixtapeStemDevice
     cacheTtlMs > 0 &&
     now - stemDeviceProbeSnapshot.checkedAt <= cacheTtlMs
   ) {
-    log.info('[analysis-runtime-probe]', {
-      event: 'device-probe-cache-hit',
-      runtimeKey: stemDeviceProbeSnapshot.runtimeKey,
-      runtimeUsable: stemDeviceProbeSnapshot.runtimeUsable,
-      probeInconclusive: stemDeviceProbeSnapshot.probeInconclusive === true,
-      ageMs: now - stemDeviceProbeSnapshot.checkedAt,
-      ttlMs: cacheTtlMs
-    })
     return stemDeviceProbeSnapshot
   }
   if (
@@ -363,16 +352,17 @@ const probeDemucsDevices = async (ffmpegPath: string): Promise<MixtapeStemDevice
     }
     const selectedTtlMs = resolveStemDeviceProbeCacheTtlMs(snapshot)
     stemDeviceProbeSnapshot = selectedTtlMs > 0 ? snapshot : null
-    log.info('[analysis-runtime-probe]', {
-      event: 'device-probe-selected',
-      runtimeKey: snapshot.runtimeKey,
-      pythonPath: resolveLoggedRuntimePath(snapshot.pythonPath),
-      runtimeUsable: snapshot.runtimeUsable,
-      probeInconclusive: snapshot.probeInconclusive === true,
-      devices: snapshot.devices,
-      error: truncateProbeLogText(snapshot.probeError),
-      cacheTtlMs: selectedTtlMs
-    })
+    if (!snapshot.runtimeUsable || snapshot.probeInconclusive) {
+      log.warn('[analysis-runtime-probe]', {
+        event: 'device-probe-selected',
+        runtimeKey: snapshot.runtimeKey,
+        pythonPath: resolveLoggedRuntimePath(snapshot.pythonPath),
+        runtimeUsable: snapshot.runtimeUsable,
+        probeInconclusive: snapshot.probeInconclusive === true,
+        devices: snapshot.devices,
+        ...(snapshot.probeError ? { error: truncateProbeLogText(snapshot.probeError) } : {})
+      })
+    }
     return snapshot
   })().finally(() => {
     stemDeviceProbePromise = null
