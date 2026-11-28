@@ -62,7 +62,7 @@
 }
 
 /* 孤儿清理是文字按钮，宽度按内容走，不能沿用 24px 的图标尺寸 */
-:deep(.songs-pane-header__button)--text {
+:deep(.songs-pane-header__button--text) {
   width: auto;
   padding: 0 8px;
   font-size: 12px;
