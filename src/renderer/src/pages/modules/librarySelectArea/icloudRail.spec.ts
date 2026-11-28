@@ -23,8 +23,16 @@ function findElement(
     if (found) return found
   }
 }
+
+function hasClass(node: ElementNode, name: string) {
+  return node.props.some((prop) => {
+    if (prop.type !== NodeTypes.ATTRIBUTE || prop.name !== 'class') return false
+    return (prop.value?.content || '').split(/\s+/).includes(name)
+  })
+}
+
 describe('iCloud rail placement and visibility preference', () => {
-  it('is the first entry under the divider, outside the fixed core libraries', async () => {
+  it('is the first entry under the divider, outside the core libraries', async () => {
     const file = await fs.readFile(
       path.join(process.cwd(), 'src/renderer/src/pages/modules/librarySelectArea.vue'),
       'utf8'
@@ -32,26 +40,15 @@ describe('iCloud rail placement and visibility preference', () => {
     const template = parse(file).descriptor.template!.content
     const ast = baseParse(template)
     const scroller = findElement(ast, (node) => node.tag === 'OverlayScrollbarsComponent')!
-    const first = scroller.children.find((node) => node.type === NodeTypes.ELEMENT)
-    expect(first?.type === NodeTypes.ELEMENT && first.tag).toBe('IcloudLibraryEntry')
-    const core = findElement(ast, (node) =>
-      node.props.some(
-        (prop) =>
-          prop.type === NodeTypes.ATTRIBUTE &&
-          prop.name === 'class' &&
-          prop.value?.content === 'librarySelectAreaCore'
-      )
-    )!
+    const core = findElement(scroller, (node) => hasClass(node, 'librarySelectAreaCore'))!
+    const dynamic = findElement(scroller, (node) => hasClass(node, 'librarySelectAreaDynamic'))!
+    const scrollerElements = scroller.children.filter((node) => node.type === NodeTypes.ELEMENT)
+    expect(scrollerElements.indexOf(core)).toBeGreaterThanOrEqual(0)
+    expect(scrollerElements.indexOf(core)).toBeLessThan(scrollerElements.indexOf(dynamic))
+    expect(hasClass(dynamic, 'librarySelectAreaDynamic--with-divider')).toBe(true)
+    const firstDynamic = dynamic.children.find((node) => node.type === NodeTypes.ELEMENT)
+    expect(firstDynamic?.type === NodeTypes.ELEMENT && firstDynamic.tag).toBe('IcloudLibraryEntry')
     expect(findElement(core, (node) => node.tag === 'IcloudLibraryEntry')).toBeUndefined()
-    const dynamic = findElement(ast, (node) =>
-      node.props.some(
-        (prop) =>
-          prop.type === NodeTypes.ATTRIBUTE &&
-          prop.name === 'class' &&
-          prop.value?.content === 'librarySelectAreaDynamic'
-      )
-    )!
-    expect(findElement(dynamic, (node) => node.tag === 'IcloudLibraryEntry')).toBeDefined()
   })
   it('honors persistent hiding and restoration without overriding capability or offline retention', () => {
     const state: IcloudState = {

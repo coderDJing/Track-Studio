@@ -58,6 +58,7 @@ import {
 } from './librarySelectArea/useIcloudLibraryRail'
 import { resolveActivePlaybackSongListUUIDs } from '@renderer/utils/playbackSongListSources'
 import { scrollIntoContainerView } from '@renderer/utils/scrollIntoContainerView'
+import { icloudOpen } from '@renderer/utils/icloudLibrary'
 const props = defineProps<{ containScroll?: boolean }>()
 const emit = defineEmits(['librarySelectedChange'])
 
@@ -433,42 +434,34 @@ const hasDynamicEntries = computed(
     externalDjSourceIcons.value.length > 0 ||
     pioneerDriveGroups.value.length > 0
 )
-const dynamicIconsScrollRef = useTemplateRef<OverlayScrollbarsComponentRef>('dynamicIconsScrollRef')
-const dynamicScrollState = reactive({
+const railIconsScrollRef = useTemplateRef<OverlayScrollbarsComponentRef>('railIconsScrollRef')
+const railScrollState = reactive({
   canScroll: false,
   atTop: true,
   atBottom: true
 })
-let dynamicScrollViewportEl: HTMLElement | null = null
-const updateDynamicScrollState = () => {
-  const viewport = dynamicIconsScrollRef.value?.osInstance()?.elements().viewport as
+let railScrollViewportEl: HTMLElement | null = null
+let railScrollResizeObserver: ResizeObserver | null = null
+const updateRailScrollState = () => {
+  const viewport = railIconsScrollRef.value?.osInstance()?.elements().viewport as
     HTMLElement | undefined
   if (!viewport) {
-    dynamicScrollState.canScroll = false
-    dynamicScrollState.atTop = true
-    dynamicScrollState.atBottom = true
+    railScrollState.canScroll = false
+    railScrollState.atTop = true
+    railScrollState.atBottom = true
     return
   }
   const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
-  dynamicScrollState.canScroll = maxScrollTop > 1
-  dynamicScrollState.atTop = viewport.scrollTop <= 1
-  dynamicScrollState.atBottom = viewport.scrollTop >= maxScrollTop - 1
+  railScrollState.canScroll = maxScrollTop > 1
+  railScrollState.atTop = viewport.scrollTop <= 1
+  railScrollState.atBottom = viewport.scrollTop >= maxScrollTop - 1
 }
-const handleDynamicScroll = () => {
-  updateDynamicScrollState()
+const handleRailScroll = () => {
+  updateRailScrollState()
 }
-const syncDynamicScrollViewport = async () => {
-  await nextTick()
-  const viewport = dynamicIconsScrollRef.value?.osInstance()?.elements().viewport as
-    HTMLElement | undefined
-  if (dynamicScrollViewportEl !== viewport) {
-    dynamicScrollViewportEl?.removeEventListener('scroll', handleDynamicScroll)
-    dynamicScrollViewportEl = viewport || null
-    dynamicScrollViewportEl?.addEventListener('scroll', handleDynamicScroll, { passive: true })
-  }
-  updateDynamicScrollState()
-}
-const selectedDynamicScrollKey = computed(() => {
+// 核心库和设备图标在同一列里滚。选中项要跟着进可视范围，双轨把栏压矮时也一样。
+const selectedRailScrollKey = computed(() => {
+  if (icloudOpen.value) return 'icloud'
   if (runtime.libraryAreaSelected === 'PioneerDeviceLibrary') {
     return (
       runtime.externalDjLibrary.selectedSourceKey ||
@@ -476,29 +469,49 @@ const selectedDynamicScrollKey = computed(() => {
       ''
     )
   }
-  return dynamicIconArr.value.some((item) => item.name === runtime.libraryAreaSelected)
-    ? runtime.libraryAreaSelected
-    : ''
+  return runtime.libraryAreaSelected || ''
 })
-const scrollSelectedDynamicIconIntoView = async () => {
-  const key = selectedDynamicScrollKey.value
+const scrollSelectedRailIconIntoView = async () => {
+  const key = selectedRailScrollKey.value
   if (!key) return
   await nextTick()
-  const viewport = dynamicIconsScrollRef.value?.osInstance()?.elements().viewport as
+  const viewport = railIconsScrollRef.value?.osInstance()?.elements().viewport as
     HTMLElement | undefined
   const target = scrollItemRefMap[key]
   if (!viewport || !target) return
   if (props.containScroll) scrollIntoContainerView(target, viewport)
   else target.scrollIntoView({ block: 'nearest' })
-  updateDynamicScrollState()
+  updateRailScrollState()
+}
+const syncRailScrollViewport = async () => {
+  await nextTick()
+  const viewport = railIconsScrollRef.value?.osInstance()?.elements().viewport as
+    HTMLElement | undefined
+  if (railScrollViewportEl !== viewport) {
+    railScrollViewportEl?.removeEventListener('scroll', handleRailScroll)
+    railScrollResizeObserver?.disconnect()
+    railScrollResizeObserver = null
+    railScrollViewportEl = viewport || null
+    railScrollViewportEl?.addEventListener('scroll', handleRailScroll, { passive: true })
+    if (railScrollViewportEl) {
+      railScrollResizeObserver = new ResizeObserver(() => {
+        updateRailScrollState()
+        void scrollSelectedRailIconIntoView()
+      })
+      railScrollResizeObserver.observe(railScrollViewportEl)
+    }
+  }
+  updateRailScrollState()
 }
 onMounted(() => {
-  void syncDynamicScrollViewport()
+  void syncRailScrollViewport()
 })
 
 onUnmounted(() => {
-  dynamicScrollViewportEl?.removeEventListener('scroll', handleDynamicScroll)
-  dynamicScrollViewportEl = null
+  railScrollViewportEl?.removeEventListener('scroll', handleRailScroll)
+  railScrollResizeObserver?.disconnect()
+  railScrollResizeObserver = null
+  railScrollViewportEl = null
 })
 
 const libraryHandleClick = (item: Icon) => {
@@ -671,16 +684,16 @@ watch(
     pioneerDriveGroups.value.map((group) => group.icons.map((item) => item.key).join(',')).join('|')
   ],
   () => {
-    void syncDynamicScrollViewport()
-    void scrollSelectedDynamicIconIntoView()
+    void syncRailScrollViewport()
+    void scrollSelectedRailIconIntoView()
   },
   { flush: 'post' }
 )
 
 watch(
-  () => selectedDynamicScrollKey.value,
+  () => selectedRailScrollKey.value,
   () => {
-    void scrollSelectedDynamicIconIntoView()
+    void scrollSelectedRailIconIntoView()
   },
   { flush: 'post' }
 )
@@ -710,68 +723,74 @@ watch(
 )
 </script>
 <template>
-  <div class="librarySelectArea unselectable">
-    <div class="librarySelectAreaCore" data-user-guide-target="library-rail">
+  <div class="librarySelectArea unselectable" data-user-guide-target="library-rail">
+    <div class="librarySelectAreaScrollShell">
       <div
-        v-for="item of coreIconArr"
-        :key="item.name"
-        class="iconBox"
-        :data-user-guide-target="resolveLibraryUserGuideTarget(item.name)"
-        @click="clickIcon(item)"
-        @contextmenu.stop.prevent="handleIconContextmenu($event, item)"
-        @mouseover="iconMouseover(item)"
-        @mouseout="iconMouseout(item)"
-        @dragenter="iconDragEnter($event, item)"
+        v-show="railScrollState.canScroll && !railScrollState.atTop"
+        class="librarySelectAreaScrollFade librarySelectAreaScrollFade--top"
+      ></div>
+      <OverlayScrollbarsComponent
+        ref="railIconsScrollRef"
+        class="librarySelectAreaScroller"
+        :options="{
+          scrollbars: {
+            autoHide: 'leave' as const,
+            autoHideDelay: 50,
+            clickScroll: true
+          } as const,
+          overflow: {
+            x: 'hidden',
+            y: 'scroll'
+          } as const
+        }"
+        element="div"
+        defer
       >
-        <div
-          class="iconBoxAccent"
-          :style="{ backgroundColor: item.name == selectedIcon.name ? 'var(--accent)' : '' }"
-        ></div>
-        <div class="iconBoxContent" @click="libraryHandleClick(item)">
-          <span
-            :ref="(el) => setIconRef(item.name, el)"
-            :style="getIconMaskStyle(item)"
-            :class="[
-              'sidebar-icon',
-              {
-                'is-active': item.name === selectedIcon.name,
-                'is-playing': isPlayingLibraryIcon(item)
-              }
-            ]"
-            @mouseenter="handleIconTooltipMouseEnter(item)"
-          ></span>
-          <bubbleBox :dom="iconRefMap[item.name] || undefined" :title="getIconTooltipTitle(item)" />
+        <div class="librarySelectAreaCore">
+          <div
+            v-for="item of coreIconArr"
+            :key="item.name"
+            :ref="(el) => setScrollItemRef(item.name, el)"
+            class="iconBox"
+            :data-user-guide-target="resolveLibraryUserGuideTarget(item.name)"
+            @click="clickIcon(item)"
+            @contextmenu.stop.prevent="handleIconContextmenu($event, item)"
+            @mouseover="iconMouseover(item)"
+            @mouseout="iconMouseout(item)"
+            @dragenter="iconDragEnter($event, item)"
+          >
+            <div
+              class="iconBoxAccent"
+              :style="{ backgroundColor: item.name == selectedIcon.name ? 'var(--accent)' : '' }"
+            ></div>
+            <div class="iconBoxContent" @click="libraryHandleClick(item)">
+              <span
+                :ref="(el) => setIconRef(item.name, el)"
+                :style="getIconMaskStyle(item)"
+                :class="[
+                  'sidebar-icon',
+                  {
+                    'is-active': item.name === selectedIcon.name,
+                    'is-playing': isPlayingLibraryIcon(item)
+                  }
+                ]"
+                @mouseenter="handleIconTooltipMouseEnter(item)"
+              ></span>
+              <bubbleBox
+                :dom="iconRefMap[item.name] || undefined"
+                :title="getIconTooltipTitle(item)"
+              />
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
-
-    <div
-      class="librarySelectAreaDynamic"
-      :class="{ 'librarySelectAreaDynamic--with-divider': hasDynamicEntries }"
-    >
-      <div v-if="hasDynamicEntries" class="librarySelectAreaDynamicScrollShell">
         <div
-          v-show="dynamicScrollState.canScroll && !dynamicScrollState.atTop"
-          class="librarySelectAreaScrollFade librarySelectAreaScrollFade--top"
-        ></div>
-        <OverlayScrollbarsComponent
-          ref="dynamicIconsScrollRef"
-          class="librarySelectAreaDynamicScroller"
-          :options="{
-            scrollbars: {
-              autoHide: 'leave' as const,
-              autoHideDelay: 50,
-              clickScroll: true
-            } as const,
-            overflow: {
-              x: 'hidden',
-              y: 'scroll'
-            } as const
-          }"
-          element="div"
-          defer
+          v-if="hasDynamicEntries"
+          class="librarySelectAreaDynamic librarySelectAreaDynamic--with-divider"
         >
-          <IcloudLibraryEntry v-if="icloudEntryVisible" />
+          <IcloudLibraryEntry
+            v-if="icloudEntryVisible"
+            :ref="(el) => setScrollItemRef('icloud', el)"
+          />
           <div
             v-for="item of dynamicIconArr"
             :key="item.name"
@@ -955,12 +974,12 @@ watch(
               </template>
             </div>
           </div>
-        </OverlayScrollbarsComponent>
-        <div
-          v-show="dynamicScrollState.canScroll && !dynamicScrollState.atBottom"
-          class="librarySelectAreaScrollFade librarySelectAreaScrollFade--bottom"
-        ></div>
-      </div>
+        </div>
+      </OverlayScrollbarsComponent>
+      <div
+        v-show="railScrollState.canScroll && !railScrollState.atBottom"
+        class="librarySelectAreaScrollFade librarySelectAreaScrollFade--bottom"
+      ></div>
     </div>
   </div>
 </template>

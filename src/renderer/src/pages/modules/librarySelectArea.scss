@@ -7,18 +7,21 @@
   flex-direction: column;
   align-items: stretch;
 
-  .librarySelectAreaCore {
-    flex: 0 0 auto;
-  }
-
-  .librarySelectAreaDynamic {
+  .librarySelectAreaScrollShell {
     flex: 1 1 auto;
     min-height: 0;
+    height: 100%;
     position: relative;
   }
 
-  .librarySelectAreaDynamic--with-divider {
-    min-height: 45px;
+  .librarySelectAreaScroller {
+    height: 100%;
+    min-height: 0;
+    width: 100%;
+  }
+
+  .librarySelectAreaDynamic {
+    position: relative;
   }
 
   .librarySelectAreaDynamic--with-divider::before {
@@ -31,16 +34,6 @@
     background: color-mix(in srgb, var(--border) 88%, transparent);
     pointer-events: none;
     z-index: 2;
-  }
-
-  .librarySelectAreaDynamicScrollShell {
-    height: 100%;
-    position: relative;
-  }
-
-  .librarySelectAreaDynamicScroller {
-    height: 100%;
-    width: 100%;
   }
 
   .librarySelectAreaScrollFade {
@@ -178,7 +171,7 @@
     gap: 2px;
   }
 
-  :deep(.librarySelectAreaDynamicScroller .os-viewport) {
+  :deep(.librarySelectAreaScroller .os-viewport) {
     overscroll-behavior: contain;
   }
 
